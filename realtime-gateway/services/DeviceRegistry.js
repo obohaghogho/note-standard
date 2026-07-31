@@ -83,11 +83,16 @@ class DeviceRegistry {
       }
 
       // 2. Query V1 Web Push Subscriptions Table
+      // Filter to only healthy/stale rows — 'invalid' subscriptions are confirmed-dead
+      // (received HTTP 410/404 from the push provider) and must be excluded to avoid
+      // wasted dispatch attempts, redundant error logs, and misleading telemetry.
+      // 'stale' subscriptions (no push in 30+ days) are still worth trying — they may
+      // simply be low-frequency users whose token is still valid.
       const { data: v1Data, error: v1Error } = await supabase
         .from('push_subscriptions')
         .select('endpoint, p256dh, auth, platform, device_id, status, last_seen_at')
         .eq('user_id', userId)
-        .neq('status', 'revoked');
+        .in('status', ['healthy', 'stale']);
 
       if (!v1Error && v1Data) {
         for (const sub of v1Data) {

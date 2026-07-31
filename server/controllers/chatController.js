@@ -1991,13 +1991,14 @@ exports.sendMessage = async (req, res) => {
 
                                  // Push / In-App Notification
                                  if (notificationService.createNotification) {
-                                     await notificationService.createNotification(
-                                         staffId,
-                                         'new_support_ticket',
-                                         'New Support Ticket Escalated',
-                                         `A user needs help with ${aiResponse.operationalMetadata?.category || 'an issue'}.`,
-                                         { ticket_id: ticket.id, conversation_id: conversationId }
-                                     );
+                                     await notificationService.createNotification({
+                                       receiverId: staffId,
+                                       senderId: null,
+                                       type: 'new_support_ticket',
+                                       title: 'New Support Ticket Escalated',
+                                       message: `A user needs help with ${aiResponse.operationalMetadata?.category || 'an issue'}.`,
+                                       link: `/admin/chats?id=${conversationId}`,
+                                     });
                                  }
                              }
                          }
