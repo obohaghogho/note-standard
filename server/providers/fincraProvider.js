@@ -59,8 +59,8 @@ class FincraProvider extends PayoutProvider {
       beneficiary: {
         firstName,                                    // ← REQUIRED by Fincra API
         lastName,                                     // ← REQUIRED by Fincra API
-        name:               accountName,
-        accountHolderName:  accountName,
+        // NOTE: do NOT include `name` or `accountHolderName` — Fincra rejects them
+        // when firstName/lastName are already present ("field is not allowed" error)
         accountNumber,
         type:               "individual",
         bankCode,
@@ -91,7 +91,12 @@ class FincraProvider extends PayoutProvider {
       });
       console.error('[FINCRA_PAYOUT_ERROR_RAW]', JSON.stringify({ errStatus, rawErrData, errMsg }, null, 2));
 
-      if (errMsg.includes("IP address") || errMsg.includes("not allowed") || errMsg.includes("ACCESS_DENIED")) {
+      // Narrowly detect genuine IP restriction errors — do NOT use broad terms like
+      // "not allowed" which also matches payload validation messages (e.g. "field is not allowed").
+      const isIpRestriction = errMsg.includes("IP address") || errMsg.includes("ip address") ||
+        errMsg.includes("ACCESS_DENIED") || errMsg.includes("not whitelisted") ||
+        errMsg.toLowerCase().includes("ip restriction") || errStatus === 403;
+      if (isIpRestriction) {
         throw new Error(`FINCRA_IP_RESTRICTION: Fincra rejected the payout: "${errMsg}". ACTION REQUIRED: Whitelist the gateway IP (137.184.216.44) in Fincra Dashboard → Settings → API → IP Whitelist. businessId=${businessId || 'MISSING'}`);
       }
       throw err;
