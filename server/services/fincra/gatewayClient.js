@@ -149,11 +149,42 @@ async function dispatchFincraRequest({ method, path, headers = {}, body = null }
       throw authErr;
     }
 
-    const resData = response.data?.data !== undefined && response.data?.status !== undefined
-      ? response.data.data
-      : response.data;
+    // The gateway server wraps Fincra's response as: { status: <http_status>, data: <fincra_body>, headers: {...} }
+    // `response.data` is the gateway wrapper; `response.data.data` is Fincra's actual response body.
+    const fincraHttpStatus = response.data?.status || response.status;
+    const fincraBody       = (response.data?.data !== undefined) ? response.data.data : response.data;
 
-    const resStatus = response.data?.status || response.status;
+    // ── Detect Fincra IP restriction (403) and surface with clear action message ──
+    const isIpRestriction =
+      fincraHttpStatus === 403 ||
+      (typeof fincraBody === 'object' && (
+        fincraBody?.error?.toString().toLowerCase().includes('ip') ||
+        fincraBody?.message?.toString().toLowerCase().includes('ip address')
+      ));
+
+    if (isIpRestriction) {
+      const ipMsg = fincraBody?.error || fincraBody?.message || 'Your IP address is not allowed to access this service';
+      const ipErr = new FincraGatewayError(
+        `FINCRA_IP_RESTRICTION: Fincra rejected request from gateway (137.184.216.44): "${ipMsg}". ACTION REQUIRED: Whitelist 137.184.216.44 in Fincra Dashboard → Settings → API → IP Whitelist.`,
+        403,
+        fincraBody
+      );
+      logger.error(ipErr.message, {
+        provider: 'FINCRA',
+        requestId,
+        correlationId,
+        method: normMethod,
+        path: cleanPath,
+        status: 403,
+        latencyMs,
+        retry: 0,
+        family: 4,
+        remoteIp: '137.184.216.44',
+        destination: `${gatewayUrl}${cleanPath}`,
+        action: 'Whitelist 137.184.216.44 in Fincra Dashboard'
+      });
+      throw ipErr;
+    }
 
     logger.info(`[FincraGateway] Gateway Request Completed`, {
       provider: 'FINCRA',
@@ -161,7 +192,7 @@ async function dispatchFincraRequest({ method, path, headers = {}, body = null }
       correlationId,
       method: normMethod,
       path: cleanPath,
-      status: resStatus,
+      status: fincraHttpStatus,
       latencyMs,
       retry: 0,
       family: 4,
@@ -170,8 +201,8 @@ async function dispatchFincraRequest({ method, path, headers = {}, body = null }
     });
 
     return {
-      status: resStatus,
-      data: resData,
+      status: fincraHttpStatus,
+      data:   fincraBody,
       headers: response.headers
     };
   } catch (error) {

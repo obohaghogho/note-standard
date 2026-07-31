@@ -8,6 +8,7 @@
 const { PayoutProvider } = require("./PayoutProvider");
 const { getFincraClient } = require("../services/fincra/client");
 const verification       = require("../services/fincra/verification");
+const { FincraGatewayError } = require("../services/fincra/gatewayClient");
 const logger             = require("../utils/logger");
 
 class FincraProvider extends PayoutProvider {
@@ -58,6 +59,13 @@ class FincraProvider extends PayoutProvider {
     try {
       res = await instance.post("/disbursements/payouts", payload);
     } catch (err) {
+      // If this is already a well-described FincraGatewayError (e.g. IP restriction), re-throw as-is
+      if (err instanceof FincraGatewayError) {
+        logger.error(`[FincraProvider] Gateway error for payout ${reference}: ${err.message}`);
+        // Re-throw with the FINCRA_IP_RESTRICTION prefix so the frontend sees a clean message
+        throw new Error(err.message);
+      }
+
       // ALWAYS log the raw Fincra error before any transformation
       const rawErrData = err.response?.data;
       const errStatus  = err.response?.status;
@@ -68,8 +76,8 @@ class FincraProvider extends PayoutProvider {
       });
       console.error('[FINCRA_PAYOUT_ERROR_RAW]', JSON.stringify({ errStatus, rawErrData, errMsg }, null, 2));
 
-      if (errMsg.includes("IP address") || errMsg.includes("not allowed")) {
-        throw new Error(`FINCRA_IP_RESTRICTION: Fincra rejected the payout with: "${errMsg}". Render egress IP may not be whitelisted, OR the 'business' ID is missing/invalid. businessId=${businessId || 'MISSING'}`);
+      if (errMsg.includes("IP address") || errMsg.includes("not allowed") || errMsg.includes("ACCESS_DENIED")) {
+        throw new Error(`FINCRA_IP_RESTRICTION: Fincra rejected the payout: "${errMsg}". ACTION REQUIRED: Whitelist the gateway IP (137.184.216.44) in Fincra Dashboard → Settings → API → IP Whitelist. businessId=${businessId || 'MISSING'}`);
       }
       throw err;
     }

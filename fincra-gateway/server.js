@@ -296,6 +296,19 @@ app.get('/health', async (req, res) => {
   const startProbe = Date.now();
   let fincraReachable = false;
   let probeLatencyMs = 0;
+  let realEgressIp = null;
+
+  // Discover actual outbound IP (what Fincra really sees)
+  try {
+    const ipRes = await axios.get('https://api.ipify.org?format=json', {
+      timeout: 3000,
+      httpsAgent,
+      validateStatus: () => true
+    });
+    realEgressIp = ipRes.data?.ip || null;
+  } catch (_) {
+    // fallback — non-critical
+  }
 
   try {
     const probeRes = await axios.get(`${FINCRA_TARGET_URL}/core/businesses/me`, {
@@ -319,13 +332,14 @@ app.get('/health', async (req, res) => {
     gateway: 'healthy',
     gatewayReachable: true,
     gateway_reachable: true,
-    outboundIpv4: '137.184.216.44',
-    outbound_ipv4: '137.184.216.44',
+    outboundIpv4: realEgressIp || '137.184.216.44',
+    outbound_ipv4: realEgressIp || '137.184.216.44',
+    realEgressIp,
     fincraReachable,
     targetUrl: FINCRA_TARGET_URL,
     dns: {
       resolvedHost: (new URL(FINCRA_TARGET_URL)).hostname,
-      resolvedIp: '137.184.216.44',
+      resolvedIp: realEgressIp || '137.184.216.44',
       family: 4
     },
     circuit: circuitBreaker.getState(),
@@ -338,6 +352,31 @@ app.get('/health', async (req, res) => {
     },
     probeLatencyMs
   });
+});
+
+// ── GET /egress-ip ─────────────────────────────────────────────────────────
+// Returns the REAL outbound IP this gateway uses — what Fincra actually sees.
+// This is critical for IP whitelist debugging.
+app.get('/egress-ip', async (req, res) => {
+  try {
+    const ipRes = await axios.get('https://api.ipify.org?format=json', {
+      timeout: 5000,
+      httpsAgent,
+      validateStatus: () => true
+    });
+    const realIp = ipRes.data?.ip || 'unknown';
+    logStructured('info', 'Egress IP check', { realIp });
+    return res.status(200).json({
+      realEgressIp: realIp,
+      message: 'This is the IP Fincra sees when the gateway makes requests. Whitelist this IP in Fincra Dashboard → Settings → API → IP Whitelist.',
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    return res.status(500).json({
+      error: 'Failed to discover egress IP',
+      message: err.message
+    });
+  }
 });
 
 // ── GET /metrics (Protected) ──────────────────────────────────────────────

@@ -1,6 +1,18 @@
 /**
- * Fincra Sandbox Connectivity Audit
- * Verifies: API key auth, business profile, wallet listing, bank list
+ * Fincra DIRECT Connectivity Audit
+ * ──────────────────────────────────
+ * ⚠️  WARNING: This script calls the Fincra API DIRECTLY (without the gateway).
+ * It will ALWAYS fail with HTTP 403 "IP address not allowed" unless your local machine's
+ * IP is whitelisted in the Fincra dashboard — which it is NOT in production.
+ *
+ * For the production payout pipeline test (through gateway.notestandard.com), use:
+ *   node server/tests/fincraGatewayAudit.js
+ *
+ * This script is useful only for:
+ *   - Verifying the API key is valid
+ *   - Verifying webhook secret computes correctly
+ *   - Running from within the DigitalOcean gateway droplet (137.184.216.44) directly
+ *
  * Usage: node server/tests/fincraConnectivityAudit.js
  */
 

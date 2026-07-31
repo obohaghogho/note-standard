@@ -9,7 +9,9 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "dev:safe": "node scripts/fix_start.js",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "audit:fincra-gateway": "node tests/fincraGatewayAudit.js",
+    "audit:fincra-direct": "node tests/fincraConnectivityAudit.js"
   },
   "keywords": [],
   "author": "",
