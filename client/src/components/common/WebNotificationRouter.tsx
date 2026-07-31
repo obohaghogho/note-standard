@@ -227,21 +227,22 @@ export const WebNotificationRouter: React.FC = () => {
   const [isEnabling, setIsEnabling] = useState(false);
 
   const isGranted = typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted';
-  const showPromptBanner = user && typeof window !== 'undefined' && 'Notification' in window && !isGranted && !dismissedBanner;
+  const isDenied = typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'denied';
+  // Don't show the banner if: already granted, already denied (Settings handles recovery), or dismissed
+  const showPromptBanner = user && typeof window !== 'undefined' && 'Notification' in window && !isGranted && !isDenied && !dismissedBanner;
 
   const handleEnableClick = async () => {
     setIsEnabling(true);
     try {
       if (notificationContext?.requestPushPermission) {
-        const res = await notificationContext.requestPushPermission();
-        if (res) {
-          toast.success('Push notifications enabled!');
-        }
+        // requestPushPermission handles its own toast messages (success/denied)
+        await notificationContext.requestPushPermission();
       }
     } catch (err) {
       console.error('Error enabling push notifications:', err);
     } finally {
       setIsEnabling(false);
+      // Always dismiss the banner after the user interacts with it
       setDismissedBanner(true);
       sessionStorage.setItem('push_banner_dismissed_session', 'true');
     }

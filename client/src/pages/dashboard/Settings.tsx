@@ -508,11 +508,34 @@ export default function Settings() {
                                 <div className="h-px bg-white/5" />
                                 <Toggle
                                     label="System Push Notifications"
-                                    description={permission === 'denied' ? "Notification permission was denied in your browser settings. Please enable them to receive alerts." : "Receive real-time alerts for messages, mentions, and important updates even when the app is closed."}
+                                    description={
+                                        permission === 'denied'
+                                            ? "Notifications are blocked by your browser. To re-enable, click the 🔒 lock icon in your browser's address bar, set Notifications to Allow, then reload the page."
+                                            : "Receive real-time alerts for messages, mentions, and important updates even when the app is closed."
+                                    }
                                     checked={isSubscribed && permission === 'granted'}
                                     disabled={permission === 'denied'}
                                     onChange={(c) => c ? subscribeUser() : unsubscribeUser()}
                                 />
+                                {permission === 'denied' && (
+                                    <div className="mt-2 flex flex-col gap-2 text-xs bg-red-500/5 border border-red-500/20 p-3 rounded-xl">
+                                        <p className="text-red-400 font-semibold flex items-center gap-1.5">
+                                            🔕 Notifications are blocked in your browser
+                                        </p>
+                                        <ol className="list-decimal list-inside space-y-1 text-slate-400 text-[11px]">
+                                            <li>Click the <strong className="text-slate-300">🔒 lock icon</strong> in your address bar</li>
+                                            <li>Find <strong className="text-slate-300">Notifications</strong> and set it to <strong className="text-emerald-400">Allow</strong></li>
+                                            <li>Click the button below to reload the page</li>
+                                        </ol>
+                                        <button
+                                            type="button"
+                                            onClick={() => window.location.reload()}
+                                            className="mt-1 self-start px-3 py-1.5 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 rounded-lg border border-indigo-500/30 font-semibold transition-all active:scale-95 text-[11px] flex items-center gap-1.5"
+                                        >
+                                            🔄 Reload Page After Allowing
+                                        </button>
+                                    </div>
+                                )}
                                 {permission === 'granted' && (
                                     <div className="mt-2 flex items-center justify-between text-xs text-slate-400 bg-white/5 p-2.5 rounded-xl border border-white/10">
                                         <span>Push Status: <strong className="text-emerald-400">Granted</strong> (Token Active)</span>
@@ -533,6 +556,7 @@ export default function Settings() {
                                     </div>
                                 )}
                                 <div className="h-px bg-white/5" />
+
                                 <Toggle
                                     label="Offline Email Fallbacks"
                                     description="Receive an email summary if you have unread messages and your device is offline or the app is closed."

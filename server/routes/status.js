@@ -189,57 +189,88 @@ router.get('/my', requireAuth, async (req, res) => {
 
     if (error) throw error;
 
-    // Fetch owner's own views
     const statusIds = (statuses || []).map(s => s.id);
     let viewedSet = new Set();
+    let allViews = [];
+    let allReactions = [];
+
     if (statusIds.length > 0) {
-      const { data: views } = await supabase
+      // 1. Fetch owner's own views to flag has_viewed
+      const { data: myViews } = await supabase
         .from('status_views')
         .select('status_id')
         .eq('viewer_id', req.user.id)
         .in('status_id', statusIds);
-      viewedSet = new Set((views || []).map(v => v.status_id));
-    }
+      viewedSet = new Set((myViews || []).map(v => v.status_id));
 
-    // Enrich with viewers and reactions
-    const enriched = await Promise.all((statuses || []).map(async (s) => {
-      const { data: viewers } = await supabase
+      // 2. Fetch all other users' views across these statuses
+      const { data: viewsData } = await supabase
         .from('status_views')
-        .select('viewed_at, completed, viewer:viewer_id (id, full_name, username, avatar_url)')
-        .eq('status_id', s.id)
+        .select('status_id, viewer_id, viewed_at, completed')
+        .in('status_id', statusIds)
         .neq('viewer_id', req.user.id)
         .order('viewed_at', { ascending: false });
+      allViews = viewsData || [];
 
-      const { data: reactions } = await supabase
+      // 3. Fetch all reactions across these statuses
+      const { data: reactionsData } = await supabase
         .from('status_reactions')
-        .select('emoji, user:user_id (id, full_name, username, avatar_url)')
-        .eq('status_id', s.id);
+        .select('status_id, user_id, emoji')
+        .in('status_id', statusIds);
+      allReactions = reactionsData || [];
+    }
 
-      const { count } = await supabase
-        .from('status_views')
-        .select('id', { count: 'exact', head: true })
-        .eq('status_id', s.id)
-        .neq('viewer_id', req.user.id);
+    // 4. Collect unique user IDs from views & reactions to batch-fetch profiles
+    const profileIdsToFetch = [...new Set([
+      ...allViews.map(v => v.viewer_id),
+      ...allReactions.map(r => r.user_id)
+    ])];
+
+    const profileMap = {};
+    if (profileIdsToFetch.length > 0) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, username, avatar_url')
+        .in('id', profileIdsToFetch);
+      (profiles || []).forEach(p => {
+        profileMap[p.id] = p;
+      });
+    }
+
+    // 5. Build enriched status items
+    const enriched = (statuses || []).map(s => {
+      const statusViews = allViews.filter(v => v.status_id === s.id);
+      const statusReactions = allReactions.filter(r => r.status_id === s.id);
+
+      const viewersList = statusViews.map(v => {
+        const prof = profileMap[v.viewer_id] || {};
+        return {
+          id: prof.id || v.viewer_id,
+          display_name: prof.full_name || prof.username || 'User',
+          username: prof.username,
+          avatar_url: prof.avatar_url,
+          viewed_at: v.viewed_at,
+          completed: v.completed,
+        };
+      });
+
+      const reactionsList = statusReactions.map(r => {
+        const prof = profileMap[r.user_id] || {};
+        return {
+          id: prof.id || r.user_id,
+          display_name: prof.full_name || prof.username || 'User',
+          username: prof.username,
+          avatar_url: prof.avatar_url,
+          emoji: r.emoji,
+        };
+      });
 
       const enrichedStatus = {
         ...s,
         has_viewed: viewedSet.has(s.id),
-        view_count: count || 0,
-        viewers: (viewers || []).map(v => ({
-          id: v.viewer?.id,
-          display_name: v.viewer?.full_name || v.viewer?.username || 'User',
-          username: v.viewer?.username,
-          avatar_url: v.viewer?.avatar_url,
-          viewed_at: v.viewed_at,
-          completed: v.completed,
-        })),
-        reactions: (reactions || []).map(r => ({
-          id: r.user?.id,
-          display_name: r.user?.full_name || r.user?.username || 'User',
-          username: r.user?.username,
-          avatar_url: r.user?.avatar_url,
-          emoji: r.emoji,
-        })),
+        view_count: statusViews.length,
+        viewers: viewersList,
+        reactions: reactionsList,
       };
 
       if (enrichedStatus.type !== 'link') {
@@ -250,7 +281,7 @@ router.get('/my', requireAuth, async (req, res) => {
       }
 
       return enrichedStatus;
-    }));
+    });
 
     res.json(enriched);
   } catch (err) {

@@ -136,7 +136,40 @@ export function usePushNotifications() {
       }
     };
     checkSubscription();
+
+    // Fix: Keep permission state in sync with the real browser permission state.
+    // Without this listener, the state is stale after the race condition or when
+    // the user blocks/allows notifications in browser settings without refreshing.
+    let permissionStatus: PermissionStatus | null = null;
+    if (typeof navigator !== 'undefined' && navigator.permissions) {
+      navigator.permissions.query({ name: 'notifications' as PermissionName }).then(status => {
+        permissionStatus = status;
+        // Sync immediately in case the state changed while the component was unmounted
+        setPermission(status.state as NotificationPermission);
+        status.onchange = () => {
+          setPermission(status.state as NotificationPermission);
+          // If permission was just granted, auto-check for an existing subscription
+          if (status.state === 'granted') {
+            checkSubscription();
+          }
+          // If permission was revoked, clear subscription state
+          if (status.state !== 'granted') {
+            setIsSubscribed(false);
+            setSubscription(null);
+          }
+        };
+      }).catch(() => {
+        // navigator.permissions.query not supported — fall through silently
+      });
+    }
+
+    return () => {
+      if (permissionStatus) {
+        permissionStatus.onchange = null;
+      }
+    };
   }, []);
+
 
   return {
     permission,

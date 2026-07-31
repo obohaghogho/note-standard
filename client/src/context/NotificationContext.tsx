@@ -209,7 +209,15 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         // ── Step 3: Create new subscription if missing ───────────────────────────
         if (!subscription) {
             let perm = Notification.permission;
-            if (perm === 'default') {
+
+            // CRITICAL: Only call requestPermission() when triggered by an explicit user gesture.
+            // Auto-recovery paths (AUTH_CHANGE, VISIBILITY_CHANGE, WINDOW_FOCUS, PERIODIC_6H,
+            // REINITIALIZE) run in the background without a user gesture. Calling requestPermission()
+            // from these paths causes browsers to silently auto-deny the prompt, which permanently
+            // blocks notifications for the user on new devices.
+            const isUserGestureReason = reason === 'MANUAL' || reason === 'MANUAL_USER_GESTURE';
+
+            if (perm === 'default' && isUserGestureReason) {
                 console.log(`[PushRecovery][${reason}] Requesting browser notification permission...`);
                 try {
                     perm = await Notification.requestPermission();
@@ -219,7 +227,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             }
 
             if (perm !== 'granted') {
-                console.log(`[PushRecovery][${reason}] Permission state: ${perm}. Cannot subscribe.`);
+                console.log(`[PushRecovery][${reason}] Permission state: ${perm}${!isUserGestureReason && perm === 'default' ? ' (skipping prompt — not a user gesture)' : ''}. Cannot subscribe.`);
                 return;
             }
             try {
@@ -607,14 +615,23 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
 
     const requestPushPermission = useCallback(async (): Promise<boolean> => {
         if (!('Notification' in window)) return false;
+        // Guard: if already denied, don't attempt — just inform the user.
+        if (Notification.permission === 'denied') {
+            toast.error('Notifications are blocked. Click the 🔒 lock icon in your address bar → Notifications → Allow, then reload.');
+            return false;
+        }
         try {
+            // This is the single authoritative call to requestPermission().
+            // It MUST be called from a user gesture (button click).
+            // All background paths in _doSubscribe guard against calling it.
             const perm = await Notification.requestPermission();
             if (perm === 'granted') {
+                // Permission is now 'granted'; _doSubscribe will skip the prompt
                 await subscribeToPush('MANUAL_USER_GESTURE');
                 toast.success('Push notifications enabled!');
                 return true;
             } else if (perm === 'denied') {
-                toast.error('Notification permission was blocked. Please enable it in browser settings.');
+                toast.error('Notifications blocked. To enable: click the 🔒 lock icon in your address bar → Notifications → Allow, then reload the page.');
             }
         } catch (e) {
             console.error('[Notifications] Permission request error:', e);

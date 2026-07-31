@@ -575,18 +575,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }
             };
 
-            if (typeof Notification !== 'undefined') {
-              if (Notification.permission === 'granted') {
-                // Already granted — run immediately
-                runPushRegistration();
-              } else if (Notification.permission === 'default') {
-                // Never asked — prompt automatically on login, then register if approved
-                console.log('[Auth] [V2 Boot-Sync] Permission default — auto-requesting...');
-                Notification.requestPermission().then(result => {
-                  console.log(`[Auth] [V2 Boot-Sync] Permission result: ${result}`);
-                  if (result === 'granted') runPushRegistration();
-                }).catch(() => {});
-              }
+            // Only sync the push installation if permission is already granted.
+            // Permission prompting is owned exclusively by NotificationContext._doSubscribe
+            // and the UI banner. Never call Notification.requestPermission() here to avoid
+            // a race condition where two simultaneous calls cause one to be auto-denied,
+            // permanently blocking push for the user on new devices.
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+              runPushRegistration();
             }
             });
           }
