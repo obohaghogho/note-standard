@@ -45,10 +45,12 @@ class FincraProvider extends PayoutProvider {
       business:            businessId,                // ← REQUIRED: identifies the Fincra merchant
       description:         narration || `NoteStandard withdrawal ${reference}`,
       customerReference:   reference,
+      paymentDestination:  "bank_account",            // ← REQUIRED by Fincra API payload validation
       beneficiary: {
-        name:          accountName,
+        name:               accountName,
+        accountHolderName:  accountName,              // ← Some Fincra API versions require this alias
         accountNumber,
-        type:          "individual",
+        type:               "individual",
         bankCode,
       },
     };
