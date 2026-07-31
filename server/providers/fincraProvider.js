@@ -38,6 +38,16 @@ class FincraProvider extends PayoutProvider {
   async initiatePayout({ amount, currency, bankCode, accountNumber, accountName, narration, reference }) {
     const { instance, businessId } = getFincraClient();
 
+    // Fincra requires firstName and lastName as separate fields in the beneficiary object.
+    // Split on whitespace; if only one word, use it for both first and last name.
+    const nameParts  = (accountName || '').trim().split(/\s+/);
+    const firstName  = nameParts[0] || accountName;
+    const lastName   = nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0] || accountName;
+
+    // Map currency to ISO country code for the beneficiary country field
+    const currencyCountryMap = { NGN: 'NG', USD: 'US', EUR: 'DE', GBP: 'GB', KES: 'KE', GHS: 'GH', ZAR: 'ZA' };
+    const country = currencyCountryMap[currency.toUpperCase()] || 'NG';
+
     const payload = {
       sourceCurrency:      currency.toUpperCase(),
       destinationCurrency: currency.toUpperCase(),
@@ -47,11 +57,14 @@ class FincraProvider extends PayoutProvider {
       customerReference:   reference,
       paymentDestination:  "bank_account",            // ← REQUIRED by Fincra API payload validation
       beneficiary: {
+        firstName,                                    // ← REQUIRED by Fincra API
+        lastName,                                     // ← REQUIRED by Fincra API
         name:               accountName,
-        accountHolderName:  accountName,              // ← Some Fincra API versions require this alias
+        accountHolderName:  accountName,
         accountNumber,
         type:               "individual",
         bankCode,
+        country,
       },
     };
 
