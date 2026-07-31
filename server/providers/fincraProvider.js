@@ -35,7 +35,7 @@ class FincraProvider extends PayoutProvider {
    * Initiate payout to Fincra API.
    * Detects whether Fincra returns an OTP challenge.
    */
-  async initiatePayout({ amount, currency, bankCode, accountNumber, accountName, narration, reference }) {
+  async initiatePayout({ amount, currency, bankCode, accountNumber, accountName, userEmail, narration, reference }) {
     const { instance, businessId } = getFincraClient();
 
     // Fincra requires firstName and lastName as separate fields in the beneficiary object.
@@ -59,8 +59,9 @@ class FincraProvider extends PayoutProvider {
       beneficiary: {
         firstName,                                    // ← REQUIRED by Fincra API
         lastName,                                     // ← REQUIRED by Fincra API
-        // NOTE: do NOT include `name` or `accountHolderName` — Fincra rejects them
-        // when firstName/lastName are already present ("field is not allowed" error)
+        accountHolderName:  accountName,              // ← REQUIRED by Fincra API (full name)
+        // NOTE: do NOT include `name` — Fincra rejects it when firstName/lastName are present
+        ...(userEmail ? { email: userEmail } : {}),  // ← recommended by Fincra for NGN payouts
         accountNumber,
         type:               "individual",
         bankCode,

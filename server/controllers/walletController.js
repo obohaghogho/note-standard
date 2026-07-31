@@ -387,6 +387,10 @@ exports.withdraw = async (req, res) => {
       const correlationId = req.body.correlationId || req.headers["x-correlation-id"] || req.headers["x-request-id"] || `corr_${Date.now()}`;
       console.log(`[E2E_CORRELATION_TRACE] [${correlationId}] [Stage 2/10] Controller Entry (/api/wallet/withdraw) | User: ${req.user.id}, Amount: ${amount} ${currency}`);
 
+      // Fetch user email to pass to Fincra beneficiary (required by Fincra API)
+      const { data: userProfile } = await supabase.from('profiles').select('email').eq('id', req.user.id).single();
+      const userEmail = userProfile?.email || req.user?.email || null;
+
       result = await payoutEngine.processWithdrawal({
         userId: req.user.id,
         amount: parseFloat(amount),
@@ -394,6 +398,7 @@ exports.withdraw = async (req, res) => {
         bankCode: bank_code,
         accountNumber: account_number,
         accountName: account_name,
+        userEmail,
         narration: `NoteStandard ${currency} withdrawal`,
         idempotencyKey,
         correlationId,

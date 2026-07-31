@@ -42,6 +42,7 @@ class PayoutEngine {
     bankCode,
     accountNumber,
     accountName,
+    userEmail,
     narration,
     idempotencyKey,
     correlationId,
@@ -183,6 +184,7 @@ class PayoutEngine {
           bankCode,
           accountNumber,
           accountName,
+          userEmail,
           narration,
           reference:     withdrawal_ref,
         });
