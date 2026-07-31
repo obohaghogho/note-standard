@@ -298,6 +298,13 @@ app.post('/internal/cache/clear', (req, res) => {
     if (chatPushService.clearUserCache) {
       chatPushService.clearUserCache(userId);
     }
+    // Also clear DeviceRegistry's independent cache (Bug 5c fix)
+    try {
+      const DeviceRegistry = require('./services/DeviceRegistry');
+      DeviceRegistry.clearUserCache(userId);
+    } catch (e) {
+      console.warn('[Gateway] DeviceRegistry cache clear failed (non-fatal):', e.message);
+    }
     res.json({ ok: true, cleared: userId });
   } catch (err) {
     res.status(500).json({ error: err.message });

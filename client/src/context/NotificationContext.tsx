@@ -239,6 +239,10 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         const { device_name, platform } = getDeviceMetadata();
         console.log(`[PushRecovery][${reason}] Syncing with backend. deviceId=${deviceId} platform=${platform}`);
 
+        const subJson = subscription.toJSON ? subscription.toJSON() : subscription;
+        const p256dh = subJson?.keys?.p256dh || null;
+        const auth = subJson?.keys?.auth || null;
+
         try {
             const subRes = await fetch(`${API_URL}/api/notifications/subscribe`, {
                 method: 'POST',
@@ -247,7 +251,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                     'Authorization': `Bearer ${session.access_token}`
                 },
                 body: JSON.stringify({
-                    subscription: subscription.toJSON ? subscription.toJSON() : subscription,
+                    subscription: subJson,
                     vapidKeyVersion: vapidKey,
                     deviceId,
                     deviceName: device_name,
@@ -257,6 +261,41 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             console.log(`[PushRecovery][${reason}] Backend /subscribe → HTTP ${subRes.status}`);
         } catch (err) {
             console.warn(`[PushRecovery][${reason}] /subscribe non-fatal warning (server initializing):`, err instanceof Error ? err.message : String(err));
+        }
+
+        // ── Step 4b: Sync V2 installation tables ─────────────────────────────────
+        // CRITICAL FIX (Bug 6): The V2 push routing system reads from device_installations
+        // and installation_accounts tables. If only push_subscriptions is updated (V1),
+        // the V2 router sees a stale/INVALID endpoint and sends to the wrong target.
+        // Every subscription recovery MUST also update the V2 tables.
+        if (p256dh && auth && deviceId) {
+            try {
+                const instRes = await fetch(`${API_URL}/api/notifications/register-installation`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${session.access_token}`
+                    },
+                    body: JSON.stringify({
+                        deviceId,
+                        pushEndpoint: subscription.endpoint,
+                        pushP256dh: p256dh,
+                        pushAuth: auth,
+                        platform: platform || 'web',
+                        type: 'vapid',
+                        reason: `PUSH_RECOVERY_${reason}`,
+                        capabilities: {
+                            supports_web_push: true,
+                            supports_fcm: false,
+                            supports_apns: false,
+                            supports_background_sync: true
+                        }
+                    })
+                });
+                console.log(`[PushRecovery][${reason}] Backend /register-installation (V2 sync) → HTTP ${instRes.status}`);
+            } catch (err) {
+                console.warn(`[PushRecovery][${reason}] /register-installation non-fatal warning:`, err instanceof Error ? err.message : String(err));
+            }
         }
 
 

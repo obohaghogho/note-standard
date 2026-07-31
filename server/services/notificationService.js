@@ -169,7 +169,7 @@ const dispatchFastPush = ({
 }) => {
   return new Promise((resolve) => {
     try {
-      const gatewayUrlStr = process.env.REALTIME_GATEWAY_URL || 'http://localhost:4000';
+      const gatewayUrlStr = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
       const bodyStr = message || title;
 
       // Normalise Gateway URL (strip trailing slash)

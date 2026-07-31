@@ -135,12 +135,8 @@ async function processIncomingMessage(io, supabase, envelope, deps = {}) {
     });
 
     if (socketsCount > 0) {
-      console.log(`[CID:${messageId.slice(0, 8)}] Gateway Routing Decision`);
-      console.log(`Recipient Socket Count : ${socketsCount}`);
-      console.log(`Recipient Connected    : YES`);
-      console.log(`Decision               : Socket First`);
-      console.log(`Push Suppressed        : YES (ACK Timer Scheduled: ${ACK_TIMEOUT_MS}ms)`);
-      console.log(`Reason                 : Recipient Online (Socket Active)`);
+      console.log(`[DeliveryEngine] Routing Decision | msgId:${messageId.slice(0, 8)} | recipient:${recipientId.slice(0, 8)} | sender:${senderId.slice(0, 8)} | conv:${conversationId.slice(0, 8)}`);
+      console.log(`[DeliveryEngine] Sockets: ${socketsCount} | Decision: SOCKET_FIRST | Push suppressed for ${ACK_TIMEOUT_MS}ms ACK window`);
 
       // Recipient has a socket — message was delivered via dispatchSocketEvent.
       // Start ACK timeout: if no chat:delivered within configured time, send push.
@@ -165,7 +161,7 @@ async function processIncomingMessage(io, supabase, envelope, deps = {}) {
         } catch (e) {
         }
 
-        console.log(`[CID:${messageId.slice(0, 8)}] Gateway ACK Timeout Fired (${ACK_TIMEOUT_MS}ms) — sending fallback push`);
+        console.log(`[DeliveryEngine] ACK Timeout (${ACK_TIMEOUT_MS}ms) — fallback push | msgId:${messageId.slice(0, 8)} | recipient:${recipientId.slice(0, 8)} | conv:${conversationId.slice(0, 8)}`);
 
         updateTelemetryFallback(supabase, messageId, recipientId).catch(err => {
           console.error('[DeliveryEngine] Background telemetry fallback update failed:', err.message);
@@ -185,12 +181,8 @@ async function processIncomingMessage(io, supabase, envelope, deps = {}) {
 
       pendingAcks.set(ackKey, { timer, recipientId, conversationId });
     } else {
-      console.log(`[CID:${messageId.slice(0, 8)}] Gateway Routing Decision`);
-      console.log(`Recipient Socket Count : 0`);
-      console.log(`Recipient Connected    : NO`);
-      console.log(`Decision               : Push Fallback`);
-      console.log(`Push Suppressed        : NO`);
-      console.log(`Reason                 : Recipient Offline (No Active Sockets)`);
+      console.log(`[DeliveryEngine] Routing Decision | msgId:${messageId.slice(0, 8)} | recipient:${recipientId.slice(0, 8)} | sender:${senderId.slice(0, 8)} | conv:${conversationId.slice(0, 8)}`);
+      console.log(`[DeliveryEngine] Sockets: 0 | Decision: PUSH_IMMEDIATE | Recipient offline`);
 
       await chatPush.sendChatPush({
         supabase,

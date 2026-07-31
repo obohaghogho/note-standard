@@ -167,11 +167,21 @@ async function sendWeb(supabase, target, { userId, title, body, messageId, conve
  * Clears the in-memory installation cache for a specific user.
  * Call this whenever the user's session_state changes (e.g. after register-session)
  * to ensure the next push uses a fresh DB query instead of stale cached data.
+ * Also clears the DeviceRegistry cache to prevent stale device lists.
  */
 function clearUserCache(userId) {
   if (userId) {
     installationsCache.delete(userId);
-    console.log(`[ChatPush] 🗑 Cache cleared for user ${userId}`);
+    // Also clear the DeviceRegistry's separate cache so the next push
+    // fetches a fresh device list from DB (not stale V2 data).
+    try {
+      const DeviceRegistry = require('./DeviceRegistry');
+      DeviceRegistry.clearUserCache(userId);
+      console.log(`[ChatPush] 🗑 Cache cleared (chatPush + DeviceRegistry) for user ${userId}`);
+    } catch (e) {
+      console.warn('[ChatPush] DeviceRegistry cache clear failed (non-fatal):', e.message);
+      console.log(`[ChatPush] 🗑 Cache cleared (chatPush only) for user ${userId}`);
+    }
   }
 }
 

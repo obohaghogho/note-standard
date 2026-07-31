@@ -92,7 +92,7 @@ class DeviceRegistry {
         .from('push_subscriptions')
         .select('endpoint, p256dh, auth, platform, device_id, status, last_seen_at')
         .eq('user_id', userId)
-        .in('status', ['healthy', 'stale']);
+        .or('status.in.(healthy,stale),status.is.null');
 
       if (!v1Error && v1Data) {
         for (const sub of v1Data) {
