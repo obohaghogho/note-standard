@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { ErrorBoundary } from '../components/common/ErrorBoundary';
 import { useWallet } from '../hooks/useWallet';
 import walletApi from '../api/walletApi';
@@ -14,35 +13,21 @@ import { FundModal } from '../components/wallet/FundModal';
 import { TransferModal } from '../components/wallet/TransferModal';
 import { WithdrawModal } from '../components/wallet/WithdrawModal';
 import { ReceiveModal } from '../components/wallet/ReceiveModal';
-import { RefreshCw, Plus, X, Loader2, Settings } from 'lucide-react';
+import { RefreshCw, Plus, X, Clock, ShieldAlert } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '../components/common/Button';
 import toast from 'react-hot-toast';
 
+import {
+  FIAT_CURRENCY_CATALOG,
+  CRYPTO_CURRENCY_CATALOG,
+} from '../config/currencyConfig';
+import type { CurrencyConfig, CryptoCurrencyConfig } from '../config/currencyConfig';
+
 type HubTab = 'fiat' | 'crypto' | 'exchange';
 
-// Default catalog — used if the API hasn't loaded yet
-const DEFAULT_FIAT_CATALOG = [
-  { code: 'NGN', name: 'Nigerian Naira', symbol: '₦', flag: '🇳🇬', color: '#6366f1', status: 'active', deposit_enabled: true, withdraw_enabled: true, transfer_enabled: true, buy_enabled: true, sell_enabled: true, convert_enabled: true, decimal_places: 2 },
-  { code: 'USD', name: 'US Dollar', symbol: '$', flag: '🇺🇸', color: '#10b981', status: 'active', deposit_enabled: true, withdraw_enabled: true, transfer_enabled: true, buy_enabled: true, sell_enabled: true, convert_enabled: true, decimal_places: 2 },
-  { code: 'EUR', name: 'Euro', symbol: '€', flag: '🇪🇺', color: '#3b82f6', status: 'active', deposit_enabled: true, withdraw_enabled: true, transfer_enabled: true, buy_enabled: true, sell_enabled: true, convert_enabled: true, decimal_places: 2 },
-  { code: 'GBP', name: 'British Pound', symbol: '£', flag: '🇬🇧', color: '#ec4899', status: 'active', deposit_enabled: true, withdraw_enabled: true, transfer_enabled: true, buy_enabled: true, sell_enabled: true, convert_enabled: true, decimal_places: 2 },
-  { code: 'AUD', name: 'Australian Dollar', symbol: 'A$', flag: '🇦🇺', color: '#f59e0b', status: 'active', deposit_enabled: true, withdraw_enabled: true, transfer_enabled: true, buy_enabled: true, sell_enabled: true, convert_enabled: true, decimal_places: 2 },
-  { code: 'CAD', name: 'Canadian Dollar', symbol: 'C$', flag: '🇨🇦', color: '#ff4d4d', status: 'active', deposit_enabled: true, withdraw_enabled: true, transfer_enabled: true, buy_enabled: true, sell_enabled: true, convert_enabled: true, decimal_places: 2 },
-  { code: 'NZD', name: 'New Zealand Dollar', symbol: 'NZ$', flag: '🇳🇿', color: '#00247d', status: 'active', deposit_enabled: true, withdraw_enabled: true, transfer_enabled: true, buy_enabled: true, sell_enabled: true, convert_enabled: true, decimal_places: 2 },
-  { code: 'JPY', name: 'Japanese Yen', symbol: '¥', flag: '🇯🇵', color: '#bc002d', status: 'active', deposit_enabled: true, withdraw_enabled: true, transfer_enabled: true, buy_enabled: true, sell_enabled: true, convert_enabled: true, decimal_places: 0 },
-];
-
-const DEFAULT_CRYPTO_CATALOG = [
-  { code: 'BTC', name: 'Bitcoin', symbol: '₿', flag: '🟠', color: '#f59e0b', status: 'active', deposit_enabled: true, withdraw_enabled: true, buy_enabled: true, sell_enabled: true, swap_enabled: true, decimal_places: 8, networks: ['bitcoin', 'BEP20'] },
-  { code: 'ETH', name: 'Ethereum', symbol: 'Ξ', flag: '🔷', color: '#8b5cf6', status: 'active', deposit_enabled: true, withdraw_enabled: true, buy_enabled: true, sell_enabled: true, swap_enabled: true, decimal_places: 6, networks: ['ERC20', 'BEP20'] },
-  { code: 'USDT', name: 'Tether', symbol: '₮', flag: '🟢', color: '#26a17b', status: 'active', deposit_enabled: true, withdraw_enabled: true, buy_enabled: true, sell_enabled: true, swap_enabled: true, decimal_places: 2, networks: ['TRC20', 'ERC20', 'BEP20'] },
-  { code: 'USDC', name: 'USD Coin', symbol: '●', flag: '🔵', color: '#2775ca', status: 'active', deposit_enabled: true, withdraw_enabled: true, buy_enabled: true, sell_enabled: true, swap_enabled: true, decimal_places: 2, networks: ['ERC20', 'BEP20'] },
-];
-
 function WalletHubContent() {
-  const { wallets, financialView, transactions, loading, refresh, createWallet } = useWallet();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const { wallets, loading, refresh, createWallet } = useWallet();
 
   // Hub state
   const [activeTab, setActiveTab] = useState<HubTab>('fiat');
@@ -50,13 +35,12 @@ function WalletHubContent() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [expandedCrypto, setExpandedCrypto] = useState<string | null>(null);
 
-  // Catalog state (DB-first, fallback to defaults)
-  const [fiatCatalog, setFiatCatalog] = useState(DEFAULT_FIAT_CATALOG);
-  const [cryptoCatalog, setCryptoCatalog] = useState(DEFAULT_CRYPTO_CATALOG);
+  // Configuration-driven catalogs
+  const [fiatCatalog, setFiatCatalog] = useState<CurrencyConfig[]>(FIAT_CURRENCY_CATALOG);
+  const [cryptoCatalog] = useState<CryptoCurrencyConfig[]>(CRYPTO_CURRENCY_CATALOG);
 
   // Live rates
-  const [rates, setRates] = useState<Record<string, number>>({});
-  const [ratesLoading, setRatesLoading] = useState(true);
+  const [rates, setRates] = useState<Record<string, number>>({} as Record<string, number>);
 
   // Selected asset for modals
   const [selectedAsset, setSelectedAsset] = useState<{ currency: string; network: string }>({ currency: 'NGN', network: 'native' });
@@ -74,12 +58,25 @@ function WalletHubContent() {
     ? (localStorage.getItem('lastBuyCryptoCurrency') || 'NGN')
     : 'NGN';
 
-  // ── Load catalog from DB ──────────────────────────────────────────────────
+  // ── Sync catalog with server or configuration ──────────────────────────────
   useEffect(() => {
-    walletApi.getCurrencies().then(catalog => {
-      if (catalog.fiat?.length > 0) setFiatCatalog(catalog.fiat);
-      if (catalog.crypto?.length > 0) setCryptoCatalog(catalog.crypto);
-    }).catch(() => { /* use defaults */ });
+    walletApi.getCurrencies().then(serverCatalog => {
+      if (serverCatalog?.fiat?.length > 0) {
+        // Merge server catalog with client configuration rules to enforce active vs coming soon policies
+        const mergedFiat = FIAT_CURRENCY_CATALOG.map(clientCurr => {
+          const match = serverCatalog.fiat.find((s: any) => s.code === clientCurr.code);
+          if (match) {
+            return {
+              ...clientCurr,
+              // Client config is the authority: active stays active, coming_soon stays coming_soon
+              status: (clientCurr.status === 'active' ? 'active' : 'coming_soon') as CurrencyConfig['status'],
+            };
+          }
+          return clientCurr;
+        });
+        setFiatCatalog(mergedFiat);
+      }
+    }).catch(() => { /* use configuration default */ });
   }, []);
 
   // ── Load exchange rates ───────────────────────────────────────────────────
@@ -87,11 +84,9 @@ function WalletHubContent() {
     let active = true;
     const fetchRates = async () => {
       try {
-        setRatesLoading(true);
         const data = await walletApi.getExchangeRates();
-        if (active && data?.rates) setRates(data.rates);
+        if (active && data?.rates) setRates(data.rates as Record<string, number>);
       } catch { /* silent */ }
-      finally { if (active) setRatesLoading(false); }
     };
     fetchRates();
     const iv = setInterval(fetchRates, 30000);
@@ -101,75 +96,15 @@ function WalletHubContent() {
   // ── Refresh on mount ──────────────────────────────────────────────────────
   useEffect(() => { refresh(); }, [refresh]);
 
-  // ── Auto-verify pending deposits ─────────────────────────────────────────
-  useEffect(() => {
-    const pendingRef = localStorage.getItem('pendingDepositReference');
-    const pendingTime = localStorage.getItem('pendingDepositTime');
-    if (!pendingRef || !pendingTime) return;
-    if (Date.now() - parseInt(pendingTime, 10) > 30 * 60 * 1000) {
-      localStorage.removeItem('pendingDepositReference');
-      localStorage.removeItem('pendingDepositTime');
-      return;
-    }
-    walletApi.proactiveVerifyPayment(pendingRef).then(res => {
-      const s = (res?.status || '').toUpperCase();
-      if (['COMPLETED', 'SUCCESS', 'SUCCESSFUL'].includes(s)) {
-        localStorage.removeItem('pendingDepositReference');
-        localStorage.removeItem('pendingDepositTime');
-        refresh();
-        toast.success('Deposit confirmed! Your wallet has been credited.');
-      } else if (['FAILED', 'CANCELLED', 'REJECTED'].includes(s)) {
-        localStorage.removeItem('pendingDepositReference');
-        localStorage.removeItem('pendingDepositTime');
-        toast.error('Your last payment could not be confirmed.');
-      }
-    }).catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ── Handle redirect-back payment verification ─────────────────────────────
-  useEffect(() => {
-    const txRef = searchParams.get('tx_ref');
-    const reference = searchParams.get('reference');
-    const transactionId = searchParams.get('transaction_id') || searchParams.get('flw_ref');
-    const statusParam = searchParams.get('status');
-    const refToVerify = txRef || reference;
-    if (refToVerify && (statusParam || reference)) {
-      let isActive = true;
-      const verify = async () => {
-        const toastId = toast.loading('Verifying your payment...', { duration: 10000 });
-        try {
-          const res = await walletApi.proactiveVerifyPayment(refToVerify, transactionId || undefined);
-          if (!isActive) return;
-          const upper = (res.status || '').toUpperCase();
-          if (['COMPLETED', 'SUCCESS', 'SUCCESSFUL'].includes(upper)) {
-            toast.success('Payment confirmed!', { id: toastId });
-          } else if (['FAILED', 'CANCELLED'].includes(upper)) {
-            toast.error('Payment failed or cancelled.', { id: toastId });
-          } else {
-            toast.success('Payment pending — tracking...', { id: toastId });
-          }
-          setSearchParams({});
-          await refresh();
-          setRefreshKey(k => k + 1);
-        } catch {
-          if (isActive) { toast.error('Confirmation delayed.', { id: toastId }); setSearchParams({}); }
-        }
-      };
-      verify();
-      return () => { isActive = false; };
-    }
-  }, [searchParams, setSearchParams, refresh]);
-
   // ── Helpers ───────────────────────────────────────────────────────────────
   const handleRefresh = () => { refresh(); setRefreshKey(k => k + 1); };
 
   const getWalletBalance = (currency: string) => {
-    const w = wallets.find(x => (x.currency || x.asset || '').toUpperCase() === currency.toUpperCase());
+    const w = wallets.find(x => (x.asset || '').toUpperCase() === currency.toUpperCase());
     return {
-      balance: parseFloat(String(w?.balance || '0')) || 0,
-      available: parseFloat(String(w?.balances?.available ?? w?.available_balance ?? w?.balance ?? '0')) || 0,
-      pending: parseFloat(String(w?.balances?.pending ?? w?.pending_balance ?? '0')) || 0,
+      balance: parseFloat(String(w?.balance ?? 0)) || 0,
+      available: parseFloat(String(w?.available ?? w?.balance ?? 0)) || 0,
+      pending: 0, // WalletEntry uses available/locked — no pending field
       address: w?.address,
       network: w?.network,
     };
@@ -186,7 +121,7 @@ function WalletHubContent() {
   const fiatWalletsInfo = fiatCatalog.map(c => ({ currency: c.code, symbol: c.symbol, balance: getWalletBalance(c.code).balance, flag: c.flag, color: c.color }));
   const cryptoWalletsInfo = cryptoCatalog.map(c => ({ currency: c.code, symbol: c.symbol, balance: getWalletBalance(c.code).balance, flag: c.flag, color: c.color }));
 
-  // fiat wallets with balances for portfolio
+  // fiat wallets for portfolio summary
   const fiatWalletsForPortfolio = fiatCatalog.map(c => {
     const b = getWalletBalance(c.code);
     return { currency: c.code, balance: b.balance, balances: { available: b.available, pending: b.pending, locked: 0 } };
@@ -214,9 +149,12 @@ function WalletHubContent() {
     } catch { /* handled */ }
   };
 
-  // All supported currencies not yet active in the user's wallets
-  const availableToCreate = [...DEFAULT_FIAT_CATALOG, ...DEFAULT_CRYPTO_CATALOG]
-    .filter(c => c.status === 'active' && !wallets.some(w => (w.currency || w.asset || '').toUpperCase() === c.code));
+  // Group Fiat Catalog into Active vs Coming Soon
+  const activeFiatCurrencies = fiatCatalog.filter(c => c.status === 'active');
+  const comingSoonFiatCurrencies = fiatCatalog.filter(c => c.status === 'coming_soon');
+
+  // Currencies available to create in modal
+  const availableToCreate = fiatCatalog.filter(c => !wallets.some(w => (w.asset || '').toUpperCase() === c.code));
 
   return (
     <div className="min-h-screen text-white" style={{ background: '#060611' }}>
@@ -229,7 +167,7 @@ function WalletHubContent() {
               style={{ backgroundImage: 'linear-gradient(135deg, #fff 0%, #a5b4fc 100%)' }}>
               Wallet Hub
             </h1>
-            <p className="text-gray-500 text-sm mt-0.5">Your unified financial command centre</p>
+            <p className="text-gray-400 text-sm mt-0.5">Unified multi-currency treasury & wallet management</p>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -238,7 +176,7 @@ function WalletHubContent() {
               size="sm"
               className="hidden sm:flex border-white/10 hover:border-indigo-500/50 text-gray-300"
             >
-              <Plus size={15} className="mr-1.5" /> Add Wallet
+              <Plus size={15} className="mr-1.5" /> Add Currency
             </Button>
             <Button onClick={handleRefresh} variant="ghost" size="sm" className="bg-white/5 hover:bg-white/10">
               <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
@@ -270,32 +208,82 @@ function WalletHubContent() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -12 }}
               transition={{ duration: 0.25 }}
-              className="space-y-6"
+              className="space-y-8"
             >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {fiatCatalog.map(currency => {
-                  const balData = getWalletBalance(currency.code);
-                  return (
-                    <FiatWalletCard
-                      key={currency.code}
-                      currency={currency as any}
-                      balance={balData.balance}
-                      availableBalance={balData.available}
-                      pendingBalance={balData.pending}
-                      showBalance={showBalances}
-                      isSelected={selectedAsset.currency === currency.code}
-                      onSelect={() => setSelectedAsset({ currency: currency.code, network: 'native' })}
-                      onDeposit={() => openModal('fund', currency.code)}
-                      onWithdraw={() => openModal('withdraw', currency.code)}
-                      onTransfer={() => openModal('transfer', currency.code)}
-                      onConvert={() => { setActiveTab('exchange'); }}
-                      onBuyCrypto={() => { setActiveTab('exchange'); }}
-                    />
-                  );
-                })}
+              {/* ── SECTION 1: AVAILABLE NOW ──────────────────────────── */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <h2 className="text-lg font-bold text-white tracking-wide">Available Now</h2>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                      {activeFiatCurrencies.length} Operational Currencies
+                    </span>
+                  </div>
+                  <span className="text-xs text-gray-500 hidden sm:inline">
+                    Live production banking & collections
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {activeFiatCurrencies.map(currency => {
+                    const balData = getWalletBalance(currency.code);
+                    return (
+                      <FiatWalletCard
+                        key={currency.code}
+                        currency={currency}
+                        balance={balData.balance}
+                        availableBalance={balData.available}
+                        pendingBalance={balData.pending}
+                        showBalance={showBalances}
+                        isSelected={selectedAsset.currency === currency.code}
+                        onSelect={() => setSelectedAsset({ currency: currency.code, network: 'native' })}
+                        onDeposit={() => openModal('fund', currency.code)}
+                        onWithdraw={() => openModal('withdraw', currency.code)}
+                        onTransfer={() => openModal('transfer', currency.code)}
+                        onConvert={() => { setActiveTab('exchange'); }}
+                        onBuyCrypto={() => { setActiveTab('exchange'); }}
+                      />
+                    );
+                  })}
+                </div>
               </div>
 
-              {selectedAsset.currency && ['NGN', 'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'NZD', 'JPY'].includes(selectedAsset.currency) && (
+              {/* ── SECTION 2: COMING SOON ────────────────────────────── */}
+              <div className="space-y-4 pt-4">
+                <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <Clock size={18} className="text-amber-400 shrink-0" />
+                    <h2 className="text-lg font-bold text-white tracking-wide">Coming Soon</h2>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/25">
+                      {comingSoonFiatCurrencies.length} Supported International Currencies
+                    </span>
+                  </div>
+                  <span className="text-xs text-amber-400/90 font-medium">
+                    Available after banking partner activation
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {comingSoonFiatCurrencies.map(currency => {
+                    const balData = getWalletBalance(currency.code);
+                    return (
+                      <FiatWalletCard
+                        key={currency.code}
+                        currency={currency}
+                        balance={balData.balance}
+                        availableBalance={balData.available}
+                        pendingBalance={balData.pending}
+                        showBalance={showBalances}
+                        isSelected={selectedAsset.currency === currency.code}
+                        onSelect={() => setSelectedAsset({ currency: currency.code, network: 'native' })}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+
+              {selectedAsset.currency && activeFiatCurrencies.some(c => c.code === selectedAsset.currency) && (
                 <VirtualAccountDetails 
                   currency={selectedAsset.currency} 
                   onAccountCreated={handleRefresh}
@@ -312,35 +300,59 @@ function WalletHubContent() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -12 }}
               transition={{ duration: 0.25 }}
-              className="space-y-3"
+              className="space-y-6"
             >
-              {cryptoCatalog.map(currency => {
-                const balData = getWalletBalance(currency.code);
-                const usdVal = toUSD(balData.balance, currency.code);
-                return (
-                  <CryptoWalletCard
-                    key={currency.code}
-                    currency={currency as any}
-                    balance={balData.balance}
-                    availableBalance={balData.available}
-                    address={balData.address}
-                    network={balData.network}
-                    usdValue={usdVal}
-                    ngnValue={usdVal / ngnRate}
-                    showBalance={showBalances}
-                    isSelected={selectedAsset.currency === currency.code}
-                    isExpanded={expandedCrypto === currency.code}
-                    onSelect={() => setSelectedAsset({ currency: currency.code, network: balData.network || 'native' })}
-                    onToggleExpand={() => setExpandedCrypto(prev => prev === currency.code ? null : currency.code)}
-                    onDeposit={() => openModal('receive', currency.code, balData.network || 'native')}
-                    onWithdraw={() => openModal('withdraw', currency.code, balData.network || 'native')}
-                    onSend={() => openModal('transfer', currency.code)}
-                    onSwap={() => setActiveTab('exchange')}
-                    onBuyWithFiat={() => { setActiveTab('exchange'); }}
-                    onSellToFiat={() => { setActiveTab('exchange'); }}
-                  />
-                );
-              })}
+              {/* Crypto Header */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-900/20 via-indigo-900/20 to-gray-900 border border-purple-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-300 font-bold">
+                    ₿
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-lg font-bold text-white">Crypto Wallet (Beta)</h2>
+                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                        Beta
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-400">Custody integration coming soon until production custody is enabled.</p>
+                  </div>
+                </div>
+                <div className="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-medium flex items-center gap-1.5">
+                  <ShieldAlert size={14} className="text-amber-400 shrink-0" />
+                  <span>Custody Integration Coming Soon</span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {cryptoCatalog.map(currency => {
+                  const balData = getWalletBalance(currency.code);
+                  const usdVal = toUSD(balData.balance, currency.code);
+                  return (
+                    <CryptoWalletCard
+                      key={currency.code}
+                      currency={currency}
+                      balance={balData.balance}
+                      availableBalance={balData.available}
+                      address={balData.address}
+                      network={balData.network}
+                      usdValue={usdVal}
+                      ngnValue={usdVal / ngnRate}
+                      showBalance={showBalances}
+                      isSelected={selectedAsset.currency === currency.code}
+                      isExpanded={expandedCrypto === currency.code}
+                      onSelect={() => setSelectedAsset({ currency: currency.code, network: balData.network || 'native' })}
+                      onToggleExpand={() => setExpandedCrypto(prev => prev === currency.code ? null : currency.code)}
+                      onDeposit={() => openModal('receive', currency.code, balData.network || 'native')}
+                      onWithdraw={() => openModal('withdraw', currency.code, balData.network || 'native')}
+                      onSend={() => openModal('transfer', currency.code)}
+                      onSwap={() => setActiveTab('exchange')}
+                      onBuyWithFiat={() => { setActiveTab('exchange'); }}
+                      onSellToFiat={() => { setActiveTab('exchange'); }}
+                    />
+                  );
+                })}
+              </div>
             </motion.div>
           )}
 
@@ -354,7 +366,7 @@ function WalletHubContent() {
               transition={{ duration: 0.25 }}
             >
               <ExchangeHub
-                fiatWallets={fiatWalletsInfo.filter(w => fiatCatalog.find(c => c.code === w.currency)?.status === 'active')}
+                fiatWallets={fiatWalletsInfo.filter(w => activeFiatCurrencies.some(c => c.code === w.currency))}
                 cryptoWallets={cryptoWalletsInfo}
                 rates={rates}
                 lastUsedFiatCurrency={lastBuyFiat}
@@ -420,32 +432,41 @@ function WalletHubContent() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="modal-overlay p-4"
+            className="modal-overlay p-4 z-50"
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="modal-content w-full max-w-lg"
+              className="modal-content w-full max-w-lg bg-gray-900 border border-white/10 p-6 rounded-3xl"
             >
               <button className="modal-close" onClick={() => setShowCreateModal(false)}>
                 <X size={20} />
               </button>
-              <h2 className="text-xl font-bold mb-1">Add New Wallet</h2>
-              <p className="text-gray-400 text-sm mb-6">Activate a new currency wallet to start transacting</p>
+              <h2 className="text-xl font-bold mb-1 text-white">Add New Currency Wallet</h2>
+              <p className="text-gray-400 text-sm mb-6">Select a currency to activate your wallet balance</p>
               {availableToCreate.length === 0 ? (
                 <p className="text-center text-gray-500 py-6">All available wallets are already active.</p>
               ) : (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-96 overflow-y-auto pr-1">
                   {availableToCreate.map(c => (
                     <button
                       key={c.code}
                       onClick={() => handleCreateWallet(c.code)}
-                      className="p-4 border border-white/5 rounded-2xl hover:border-indigo-500/40 hover:bg-white/5 transition-all flex flex-col items-center gap-2 group"
+                      className={`p-4 border rounded-2xl transition-all flex flex-col items-center gap-2 text-center ${
+                        c.status === 'active'
+                          ? 'border-white/10 hover:border-indigo-500/50 hover:bg-white/5 cursor-pointer'
+                          : 'border-white/5 bg-white/5 opacity-60 cursor-not-allowed'
+                      }`}
                     >
-                      <span className="text-3xl group-hover:scale-110 transition-transform">{c.flag}</span>
+                      <span className="text-3xl">{c.flag}</span>
                       <span className="font-bold text-white text-sm">{c.code}</span>
-                      <span className="text-gray-500 text-xs">{c.name}</span>
+                      <span className="text-gray-400 text-xs truncate max-w-full">{c.name}</span>
+                      {c.status === 'active' ? (
+                        <span className="text-[10px] text-emerald-400 font-semibold">Active</span>
+                      ) : (
+                        <span className="text-[10px] text-amber-400 font-semibold">Coming Soon</span>
+                      )}
                     </button>
                   ))}
                 </div>

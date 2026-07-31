@@ -1,8 +1,9 @@
-export enum ValuationMode {
-    FRESH = 'FRESH',
-    STALE = 'STALE',
-    INVALID = 'INVALID'
-}
+export const ValuationMode = {
+    FRESH: 'FRESH',
+    STALE: 'STALE',
+    INVALID: 'INVALID',
+} as const;
+export type ValuationMode = typeof ValuationMode[keyof typeof ValuationMode];
 
 /**
  * Unified Balance Model: Raw Holdings (TRUTH)
