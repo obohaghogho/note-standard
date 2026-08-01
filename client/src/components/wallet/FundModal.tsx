@@ -594,6 +594,22 @@ export const FundModal: React.FC<FundModalProps> = ({
                     );
                 })()}
 
+                {/* Informational Operational Notice Box (Non-Error UX) */}
+                {!activeDepositRails.some(r => r.type === 'card') && !isCrypto && (
+                    <div className="p-3 bg-cyan-950/20 border border-cyan-500/20 rounded-xl text-[11px] text-cyan-300 flex items-start gap-2.5 mb-4 leading-relaxed">
+                        <span className="text-sm select-none">ℹ️</span>
+                        <div>
+                            <strong className="font-semibold text-cyan-200 block mb-0.5">Active Deposit Rails ({effectivePayCurrency}):</strong>
+                            <span className="text-gray-400">Direct collection is active via banking provider. Supported deposit methods:</span>
+                            <ul className="list-disc list-inside mt-1 font-medium space-y-0.5 text-cyan-300">
+                                {activeDepositRails.map(r => (
+                                    <li key={r.id}>{r.name} ({r.estimatedSettlement})</li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+                )}
+
                 {/* Fiat Payment Currency Selector (When buying crypto directly from a Crypto wallet view) */}
                 <AnimatePresence>
                     {isCrypto && (method === 'card' || method === 'bank') && (
