@@ -38,42 +38,79 @@ function getGatewayConversionTarget(currency) {
 const FX_VOLATILITY_BUFFER = 0.01; // 1%
 
 // ── Bank Transfer Support Matrix ──────────────────────────────────────────────
+// Active = full fiat banking support via Fincra.
+// coming_soon = not yet enabled for NoteStandard; display-only.
 const BANK_TRANSFER_SUPPORT = {
-  NGN: { provider: "paystack_dva", supported: true },
-  USD: { provider: "grey", supported: true },
-  EUR: { provider: "grey", supported: true },
-  GBP: { provider: "grey", supported: true },
-  JPY: {
-    provider: null,
-    supported: false,
-    message: "JPY bank transfers are not supported.",
-    fallbackCurrency: "USD",
-  },
+  // Core fiat — Fincra
+  NGN:  { provider: "fincra",  supported: true },
+  USD:  { provider: "fincra",  supported: true },
+  EUR:  { provider: "fincra",  supported: true },
+  GBP:  { provider: "fincra",  supported: true },
+  CAD:  { provider: "fincra",  supported: true },
+  // African fiat — Fincra
+  GHS:  { provider: "fincra",  supported: true },
+  KES:  { provider: "fincra",  supported: true },
+  TZS:  { provider: "fincra",  supported: true },
+  UGX:  { provider: "fincra",  supported: true },
+  ZAR:  { provider: "fincra",  supported: true },
+  XOF:  { provider: "fincra",  supported: true },
+  MWK:  { provider: "fincra",  supported: true },
+  RWF:  { provider: "fincra",  supported: true },
+  XAF:  { provider: "fincra",  supported: true },
+  ZMW:  { provider: "fincra",  supported: true },
+  EGP:  { provider: "fincra",  supported: true },
+  // Asian fiat — Fincra
+  CNY:  { provider: "fincra",  supported: true },
+  CNH:  { provider: "fincra",  supported: true },
+  // Stablecoins — Fincra merchant wallet (fiat settlement layer)
+  USDT: { provider: "fincra",  supported: true },
+  USDC: { provider: "fincra",  supported: true },
+  // Digital currency — Fincra
+  CNGN: { provider: "fincra",  supported: true },
+  // Coming soon — provider not yet active for NoteStandard
   AUD: {
-    provider: null,
-    supported: false,
-    message: "AUD bank transfers are not directly supported. Card payments are automatically processed.",
-    fallbackCurrency: "USD",
-  },
-  CAD: {
-    provider: null,
-    supported: false,
-    message: "CAD bank transfers are not directly supported. Card payments are automatically processed.",
+    provider: null, supported: false,
+    message: "AUD will become available after provider approval.",
     fallbackCurrency: "USD",
   },
   NZD: {
-    provider: null,
-    supported: false,
-    message: "NZD bank transfers are not directly supported. Card payments are automatically processed.",
+    provider: null, supported: false,
+    message: "NZD will become available after provider approval.",
+    fallbackCurrency: "USD",
+  },
+  JPY: {
+    provider: null, supported: false,
+    message: "JPY will become available after provider approval.",
     fallbackCurrency: "USD",
   },
 };
 
 // ── Supported Wallet Currencies ───────────────────────────────────────────────
-const SUPPORTED_WALLET_CURRENCIES = new Set(["NGN", "USD", "EUR", "GBP", "JPY", "AUD", "CAD", "NZD"]);
+// All currencies for which wallets can be created and balances maintained.
+const SUPPORTED_WALLET_CURRENCIES = new Set([
+  "NGN","USD","EUR","GBP","CAD",
+  "GHS","KES","TZS","UGX","ZAR",
+  "XOF","MWK","RWF","XAF","ZMW",
+  "EGP","CNY","CNH","USDT","USDC",
+  "CNGN",
+  // Coming soon — wallet records exist but no transactions permitted
+  "AUD","NZD","JPY",
+]);
+
+// ── Coming Soon Currencies ────────────────────────────────────────────────────
+// Approved by Fincra but not yet enabled. Display only.
+const COMING_SOON_CURRENCIES = new Set(["AUD", "NZD", "JPY"]);
 
 // ── Supported Bank Account Currencies ────────────────────────────────────────
-const SUPPORTED_BANK_ACCOUNT_CURRENCIES = new Set(["USD", "GBP", "EUR", "NGN", "JPY", "AUD", "CAD", "NZD"]);
+const SUPPORTED_BANK_ACCOUNT_CURRENCIES = new Set([
+  "NGN","USD","EUR","GBP","CAD",
+  "GHS","KES","TZS","UGX","ZAR",
+  "XOF","MWK","RWF","XAF","ZMW",
+  "EGP","CNY","CNH","USDT","USDC",
+  "CNGN",
+]);
+
+
 
 // ── Helper Functions ──────────────────────────────────────────────────────────
 
@@ -100,13 +137,14 @@ function isSupportedWalletCurrency(currency) {
 }
 
 module.exports = {
-  // Legacy exports maintained to prevent massive cascading breaks during migration
-  PAYSTACK_NATIVE_CURRENCIES: new Set(["NGN", "USD", "EUR", "GBP", "GHS", "ZAR", "KES", "EGP"]), // EUR+GBP added: supported via Paystack International Payments
+  // Legacy exports maintained to prevent cascading breaks during migration
+  PAYSTACK_NATIVE_CURRENCIES: new Set(["NGN", "USD", "EUR", "GBP", "GHS", "ZAR", "KES", "EGP"]),
   GATEWAY_CONVERSION_MAP,
   FX_VOLATILITY_BUFFER,
   BANK_TRANSFER_SUPPORT,
   SUPPORTED_WALLET_CURRENCIES,
   SUPPORTED_BANK_ACCOUNT_CURRENCIES,
+  COMING_SOON_CURRENCIES,
   
   requiresGatewayConversion,
   getGatewayConversionTarget,
@@ -115,3 +153,4 @@ module.exports = {
   getDecimals,
   isSupportedWalletCurrency,
 };
+

@@ -3,6 +3,10 @@ const { v4: uuidv4 } = require("uuid");
 const math = require("../utils/mathUtils");
 const logger = require("../utils/logger");
 const LedgerService = require("./LedgerService");
+const { FINCRA_SUPPORTED_SET, FINCRA_COMING_SOON_SET } = require("./fincra/constants");
+
+// Hard crypto-only currencies: on-chain custody via NowPayments, never through Fincra fiat
+const HARD_CRYPTO_CURRENCIES = new Set(["BTC", "ETH"]);
 
 /**
  * FiatWalletService
@@ -17,7 +21,9 @@ class FiatWalletService {
       .from("wallets_v6")
       .select("*")
       .eq("user_id", userId)
-      .not("currency", "in", "(BTC,ETH,USDT,USDC)"); // Filter out crypto
+      // Only exclude on-chain crypto custody currencies from the fiat view.
+      // USDT and USDC via Fincra are fiat settlement and are included here.
+      .not("currency", "in", "(BTC,ETH)");
 
     if (error) throw error;
     
@@ -38,8 +44,14 @@ class FiatWalletService {
   async createWallet(userId, currency) {
     const upCurrency = currency.toUpperCase();
 
-    if (["BTC", "ETH", "USDT", "USDC"].includes(upCurrency)) {
-      throw new Error("Crypto currencies are strictly forbidden in FiatWalletService.");
+    // Block on-chain crypto-only currencies — these use CryptoWalletService (NowPayments)
+    if (HARD_CRYPTO_CURRENCIES.has(upCurrency)) {
+      throw new Error("BTC and ETH wallets must use CryptoWalletService (NowPayments on-chain custody).");
+    }
+
+    // Block coming-soon currencies from creating transactions
+    if (FINCRA_COMING_SOON_SET.has(upCurrency)) {
+      throw new Error(`CURRENCY_NOT_AVAILABLE: ${upCurrency} will become available after provider approval. Deposits and withdrawals are not yet enabled.`);
     }
 
     const { data: existing } = await supabase
@@ -179,8 +191,12 @@ class FiatWalletService {
     const upCurrency = (currency || 'USD').toUpperCase();
     const numAmount = parseFloat(amount);
     
-    if (["BTC", "ETH", "USDT", "USDC"].includes(upCurrency)) {
-      throw new Error("Crypto withdrawals must use CryptoWalletService.");
+    if (HARD_CRYPTO_CURRENCIES.has(upCurrency)) {
+      throw new Error("Crypto withdrawals (BTC, ETH) must use CryptoWalletService.");
+    }
+
+    if (FINCRA_COMING_SOON_SET.has(upCurrency)) {
+      throw new Error(`CURRENCY_NOT_AVAILABLE: ${upCurrency} is not yet available for withdrawals.`);
     }
 
     const fraudEngine = require("./payment/FraudEngine");

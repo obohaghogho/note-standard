@@ -1,0 +1,272 @@
+{
+  "checksum": "sha256:b266e7e415e4acc7e70f90f712a2952ed325d9ee1070d52fc54f262fe8b7df1f",
+  "signature": {
+    "algorithm": "HMAC-SHA256",
+    "keyId": "audit-key-2026-v1",
+    "signature": "9762152a60b2906f4155b980d926e9f38fb3eb0eb8e9ba2e85f11be7872faf06"
+  },
+  "payload": {
+    "bundleId": "1b2ef751-3603-49e9-9484-9240bf8d3b7f",
+    "previousBundleChecksum": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "generatedAt": "2026-07-30T14:04:11.567Z",
+    "schemaVersion": "1.0.0",
+    "systemState": {
+      "mode": "NORMAL"
+    },
+    "integrityReport": {
+      "id": "b9585491-0327-42b3-894f-f261e5ea1664",
+      "status": "PASSED",
+      "debits_total": "221869.000000000000000000",
+      "credits_total": "221869.000000000000000000",
+      "entries_count": "19",
+      "failed_checks": {
+        "checks": {
+          "financial": {
+            "doubleEntry": {
+              "id": "INV-001",
+              "name": "Σ Debits = Σ Credits",
+              "status": "PASSED",
+              "severity": "CRITICAL"
+            },
+            "nonNegativeBalances": {
+              "id": "INV-003",
+              "name": "Non-negative wallet balances",
+              "status": "PASSED",
+              "severity": "HIGH"
+            },
+            "referentialIntegrity": {
+              "id": "INV-002",
+              "name": "No orphan ledger entries",
+              "status": "PASSED",
+              "severity": "HIGH"
+            }
+          },
+          "operational": {
+            "outboxDeadLetter": {
+              "id": "INV-004",
+              "name": "Outbox Dead-Letter Queue empty",
+              "status": "PASSED",
+              "severity": "MEDIUM"
+            }
+          }
+        },
+        "failedChecks": [],
+        "overallStatus": "HEALTHY",
+        "highestFailedSeverity": "NONE"
+      },
+      "duration_ms": 3856,
+      "verified_at": "2026-07-30T14:04:09.756Z"
+    },
+    "reserveProof": [
+      {
+        "policy": {
+          "id": "treasury-reserve-policy",
+          "version": "1.0.0",
+          "checksum": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "effectiveAt": "2026-07-30T00:00:00Z"
+        },
+        "currency": "BTC",
+        "liabilities": {
+          "available": "0.0002",
+          "locked": "0",
+          "pendingWithdrawal": "0",
+          "total": "0.0002"
+        },
+        "assets": {
+          "immediatelySpendable": "0",
+          "lockedCustody": "0",
+          "pendingSettlement": "0",
+          "total": "0"
+        },
+        "providerExposure": {},
+        "solvencyReserveRatio": "0.00%",
+        "liquidityRatio": "0.00%",
+        "severity": "CRITICAL",
+        "recommendedAction": "HALT_NEW_WITHDRAWALS_IMMEDIATE_ESCALATION",
+        "enforcedControls": {
+          "newWithdrawals": "BLOCKED",
+          "largeTransfers": "BLOCKED",
+          "newDeposits": "ALLOWED",
+          "internalTransfers": "ALLOWED"
+        },
+        "decisionEvidence": [
+          {
+            "rule": "minimumReserveRatio",
+            "expected": ">=100.00%",
+            "actual": "0.00%",
+            "result": "FAILED"
+          },
+          {
+            "rule": "immediateLiquidityBuffer",
+            "expected": ">=100.00%",
+            "actual": "0.00%",
+            "result": "FAILED"
+          }
+        ]
+      },
+      {
+        "policy": {
+          "id": "treasury-reserve-policy",
+          "version": "1.0.0",
+          "checksum": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "effectiveAt": "2026-07-30T00:00:00Z"
+        },
+        "currency": "USDC",
+        "liabilities": {
+          "available": "0",
+          "locked": "0",
+          "pendingWithdrawal": "0",
+          "total": "0"
+        },
+        "assets": {
+          "immediatelySpendable": "0",
+          "lockedCustody": "0",
+          "pendingSettlement": "0",
+          "total": "0"
+        },
+        "providerExposure": {},
+        "solvencyReserveRatio": "100.00%",
+        "liquidityRatio": "100.00%",
+        "severity": "HEALTHY",
+        "recommendedAction": "NORMAL_OPERATION",
+        "enforcedControls": {
+          "newWithdrawals": "ALLOWED",
+          "largeTransfers": "ALLOWED",
+          "newDeposits": "ALLOWED",
+          "internalTransfers": "ALLOWED"
+        },
+        "decisionEvidence": [
+          {
+            "rule": "minimumReserveRatio",
+            "expected": ">=100.00%",
+            "actual": "100.00%",
+            "result": "PASSED"
+          },
+          {
+            "rule": "immediateLiquidityBuffer",
+            "expected": ">=100.00%",
+            "actual": "100.00%",
+            "result": "PASSED"
+          }
+        ]
+      },
+      {
+        "policy": {
+          "id": "treasury-reserve-policy",
+          "version": "1.0.0",
+          "checksum": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "effectiveAt": "2026-07-30T00:00:00Z"
+        },
+        "currency": "USDT",
+        "liabilities": {
+          "available": "61658",
+          "locked": "80000",
+          "pendingWithdrawal": "0",
+          "total": "141658"
+        },
+        "assets": {
+          "immediatelySpendable": "5000",
+          "lockedCustody": "0",
+          "pendingSettlement": "0",
+          "total": "5000"
+        },
+        "providerExposure": {
+          "NOWPAYMENTS": {
+            "amount": "5000",
+            "sharePercent": "100.00%"
+          }
+        },
+        "solvencyReserveRatio": "3.53%",
+        "liquidityRatio": "8.11%",
+        "severity": "CRITICAL",
+        "recommendedAction": "HALT_NEW_WITHDRAWALS_IMMEDIATE_ESCALATION",
+        "enforcedControls": {
+          "newWithdrawals": "BLOCKED",
+          "largeTransfers": "BLOCKED",
+          "newDeposits": "ALLOWED",
+          "internalTransfers": "ALLOWED"
+        },
+        "decisionEvidence": [
+          {
+            "rule": "minimumReserveRatio",
+            "expected": ">=100.00%",
+            "actual": "3.53%",
+            "result": "FAILED"
+          },
+          {
+            "rule": "immediateLiquidityBuffer",
+            "expected": ">=100.00%",
+            "actual": "8.11%",
+            "result": "FAILED"
+          }
+        ]
+      },
+      {
+        "policy": {
+          "id": "treasury-reserve-policy",
+          "version": "1.0.0",
+          "checksum": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "effectiveAt": "2026-07-30T00:00:00Z"
+        },
+        "currency": "ETH",
+        "liabilities": {
+          "available": "0",
+          "locked": "0",
+          "pendingWithdrawal": "0",
+          "total": "0"
+        },
+        "assets": {
+          "immediatelySpendable": "0",
+          "lockedCustody": "0",
+          "pendingSettlement": "0",
+          "total": "0"
+        },
+        "providerExposure": {},
+        "solvencyReserveRatio": "100.00%",
+        "liquidityRatio": "100.00%",
+        "severity": "HEALTHY",
+        "recommendedAction": "NORMAL_OPERATION",
+        "enforcedControls": {
+          "newWithdrawals": "ALLOWED",
+          "largeTransfers": "ALLOWED",
+          "newDeposits": "ALLOWED",
+          "internalTransfers": "ALLOWED"
+        },
+        "decisionEvidence": [
+          {
+            "rule": "minimumReserveRatio",
+            "expected": ">=100.00%",
+            "actual": "100.00%",
+            "result": "PASSED"
+          },
+          {
+            "rule": "immediateLiquidityBuffer",
+            "expected": ">=100.00%",
+            "actual": "100.00%",
+            "result": "PASSED"
+          }
+        ]
+      }
+    ],
+    "outboxMetrics": [
+      {
+        "status": "PUBLISHED",
+        "count": "2",
+        "oldest_event_at": "2026-07-30T10:12:42.477Z"
+      }
+    ],
+    "workerHeartbeats": {
+      "outboxWorker": {
+        "status": "INACTIVE",
+        "lastHeartbeatAt": "2026-07-30T14:04:05.819Z",
+        "ageSeconds": 6
+      },
+      "custodySyncWorker": {
+        "status": "INACTIVE",
+        "lastHeartbeatAt": "2026-07-30T14:04:05.820Z",
+        "ageSeconds": 6
+      }
+    }
+  },
+  "durationMs": 5750
+}

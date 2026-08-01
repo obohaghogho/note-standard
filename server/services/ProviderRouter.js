@@ -23,25 +23,54 @@
 const INTL_ENABLED = process.env.INTERNATIONAL_FIAT_ENABLED === 'true';
 
 // ── Feature Flags for Virtual Accounts ───────────────────────────────────────
+// All Fincra-approved currencies have VA enabled via the Fincra merchant wallet.
+// AUD, NZD, JPY remain coming_soon until provider approval.
 const VA_FLAGS = {
-  NGN: true, // NGN is always active natively
-  USD: process.env.USD_VIRTUAL_ACCOUNTS_ENABLED === 'true',
-  EUR: process.env.EUR_VIRTUAL_ACCOUNTS_ENABLED === 'true',
-  GBP: process.env.GBP_VIRTUAL_ACCOUNTS_ENABLED === 'true',
-  CAD: process.env.CAD_VIRTUAL_ACCOUNTS_ENABLED === 'true',
-  AUD: process.env.AUD_VIRTUAL_ACCOUNTS_ENABLED === 'true',
-  NZD: process.env.NZD_VIRTUAL_ACCOUNTS_ENABLED === 'true',
+  // Core fiat — always active via Fincra
+  NGN: true,
+  USD: true,
+  EUR: true,
+  GBP: true,
+  CAD: true,
+  // African fiat — active via Fincra
+  GHS: true,
+  KES: true,
+  TZS: true,
+  UGX: true,
+  ZAR: true,
+  XOF: true,
+  MWK: true,
+  RWF: true,
+  XAF: true,
+  ZMW: true,
+  EGP: true,
+  // Asian fiat — active via Fincra
+  CNY: true,
+  CNH: true,
+  // Stablecoins — Fincra merchant wallet only (no virtual accounts)
+  USDT: false,
+  USDC: false,
+  // Digital currency
+  CNGN: false,
+  // Coming soon — provider not yet approved for NoteStandard
+  AUD: false,
+  NZD: false,
+  JPY: false,
 };
 
 // ── Virtual Account Provider Registry (Configuration-driven) ──────────────────
+// All Fincra-approved currencies default to fincra for virtual accounts.
+// AUD/NZD/JPY have no provider (not yet approved).
 const VA_ROUTING = {
   NGN: process.env.NGN_VIRTUAL_ACCOUNT_PROVIDER || 'fincra',
   USD: process.env.USD_VIRTUAL_ACCOUNT_PROVIDER || 'fincra',
   EUR: process.env.EUR_VIRTUAL_ACCOUNT_PROVIDER || 'fincra',
   GBP: process.env.GBP_VIRTUAL_ACCOUNT_PROVIDER || 'fincra',
   CAD: process.env.CAD_VIRTUAL_ACCOUNT_PROVIDER || 'fincra',
-  AUD: process.env.AUD_VIRTUAL_ACCOUNT_PROVIDER || 'fincra',
-  NZD: process.env.NZD_VIRTUAL_ACCOUNT_PROVIDER || 'fincra',
+  GHS: 'fincra', TZS: 'fincra', KES: 'fincra', UGX: 'fincra',
+  ZAR: 'fincra', XOF: 'fincra', MWK: 'fincra', RWF: 'fincra',
+  XAF: 'fincra', ZMW: 'fincra', EGP: 'fincra', CNY: 'fincra',
+  CNH: 'fincra',
 };
 
 // ── Provider Registry ─────────────────────────────────────────────────────────
@@ -82,8 +111,14 @@ const PROVIDER_REGISTRY = {
   fincra: {
     name: 'Fincra',
     type: 'fiat_gateway',
-    supportedCurrencies: ['NGN', 'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'NZD', 'KES'],
-    operations: ['deposit', 'withdraw', 'transfer', 'virtual_account'],
+    supportedCurrencies: [
+      'NGN','USD','EUR','GBP','CAD',
+      'GHS','KES','TZS','UGX','ZAR',
+      'XOF','MWK','RWF','XAF','ZMW',
+      'EGP','CNY','CNH','USDT','USDC',
+      'CNGN',
+    ],
+    operations: ['deposit', 'withdraw', 'transfer', 'virtual_account', 'convert'],
     requiresSmallestUnit: false,
     live: true,
   },
@@ -97,9 +132,21 @@ const PROVIDER_REGISTRY = {
   },
 };
 
-// ── Crypto currency set ───────────────────────────────────────────────────────
-const CRYPTO_CURRENCIES = new Set(['BTC', 'ETH', 'USDT', 'USDC', 'MATIC', 'XRP', 'LTC', 'BNB']);
-const FIAT_CURRENCIES   = new Set(['NGN', 'USD', 'EUR', 'GBP', 'GHS', 'ZAR', 'KES', 'EGP', 'CAD', 'AUD', 'NZD', 'JPY', 'AED']);
+// ── Currency sets ─────────────────────────────────────────────────────────────
+// USDT/USDC appear in both sets because Fincra (fiat settlement) and
+// NowPayments (on-chain) support them independently. The routing logic
+// below separates them: Fincra USDT/USDC go through fiat path.
+const CRYPTO_CURRENCIES = new Set(['BTC', 'ETH', 'MATIC', 'XRP', 'LTC', 'BNB']);
+const FINCRA_FIAT_SET   = new Set([
+  'NGN','USD','EUR','GBP','CAD',
+  'GHS','KES','TZS','UGX','ZAR',
+  'XOF','MWK','RWF','XAF','ZMW',
+  'EGP','CNY','CNH','USDT','USDC','CNGN',
+]);
+const COMING_SOON_SET   = new Set(['AUD','NZD','JPY']);
+const FIAT_CURRENCIES   = new Set([
+  ...FINCRA_FIAT_SET, ...COMING_SOON_SET, 'AED',
+]);
 
 /**
  * Determines whether a currency code is crypto.
@@ -149,31 +196,19 @@ function getProvider(currency, operation) {
 
   // ── Virtual Account Operation ─────────────────────────────────────────────
   if (op === 'virtual_account') {
-    // Check if the specific currency virtual account is enabled (feature flag + global intl switch)
-    const isNg = code === 'NGN';
-    const isIntlVAEnabled = VA_FLAGS[code] && INTL_ENABLED;
-    
-    if (!isNg && !isIntlVAEnabled) {
-      return 'coming_soon';
-    }
-    
+    if (!VA_FLAGS[code]) return 'coming_soon';
     return VA_ROUTING[code] || 'unsupported';
   }
 
-  // ── NGN (primary fiat) ────────────────────────────────────────────────────
-  if (code === 'NGN') {
-    return 'fincra';
-  }
+  // ── Coming soon currencies (AUD, NZD, JPY) ───────────────────────────────
+  if (COMING_SOON_SET.has(code)) return 'coming_soon';
 
-  // ── International fiat currencies ─────────────────────────────────────────
-  if (['USD', 'EUR', 'GBP', 'CAD', 'AUD'].includes(code)) {
-    if (!INTL_ENABLED) return 'coming_soon';
-    // Bank transfers for international fiat use Grey (future)
-    if (op === 'bank_transfer') return PROVIDER_REGISTRY.grey.live ? 'grey' : 'coming_soon';
-    return 'fincra'; // Use Fincra for cross-border checkouts
-  }
+  // ── Fincra fiat currencies (all 21 approved) ─────────────────────────────
+  // USDT/USDC route through fincra (merchant wallet fiat settlement).
+  // BTC/ETH are in CRYPTO_CURRENCIES above and will not reach here.
+  if (FINCRA_FIAT_SET.has(code)) return 'fincra';
 
-  // ── Other fiat (GHS, ZAR, KES, etc.) ────────────────────────────────────
+  // ── Other fiat (legacy / unlisted) ───────────────────────────────────────
   if (isFiat(code)) {
     if (PROVIDER_REGISTRY.fincra.supportedCurrencies.includes(code)) return 'fincra';
     return 'coming_soon';
