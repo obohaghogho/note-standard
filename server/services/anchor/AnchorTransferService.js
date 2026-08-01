@@ -31,6 +31,7 @@ const AnchorTransferService = {
     // ── 1. Execute transfer ───────────────────────────────────────────────────
     const result = await AnchorService.initiateTransfer({
       userId, amount, currency, accountNumber, bankCode, accountName, narration, reference,
+      destination: { accountNumber, bankCode, accountName },
     });
 
     // ── 2. Compute expected settlement date ───────────────────────────────────

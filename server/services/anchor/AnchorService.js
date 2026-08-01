@@ -22,8 +22,8 @@ const supabase      = require('../../config/database');
 let _instance = null;
 function getAnchor() {
   if (!_instance) {
-    const AnchorServiceClass = require('../anchorService');
-    _instance = new AnchorServiceClass();
+    const anchorInst = require('../anchorService');
+    _instance = anchorInst;
   }
   return _instance;
 }
