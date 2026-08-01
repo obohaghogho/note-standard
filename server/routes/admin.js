@@ -122,4 +122,25 @@ router.use('/treasury', require('./admin/treasuryRoutes'));
 // Reporting & Maintenance Mode
 router.use('/reports', require('./admin/reportingRoutes'));
 
+// Enterprise Payment Capabilities Registry & Rails Engine
+router.get('/payment-capabilities', async (req, res) => {
+  try {
+    const ProviderCapabilityRegistry = require('../services/payment/ProviderCapabilityRegistry');
+    const grid = await ProviderCapabilityRegistry.getAdminCapabilitiesGrid();
+    res.json(grid);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/payment-capabilities/refresh', async (req, res) => {
+  try {
+    const ProviderCapabilityRegistry = require('../services/payment/ProviderCapabilityRegistry');
+    const updated = await ProviderCapabilityRegistry.refreshCapabilities();
+    res.json({ success: true, ...updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

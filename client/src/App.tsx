@@ -78,6 +78,7 @@ const PushHealthDashboard = lazyWithRetry(() => import('./pages/admin/PushHealth
 const CommunicationHealthDashboard = lazyWithRetry(() => import('./pages/admin/CommunicationHealthDashboard').then(m => ({ default: m.CommunicationHealthDashboard })), 'CommunicationHealthDashboard');
 const FincraAdminPanel = lazyWithRetry(() => import('./components/admin/FincraAdminPanel').then(m => ({ default: m.FincraAdminPanel })), 'FincraAdminPanel');
 const SupportCenter = lazyWithRetry(() => import('./pages/admin/SupportCenter'), 'SupportCenter');
+const PaymentCapabilitiesPage = lazyWithRetry(() => import('./pages/admin/PaymentCapabilitiesPage'), 'PaymentCapabilitiesPage');
 const CryptoTreasuryDashboard = lazyWithRetry(() => import('./pages/admin/CryptoTreasuryDashboard'), 'CryptoTreasuryDashboard');
 
 
@@ -229,6 +230,7 @@ function App() {
                                 <Route path="communication-health" element={<CommunicationHealthDashboard />} />
                                 <Route path="fincra" element={<FincraAdminPanel />} />
                                 <Route path="crypto-treasury" element={<CryptoTreasuryDashboard />} />
+                                <Route path="payment-capabilities" element={<PaymentCapabilitiesPage />} />
                                 <Route path="support-center" element={<SupportCenter />} />
 
                               </Route>

@@ -25,6 +25,7 @@ import {
     ArrowLeft,
     Wallet,
     Coins,
+    Landmark,
     Activity
 } from 'lucide-react';
 
@@ -97,6 +98,7 @@ export const AdminLayout = () => {
         { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
         { to: '/admin/users', icon: Users, label: 'Users' },
         { to: '/admin/crypto-treasury', icon: Coins, label: 'Crypto Treasury' },
+        { to: '/admin/payment-capabilities', icon: Landmark, label: 'Payment Rails' },
         { to: '/admin/chats', icon: MessageSquare, label: 'Support Chats', badge: newChatsCount },
         { to: '/admin/ads', icon: Target, label: 'Manage Ads' },
         { to: '/admin/audit-logs', icon: HistoryIcon, label: 'Audit Logs' },

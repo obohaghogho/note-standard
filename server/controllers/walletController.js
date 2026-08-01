@@ -1053,3 +1053,40 @@ exports.refreshVirtualAccount = async (req, res) => {
   }
 };
 
+/**
+ * GET /wallet/capabilities
+ * Returns versioned payment rail capabilities for all currencies.
+ */
+exports.getCapabilities = async (req, res) => {
+  try {
+    const ProviderCapabilityRegistry = require("../services/payment/ProviderCapabilityRegistry");
+    const userTier = req.user?.plan_tier || 'FREE';
+    const capabilities = await ProviderCapabilityRegistry.getMergedCapabilities(userTier);
+    res.json(capabilities);
+  } catch (err) {
+    console.error("[WalletController] getCapabilities Error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+/**
+ * GET /wallet/capabilities/:currency
+ * Returns payment rail capabilities for a specific currency.
+ */
+exports.getCurrencyCapabilities = async (req, res) => {
+  try {
+    const { currency } = req.params;
+    const ProviderCapabilityRegistry = require("../services/payment/ProviderCapabilityRegistry");
+    const userTier = req.user?.plan_tier || 'FREE';
+    const caps = await ProviderCapabilityRegistry.getCapabilitiesForCurrency(currency, userTier);
+    if (!caps) {
+      return res.status(404).json({ error: `No payment capabilities found for currency: ${currency}` });
+    }
+    res.json(caps);
+  } catch (err) {
+    console.error("[WalletController] getCurrencyCapabilities Error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+
