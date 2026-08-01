@@ -458,28 +458,43 @@ exports.createConversation = async (req, res) => {
       return res.status(400).json({ error: "Participants (usernames) required" });
     }
 
-    // 1. Resolve Usernames to IDs (Case-Insensitive)
-    const normalizedUsernames = recipientUsernames.map(u => u.trim().toLowerCase());
-    
-    // Attempt batch resolution first
-    const { data: profiles, error: profileError } = await supabase
-      .from("profiles")
-      .select("id, username")
-      .in("username", recipientUsernames);
-    
-    let finalProfiles = profiles || [];
+    // 0. Ensure sender profile exists in public.profiles (self-healing)
+    const { ensureProfile } = require("../services/userService");
+    await ensureProfile(userId, req.user);
 
-    // Fallback for case-insensitive if some were not found
-    if (finalProfiles.length !== recipientUsernames.length) {
-      for (const username of recipientUsernames) {
-        if (!finalProfiles.find(p => p.username?.toLowerCase() === username.toLowerCase())) {
-          const { data: p } = await supabase
-            .from("profiles")
-            .select("id, username")
-            .ilike("username", username)
-            .maybeSingle();
-          if (p) finalProfiles.push(p);
-        }
+    // 1. Resolve Usernames/IDs/Emails to Profile Records
+    const cleanIdentifiers = recipientUsernames.map(u => String(u).trim().replace(/^@/, ''));
+    let finalProfiles = [];
+
+    for (const identifier of cleanIdentifiers) {
+      if (!identifier) continue;
+
+      // Check if identifier is a valid UUID
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
+
+      let p = null;
+      if (isUUID) {
+        const { data } = await supabase.from("profiles").select("id, username").eq("id", identifier).maybeSingle();
+        p = data;
+      }
+
+      if (!p) {
+        const { data } = await supabase.from("profiles").select("id, username").ilike("username", identifier).maybeSingle();
+        p = data;
+      }
+
+      if (!p) {
+        const { data } = await supabase.from("profiles").select("id, username").ilike("email", identifier).maybeSingle();
+        p = data;
+      }
+
+      if (!p) {
+        const { data } = await supabase.from("profiles").select("id, username").ilike("full_name", identifier).maybeSingle();
+        p = data;
+      }
+
+      if (p && !finalProfiles.some(existing => existing.id === p.id)) {
+        finalProfiles.push(p);
       }
     }
 
@@ -612,7 +627,12 @@ exports.createConversation = async (req, res) => {
 
     const conversationId = convData.id;
 
-    // 4. Add Members
+    // 4. Add Members (Ensure profiles exist for all participant IDs to prevent FK constraint failure)
+    await ensureProfile(userId, req.user);
+    for (const pId of participantIds) {
+      await ensureProfile(pId);
+    }
+
     const membersPayload = [
       {
         conversation_id: conversationId,

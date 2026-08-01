@@ -116,7 +116,7 @@ const requireAuth = async (req, res, next) => {
           .from("profiles")
           .select("id, role, status, plan_tier, email, username")
           .eq("id", data.user.id)
-          .single();
+          .maybeSingle();
         
         if (pError) {
           console.warn("[Auth] Preferred columns fetch failed, falling back:", pError.message);
@@ -124,10 +124,17 @@ const requireAuth = async (req, res, next) => {
             .from("profiles")
             .select("id, role, status, email, username")
             .eq("id", data.user.id)
-            .single();
+            .maybeSingle();
           profile = fallbackP;
         } else {
           profile = p;
+        }
+
+        // Self-heal: If profile is missing for authenticated user, auto-provision it
+        if (!profile) {
+          console.warn(`[Auth] Profile missing for user ${data.user.id}, triggering ensureProfile...`);
+          const { ensureProfile } = require("../services/userService");
+          profile = await ensureProfile(data.user.id, data.user);
         }
       } catch (e) {
         console.error("[Auth] Profile fetch crashed:", e.message);

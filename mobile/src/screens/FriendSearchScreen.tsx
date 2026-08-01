@@ -30,10 +30,11 @@ export default function FriendSearchScreen() {
   };
 
   const startChat = async (username: string) => {
-    setStartingChat(username);
+    const cleanUsername = String(username).trim().replace(/^@/, '');
+    setStartingChat(cleanUsername);
     try {
       // FIX: Use ChatService.createConversation which null-safely normalises the response
-      const conversation = await ChatService.createConversation(username);
+      const conversation = await ChatService.createConversation(cleanUsername);
 
       if (!conversation) {
         Alert.alert('Error', 'Could not start chat. Please try again.');

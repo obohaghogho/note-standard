@@ -2375,13 +2375,19 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     const startConversation = async (username: string): Promise<string | null> => {
         try {
-            const res = await api.post('/chat/conversations', { participants: [username], type: 'direct' });
-            const id = res.data.conversation.id;
+            const cleanUsername = String(username).trim().replace(/^@/, '');
+            const res = await api.post('/chat/conversations', { participants: [cleanUsername], type: 'direct' });
+            const id = res.data?.conversation?.id;
+            if (!id) {
+                throw new Error(res.data?.error || 'Invalid server response');
+            }
             setActiveConversationId(id);
             loadConversations();
             return id;
-        } catch {
-            toast.error('Failed to start conversation');
+        } catch (err: any) {
+            console.error('[ChatContext] startConversation error:', err);
+            const msg = err?.response?.data?.error || err?.response?.data?.details || err?.message || 'Failed to start conversation';
+            toast.error(msg);
             return null;
         }
     };
