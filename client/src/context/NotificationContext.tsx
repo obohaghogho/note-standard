@@ -429,6 +429,35 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [session, user?.id]);
 
+    // ─── Boot Self-Healing Push Audit ──────────────────────────────────────────
+    // Detects stranded accounts (0 push tokens registered on server) and auto-syncs.
+    useEffect(() => {
+        if (!session || !user || typeof window === 'undefined' || !('Notification' in window)) return;
+        if (Notification.permission !== 'granted') return;
+
+        const runBootSelfHeal = async () => {
+            try {
+                const deviceId = await getDeviceId();
+                const res = await fetch(`${API_URL}/api/notifications/installation-status/${deviceId}`, {
+                    headers: { 'Authorization': `Bearer ${session.access_token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (!data.registered || data.status === 'UNKNOWN') {
+                        console.log('[PushSelfHeal] Device not registered on server — auto-syncing push tokens...');
+                        await subscribeToPush('BOOT_SELF_HEAL');
+                    }
+                }
+            } catch (err) {
+                console.warn('[PushSelfHeal] Non-fatal boot check note:', err);
+            }
+        };
+
+        const timer = setTimeout(runBootSelfHeal, 3000);
+        return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [session, user?.id]);
+
     const markAsRead = useCallback(async (id: string) => {
         if (!session) return;
         try {

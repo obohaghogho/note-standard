@@ -217,10 +217,10 @@ const getInstallationStatus = async (req, res, next) => {
       .maybeSingle();
       
     if (error || !data) {
-      return res.json({ status: "UNKNOWN" });
+      return res.json({ status: "UNKNOWN", registered: false });
     }
     
-    res.json({ status: data.endpoint_status, failure_reason: data.failure_reason });
+    res.json({ status: data.endpoint_status, registered: true, failure_reason: data.failure_reason });
   } catch (err) {
     next(err);
   }
