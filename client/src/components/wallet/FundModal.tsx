@@ -563,6 +563,37 @@ export const FundModal: React.FC<FundModalProps> = ({
                     })}
                 </div>
 
+                {/* Selected Payment Rail Metadata Card */}
+                {(() => {
+                    const selectedRail = activeDepositRails.find(r => 
+                        (method === 'card' && r.type === 'card') ||
+                        (method === 'crypto' && (r.type === 'crypto' || r.type === 'fx_settlement')) ||
+                        (method === 'bank' && r.type !== 'card' && r.type !== 'crypto' && r.type !== 'fx_settlement')
+                    ) || activeDepositRails[0];
+
+                    if (!selectedRail) return null;
+
+                    return (
+                        <div className="bg-purple-950/30 border border-purple-500/30 rounded-xl p-3.5 mb-4 text-xs space-y-1.5 text-purple-200">
+                            <div className="flex items-center justify-between font-semibold border-b border-purple-500/20 pb-1.5">
+                                <span className="text-white flex items-center gap-1.5">
+                                    <Zap className="w-3.5 h-3.5 text-purple-400" />
+                                    {selectedRail.name} Rail Specification
+                                </span>
+                                <span className="text-[10px] text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded font-mono uppercase">
+                                    Provider: {selectedRail.provider}
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
+                                <div>Est. Settlement: <strong className="text-white">{selectedRail.estimatedSettlement}</strong></div>
+                                <div>Fee: <strong className="text-white">{selectedRail.fee.text}</strong></div>
+                                <div>Min Amount: <strong className="text-white">{selectedRail.limits.minimum.toLocaleString()} {effectivePayCurrency}</strong></div>
+                                <div>Max Amount: <strong className="text-white">{selectedRail.limits.maximum.toLocaleString()} {effectivePayCurrency}</strong></div>
+                            </div>
+                        </div>
+                    );
+                })()}
+
                 {/* Fiat Payment Currency Selector (When buying crypto directly from a Crypto wallet view) */}
                 <AnimatePresence>
                     {isCrypto && (method === 'card' || method === 'bank') && (
