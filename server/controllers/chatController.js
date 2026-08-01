@@ -679,13 +679,24 @@ exports.createConversation = async (req, res) => {
       await realtime.emitToUser(userId, "chat:new_conversation", result.conversation);
       
       for (const pId of participantIds) {
+        const notifTitle = "New Chat Request";
+        const notifMsg = `${creator?.username || "Someone"} wants to start a chat with you`;
         await createNotification({
           receiverId: pId,
           senderId: userId,
           type: "chat_request",
-          title: "New Chat Request",
-          message: `${creator?.username || "Someone"} wants to start a chat with you`,
+          title: notifTitle,
+          message: notifMsg,
           link: `/dashboard/chat?id=${conversationId}`,
+          conversationId: conversationId,
+        });
+        await dispatchFastPush({
+          receiverId: pId,
+          type: "chat_request",
+          title: notifTitle,
+          message: notifMsg,
+          link: `/dashboard/chat?id=${conversationId}`,
+          conversationId: conversationId,
         });
         await realtime.emitToUser(pId, "chat:new_conversation", result.conversation);
       }
@@ -754,13 +765,24 @@ exports.acceptConversation = async (req, res) => {
 
       if (members) {
         for (const m of members) {
+          const notifTitle = "Chat Request Accepted";
+          const notifMsg = `${accepter?.username || "Someone"} accepted your chat request!`;
           await createNotification({
             receiverId: m.user_id,
             senderId: userId,
             type: "chat_accepted",
-            title: "Chat Request Accepted",
-            message: `${accepter?.username || "Someone"} accepted your chat request!`,
+            title: notifTitle,
+            message: notifMsg,
             link: `/dashboard/chat?id=${conversationId}`,
+            conversationId: conversationId,
+          });
+          await dispatchFastPush({
+            receiverId: m.user_id,
+            type: "chat_accepted",
+            title: notifTitle,
+            message: notifMsg,
+            link: `/dashboard/chat?id=${conversationId}`,
+            conversationId: conversationId,
           });
           await realtime.emitToUser(m.user_id, "chat:conversation_updated", { conversationId, userId, status: "accepted" });
         }

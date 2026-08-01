@@ -81,9 +81,11 @@ class NotificationRouterService {
 
       console.log(`[ACCOUNT_FORENSIC] Parsed payload — type=${type}, conversationId=${conversationId}, targetAccountId=${targetAccountId}`);
 
+      const isChatNotif = type === 'message' || type === 'chat_message' || type === 'chat_request' || type === 'chat_accepted';
+
       if (!targetAccountId) {
         console.log('[ACCOUNT_FORENSIC] No targetAccountId in payload — navigating without account switch.');
-        if ((type === 'message' || type === 'chat_message') && conversationId) {
+        if (isChatNotif && conversationId) {
           await deepNavigateToChat(conversationId);
         }
         return;
@@ -131,10 +133,10 @@ class NotificationRouterService {
         console.log('[ACCOUNT_FORENSIC] Already on correct account — skipping switch.');
       }
 
-      if ((type === 'message' || type === 'chat_message') && conversationId) {
+      if (isChatNotif && conversationId) {
         await deepNavigateToChat(conversationId);
       } else {
-        console.log('[ACCOUNT_FORENSIC] Notification type not chat_message, no navigation needed:', type);
+        console.log('[ACCOUNT_FORENSIC] Notification type not chat_message/chat_request, no navigation needed:', type);
       }
 
     } catch (err) {

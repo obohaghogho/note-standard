@@ -1161,6 +1161,11 @@ const ChatWindow: React.FC = () => {
                             </div>
                         ) : (
                             <form onSubmit={handleSend} className="flex flex-col gap-2 md:gap-3 max-w-full">
+                            {isWaitingForOthers && (
+                                <div className="px-3 py-1.5 bg-blue-900/30 text-blue-300 text-xs rounded-xl border border-blue-500/20 text-center font-medium backdrop-blur-md">
+                                    ⏳ Waiting for {otherUserTitle} to accept your message request.
+                                </div>
+                            )}
                             {isVoiceRecording ? (
                                 <div className="flex justify-center p-3 bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700/50 animate-in slide-in-from-bottom-4 duration-300">
                                     <VoiceRecorder onSend={handleVoiceMessage} onCancel={() => setIsVoiceRecording(false)} />
@@ -1348,8 +1353,44 @@ const ChatWindow: React.FC = () => {
                     </div>
                 </div>
             ) : (
-                <div className="flex-shrink-0 bg-gray-950 border-t border-white/5 p-8 text-center text-gray-500 text-sm font-medium">
-                    Please accept the message request to start chatting.
+                <div className="chat-input-bar relative bg-gray-950/90 backdrop-blur-2xl border-t border-white/10 p-4 md:p-6 z-40" ref={composerRef}>
+                    <div className="max-w-[700px] mx-auto flex flex-col items-center gap-3 text-center">
+                        <div className="flex items-center gap-2 text-blue-400 font-semibold text-sm">
+                            <MessageCircle size={18} />
+                            <span>{otherUserTitle} wants to connect with you</span>
+                        </div>
+                        <p className="text-xs text-gray-400 max-w-md">
+                            Accepting this request will allow you and {otherUserTitle} to exchange end-to-end encrypted messages and make calls.
+                        </p>
+                        <div className="flex items-center gap-3 mt-1 w-full sm:w-auto">
+                            <button
+                                type="button"
+                                onClick={handleAccept}
+                                disabled={isAccepting}
+                                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-600/30 transition-all active:scale-95 disabled:opacity-50"
+                            >
+                                {isAccepting ? (
+                                    <>
+                                        <Loader2 size={16} className="animate-spin" />
+                                        <span>Accepting...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <CheckCheck size={16} />
+                                        <span>Accept Request</span>
+                                    </>
+                                )}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleBlockUser}
+                                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 bg-gray-800 hover:bg-gray-700 text-red-400 hover:text-red-300 border border-white/10 text-xs font-semibold rounded-xl transition-all active:scale-95"
+                            >
+                                <X size={16} />
+                                <span>Block & Ignore</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 

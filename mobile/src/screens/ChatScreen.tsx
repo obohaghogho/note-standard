@@ -19,6 +19,8 @@ import { Audio } from 'expo-av';
 import SignalingService from '../services/SignalingService';
 import apiClient from '../api/apiClient';
 
+import { ChatService } from '../services/ChatService';
+
 import { MessageComposer } from '../components/chat/MessageComposer';
 import { ChatMessageBubble, Message } from '../components/chat/ChatMessageBubble';
 import { MessageActionSheet } from '../components/chat/MessageActionSheet';
@@ -90,6 +92,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     const [replyTo, setReplyTo] = useState<Message | null>(null);
     const [editingMessage, setEditingMessage] = useState<Message | null>(null);
     const [actionSheetMessage, setActionSheetMessage] = useState<Message | null>(null);
+    const [isAccepting, setIsAccepting] = useState(false);
 
     // Stable refs — read in callbacks without stale closures
     const editingMessageRef = useRef<Message | null>(null);
@@ -108,9 +111,29 @@ export default function ChatScreen({ navigation, route }: Props) {
     // Derive member/profile from resolved conversation
     const members = resolvedConversation?.members ?? [];
     const otherMember = members.find((m: any) => m.user_id !== user?.id);
+    const myMember = members.find((m: any) => m.user_id === user?.id);
+    const isPending = myMember?.status === 'pending';
     const profile = otherMember?.profile;
     const isOtherOnline = profile?.is_online || false;
     const recipientName = profile?.full_name?.trim() || profile?.username?.trim() || 'Chat';
+
+    const handleAccept = useCallback(async () => {
+        if (isAccepting || !conversationId) return;
+        setIsAccepting(true);
+        try {
+            const ok = await ChatService.acceptConversation(conversationId);
+            if (ok) {
+                const res = await apiClient.get('/chat/conversations');
+                const list: any[] = res.data || [];
+                const match = list.find((c: any) => c.id === conversationId);
+                if (match) setResolvedConversation(match);
+            }
+        } catch (e) {
+            console.warn('[ChatScreen] Accept failed:', e);
+        } finally {
+            setIsAccepting(false);
+        }
+    }, [conversationId, isAccepting]);
 
     useEffect(() => {
         if (isFocused) {
@@ -350,12 +373,32 @@ export default function ChatScreen({ navigation, route }: Props) {
                 </View>
             )}
 
-            {/* MessageComposer never remounts — keyboard stays open */}
-            <MessageComposer
-                conversationId={conversationId}
-                onSend={handleSend}
-                insets={insets}
-            />
+            {isPending ? (
+                <View style={[styles.requestBannerWrap, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+                    <Text style={styles.requestBannerTitle}>📩 {recipientName} wants to connect with you</Text>
+                    <Text style={styles.requestBannerSub}>
+                        Accept to start chatting and exchanging end-to-end encrypted messages.
+                    </Text>
+                    <TouchableOpacity
+                        style={[styles.acceptRequestBtn, isAccepting && { opacity: 0.6 }]}
+                        onPress={handleAccept}
+                        disabled={isAccepting}
+                        activeOpacity={0.8}
+                    >
+                        <LinearGradient colors={['#6366f1', '#4f46e5']} style={styles.acceptRequestGrad}>
+                            <Text style={styles.acceptRequestBtnText}>
+                                {isAccepting ? 'Accepting...' : 'Accept Message Request'}
+                            </Text>
+                        </LinearGradient>
+                    </TouchableOpacity>
+                </View>
+            ) : (
+                <MessageComposer
+                    conversationId={conversationId}
+                    onSend={handleSend}
+                    insets={insets}
+                />
+            )}
         </Animated.View>
     );
 }
@@ -366,15 +409,11 @@ const EMPTY_ARRAY: Message[] = [];
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#060611' },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    // listShell: isolated flex container that owns all vertical space between
-    // header and composer. When composer grows, this shrinks — the list
-    // does NOT re-measure or re-render its items.
     listShell: { flex: 1, overflow: 'hidden' },
     header: {
         flexDirection: 'row', alignItems: 'center',
         paddingTop: 56, paddingBottom: 14, paddingHorizontal: 16,
         borderBottomWidth: 1, borderColor: '#111133', backgroundColor: '#060611',
-        // zIndex keeps header above the list during fast scrolls
         zIndex: 10,
     },
     backBtn: { marginRight: 12, padding: 4 },
@@ -406,4 +445,16 @@ const styles = StyleSheet.create({
     actionText: { color: '#aaa', fontSize: 12 },
     actionClose: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
     actionCloseText: { color: '#666', fontSize: 18 },
+    requestBannerWrap: {
+        backgroundColor: '#0d0d1e',
+        borderTopWidth: 1,
+        borderColor: '#111133',
+        padding: 20,
+        alignItems: 'center',
+    },
+    requestBannerTitle: { color: '#fff', fontSize: 15, fontWeight: '700', marginBottom: 6 },
+    requestBannerSub: { color: '#aaa', fontSize: 12, textAlign: 'center', marginBottom: 16 },
+    acceptRequestBtn: { borderRadius: 12, overflow: 'hidden', width: '100%', maxWidth: 280 },
+    acceptRequestGrad: { paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
+    acceptRequestBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
 });
