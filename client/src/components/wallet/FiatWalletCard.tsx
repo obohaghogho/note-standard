@@ -4,6 +4,8 @@ import {
   Download, ArrowUpRight, Send, RefreshCw, ShoppingCart, Lock, Info, ChevronRight, CheckCircle2, AlertCircle
 } from 'lucide-react';
 import type { CurrencyConfig } from '../../config/currencyConfig';
+import { useWalletCapabilities } from '../../hooks/useWalletCapabilities';
+import { WalletRailSummary } from './WalletRailSummary';
 
 interface FiatWalletCardProps {
   currency: CurrencyConfig;
@@ -91,6 +93,8 @@ export function FiatWalletCard({
   onBuyCrypto,
   onSelect,
 }: FiatWalletCardProps) {
+  const { getCurrencyCapability } = useWalletCapabilities();
+  const capability = getCurrencyCapability(currency.code);
   const [showComingSoon, setShowComingSoon] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
   const isActive = currency.status === 'active';
@@ -230,6 +234,11 @@ export function FiatWalletCard({
                 </span>
               )}
             </div>
+
+            {/* Provider-Aware Payment Rail Summary Badge */}
+            {isActive && capability && (
+              <WalletRailSummary capability={capability} className="mb-3" />
+            )}
 
             {/* 3-Tier Settlement-Aware Balance Section */}
             <div className="mb-4 space-y-1">

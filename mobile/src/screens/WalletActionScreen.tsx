@@ -17,12 +17,33 @@ export default function WalletActionScreen() {
   const [bankName, setBankName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [accountName, setAccountName] = useState('');
-  const [depositMethod, setDepositMethod] = useState<'card' | 'bank'>('card');
+  const [depositMethod, setDepositMethod] = useState<'card' | 'bank'>('bank');
+  const [supportedDepositRails, setSupportedDepositRails] = useState<string[]>(['bank']);
   const [bankDetails, setBankDetails] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
   const isDeposit = type === 'deposit';
-  const isFiat = ['USD', 'NGN', 'EUR', 'GBP', 'JPY'].includes(currency);
+  const isFiat = ['USD', 'NGN', 'EUR', 'GBP', 'JPY', 'TZS', 'GHS', 'KES', 'ZAR', 'CAD'].includes(currency);
+
+  React.useEffect(() => {
+    async function loadCapabilities() {
+      try {
+        const res = await apiClient.get(`/wallet/capabilities/${currency}`);
+        if (res.data && res.data.depositMethods) {
+          const rails = res.data.depositMethods.map((r: any) => r.type);
+          setSupportedDepositRails(rails);
+          if (rails.includes('card')) {
+            setDepositMethod('card');
+          } else {
+            setDepositMethod('bank');
+          }
+        }
+      } catch (e) {
+        // Fallback to bank if capability fetch fails
+      }
+    }
+    loadCapabilities();
+  }, [currency]);
 
   const handleDeposit = async () => {
     if (!amount || isNaN(parseFloat(amount))) {
@@ -156,17 +177,21 @@ export default function WalletActionScreen() {
         {/* Deposit Method Selector (Fiat only) */}
         {isDeposit && isFiat && (
           <View style={styles.methodRow}>
-            <TouchableOpacity 
-              style={[styles.methodBtn, depositMethod === 'card' && styles.methodBtnActive]} 
-              onPress={() => setDepositMethod('card')}
-            >
-              <Text style={[styles.methodBtnText, depositMethod === 'card' && styles.methodBtnTextActive]}>💳 Card</Text>
-            </TouchableOpacity>
+            {supportedDepositRails.includes('card') && (
+              <TouchableOpacity 
+                style={[styles.methodBtn, depositMethod === 'card' && styles.methodBtnActive]} 
+                onPress={() => setDepositMethod('card')}
+              >
+                <Text style={[styles.methodBtnText, depositMethod === 'card' && styles.methodBtnTextActive]}>💳 Card</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity 
               style={[styles.methodBtn, depositMethod === 'bank' && styles.methodBtnActive]} 
               onPress={() => setDepositMethod('bank')}
             >
-              <Text style={[styles.methodBtnText, depositMethod === 'bank' && styles.methodBtnTextActive]}>🏦 Bank Transfer</Text>
+              <Text style={[styles.methodBtnText, depositMethod === 'bank' && styles.methodBtnTextActive]}>
+                {supportedDepositRails.includes('mobile_money') ? '📱 Mobile Money / Bank' : '🏦 Bank Transfer'}
+              </Text>
             </TouchableOpacity>
           </View>
         )}

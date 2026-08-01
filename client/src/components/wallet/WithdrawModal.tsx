@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, ArrowUpRight, Loader2, Building2, AlertTriangle, Clock, ShieldCheck } from 'lucide-react';
+import { X, ArrowUpRight, Loader2, Building2, AlertTriangle, Clock, ShieldCheck, Smartphone, Zap } from 'lucide-react';
 import { Button } from '../common/Button';
 import { useWallet } from '../../hooks/useWallet';
+import { useWalletCapabilities } from '../../hooks/useWalletCapabilities';
 import { formatCurrency } from '../../lib/CurrencyFormatter';
 import type { Currency } from '@/types/wallet';
 import { POPULAR_BANKS, COUNTRIES } from '../../lib/bankList';
@@ -25,6 +26,10 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
     onSuccess 
 }) => {
     const { withdraw, getCommissionRate, wallets } = useWallet();
+    const { getCurrencyCapability } = useWalletCapabilities();
+    const currencyCap = getCurrencyCapability(selectedCurrency);
+    const activeWithdrawRails = currencyCap?.withdrawMethods || [];
+
     const [address, setAddress] = useState('');
     const [amount, setAmount] = useState('');
     const [isWithdrawing, setIsWithdrawing] = useState(false);
@@ -272,6 +277,24 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                 )}
 
                 <form onSubmit={handleWithdraw} className="modal-body flex flex-col gap-5">
+                    {/* Active Payout Rails */}
+                    {activeWithdrawRails.length > 0 && (
+                        <div className="bg-gray-900/90 border border-gray-800 rounded-xl p-3 text-xs space-y-1.5">
+                            <span className="text-[10px] uppercase font-semibold text-gray-400 block tracking-wider">
+                                Active Payout Rails ({selectedCurrency})
+                            </span>
+                            <div className="flex flex-wrap gap-2">
+                                {activeWithdrawRails.map(rail => (
+                                    <div key={rail.id} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-300 text-xs">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                        <span className="font-semibold">{rail.name}</span>
+                                        <span className="text-[10px] text-gray-400 font-mono">({rail.fee.text} • {rail.estimatedSettlement})</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {isFiat ? (
                         <div className="space-y-4">
                             {/* Country Selector */}

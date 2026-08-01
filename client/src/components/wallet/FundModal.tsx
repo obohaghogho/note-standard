@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, CreditCard, Bitcoin, Copy, Loader2, ShieldCheck, CheckCircle2, Landmark, Zap, Lock, ChevronDown, Upload, FileCheck } from 'lucide-react';
+import { X, CreditCard, Bitcoin, Copy, Loader2, ShieldCheck, CheckCircle2, Landmark, Zap, Lock, ChevronDown, Upload, FileCheck, Smartphone } from 'lucide-react';
 import { Button } from '../common/Button';
 import walletApi from '../../api/walletApi';
 import toast from 'react-hot-toast';
@@ -7,6 +7,7 @@ import type { Currency, BankDepositResponse, CryptoDepositResponse } from '@/typ
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { useWallet } from '../../hooks/useWallet';
+import { useWalletCapabilities } from '../../hooks/useWalletCapabilities';
 import { supabase } from '@/lib/supabase';
 
 interface FundModalProps {
@@ -88,6 +89,10 @@ export const FundModal: React.FC<FundModalProps> = ({
     // For Crypto wallets acting as target, what fiat are they paying with?
     const [paymentFiat, setPaymentFiat] = useState<string>('USD');
 
+    const { getCurrencyCapability } = useWalletCapabilities();
+    const currencyCap = getCurrencyCapability(effectivePayCurrency);
+    const activeDepositRails = currencyCap?.depositMethods || [];
+
     // Auto-detect if this is a cross-currency purchase flow
     const isEffectivelyPurchase = isPurchase || (isCrypto && (method === 'card' || method === 'bank'));
     const effectiveTargetCurrency = isEffectivelyPurchase ? (isCrypto ? activeCurrency : targetCurrency) : undefined;
@@ -100,11 +105,18 @@ export const FundModal: React.FC<FundModalProps> = ({
             setBankDetails(null);
             setCryptoAddress(null);
             setCryptoStatus('PENDING');
-            setMethod(isCrypto ? 'crypto' : 'card');
+            if (activeDepositRails.length > 0) {
+                const first = activeDepositRails[0];
+                if (first.type === 'card') setMethod('card');
+                else if (first.type === 'crypto' || first.type === 'fx_settlement') setMethod('crypto');
+                else setMethod('bank');
+            } else {
+                setMethod(isCrypto ? 'crypto' : 'bank');
+            }
             setIsPurchase(false);
             setIsRequestingLimit(false);
         }
-    }, [isOpen, activeCurrency, isCrypto]);
+    }, [isOpen, activeCurrency, isCrypto, activeDepositRails.length]);
 
     useEffect(() => {
         if (isOpen) {
@@ -511,58 +523,44 @@ export const FundModal: React.FC<FundModalProps> = ({
                     )}
                 </AnimatePresence>
 
-                <div className="flex gap-2 mb-6 bg-gray-900/50 p-1 rounded-xl border border-gray-800">
-                    <button
-                        onClick={() => {
-                            const upPayCurrency = effectivePayCurrency.toUpperCase();
-                            if (['BTC', 'ETH'].includes(upPayCurrency)) {
-                                toast.error(`${upPayCurrency} cannot be funded via card.`);
-                                return;
-                            }
-                            setMethod('card');
-                        }}
-                        className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg transition-all ${
-                            method === 'card' 
-                                ? 'bg-purple-600 border border-red-500 ring-2 ring-red-500 text-white shadow-lg shadow-red-500/20' 
-                                : 'border border-transparent text-gray-400 hover:text-white hover:bg-gray-800'
-                        } ${['BTC', 'ETH'].includes(effectivePayCurrency.toUpperCase()) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                        <CreditCard size={18} />
-                        <div className="flex flex-col items-center">
-                            <span className="text-sm font-medium">
-                                Card
-                            </span>
-                            {['BTC', 'ETH'].includes(effectivePayCurrency.toUpperCase()) && (
-                                <span className="text-[8px] opacity-70">Unavailable</span>
-                            )}
-                        </div>
-                    </button>
-                    <button
-                        onClick={() => setMethod('bank')}
-                        className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg transition-all ${
-                            method === 'bank' 
-                                ? 'bg-purple-600 border border-red-500 ring-2 ring-red-500 text-white shadow-lg shadow-red-500/20' 
-                                : 'border border-transparent text-gray-400 hover:text-white hover:bg-gray-800'
-                        }`}
-                    >
-                        <Landmark size={18} />
-                        <span className="text-sm font-medium">
-                            Bank Transfer
-                        </span>
-                    </button>
-                    {isCrypto && (
-                        <button
-                            onClick={() => setMethod('crypto')}
-                            className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg transition-all ${
-                                method === 'crypto' 
-                                    ? 'bg-purple-600 border border-red-500 ring-2 ring-red-500 text-white shadow-lg shadow-red-500/20' 
-                                    : 'border border-transparent text-gray-400 hover:text-white hover:bg-gray-800'
-                            }`}
-                        >
-                            <Bitcoin size={18} />
-                            <span className="text-sm font-medium">Crypto</span>
-                        </button>
-                    )}
+                {/* Dynamically Rendered Active Payment Rails */}
+                <div className="flex gap-2 mb-6 bg-gray-900/50 p-1.5 rounded-xl border border-gray-800 flex-wrap">
+                    {activeDepositRails.map((rail) => {
+                        let railMethodKey: DepositMethod = 'bank';
+                        if (rail.type === 'card') railMethodKey = 'card';
+                        else if (rail.type === 'crypto' || rail.type === 'fx_settlement') railMethodKey = 'crypto';
+
+                        const isSelected = method === railMethodKey;
+
+                        let IconComponent = Landmark;
+                        if (rail.type === 'card') IconComponent = CreditCard;
+                        else if (rail.type === 'mobile_money') IconComponent = Smartphone;
+                        else if (rail.type === 'faster_payments') IconComponent = Zap;
+                        else if (rail.type === 'crypto' || rail.type === 'fx_settlement') IconComponent = Bitcoin;
+
+                        return (
+                            <button
+                                key={rail.id}
+                                type="button"
+                                onClick={() => setMethod(railMethodKey)}
+                                className={`flex-1 min-w-[130px] flex flex-col items-center justify-center p-2.5 rounded-lg transition-all ${
+                                    isSelected 
+                                        ? 'bg-purple-600 border border-purple-400 ring-2 ring-purple-500 text-white shadow-lg' 
+                                        : 'border border-transparent text-gray-400 hover:text-white hover:bg-gray-800'
+                                }`}
+                            >
+                                <div className="flex items-center gap-1.5 font-bold text-xs">
+                                    <IconComponent size={16} />
+                                    <span>{rail.name}</span>
+                                </div>
+                                <div className="flex items-center gap-1 text-[10px] text-purple-200 mt-0.5 opacity-90">
+                                    <span>{rail.fee.text}</span>
+                                    <span>•</span>
+                                    <span>{rail.estimatedSettlement}</span>
+                                </div>
+                            </button>
+                        );
+                    })}
                 </div>
 
                 {/* Fiat Payment Currency Selector (When buying crypto directly from a Crypto wallet view) */}
