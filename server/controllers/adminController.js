@@ -2127,3 +2127,63 @@ exports.getFinancialOverview = async (req, res, next) => {
     next(err);
   }
 };
+
+// GET /api/admin/settlement/overview — Settlement Monitoring Dashboard Telemetry
+exports.getSettlementOverview = async (req, res, next) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+
+    // Query settlement pending items
+    const { data: pendingItems } = await serviceSupabase
+      .from("settlement_pending_items")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    // Query flagged items
+    const { data: flaggedItems } = await serviceSupabase
+      .from("settlement_pending_items")
+      .select("*")
+      .eq("flagged_for_review", true);
+
+    // Query settlement policies
+    const { data: policies } = await serviceSupabase
+      .from("settlement_policies")
+      .select("*");
+
+    // Query provider balances
+    const { data: providerBalances } = await serviceSupabase
+      .from("treasury_provider_balances")
+      .select("*");
+
+    // Aggregates per currency
+    const { data: walletTotals } = await serviceSupabase
+      .from("wallets_v6")
+      .select("currency, balance, available_balance, pending_balance, reserved_balance");
+
+    const totalsByCurrency = {};
+    (walletTotals || []).forEach(w => {
+      if (!totalsByCurrency[w.currency]) {
+        totalsByCurrency[w.currency] = { available: 0, pending: 0, reserved: 0, total: 0 };
+      }
+      totalsByCurrency[w.currency].available += parseFloat(w.available_balance || 0);
+      totalsByCurrency[w.currency].pending += parseFloat(w.pending_balance || 0);
+      totalsByCurrency[w.currency].reserved += parseFloat(w.reserved_balance || 0);
+      totalsByCurrency[w.currency].total += parseFloat(w.balance || 0);
+    });
+
+    return res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      totalsByCurrency,
+      providerBalances: providerBalances || [],
+      settlementPolicies: policies || [],
+      pendingCount: (pendingItems || []).filter(i => !i.promoted_at).length,
+      flaggedCount: (flaggedItems || []).length,
+      recentPendingItems: pendingItems || [],
+      flaggedItems: flaggedItems || [],
+    });
+  } catch (err) {
+    next(err);
+  }
+};

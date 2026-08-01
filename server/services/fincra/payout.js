@@ -43,10 +43,10 @@ const { v4: uuidv4 } = require("uuid");
  * @param {string} params.narration     - Transfer description
  */
 async function initiateFincraPayout({ userId, amount, currency, bankCode, accountNumber, accountName, narration }) {
-  // ── STEP 1: Read user wallet balance from internal ledger ────────────────
+  // ── STEP 1: Read user wallet available_balance from internal ledger ─────
   const { data: wallet, error: walletErr } = await supabase
     .from("wallets_v6")
-    .select("id, balance, currency")
+    .select("id, balance, available_balance, currency")
     .eq("user_id", userId)
     .eq("currency", currency)
     .maybeSingle();
@@ -55,8 +55,8 @@ async function initiateFincraPayout({ userId, amount, currency, bankCode, accoun
     throw new Error(`User wallet (${currency}) not found: ${walletErr?.message}`);
   }
 
-  // ── STEP 2: Validate sufficient funds ────────────────────────────────────
-  const available = parseFloat(wallet.balance || 0);
+  // ── STEP 2: Validate available_balance ONLY (never pending or reserved) ──
+  const available = parseFloat(wallet.available_balance || 0);
   const required  = parseFloat(amount);
   if (available < required) {
     throw new FincraInsufficientFundsError(available, required, currency);
@@ -82,15 +82,12 @@ async function initiateFincraPayout({ userId, amount, currency, bankCode, accoun
 
   await recordFincraAudit({ action: "PAYOUT_INITIATED", userId, details: { reference, amount: required, currency } });
 
-  // ── STEP 4: Reserve funds in wallets_store ───────────────────────────────
-  // This prevents double-spending before the Fincra API responds.
-  const { error: reserveErr } = await supabase
-    .from("wallets_store")
-    .update({
-      balance:     supabase.rpc ? available - required : available - required,
-      updated_at:  new Date().toISOString(),
-    })
-    .eq("id", wallet.id);
+  // ── STEP 4: Reserve funds via atomic RPC (reserve_for_withdrawal) ─────────
+  // Moves available_balance -> reserved_balance atomically with row lock
+  const { data: remAvail, error: reserveErr } = await supabase.rpc('reserve_for_withdrawal', {
+    p_wallet_id: wallet.id,
+    p_amount: required,
+  });
 
   if (reserveErr) {
     await supabase.from("fincra_transactions").update({ status: FINCRA_TX_STATUS.FAILED }).eq("reference", reference);
@@ -98,7 +95,20 @@ async function initiateFincraPayout({ userId, amount, currency, bankCode, accoun
   }
 
   await supabase.from("fincra_transactions").update({ status: FINCRA_TX_STATUS.RESERVED }).eq("reference", reference);
-  logger.info(`[Fincra/payout] Funds reserved for user ${userId}: ${required} ${currency}`);
+  logger.info(`[Fincra/payout] Funds reserved for user ${userId}: ${required} ${currency}. Remaining available: ${remAvail}`);
+
+  // Notify user: Withdrawal Initiated
+  try {
+    const notificationService = require("../notificationService");
+    await notificationService.sendNotification(userId, {
+      type: 'WITHDRAWAL_INITIATED',
+      title: 'Withdrawal Initiated',
+      message: `Withdrawal of ${currency} ${required.toLocaleString()} initiated to ${accountNumber} (${accountName}).`,
+      data: { reference, amount: required, currency, bankCode },
+    });
+  } catch (nErr) {
+    logger.warn(`[Fincra/payout] Notification warning: ${nErr.message}`);
+  }
 
   // ── STEP 5: Call Fincra /disbursements/payouts ───────────────────────────
   try {
@@ -131,12 +141,13 @@ async function initiateFincraPayout({ userId, amount, currency, bankCode, accoun
     return { reference, fincraRef, status: FINCRA_TX_STATUS.PENDING };
 
   } catch (err) {
-    // ── STEP 5 FAILURE: Auto-reverse the fund reservation ─────────────────
+    // ── STEP 5 FAILURE: Auto-reverse the fund reservation via RPC ──────────
     logger.error(`[Fincra/payout] Fincra API error. Reversing fund reservation for ${reference}: ${err.message}`);
 
-    await supabase.from("wallets_store")
-      .update({ balance: available, updated_at: new Date().toISOString() })
-      .eq("id", wallet.id);
+    await supabase.rpc('reverse_withdrawal_reservation', {
+      p_wallet_id: wallet.id,
+      p_amount: required,
+    }).catch(revErr => logger.error(`[Fincra/payout] RPC reverse_withdrawal_reservation error: ${revErr.message}`));
 
     await supabase.from("fincra_transactions")
       .update({ status: FINCRA_TX_STATUS.REVERSED, metadata: { reversal_reason: err.message } })
@@ -144,13 +155,77 @@ async function initiateFincraPayout({ userId, amount, currency, bankCode, accoun
 
     await recordFincraAudit({ action: "PAYOUT_RESERVATION_REVERSED", userId, details: { reference, reason: err.message } });
 
+    // Notify user: Withdrawal Failed / Returned
+    try {
+      const notificationService = require("../notificationService");
+      await notificationService.sendNotification(userId, {
+        type: 'WITHDRAWAL_FAILED',
+        title: 'Withdrawal Failed - Funds Returned',
+        message: `Your withdrawal of ${currency} ${required.toLocaleString()} could not be processed. Funds have been returned to your available balance.`,
+        data: { reference, amount: required, currency, reason: err.message },
+      });
+    } catch (nErr) {
+      logger.warn(`[Fincra/payout] Notification warning: ${nErr.message}`);
+    }
+
     throw err;
   }
 }
 
 /**
+ * Finalize payout debit upon payout.successful webhook.
+ * Calls complete_withdrawal RPC (deducts total balance, since available was already reduced).
+ */
+async function completePayoutDebit(reference) {
+  const { data: txRecord, error } = await supabase
+    .from("fincra_transactions")
+    .select("*")
+    .eq("reference", reference)
+    .maybeSingle();
+
+  if (error || !txRecord) {
+    logger.error(`[Fincra/payout] Cannot complete debit — transaction not found: ${reference}`);
+    return false;
+  }
+
+  const { data: wallet } = await supabase
+    .from("wallets_v6")
+    .select("id")
+    .eq("user_id", txRecord.user_id)
+    .eq("currency", txRecord.currency)
+    .maybeSingle();
+
+  if (!wallet) return false;
+
+  const { error: rpcErr } = await supabase.rpc('complete_withdrawal', {
+    p_wallet_id: wallet.id,
+    p_amount: parseFloat(txRecord.amount),
+  });
+
+  if (rpcErr) {
+    logger.error(`[Fincra/payout] RPC complete_withdrawal error: ${rpcErr.message}`);
+    return false;
+  }
+
+  // Notify user: Withdrawal Completed
+  try {
+    const notificationService = require("../notificationService");
+    await notificationService.sendNotification(txRecord.user_id, {
+      type: 'WITHDRAWAL_COMPLETED',
+      title: 'Withdrawal Completed',
+      message: `Your withdrawal of ${txRecord.currency} ${parseFloat(txRecord.amount).toLocaleString()} was processed successfully.`,
+      data: { reference, amount: txRecord.amount, currency: txRecord.currency },
+    });
+  } catch (nErr) {
+    logger.warn(`[Fincra/payout] Notification warning: ${nErr.message}`);
+  }
+
+  return true;
+}
+
+/**
  * Reverse a fund reservation for a failed payout.
- * Called by the webhook processor on payout.failed events.
+ * Called by the webhook processor on payout.failed events or by timeout worker.
  *
  * @param {string} reference - The NoteStandard-side reference
  * @param {string} reason
@@ -172,7 +247,6 @@ async function reversePayoutReservation(reference, reason = "Payout failed") {
     return true;
   }
 
-  // Read current wallet balance and restore the reserved amount
   const { data: wallet } = await supabase
     .from("wallets_v6")
     .select("id, balance")
@@ -185,11 +259,21 @@ async function reversePayoutReservation(reference, reason = "Payout failed") {
     return false;
   }
 
-  const restored = parseFloat(wallet.balance || 0) + parseFloat(txRecord.amount);
+  const amount = parseFloat(txRecord.amount);
 
-  await supabase.from("wallets_store")
-    .update({ balance: restored, updated_at: new Date().toISOString() })
-    .eq("id", wallet.id);
+  const { error: rpcErr } = await supabase.rpc('reverse_withdrawal_reservation', {
+    p_wallet_id: wallet.id,
+    p_amount: amount,
+  });
+
+  if (rpcErr) {
+    logger.error(`[Fincra/payout] RPC reverse_withdrawal_reservation error: ${rpcErr.message}`);
+    // Fallback
+    const restored = parseFloat(wallet.available_balance || 0) + amount;
+    await supabase.from("wallets_store")
+      .update({ available_balance: restored, updated_at: new Date().toISOString() })
+      .eq("id", wallet.id);
+  }
 
   await supabase.from("fincra_transactions")
     .update({ status: FINCRA_TX_STATUS.REVERSED, metadata: { ...(txRecord.metadata || {}), reversal_reason: reason } })
@@ -198,11 +282,25 @@ async function reversePayoutReservation(reference, reason = "Payout failed") {
   await recordFincraAudit({
     action: "PAYOUT_REVERSED",
     userId: txRecord.user_id,
-    details: { reference, restoredAmount: txRecord.amount, currency: txRecord.currency, reason },
+    details: { reference, restoredAmount: amount, currency: txRecord.currency, reason },
   });
 
-  logger.info(`[Fincra/payout] Reversal complete for ${reference}. Restored ${txRecord.amount} ${txRecord.currency}.`);
+  logger.info(`[Fincra/payout] Reversal complete for ${reference}. Restored ${amount} ${txRecord.currency}.`);
+
+  // Notify user: Withdrawal Reversed
+  try {
+    const notificationService = require("../notificationService");
+    await notificationService.sendNotification(txRecord.user_id, {
+      type: 'WITHDRAWAL_FAILED',
+      title: 'Withdrawal Failed - Funds Returned',
+      message: `Your withdrawal of ${txRecord.currency} ${amount.toLocaleString()} failed (${reason}). Reserved funds have been returned to your available balance.`,
+      data: { reference, amount, currency: txRecord.currency, reason },
+    });
+  } catch (nErr) {
+    logger.warn(`[Fincra/payout] Notification warning: ${nErr.message}`);
+  }
+
   return true;
 }
 
-module.exports = { initiateFincraPayout, reversePayoutReservation };
+module.exports = { initiateFincraPayout, reversePayoutReservation, completePayoutDebit };

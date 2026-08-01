@@ -134,7 +134,8 @@ async function processFincraWebhook(headers, rawBody, parsedBody) {
 
 /**
  * Handle Fincra collection.successful (deposit received).
- * Credits user wallet via wallets_store balance update.
+ * Checks provider settlement policy to determine whether to credit
+ * Available Balance immediately or park in Pending Balance.
  */
 async function handleDepositSuccessful(payload) {
   const data           = payload.data || payload;
@@ -196,10 +197,9 @@ async function handleDepositSuccessful(payload) {
     });
   }
 
-  // Credit user wallet via wallets_store (following established NoteStandard pattern)
   const { data: wallet } = await supabase
     .from("wallets_v6")
-    .select("id, balance")
+    .select("id, balance, available_balance, pending_balance")
     .eq("user_id", userId)
     .eq("currency", currency)
     .maybeSingle();
@@ -209,39 +209,122 @@ async function handleDepositSuccessful(payload) {
     return { handled: false, reason: "Wallet not found" };
   }
 
-  const newBalance = parseFloat(wallet.balance || 0) + amount;
+  // Determine settlement policy
+  const SettlementPolicyService = require("../settlement/SettlementPolicyService");
+  const policy = await SettlementPolicyService.getPolicy('fincra', currency);
 
-  await supabase.from("wallets_store")
-    .update({ balance: newBalance, updated_at: new Date().toISOString() })
-    .eq("id", wallet.id);
+  let isSettled = policy.deposit_settles_instantly || data.settlement_status === 'settled';
 
-  // Update fincra_transactions to SUCCESSFUL
-  await supabase.from("fincra_transactions")
-    .update({ status: FINCRA_TX_STATUS.SUCCESSFUL })
-    .eq("fincra_reference", fincraRef);
+  if (isSettled) {
+    // Credit available balance directly via RPC
+    const { error: rpcErr } = await supabase.rpc('credit_available_balance', {
+      p_wallet_id: wallet.id,
+      p_amount: amount,
+    });
 
-  await recordFincraAudit({
-    action: "DEPOSIT_CREDITED",
-    userId,
-    details: { fincraRef, amount, currency, newBalance },
-  });
+    if (rpcErr) {
+      logger.error(`[Fincra/webhook] RPC credit_available_balance failed: ${rpcErr.message}`);
+      // Fallback
+      const newBal = parseFloat(wallet.balance || 0) + amount;
+      const newAvail = parseFloat(wallet.available_balance || 0) + amount;
+      await supabase.from("wallets_store")
+        .update({ balance: newBal, available_balance: newAvail, updated_at: new Date().toISOString() })
+        .eq("id", wallet.id);
+    }
 
-  logger.info(`[Fincra/webhook] ✅ Deposit credited: ${amount} ${currency} for user ${userId}. New balance: ${newBalance}`);
+    await supabase.from("fincra_transactions")
+      .update({ status: FINCRA_TX_STATUS.SUCCESSFUL })
+      .eq("fincra_reference", fincraRef);
 
-  // Notify user via realtime service
-  try {
-    const realtime = require("../realtimeService");
-    await realtime.notifyUser(userId, "fincra_deposit", { amount, currency, fincraRef });
-  } catch (notifyErr) {
-    logger.warn(`[Fincra/webhook] Realtime notification failed (non-fatal): ${notifyErr.message}`);
+    await recordFincraAudit({
+      action: "DEPOSIT_CREDITED_AVAILABLE",
+      userId,
+      details: { fincraRef, amount, currency, status: 'AVAILABLE' },
+    });
+
+    logger.info(`[Fincra/webhook] ✅ Deposit credited to AVAILABLE: ${amount} ${currency} for user ${userId}.`);
+
+    // Notification
+    try {
+      const notificationService = require("../notificationService");
+      await notificationService.sendNotification(userId, {
+        type: 'DEPOSIT_SETTLED',
+        title: 'Deposit Settled & Available',
+        message: `Your deposit of ${currency} ${amount.toLocaleString()} is now available in your wallet.`,
+        data: { amount, currency, fincraRef },
+      });
+    } catch (nErr) {
+      logger.warn(`[Fincra/webhook] Notification failed: ${nErr.message}`);
+    }
+
+  } else {
+    // Credit PENDING balance via RPC and record item in settlement_pending_items
+    const { error: rpcErr } = await supabase.rpc('credit_pending_balance', {
+      p_wallet_id: wallet.id,
+      p_amount: amount,
+    });
+
+    if (rpcErr) {
+      logger.error(`[Fincra/webhook] RPC credit_pending_balance failed: ${rpcErr.message}`);
+      const newBal = parseFloat(wallet.balance || 0) + amount;
+      const newPend = parseFloat(wallet.pending_balance || 0) + amount;
+      await supabase.from("wallets_store")
+        .update({ balance: newBal, pending_balance: newPend, updated_at: new Date().toISOString() })
+        .eq("id", wallet.id);
+    }
+
+    const expectedSettlementAt = await SettlementPolicyService.calculateExpectedSettlementAt('fincra', currency);
+
+    await supabase.from("settlement_pending_items").insert({
+      wallet_id: wallet.id,
+      user_id: userId,
+      amount,
+      currency,
+      provider: 'fincra',
+      provider_reference: fincraRef,
+      provider_status: 'pending',
+      expected_settlement_at: expectedSettlementAt,
+    }).catch(err => logger.warn(`[Fincra/webhook] Pending item insert warning: ${err.message}`));
+
+    await supabase.from("fincra_transactions")
+      .update({ status: FINCRA_TX_STATUS.PENDING })
+      .eq("fincra_reference", fincraRef);
+
+    await recordFincraAudit({
+      action: "DEPOSIT_CREDITED_PENDING",
+      userId,
+      details: { fincraRef, amount, currency, status: 'PENDING', expectedSettlementAt },
+    });
+
+    logger.info(`[Fincra/webhook] ⏳ Deposit parked in PENDING: ${amount} ${currency} for user ${userId}. Expected: ${expectedSettlementAt}`);
+
+    try {
+      const notificationService = require("../notificationService");
+      await notificationService.sendNotification(userId, {
+        type: 'DEPOSIT_RECEIVED',
+        title: 'Deposit Received (Pending Settlement)',
+        message: `Your deposit of ${currency} ${amount.toLocaleString()} was received and is pending settlement. Funds will be available soon.`,
+        data: { amount, currency, fincraRef, expectedSettlementAt },
+      });
+    } catch (nErr) {
+      logger.warn(`[Fincra/webhook] Notification failed: ${nErr.message}`);
+    }
   }
 
-  return { handled: true, userId, amount, currency };
+  // Realtime update
+  try {
+    const realtime = require("../realtimeService");
+    await realtime.notifyUser(userId, "fincra_deposit", { amount, currency, fincraRef, isSettled });
+  } catch (notifyErr) {
+    logger.warn(`[Fincra/webhook] Realtime notification failed: ${notifyErr.message}`);
+  }
+
+  return { handled: true, userId, amount, currency, isSettled };
 }
 
 /**
  * Handle Fincra payout.successful.
- * Finalizes the debit (funds were already reserved; simply mark as SUCCESSFUL).
+ * Finalizes the debit (calls completePayoutDebit to deduct total balance).
  */
 async function handlePayoutSuccessful(payload) {
   const data      = payload.data || payload;
@@ -255,6 +338,9 @@ async function handlePayoutSuccessful(payload) {
   await supabase.from("fincra_transactions")
     .update({ status: FINCRA_TX_STATUS.SUCCESSFUL, fincra_reference: fincraRef })
     .or(`reference.eq.${ref},fincra_reference.eq.${fincraRef}`);
+
+  const { completePayoutDebit } = require("./payout");
+  await completePayoutDebit(ref);
 
   await recordFincraAudit({
     action: "PAYOUT_SUCCESSFUL",

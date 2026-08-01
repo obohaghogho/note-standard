@@ -14,6 +14,14 @@ export interface CurrencyConfig {
   buy_enabled: boolean;
   sell_enabled: boolean;
   convert_enabled: boolean;
+  settlement_aware?: boolean;
+  capabilities?: {
+    deposit: boolean;
+    withdrawal: boolean;
+    virtualAccount: boolean;
+    conversion: boolean;
+    settlementAware: boolean;
+  };
   decimal_places: number;
   tooltip?: string;
 }

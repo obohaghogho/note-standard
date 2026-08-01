@@ -231,19 +231,46 @@ export function FiatWalletCard({
               )}
             </div>
 
-            {/* Balance Section */}
-            <div className="mb-4">
-              <div className={`text-2xl sm:text-3xl font-black tracking-tight ${isActive ? 'text-white' : 'text-gray-400'}`}>
-                {currency.symbol}{formatBalance(balance)}
-              </div>
-              {pendingBalance > 0 && (
-                <div className="text-xs text-amber-400 mt-0.5 flex items-center gap-1 font-medium">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                  +{currency.symbol}{formatBalance(pendingBalance)} pending
+            {/* 3-Tier Settlement-Aware Balance Section */}
+            <div className="mb-4 space-y-1">
+              <div className="flex items-baseline justify-between">
+                <div className={`text-2xl sm:text-3xl font-black tracking-tight ${isActive ? 'text-white' : 'text-gray-400'}`}>
+                  {currency.symbol}{formatBalance(balance)}
                 </div>
-              )}
-              <div className="text-gray-500 text-xs mt-0.5">
-                Available: {currency.symbol}{formatBalance(availableBalance)}
+                <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wider">Total</span>
+              </div>
+
+              <div className="pt-2 border-t border-white/5 space-y-1 text-xs">
+                {/* Available */}
+                <div className="flex justify-between items-center text-emerald-400 font-medium">
+                  <span className="flex items-center gap-1 text-gray-400">
+                    Available
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  </span>
+                  <span className="font-semibold">{currency.symbol}{formatBalance(availableBalance)}</span>
+                </div>
+
+                {/* Pending */}
+                {pendingBalance > 0 && (
+                  <div className="flex justify-between items-center text-amber-400 font-medium">
+                    <span className="flex items-center gap-1 text-amber-400/90" title="Funds received, awaiting banking partner settlement">
+                      <Clock size={11} className="text-amber-400" />
+                      Pending Settlement
+                    </span>
+                    <span className="font-semibold">+{currency.symbol}{formatBalance(pendingBalance)}</span>
+                  </div>
+                )}
+
+                {/* Reserved */}
+                {Math.max(0, balance - availableBalance - pendingBalance) > 0 && (
+                  <div className="flex justify-between items-center text-orange-400 font-medium">
+                    <span className="flex items-center gap-1 text-orange-400/90" title="Funds reserved for an active withdrawal request">
+                      <Lock size={11} className="text-orange-400" />
+                      Reserved (Payout)
+                    </span>
+                    <span className="font-semibold">{currency.symbol}{formatBalance(Math.max(0, balance - availableBalance - pendingBalance))}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -253,15 +280,22 @@ export function FiatWalletCard({
             <div className="flex gap-2 flex-wrap">
               {actions.map((action) => {
                 const Icon = action.icon;
-                const buttonEnabled = isActive && action.enabled;
+                let buttonEnabled = isActive && action.enabled;
+
+                // Disable withdraw if available balance is zero/insufficient
+                if (action.label === 'Withdraw' && availableBalance <= 0) {
+                  buttonEnabled = false;
+                }
+
                 return (
                   <button
                     key={action.label}
                     disabled={!buttonEnabled}
+                    title={action.label === 'Withdraw' && availableBalance <= 0 && isActive ? "Insufficient available balance to withdraw" : undefined}
                     onClick={(e) => {
                       if (!buttonEnabled) {
                         e.stopPropagation();
-                        setShowComingSoon(true);
+                        if (isComingSoon) setShowComingSoon(true);
                         return;
                       }
                       e.stopPropagation();

@@ -13,9 +13,11 @@ export interface WalletEntry {
     id: string;
     type: "custodial" | "external" | "vault";
     asset: string;
-    balance: number;       // Ledger Truth
-    available: number;     // Ledger Truth
-    locked: number;        // Ledger Truth
+    balance: number;       // Ledger Total
+    available: number;     // Settled & Withdrawable
+    pending: number;       // Awaiting Provider Settlement
+    reserved: number;      // Held for Outbound Payout
+    locked: number;        // Compliance Hold
     source: "internal_ledger" | "external_provider";
     network?: string;
     address?: string;
@@ -33,6 +35,8 @@ export interface WalletViewDTO {
     asset: string;
     balance: string;       // Formatted for display
     available: string;     // Formatted for display
+    pending?: string;      // Formatted for display
+    reserved?: string;     // Formatted for display
     valuationUsd: string;  // Holdings * Price
     mode: ValuationMode;
     canExecute: boolean;   // Final blockade for financial actions

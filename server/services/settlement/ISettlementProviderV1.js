@@ -31,6 +31,15 @@ class ISettlementProviderV1 {
   async getRateQuote(fromCurrency, toCurrency, amount = 1) {
     throw new Error("NOT_IMPLEMENTED: getRateQuote()");
   }
+
+  /**
+   * Check if a deposit transaction is fully settled with the provider.
+   * @param {string} providerReference
+   * @returns {Promise<{ isSettled: boolean, status: string, settledAt?: string }>}
+   */
+  async getDepositSettlementStatus(providerReference) {
+    throw new Error("NOT_IMPLEMENTED: getDepositSettlementStatus()");
+  }
 }
 
 module.exports = ISettlementProviderV1;
