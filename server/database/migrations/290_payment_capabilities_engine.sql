@@ -50,18 +50,21 @@ VALUES
 ('usd_wire_wd', 'USD', 'fincra', 'wire', 'Wire Payout', 'withdrawal', 2, 'ONLINE', 25.00, 0.00, 100, 500000, 'PRO', 'Same Day', 4, 'Fast Delivery'),
 
 -- EUR Deposits & Withdrawals
-('eur_sepa_dep', 'EUR', 'fincra', 'sepa', 'SEPA Transfer', 'deposit', 1, 'ONLINE', 0, 0.00, 10, 100000, 'FREE', 'Same Day', 5, 'Recommended'),
-('eur_bank_dep', 'EUR', 'fincra', 'bank_transfer', 'Bank Transfer', 'deposit', 2, 'ONLINE', 0, 0.00, 10, 100000, 'FREE', 'Same Day', 4, 'Best Value'),
+('eur_card_dep', 'EUR', 'fincra', 'card', 'Pay by Card', 'deposit', 1, 'ONLINE', 0, 2.20, 10, 5000, 'FREE', 'Instant', 5, 'Recommended'),
+('eur_sepa_dep', 'EUR', 'fincra', 'sepa', 'SEPA Transfer', 'deposit', 2, 'ONLINE', 0, 0.00, 10, 100000, 'FREE', 'Same Day', 4, 'Best Value'),
+('eur_bank_dep', 'EUR', 'fincra', 'bank_transfer', 'Bank Transfer', 'deposit', 3, 'ONLINE', 0, 0.00, 10, 100000, 'FREE', 'Same Day', 3, 'Standard'),
 ('eur_sepa_wd', 'EUR', 'fincra', 'sepa', 'SEPA Transfer', 'withdrawal', 1, 'ONLINE', 0.50, 0.00, 10, 100000, 'FREE', 'Same Day', 5, 'Recommended'),
 
 -- GBP Deposits & Withdrawals
-('gbp_fp_dep', 'GBP', 'fincra', 'faster_payments', 'UK Faster Payments', 'deposit', 1, 'ONLINE', 0, 0.00, 5, 250000, 'FREE', 'Instant', 5, 'Recommended'),
-('gbp_bank_dep', 'GBP', 'fincra', 'bank_transfer', 'Bank Transfer', 'deposit', 2, 'ONLINE', 0, 0.00, 5, 250000, 'FREE', 'Instant', 4, 'Best Value'),
+('gbp_card_dep', 'GBP', 'fincra', 'card', 'Pay by Card', 'deposit', 1, 'ONLINE', 0, 2.20, 10, 5000, 'FREE', 'Instant', 5, 'Recommended'),
+('gbp_fp_dep', 'GBP', 'fincra', 'faster_payments', 'UK Faster Payments', 'deposit', 2, 'ONLINE', 0, 0.00, 5, 250000, 'FREE', 'Instant', 4, 'Best Value'),
+('gbp_bank_dep', 'GBP', 'fincra', 'bank_transfer', 'Bank Transfer', 'deposit', 3, 'ONLINE', 0, 0.00, 5, 250000, 'FREE', 'Instant', 3, 'Standard'),
 ('gbp_fp_wd', 'GBP', 'fincra', 'faster_payments', 'UK Faster Payments', 'withdrawal', 1, 'ONLINE', 0.50, 0.00, 5, 250000, 'FREE', 'Instant', 5, 'Recommended'),
 
--- TZS Deposits & Withdrawals (Tanzania - No Card)
-('tzs_momo_dep', 'TZS', 'fincra', 'mobile_money', 'Mobile Money (M-Pesa / Tigo)', 'deposit', 1, 'ONLINE', 0, 1.00, 1000, 10000000, 'FREE', 'Instant', 5, 'Recommended'),
-('tzs_bank_dep', 'TZS', 'fincra', 'bank_transfer', 'Bank Transfer', 'deposit', 2, 'ONLINE', 0, 0.00, 1000, 50000000, 'FREE', 'Same Day', 4, 'Best Value'),
+-- TZS Deposits & Withdrawals (Tanzania)
+('tzs_card_dep', 'TZS', 'fincra', 'card', 'Pay by Card', 'deposit', 1, 'ONLINE', 0, 2.00, 1000, 5000000, 'FREE', 'Instant', 5, 'Recommended'),
+('tzs_momo_dep', 'TZS', 'fincra', 'mobile_money', 'Mobile Money (M-Pesa / Tigo)', 'deposit', 2, 'ONLINE', 0, 1.00, 1000, 10000000, 'FREE', 'Instant', 4, 'Best Value'),
+('tzs_bank_dep', 'TZS', 'fincra', 'bank_transfer', 'Bank Transfer', 'deposit', 3, 'ONLINE', 0, 0.00, 1000, 50000000, 'FREE', 'Same Day', 3, 'Standard'),
 ('tzs_momo_wd', 'TZS', 'fincra', 'mobile_money', 'Mobile Money Payout', 'withdrawal', 1, 'ONLINE', 500, 0.00, 1000, 10000000, 'FREE', 'Instant', 5, 'Recommended'),
 ('tzs_bank_wd', 'TZS', 'fincra', 'bank_transfer', 'Local Bank Payout', 'withdrawal', 2, 'ONLINE', 1000, 0.00, 1000, 50000000, 'FREE', 'Same Day', 4, 'Standard'),
 
@@ -71,17 +74,20 @@ VALUES
 ('zar_bank_dep', 'ZAR', 'fincra', 'bank_transfer', 'Bank Transfer', 'deposit', 3, 'ONLINE', 0, 0.00, 50, 1000000, 'FREE', 'Same Day', 3, 'Standard'),
 ('zar_eft_wd', 'ZAR', 'fincra', 'eft', 'South Africa EFT Payout', 'withdrawal', 1, 'ONLINE', 10, 0.00, 50, 500000, 'FREE', 'Instant', 5, 'Recommended'),
 
--- GHS, KES, UGX, RWF, XAF, XOF Mobile Money & Bank Rails
-('ghs_momo_dep', 'GHS', 'fincra', 'mobile_money', 'Mobile Money (MTN / Vodafone)', 'deposit', 1, 'ONLINE', 0, 1.00, 5, 20000, 'FREE', 'Instant', 5, 'Recommended'),
-('ghs_bank_dep', 'GHS', 'fincra', 'bank_transfer', 'Bank Transfer', 'deposit', 2, 'ONLINE', 0, 0.00, 5, 50000, 'FREE', 'Same Day', 4, 'Best Value'),
+-- GHS, KES, UGX Mobile Money & Card Rails
+('ghs_card_dep', 'GHS', 'fincra', 'card', 'Pay by Card', 'deposit', 1, 'ONLINE', 0, 2.00, 5, 20000, 'FREE', 'Instant', 5, 'Recommended'),
+('ghs_momo_dep', 'GHS', 'fincra', 'mobile_money', 'Mobile Money (MTN / Vodafone)', 'deposit', 2, 'ONLINE', 0, 1.00, 5, 20000, 'FREE', 'Instant', 4, 'Best Value'),
+('ghs_bank_dep', 'GHS', 'fincra', 'bank_transfer', 'Bank Transfer', 'deposit', 3, 'ONLINE', 0, 0.00, 5, 50000, 'FREE', 'Same Day', 3, 'Standard'),
 ('ghs_momo_wd', 'GHS', 'fincra', 'mobile_money', 'Mobile Money Payout', 'withdrawal', 1, 'ONLINE', 2, 0.00, 5, 20000, 'FREE', 'Instant', 5, 'Recommended'),
 
-('kes_momo_dep', 'KES', 'fincra', 'mobile_money', 'Mobile Money (M-Pesa)', 'deposit', 1, 'ONLINE', 0, 1.00, 100, 300000, 'FREE', 'Instant', 5, 'Recommended'),
-('kes_bank_dep', 'KES', 'fincra', 'bank_transfer', 'Bank Transfer', 'deposit', 2, 'ONLINE', 0, 0.00, 100, 1000000, 'FREE', 'Same Day', 4, 'Best Value'),
+('kes_card_dep', 'KES', 'fincra', 'card', 'Pay by Card', 'deposit', 1, 'ONLINE', 0, 2.00, 100, 300000, 'FREE', 'Instant', 5, 'Recommended'),
+('kes_momo_dep', 'KES', 'fincra', 'mobile_money', 'Mobile Money (M-Pesa)', 'deposit', 2, 'ONLINE', 0, 1.00, 100, 300000, 'FREE', 'Instant', 4, 'Best Value'),
+('kes_bank_dep', 'KES', 'fincra', 'bank_transfer', 'Bank Transfer', 'deposit', 3, 'ONLINE', 0, 0.00, 100, 1000000, 'FREE', 'Same Day', 3, 'Standard'),
 ('kes_momo_wd', 'KES', 'fincra', 'mobile_money', 'Mobile Money Payout', 'withdrawal', 1, 'ONLINE', 50, 0.00, 100, 300000, 'FREE', 'Instant', 5, 'Recommended'),
 
--- CAD, MWK, ZMW, EGP, CNY, CNH Bank Transfers
-('cad_bank_dep', 'CAD', 'fincra', 'bank_transfer', 'Bank Transfer / EFT', 'deposit', 1, 'ONLINE', 0, 0.00, 10, 100000, 'FREE', 'Same Day', 5, 'Recommended'),
+-- CAD Bank & Card Transfers
+('cad_card_dep', 'CAD', 'fincra', 'card', 'Pay by Card', 'deposit', 1, 'ONLINE', 0, 2.50, 10, 5000, 'FREE', 'Instant', 5, 'Recommended'),
+('cad_bank_dep', 'CAD', 'fincra', 'bank_transfer', 'Bank Transfer / EFT', 'deposit', 2, 'ONLINE', 0, 0.00, 10, 100000, 'FREE', 'Same Day', 4, 'Best Value'),
 ('cad_bank_wd', 'CAD', 'fincra', 'bank_transfer', 'Bank Transfer Payout', 'withdrawal', 1, 'ONLINE', 2, 0.00, 10, 100000, 'FREE', 'Same Day', 5, 'Recommended'),
 
 -- USDT / USDC FX Settlement Rails

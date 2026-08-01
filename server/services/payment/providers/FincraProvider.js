@@ -179,19 +179,28 @@ class FincraProvider extends BaseProvider {
       source:        "note_standard_v2",
     };
 
+    const targetCurrency = String(currency).toUpperCase();
+    let methods = ["card", "bank_transfer"];
+    if (["GHS", "KES", "TZS", "UGX", "ZMW", "RWF"].includes(targetCurrency)) {
+      methods.push("mobile_money");
+    }
+    if (["ZAR"].includes(targetCurrency)) {
+      methods.push("eft");
+    }
+
     const payload = {
       customer: {
         name:  safeName,
         email: safeEmail,
       },
       amount:         Number(Number(amount).toFixed(2)),
-      currency:       String(currency).toUpperCase(),
+      currency:       targetCurrency,
       reference:      String(reference),
       redirectUrl:    String(callbackUrl),
       description:    metadata.description || "Digital Assets Purchase",
       feeBearer:      "business", // Matched with scratch scripts for stability
       settlementDestination: "wallet",
-      paymentMethods: ["card"],
+      paymentMethods: methods,
       business:       this.businessId,
       metadata:       safeMetadata,
     };
