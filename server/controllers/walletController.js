@@ -153,10 +153,10 @@ exports.depositCard = async (req, res, next) => {
     currency = String(currency).replace(/"/g, "");
 
     const upperCurrency = String(currency).toUpperCase();
-    const isCryptoWallet = ["BTC", "ETH", "USDT", "USDC"].includes(upperCurrency);
-    if (isCryptoWallet) {
+    const cardSupportedCurrencies = ["NGN", "USD", "ZAR", "GHS"];
+    if (!cardSupportedCurrencies.includes(upperCurrency)) {
       return res.status(400).json({
-        error: `Card deposits are not supported directly for ${upperCurrency}. Please use Crypto deposit or Buy with Fiat.`
+        error: `Card deposits are not supported for ${upperCurrency}. Please use ${upperCurrency === 'EUR' ? 'SEPA Transfer' : upperCurrency === 'GBP' ? 'UK Faster Payments' : 'Bank Transfer'}.`
       });
     }
 
