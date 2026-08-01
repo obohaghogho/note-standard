@@ -89,58 +89,48 @@ export const FundModal: React.FC<FundModalProps> = ({
     // For Crypto wallets acting as target, what fiat are they paying with?
     const [paymentFiat, setPaymentFiat] = useState<string>('USD');
 
-    const { getCurrencyCapability } = useWalletCapabilities();
-    const currencyCap = getCurrencyCapability(effectivePayCurrency);
-    const activeDepositRails = currencyCap?.depositMethods || [];
-
     // Auto-detect if this is a cross-currency purchase flow
     const isEffectivelyPurchase = isPurchase || (isCrypto && (method === 'card' || method === 'bank'));
     const effectiveTargetCurrency = isEffectivelyPurchase ? (isCrypto ? activeCurrency : targetCurrency) : undefined;
     const effectiveTargetNetwork = isEffectivelyPurchase ? (isCrypto ? activeNetwork : targetNetwork) : undefined;
     const effectivePayCurrency = isCrypto && (method === 'card' || method === 'bank') ? paymentFiat : activeCurrency;
 
+    const { getCurrencyCapability } = useWalletCapabilities();
+    const currencyCap = getCurrencyCapability(effectivePayCurrency);
+    const activeDepositRails = currencyCap?.depositMethods || [];
+
+    const [selectedRailId, setSelectedRailId] = useState<string | null>(null);
+
     useEffect(() => {
-        // Reset state when modal opens or activeCurrency changes
         if (isOpen) {
             setBankDetails(null);
             setCryptoAddress(null);
             setCryptoStatus('PENDING');
-            if (activeDepositRails.length > 0) {
-                const first = activeDepositRails[0];
-                if (first.type === 'card') setMethod('card');
-                else if (first.type === 'crypto' || first.type === 'fx_settlement') setMethod('crypto');
-                else setMethod('bank');
-            } else {
-                setMethod(isCrypto ? 'crypto' : 'bank');
-            }
+            setAmount('');
             setIsPurchase(false);
             setIsRequestingLimit(false);
-        }
-    }, [isOpen, activeCurrency, isCrypto, activeDepositRails.length]);
-
-    useEffect(() => {
-        if (isOpen) {
             setActiveCurrency(selectedCurrency);
             setActiveNetwork(selectedNetwork);
-            setAmount('');
-            
-            // Check if card is supported for the initial currency
-            const upCurr = selectedCurrency.toUpperCase();
-            if (['BTC', 'ETH'].includes(upCurr)) {
-                setMethod('crypto');
-            } else {
-                setMethod(selectedCurrency === 'BTC' || selectedCurrency === 'ETH' ? 'crypto' : 'card');
-            }
         }
     }, [isOpen, selectedCurrency, selectedNetwork]);
 
-    // Handle currency/fiat changes to ensure card isn't selected for unsupported currencies
+    // Sync selectedRailId & method with activeDepositRails
     useEffect(() => {
-        const upPayCurrency = effectivePayCurrency.toUpperCase();
-        if (method === 'card' && ['BTC', 'ETH'].includes(upPayCurrency)) {
-            setMethod('crypto');
+        if (isOpen && activeDepositRails.length > 0) {
+            const cardRail = activeDepositRails.find(r => r.type === 'card');
+            const targetRail = (selectedRailId && activeDepositRails.find(r => r.id === selectedRailId)) || cardRail || activeDepositRails[0];
+            
+            setSelectedRailId(targetRail.id);
+
+            if (targetRail.type === 'card') {
+                setMethod('card');
+            } else if (targetRail.type === 'crypto' || targetRail.type === 'fx_settlement') {
+                setMethod('crypto');
+            } else {
+                setMethod('bank');
+            }
         }
-    }, [effectivePayCurrency, method]);
+    }, [isOpen, activeDepositRails]);
 
     // Polling for crypto status
     useEffect(() => {
@@ -530,7 +520,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                         if (rail.type === 'card') railMethodKey = 'card';
                         else if (rail.type === 'crypto' || rail.type === 'fx_settlement') railMethodKey = 'crypto';
 
-                        const isSelected = method === railMethodKey;
+                        const isSelected = selectedRailId === rail.id;
 
                         let IconComponent = Landmark;
                         if (rail.type === 'card') IconComponent = CreditCard;
@@ -542,7 +532,10 @@ export const FundModal: React.FC<FundModalProps> = ({
                             <button
                                 key={rail.id}
                                 type="button"
-                                onClick={() => setMethod(railMethodKey)}
+                                onClick={() => {
+                                    setSelectedRailId(rail.id);
+                                    setMethod(railMethodKey);
+                                }}
                                 className={`flex-1 min-w-[130px] flex flex-col items-center justify-center p-2.5 rounded-lg transition-all ${
                                     isSelected 
                                         ? 'bg-purple-600 border border-purple-400 ring-2 ring-purple-500 text-white shadow-lg' 
@@ -565,11 +558,9 @@ export const FundModal: React.FC<FundModalProps> = ({
 
                 {/* Selected Payment Rail Metadata Card */}
                 {(() => {
-                    const selectedRail = activeDepositRails.find(r => 
-                        (method === 'card' && r.type === 'card') ||
-                        (method === 'crypto' && (r.type === 'crypto' || r.type === 'fx_settlement')) ||
-                        (method === 'bank' && r.type !== 'card' && r.type !== 'crypto' && r.type !== 'fx_settlement')
-                    ) || activeDepositRails[0];
+                    const selectedRail = activeDepositRails.find(r => r.id === selectedRailId) || 
+                        activeDepositRails.find(r => r.type === 'card') || 
+                        activeDepositRails[0];
 
                     if (!selectedRail) return null;
 
