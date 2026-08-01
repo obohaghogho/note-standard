@@ -153,7 +153,7 @@ exports.depositCard = async (req, res, next) => {
     currency = String(currency).replace(/"/g, "");
 
     const upperCurrency = String(currency).toUpperCase();
-    const supportedCardCurrencies = ["NGN", "USD"];
+    const supportedCardCurrencies = ["NGN", "USD", "ZAR"];
     if (!supportedCardCurrencies.includes(upperCurrency)) {
       return res.status(400).json({
         error: `Card deposits are not supported for ${upperCurrency}. Please use ${upperCurrency === 'EUR' ? 'SEPA Transfer' : 'Bank Transfer'}.`

@@ -66,8 +66,9 @@ VALUES
 ('tzs_bank_wd', 'TZS', 'fincra', 'bank_transfer', 'Local Bank Payout', 'withdrawal', 2, 'ONLINE', 1000, 0.00, 1000, 50000000, 'FREE', 'Same Day', 4, 'Standard'),
 
 -- ZAR Deposits & Withdrawals (South Africa)
-('zar_eft_dep', 'ZAR', 'fincra', 'eft', 'South Africa EFT', 'deposit', 1, 'ONLINE', 0, 0.80, 50, 500000, 'FREE', 'Instant', 5, 'Recommended'),
-('zar_bank_dep', 'ZAR', 'fincra', 'bank_transfer', 'Bank Transfer', 'deposit', 2, 'ONLINE', 0, 0.00, 50, 1000000, 'FREE', 'Same Day', 4, 'Best Value'),
+('zar_card_dep', 'ZAR', 'fincra', 'card', 'Pay by Card', 'deposit', 1, 'ONLINE', 0, 2.00, 50, 50000, 'FREE', 'Instant', 5, 'Recommended'),
+('zar_eft_dep', 'ZAR', 'fincra', 'eft', 'South Africa EFT', 'deposit', 2, 'ONLINE', 0, 0.80, 50, 500000, 'FREE', 'Instant', 4, 'Best Value'),
+('zar_bank_dep', 'ZAR', 'fincra', 'bank_transfer', 'Bank Transfer', 'deposit', 3, 'ONLINE', 0, 0.00, 50, 1000000, 'FREE', 'Same Day', 3, 'Standard'),
 ('zar_eft_wd', 'ZAR', 'fincra', 'eft', 'South Africa EFT Payout', 'withdrawal', 1, 'ONLINE', 10, 0.00, 50, 500000, 'FREE', 'Instant', 5, 'Recommended'),
 
 -- GHS, KES, UGX, RWF, XAF, XOF Mobile Money & Bank Rails

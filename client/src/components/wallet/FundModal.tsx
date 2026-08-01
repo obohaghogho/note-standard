@@ -111,26 +111,36 @@ export const FundModal: React.FC<FundModalProps> = ({
             setIsRequestingLimit(false);
             setActiveCurrency(selectedCurrency);
             setActiveNetwork(selectedNetwork);
+            setSelectedRailId(null);
         }
     }, [isOpen, selectedCurrency, selectedNetwork]);
 
     // Sync selectedRailId & method with activeDepositRails
     useEffect(() => {
-        if (isOpen && activeDepositRails.length > 0) {
-            const cardRail = activeDepositRails.find(r => r.type === 'card');
-            const targetRail = (selectedRailId && activeDepositRails.find(r => r.id === selectedRailId)) || cardRail || activeDepositRails[0];
-            
-            setSelectedRailId(targetRail.id);
+        if (isOpen) {
+            const upCurr = String(activeCurrency || selectedCurrency).toUpperCase();
+            const isCryptoWallet = ['BTC', 'ETH', 'USDT', 'USDC'].includes(upCurr);
 
-            if (targetRail.type === 'card') {
-                setMethod('card');
-            } else if (targetRail.type === 'crypto' || targetRail.type === 'fx_settlement') {
+            if (isCryptoWallet) {
                 setMethod('crypto');
-            } else {
-                setMethod('bank');
+                if (activeDepositRails.length > 0) {
+                    const cryptoRail = activeDepositRails.find(r => r.type === 'crypto' || r.type === 'fx_settlement') || activeDepositRails[0];
+                    if (cryptoRail) setSelectedRailId(cryptoRail.id);
+                }
+            } else if (activeDepositRails.length > 0) {
+                const existingRail = selectedRailId ? activeDepositRails.find(r => r.id === selectedRailId) : null;
+                const cardRail = activeDepositRails.find(r => r.type === 'card');
+                const targetRail = existingRail || cardRail || activeDepositRails[0];
+
+                if (targetRail) {
+                    setSelectedRailId(targetRail.id);
+                    if (targetRail.type === 'card') setMethod('card');
+                    else if (targetRail.type === 'crypto' || targetRail.type === 'fx_settlement') setMethod('crypto');
+                    else setMethod('bank');
+                }
             }
         }
-    }, [isOpen, activeDepositRails]);
+    }, [isOpen, activeCurrency, activeDepositRails]);
 
     // Polling for crypto status
     useEffect(() => {

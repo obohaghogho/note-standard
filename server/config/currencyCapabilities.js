@@ -75,8 +75,9 @@ const BASELINE_CURRENCY_CAPABILITIES = {
     symbol: 'R',
     type: 'fiat',
     rails: [
-      { id: 'zar_eft_dep', name: 'South Africa EFT', type: 'eft', operations: ['deposit'], provider: 'fincra', priority: 1, availability: 'ONLINE', fee: { fixed: 0, percentage: 0.8, text: '0.8%' }, limits: { minimum: 50, maximum: 500000 }, requiredTier: 'FREE', estimatedSettlement: 'Instant', icon: 'ShieldCheck', recommendedScore: 5, recommendationBadge: 'Recommended' },
-      { id: 'zar_bank_dep', name: 'Bank Transfer', type: 'bank_transfer', operations: ['deposit'], provider: 'fincra', priority: 2, availability: 'ONLINE', fee: { fixed: 0, percentage: 0, text: 'Free' }, limits: { minimum: 50, maximum: 1000000 }, requiredTier: 'FREE', estimatedSettlement: 'Same Day', icon: 'Building2', recommendedScore: 4, recommendationBadge: 'Best Value' },
+      { id: 'zar_card_dep', name: 'Pay by Card', type: 'card', operations: ['deposit'], provider: 'fincra', priority: 1, availability: 'ONLINE', fee: { fixed: 0, percentage: 2.0, text: '2.0%' }, limits: { minimum: 50, maximum: 50000 }, requiredTier: 'FREE', estimatedSettlement: 'Instant', icon: 'CreditCard', recommendedScore: 5, recommendationBadge: 'Recommended' },
+      { id: 'zar_eft_dep', name: 'South Africa EFT', type: 'eft', operations: ['deposit'], provider: 'fincra', priority: 2, availability: 'ONLINE', fee: { fixed: 0, percentage: 0.8, text: '0.8%' }, limits: { minimum: 50, maximum: 500000 }, requiredTier: 'FREE', estimatedSettlement: 'Instant', icon: 'ShieldCheck', recommendedScore: 4, recommendationBadge: 'Best Value' },
+      { id: 'zar_bank_dep', name: 'Bank Transfer', type: 'bank_transfer', operations: ['deposit'], provider: 'fincra', priority: 3, availability: 'ONLINE', fee: { fixed: 0, percentage: 0, text: 'Free' }, limits: { minimum: 50, maximum: 1000000 }, requiredTier: 'FREE', estimatedSettlement: 'Same Day', icon: 'Building2', recommendedScore: 3, recommendationBadge: 'Standard' },
       { id: 'zar_eft_wd', name: 'South Africa EFT Payout', type: 'eft', operations: ['withdrawal'], provider: 'fincra', priority: 1, availability: 'ONLINE', fee: { fixed: 10, percentage: 0, text: 'R10.00' }, limits: { minimum: 50, maximum: 500000 }, requiredTier: 'FREE', estimatedSettlement: 'Instant', icon: 'ShieldCheck', recommendedScore: 5, recommendationBadge: 'Recommended' }
     ]
   },
