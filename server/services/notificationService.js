@@ -14,25 +14,32 @@ const eventBus = require("./eventBus");
  * @param {string} [params.message] - Notification message
  * @param {string} [params.link] - Link to redirect the user
  */
-const createNotification = async ({
-  receiverId,
-  senderId,
-  type,
-  title,
-  message,
-  link,
-  messageId,
-  conversationId,
-  trace,
-  skipPush = false,
-}) => {
+const createNotification = async (params) => {
+  const receiverId = params.receiverId || params.receiver_id;
+  const senderId = params.senderId || params.sender_id;
+  const {
+    type,
+    title,
+    message,
+    link,
+    messageId,
+    conversationId,
+    trace,
+    skipPush = false,
+  } = params;
+
+  if (!receiverId) {
+    console.error("[NotificationService] ❌ createNotification failed: receiverId is missing!", params);
+    return false;
+  }
+
   try {
     // 1. Persist to Database
     const { data, error } = await supabase
       .from("notifications")
       .insert([{
         receiver_id: receiverId,
-        sender_id: senderId,
+        sender_id: senderId || null,
         type,
         title,
         message,
@@ -68,7 +75,8 @@ const createNotification = async ({
     //    The gateway holds Firebase Admin and APNs credentials.
     //    We route through the gateway's /internal/push for all native push notifications.
 
-    const gatewayUrlStr = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
+    const envConfig = require('../config/env');
+    const gatewayUrlStr = process.env.REALTIME_GATEWAY_URL || envConfig.REALTIME_GATEWAY_URL || 'https://realtime-gateway-gsb5.onrender.com';
     const bodyStr = message || title;
     
     // Temporary: Disable KeepAlive to test if Render is tearing down long-lived sockets
@@ -157,19 +165,27 @@ const createNotification = async ({
  * Fix: replaced with the same native http/https pattern used by createNotification().
  * No external dependency required.
  */
-const dispatchFastPush = ({
-  receiverId,
-  type,
-  title,
-  message,
-  link,
-  messageId,
-  conversationId,
-  trace,
-}) => {
+const dispatchFastPush = (params) => {
   return new Promise((resolve) => {
     try {
-      const gatewayUrlStr = process.env.REALTIME_GATEWAY_URL || 'http://localhost:5000';
+      const receiverId = params.receiverId || params.receiver_id;
+      const {
+        type,
+        title,
+        message,
+        link,
+        messageId,
+        conversationId,
+        trace,
+      } = params;
+
+      if (!receiverId) {
+        console.error("[NotificationService] ❌ dispatchFastPush failed: receiverId is missing!", params);
+        return resolve(false);
+      }
+
+      const envConfig = require('../config/env');
+      const gatewayUrlStr = process.env.REALTIME_GATEWAY_URL || envConfig.REALTIME_GATEWAY_URL || 'https://realtime-gateway-gsb5.onrender.com';
       const bodyStr = message || title;
 
       // Normalise Gateway URL (strip trailing slash)
