@@ -180,12 +180,20 @@ class FincraProvider extends BaseProvider {
     };
 
     const targetCurrency = String(currency).toUpperCase();
-    let methods = ["card", "bank_transfer"];
-    if (["GHS", "KES", "TZS", "UGX", "ZMW", "RWF"].includes(targetCurrency)) {
-      methods.push("mobile_money");
-    }
-    if (["ZAR"].includes(targetCurrency)) {
-      methods.push("eft");
+    let methods;
+
+    if (metadata?.paymentMethods && Array.isArray(metadata.paymentMethods)) {
+      methods = metadata.paymentMethods;
+    } else if (metadata?.channel === "card" || metadata?.method === "card") {
+      methods = ["card"];
+    } else if (targetCurrency === "NGN") {
+      methods = ["card", "bank_transfer"];
+    } else if (["GHS", "KES", "TZS", "UGX"].includes(targetCurrency)) {
+      methods = ["mobile_money", "card"];
+    } else if (targetCurrency === "ZAR") {
+      methods = ["card", "eft"];
+    } else {
+      methods = ["card"];
     }
 
     const payload = {
