@@ -41,8 +41,8 @@ const BASELINE_CURRENCY_CAPABILITIES = {
     symbol: '€',
     type: 'fiat',
     rails: [
-      { id: 'eur_card_dep', name: 'Pay by Card', type: 'card', operations: ['deposit'], provider: 'fincra', priority: 1, availability: 'ONLINE', fee: { fixed: 0, percentage: 2.2, text: '2.2%' }, limits: { minimum: 10, maximum: 5000 }, requiredTier: 'FREE', estimatedSettlement: 'Instant', icon: 'CreditCard', recommendedScore: 5, recommendationBadge: 'Recommended' },
-      { id: 'eur_sepa_dep', name: 'SEPA Transfer', type: 'sepa', operations: ['deposit'], provider: 'fincra', priority: 2, availability: 'ONLINE', fee: { fixed: 0, percentage: 0, text: 'Free' }, limits: { minimum: 10, maximum: 100000 }, requiredTier: 'FREE', estimatedSettlement: 'Same Day', icon: 'Globe', recommendedScore: 4, recommendationBadge: 'Best Value' },
+      { id: 'eur_sepa_dep', name: 'SEPA Transfer', type: 'sepa', operations: ['deposit'], provider: 'fincra', priority: 1, availability: 'ONLINE', fee: { fixed: 0, percentage: 0, text: 'Free' }, limits: { minimum: 10, maximum: 100000 }, requiredTier: 'FREE', estimatedSettlement: 'Same Day', icon: 'Globe', recommendedScore: 5, recommendationBadge: 'Recommended' },
+      { id: 'eur_bank_dep', name: 'Bank Transfer', type: 'bank_transfer', operations: ['deposit'], provider: 'fincra', priority: 2, availability: 'ONLINE', fee: { fixed: 0, percentage: 0, text: 'Free' }, limits: { minimum: 10, maximum: 100000 }, requiredTier: 'FREE', estimatedSettlement: 'Same Day', icon: 'Building2', recommendedScore: 4, recommendationBadge: 'Best Value' },
       { id: 'eur_sepa_wd', name: 'SEPA Payout', type: 'sepa', operations: ['withdrawal'], provider: 'fincra', priority: 1, availability: 'ONLINE', fee: { fixed: 0.5, percentage: 0, text: '€0.50' }, limits: { minimum: 10, maximum: 100000 }, requiredTier: 'FREE', estimatedSettlement: 'Same Day', icon: 'Globe', recommendedScore: 5, recommendationBadge: 'Recommended' }
     ]
   },
@@ -52,8 +52,8 @@ const BASELINE_CURRENCY_CAPABILITIES = {
     symbol: '£',
     type: 'fiat',
     rails: [
-      { id: 'gbp_card_dep', name: 'Pay by Card', type: 'card', operations: ['deposit'], provider: 'fincra', priority: 1, availability: 'ONLINE', fee: { fixed: 0, percentage: 2.2, text: '2.2%' }, limits: { minimum: 10, maximum: 5000 }, requiredTier: 'FREE', estimatedSettlement: 'Instant', icon: 'CreditCard', recommendedScore: 5, recommendationBadge: 'Recommended' },
-      { id: 'gbp_fp_dep', name: 'UK Faster Payments', type: 'faster_payments', operations: ['deposit'], provider: 'fincra', priority: 2, availability: 'ONLINE', fee: { fixed: 0, percentage: 0, text: 'Free' }, limits: { minimum: 5, maximum: 250000 }, requiredTier: 'FREE', estimatedSettlement: 'Instant', icon: 'Zap', recommendedScore: 4, recommendationBadge: 'Best Value' },
+      { id: 'gbp_fp_dep', name: 'UK Faster Payments', type: 'faster_payments', operations: ['deposit'], provider: 'fincra', priority: 1, availability: 'ONLINE', fee: { fixed: 0, percentage: 0, text: 'Free' }, limits: { minimum: 5, maximum: 250000 }, requiredTier: 'FREE', estimatedSettlement: 'Instant', icon: 'Zap', recommendedScore: 5, recommendationBadge: 'Recommended' },
+      { id: 'gbp_bank_dep', name: 'Bank Transfer', type: 'bank_transfer', operations: ['deposit'], provider: 'fincra', priority: 2, availability: 'ONLINE', fee: { fixed: 0, percentage: 0, text: 'Free' }, limits: { minimum: 5, maximum: 250000 }, requiredTier: 'FREE', estimatedSettlement: 'Instant', icon: 'Building2', recommendedScore: 4, recommendationBadge: 'Best Value' },
       { id: 'gbp_fp_wd', name: 'UK Faster Payments Payout', type: 'faster_payments', operations: ['withdrawal'], provider: 'fincra', priority: 1, availability: 'ONLINE', fee: { fixed: 0.5, percentage: 0, text: '£0.50' }, limits: { minimum: 5, maximum: 250000 }, requiredTier: 'FREE', estimatedSettlement: 'Instant', icon: 'Zap', recommendedScore: 5, recommendationBadge: 'Recommended' }
     ]
   },

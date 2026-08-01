@@ -152,6 +152,14 @@ exports.depositCard = async (req, res, next) => {
 
     currency = String(currency).replace(/"/g, "");
 
+    const upperCurrency = String(currency).toUpperCase();
+    const supportedCardCurrencies = ["NGN", "USD"];
+    if (!supportedCardCurrencies.includes(upperCurrency)) {
+      return res.status(400).json({
+        error: `Card deposits are not supported for ${upperCurrency}. Please use ${upperCurrency === 'EUR' ? 'SEPA Transfer' : 'Bank Transfer'}.`
+      });
+    }
+
     const paymentService = require("../services/payment/paymentService");
     const { data: profile } = await supabase.from('profiles').select('email').eq('id', req.user.id).single();
     const email = profile?.email || 'user@example.com';

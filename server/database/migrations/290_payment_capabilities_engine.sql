@@ -50,15 +50,13 @@ VALUES
 ('usd_wire_wd', 'USD', 'fincra', 'wire', 'Wire Payout', 'withdrawal', 2, 'ONLINE', 25.00, 0.00, 100, 500000, 'PRO', 'Same Day', 4, 'Fast Delivery'),
 
 -- EUR Deposits & Withdrawals
-('eur_card_dep', 'EUR', 'fincra', 'card', 'Pay by Card', 'deposit', 1, 'ONLINE', 0, 2.20, 10, 5000, 'FREE', 'Instant', 5, 'Recommended'),
-('eur_sepa_dep', 'EUR', 'fincra', 'sepa', 'SEPA Transfer', 'deposit', 2, 'ONLINE', 0, 0.00, 10, 100000, 'FREE', 'Same Day', 4, 'Best Value'),
-('eur_bank_dep', 'EUR', 'fincra', 'bank_transfer', 'Bank Transfer', 'deposit', 3, 'ONLINE', 0, 0.00, 10, 100000, 'FREE', 'Same Day', 3, 'Standard'),
+('eur_sepa_dep', 'EUR', 'fincra', 'sepa', 'SEPA Transfer', 'deposit', 1, 'ONLINE', 0, 0.00, 10, 100000, 'FREE', 'Same Day', 5, 'Recommended'),
+('eur_bank_dep', 'EUR', 'fincra', 'bank_transfer', 'Bank Transfer', 'deposit', 2, 'ONLINE', 0, 0.00, 10, 100000, 'FREE', 'Same Day', 4, 'Best Value'),
 ('eur_sepa_wd', 'EUR', 'fincra', 'sepa', 'SEPA Transfer', 'withdrawal', 1, 'ONLINE', 0.50, 0.00, 10, 100000, 'FREE', 'Same Day', 5, 'Recommended'),
 
 -- GBP Deposits & Withdrawals
-('gbp_card_dep', 'GBP', 'fincra', 'card', 'Pay by Card', 'deposit', 1, 'ONLINE', 0, 2.20, 10, 5000, 'FREE', 'Instant', 5, 'Recommended'),
-('gbp_fp_dep', 'GBP', 'fincra', 'faster_payments', 'UK Faster Payments', 'deposit', 2, 'ONLINE', 0, 0.00, 5, 250000, 'FREE', 'Instant', 4, 'Best Value'),
-('gbp_bank_dep', 'GBP', 'fincra', 'bank_transfer', 'Bank Transfer', 'deposit', 3, 'ONLINE', 0, 0.00, 5, 250000, 'FREE', 'Instant', 3, 'Standard'),
+('gbp_fp_dep', 'GBP', 'fincra', 'faster_payments', 'UK Faster Payments', 'deposit', 1, 'ONLINE', 0, 0.00, 5, 250000, 'FREE', 'Instant', 5, 'Recommended'),
+('gbp_bank_dep', 'GBP', 'fincra', 'bank_transfer', 'Bank Transfer', 'deposit', 2, 'ONLINE', 0, 0.00, 5, 250000, 'FREE', 'Instant', 4, 'Best Value'),
 ('gbp_fp_wd', 'GBP', 'fincra', 'faster_payments', 'UK Faster Payments', 'withdrawal', 1, 'ONLINE', 0.50, 0.00, 5, 250000, 'FREE', 'Instant', 5, 'Recommended'),
 
 -- TZS Deposits & Withdrawals (Tanzania - No Card)
