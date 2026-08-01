@@ -223,7 +223,7 @@ function WalletHubContent() {
                     </span>
                   </div>
                   <span className="text-xs text-gray-500 hidden sm:inline">
-                    Fincra Merchant Wallet Banking & Collections
+                    Licensed Banking Partners
                   </span>
                 </div>
 
@@ -294,7 +294,7 @@ function WalletHubContent() {
             </motion.div>
           )}
 
-          {/* ── DIGITAL CURRENCY TAB (Fincra Merchant Wallet Stablecoins) ───── */}
+          {/* ── DIGITAL CURRENCY TAB ──────────────────────────────────── */}
           {activeTab === 'digital' && (
             <motion.div
               key="digital"
@@ -314,10 +314,10 @@ function WalletHubContent() {
                     <div className="flex items-center gap-2">
                       <h2 className="text-lg font-bold text-white">Digital Currency & Stablecoins</h2>
                       <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                        Fincra Merchant Wallet
+                        Licensed Settlement Partner
                       </span>
                     </div>
-                    <p className="text-xs text-gray-400">Fincra settlement stablecoins & digital naira — fiat settlement layer (separate from on-chain crypto custody).</p>
+                    <p className="text-xs text-gray-400">Settlement stablecoins & digital naira — fiat settlement layer (separate from on-chain crypto custody).</p>
                   </div>
                 </div>
               </div>
@@ -367,10 +367,10 @@ function WalletHubContent() {
                     <div className="flex items-center gap-2">
                       <h2 className="text-lg font-bold text-white">Blockchain Cryptocurrencies</h2>
                       <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/30">
-                        NOWPayments On-Chain
+                        Licensed Custody Partner
                       </span>
                     </div>
-                    <p className="text-xs text-gray-400">On-chain blockchain deposits, confirmations, network fees, & wallet addresses via NOWPayments.</p>
+                    <p className="text-xs text-gray-400">On-chain blockchain deposits, confirmations, network fees, & wallet addresses.</p>
                   </div>
                 </div>
                 <div className="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-medium flex items-center gap-1.5">
