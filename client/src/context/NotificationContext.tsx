@@ -7,6 +7,7 @@ import { AnimatePresence } from 'framer-motion';
 import NotificationToast, { type NotificationToastData } from '../components/common/NotificationToast';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getDeviceId, getDeviceMetadata } from '../utils/deviceId';
+import { Bell } from 'lucide-react';
 
 interface Notification {
     id: string;
@@ -639,6 +640,17 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         return false;
     }, [subscribeToPush]);
 
+    const [showPermissionBanner, setShowPermissionBanner] = useState(false);
+
+    useEffect(() => {
+        if (user && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+            const timer = setTimeout(() => setShowPermissionBanner(true), 2000);
+            return () => clearTimeout(timer);
+        } else {
+            setShowPermissionBanner(false);
+        }
+    }, [user]);
+
     return (
         <NotificationContext.Provider value={{ 
             notifications, 
@@ -654,6 +666,45 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             requestPushPermission
         }}>
             {children}
+            {showPermissionBanner && (
+                <div className="fixed bottom-5 right-5 z-50 max-w-sm bg-gray-950/95 backdrop-blur-xl border border-blue-500/30 p-4 rounded-2xl shadow-2xl flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-5 duration-300">
+                    <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 text-blue-400 font-semibold text-sm">
+                            <Bell size={18} />
+                            <span>Enable Notifications</span>
+                        </div>
+                        <button 
+                            type="button"
+                            onClick={() => setShowPermissionBanner(false)}
+                            className="text-gray-400 hover:text-white text-xs p-1 rounded-lg hover:bg-white/10 transition-all"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                    <p className="text-xs text-gray-300">
+                        Get instant alerts for new chat requests, messages, and security updates on your device.
+                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                const ok = await requestPushPermission();
+                                if (ok) setShowPermissionBanner(false);
+                            }}
+                            className="flex-1 py-2 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-600/30 transition-all active:scale-95 text-center"
+                        >
+                            Enable Now
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setShowPermissionBanner(false)}
+                            className="py-2 px-3 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-medium rounded-xl transition-all"
+                        >
+                            Later
+                        </button>
+                    </div>
+                </div>
+            )}
             <AnimatePresence>
                 {currentToast && (
                     <NotificationToast 

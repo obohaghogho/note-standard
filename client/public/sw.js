@@ -108,7 +108,8 @@ self.addEventListener('push', (event) => {
         options.tag = `incoming-call-${Date.now()}`; // Unique tag so previous calls don't overwrite current ones
     }
 
-    if (options.data.type === 'chat_message' && options.data.messageId) {
+    const isChatPush = options.data.type === 'chat_message' || options.data.type === 'message' || options.data.type === 'chat_request' || options.data.type === 'chat_accepted';
+    if (isChatPush && options.data.messageId) {
         const targetApiUrl = options.data.apiUrl || 'https://note-standard-api.onrender.com';
 
         // FAST-PATH: Use the gateway URL when available — the gateway is ALWAYS awake because it

@@ -62,8 +62,9 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
   try {
     const data = remoteMessage.data;
 
-    // ── Chat message: show notification + fire delivery webhook ──────────────
-    if ((data?.type === 'chat_message' || data?.type === 'message') && data?.messageId) {
+    // ── Chat message / request: show notification + fire delivery webhook ──────────────
+    const isChatType = data?.type === 'chat_message' || data?.type === 'message' || data?.type === 'chat_request' || data?.type === 'chat_accepted';
+    if (isChatType && data?.messageId) {
       const messageId = data.messageId;
       const conversationId = data.conversationId || '';
 

@@ -140,11 +140,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     useEffect(() => {
         if (!user) return;
         const initSession = async () => {
-            let localDeviceId = await AsyncStorage.getItem('chat_device_id');
-            if (!localDeviceId) {
-                localDeviceId = `mobile-${Math.random().toString(36).substring(2, 9)}`;
-                await AsyncStorage.setItem('chat_device_id', localDeviceId);
-            }
+            const { DeviceManager } = require('../utils/DeviceManager');
+            const localDeviceId = await DeviceManager.getDeviceId();
             setDeviceId(localDeviceId);
             deviceIdRef.current = localDeviceId;
 

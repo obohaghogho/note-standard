@@ -218,6 +218,16 @@ export class PushHandler {
   static async registerDeviceToken() {
     console.log('[PushHandler] 📡 Fetching and registering device tokens...');
 
+    try {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        console.log(`[PushHandler] Requested push permissions. Result: ${status}`);
+      }
+    } catch (pErr) {
+      console.warn('[PushHandler] Notification permission check note:', pErr);
+    }
+
     if (Platform.OS === 'android') {
       // Phase 5 fix: Use the native Firebase FCM token, NOT Expo's device push token.
       // Expo's getDevicePushTokenAsync() returns a token formatted for Expo's
