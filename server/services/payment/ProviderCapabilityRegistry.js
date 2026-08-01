@@ -49,8 +49,12 @@ class ProviderCapabilityRegistry {
    */
   static normalizeDbRails(dbRows) {
     const map = {};
+    const UNSUPPORTED_CARD_CURRENCIES = ['EUR', 'GBP', 'CAD', 'TZS', 'KES'];
 
     for (const row of dbRows) {
+      if (row.rail_type === 'card' && UNSUPPORTED_CARD_CURRENCIES.includes(row.currency)) {
+        continue;
+      }
       const curr = row.currency;
       if (!map[curr]) {
         map[curr] = {
