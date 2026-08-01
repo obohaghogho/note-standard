@@ -24,7 +24,7 @@ import {
 } from '../config/currencyConfig';
 import type { CurrencyConfig, CryptoCurrencyConfig } from '../config/currencyConfig';
 
-type HubTab = 'fiat' | 'crypto' | 'exchange';
+import type { TabId as HubTab } from '../components/wallet/WalletHubTabs';
 
 function WalletHubContent() {
   const { wallets, loading, refresh, createWallet } = useWallet();
@@ -421,7 +421,7 @@ function WalletHubContent() {
               transition={{ duration: 0.25 }}
             >
               <ExchangeHub
-                fiatWallets={fiatWalletsInfo.filter(w => activeFiatCurrencies.some(c => c.code === w.currency))}
+                fiatWallets={fiatWalletsInfo.filter(w => fiatCatalog.some(c => c.status === 'active' && c.code === w.currency))}
                 cryptoWallets={cryptoWalletsInfo}
                 rates={rates}
                 lastUsedFiatCurrency={lastBuyFiat}
