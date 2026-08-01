@@ -242,7 +242,9 @@ export const COMING_SOON_CURRENCIES = new Set(
   FIAT_CURRENCY_CATALOG.filter(c => c.status === 'coming_soon').map(c => c.code)
 );
 
-// ── CRYPTO CURRENCY CATALOG ──────────────────────────────────────────────────
+// ── CRYPTO CURRENCY CATALOG (On-Chain Custody via NOWPayments) ───────────────
+// Only true blockchain cryptocurrencies belong here.
+// Stablecoins (USDT, USDC, CNGN) settled via Fincra belong in FIAT_CURRENCY_CATALOG.
 export const CRYPTO_CURRENCY_CATALOG: CryptoCurrencyConfig[] = [
   {
     code: 'BTC',
@@ -252,7 +254,7 @@ export const CRYPTO_CURRENCY_CATALOG: CryptoCurrencyConfig[] = [
     color: '#f59e0b',
     status: 'coming_soon',
     custodyStatus: 'coming_soon',
-    custodyBadgeText: 'Custody Integration Coming Soon',
+    custodyBadgeText: 'NOWPayments On-Chain Custody',
     deposit_enabled: false,
     withdraw_enabled: false,
     buy_enabled: false,
@@ -260,7 +262,7 @@ export const CRYPTO_CURRENCY_CATALOG: CryptoCurrencyConfig[] = [
     swap_enabled: false,
     decimal_places: 8,
     networks: ['bitcoin', 'BEP20'],
-    tooltip: 'Custody integration coming soon until production custody is enabled.',
+    tooltip: 'NOWPayments on-chain custody integration coming soon.',
   },
   {
     code: 'ETH',
@@ -270,7 +272,7 @@ export const CRYPTO_CURRENCY_CATALOG: CryptoCurrencyConfig[] = [
     color: '#8b5cf6',
     status: 'coming_soon',
     custodyStatus: 'coming_soon',
-    custodyBadgeText: 'Custody Integration Coming Soon',
+    custodyBadgeText: 'NOWPayments On-Chain Custody',
     deposit_enabled: false,
     withdraw_enabled: false,
     buy_enabled: false,
@@ -278,43 +280,7 @@ export const CRYPTO_CURRENCY_CATALOG: CryptoCurrencyConfig[] = [
     swap_enabled: false,
     decimal_places: 6,
     networks: ['ERC20', 'BEP20'],
-    tooltip: 'Custody integration coming soon until production custody is enabled.',
-  },
-  {
-    code: 'USDT',
-    name: 'Tether',
-    symbol: '₮',
-    flag: '🟢',
-    color: '#26a17b',
-    status: 'coming_soon',
-    custodyStatus: 'coming_soon',
-    custodyBadgeText: 'Custody Integration Coming Soon',
-    deposit_enabled: false,
-    withdraw_enabled: false,
-    buy_enabled: false,
-    sell_enabled: false,
-    swap_enabled: false,
-    decimal_places: 2,
-    networks: ['TRC20', 'ERC20', 'BEP20'],
-    tooltip: 'Custody integration coming soon until production custody is enabled.',
-  },
-  {
-    code: 'USDC',
-    name: 'USD Coin',
-    symbol: '●',
-    flag: '🔵',
-    color: '#2775ca',
-    status: 'coming_soon',
-    custodyStatus: 'coming_soon',
-    custodyBadgeText: 'Custody Integration Coming Soon',
-    deposit_enabled: false,
-    withdraw_enabled: false,
-    buy_enabled: false,
-    sell_enabled: false,
-    swap_enabled: false,
-    decimal_places: 2,
-    networks: ['ERC20', 'BEP20'],
-    tooltip: 'Custody integration coming soon until production custody is enabled.',
+    tooltip: 'NOWPayments on-chain custody integration coming soon.',
   },
 ];
 

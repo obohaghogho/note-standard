@@ -149,8 +149,10 @@ function WalletHubContent() {
     } catch { /* handled */ }
   };
 
-  // Group Fiat Catalog into Active vs Coming Soon
-  const activeFiatCurrencies = fiatCatalog.filter(c => c.status === 'active');
+  // Group Fiat Catalog into Fiat Banking vs Digital Currency vs Coming Soon
+  const STABLECOIN_CODES = new Set(['USDT', 'USDC', 'CNGN']);
+  const activeBankingFiat = fiatCatalog.filter(c => c.status === 'active' && !STABLECOIN_CODES.has(c.code));
+  const digitalCurrencies = fiatCatalog.filter(c => c.status === 'active' && STABLECOIN_CODES.has(c.code));
   const comingSoonFiatCurrencies = fiatCatalog.filter(c => c.status === 'coming_soon');
 
   // Currencies available to create in modal
@@ -200,7 +202,7 @@ function WalletHubContent() {
 
         {/* ── Tab Panels ────────────────────────────────────────────── */}
         <AnimatePresence mode="wait">
-          {/* ── FIAT WALLETS TAB ──────────────────────────────────── */}
+          {/* ── FIAT BANKING TAB ──────────────────────────────────── */}
           {activeTab === 'fiat' && (
             <motion.div
               key="fiat"
@@ -215,18 +217,18 @@ function WalletHubContent() {
                 <div className="flex items-center justify-between border-b border-white/5 pb-3">
                   <div className="flex items-center gap-2.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <h2 className="text-lg font-bold text-white tracking-wide">Available Now</h2>
+                    <h2 className="text-lg font-bold text-white tracking-wide font-mono uppercase text-xs tracking-wider">Fiat Banking Currencies</h2>
                     <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
-                      {activeFiatCurrencies.length} Operational Currencies
+                      {activeBankingFiat.length} Active Currencies
                     </span>
                   </div>
                   <span className="text-xs text-gray-500 hidden sm:inline">
-                    Live production banking & collections
+                    Fincra Merchant Wallet Banking & Collections
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {activeFiatCurrencies.map(currency => {
+                  {activeBankingFiat.map(currency => {
                     const balData = getWalletBalance(currency.code);
                     return (
                       <FiatWalletCard
@@ -283,7 +285,7 @@ function WalletHubContent() {
                 </div>
               </div>
 
-              {selectedAsset.currency && activeFiatCurrencies.some(c => c.code === selectedAsset.currency) && (
+              {selectedAsset.currency && activeBankingFiat.some(c => c.code === selectedAsset.currency) && (
                 <VirtualAccountDetails 
                   currency={selectedAsset.currency} 
                   onAccountCreated={handleRefresh}
@@ -292,7 +294,60 @@ function WalletHubContent() {
             </motion.div>
           )}
 
-          {/* ── CRYPTO WALLETS TAB ────────────────────────────────── */}
+          {/* ── DIGITAL CURRENCY TAB (Fincra Merchant Wallet Stablecoins) ───── */}
+          {activeTab === 'digital' && (
+            <motion.div
+              key="digital"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.25 }}
+              className="space-y-6"
+            >
+              {/* Digital Currency Banner */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-900/20 via-indigo-900/20 to-gray-900 border border-emerald-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-300 font-bold text-lg">
+                    ₮
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-lg font-bold text-white">Digital Currency & Stablecoins</h2>
+                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                        Fincra Merchant Wallet
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-400">Fincra settlement stablecoins & digital naira — fiat settlement layer (separate from on-chain crypto custody).</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {digitalCurrencies.map(currency => {
+                  const balData = getWalletBalance(currency.code);
+                  return (
+                    <FiatWalletCard
+                      key={currency.code}
+                      currency={currency}
+                      balance={balData.balance}
+                      availableBalance={balData.available}
+                      pendingBalance={balData.pending}
+                      showBalance={showBalances}
+                      isSelected={selectedAsset.currency === currency.code}
+                      onSelect={() => setSelectedAsset({ currency: currency.code, network: 'native' })}
+                      onDeposit={() => openModal('fund', currency.code)}
+                      onWithdraw={() => openModal('withdraw', currency.code)}
+                      onTransfer={() => openModal('transfer', currency.code)}
+                      onConvert={() => { setActiveTab('exchange'); }}
+                      onBuyCrypto={() => { setActiveTab('exchange'); }}
+                    />
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── ON-CHAIN CRYPTO WALLETS TAB ───────────────────────── */}
           {activeTab === 'crypto' && (
             <motion.div
               key="crypto"
@@ -310,17 +365,17 @@ function WalletHubContent() {
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h2 className="text-lg font-bold text-white">Crypto Wallet (Beta)</h2>
-                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                        Beta
+                      <h2 className="text-lg font-bold text-white">Blockchain Cryptocurrencies</h2>
+                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                        NOWPayments On-Chain
                       </span>
                     </div>
-                    <p className="text-xs text-gray-400">Custody integration coming soon until production custody is enabled.</p>
+                    <p className="text-xs text-gray-400">On-chain blockchain deposits, confirmations, network fees, & wallet addresses via NOWPayments.</p>
                   </div>
                 </div>
                 <div className="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-medium flex items-center gap-1.5">
                   <ShieldAlert size={14} className="text-amber-400 shrink-0" />
-                  <span>Custody Integration Coming Soon</span>
+                  <span>On-Chain Custody Integration Coming Soon</span>
                 </div>
               </div>
 

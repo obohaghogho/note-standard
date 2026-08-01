@@ -1,8 +1,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Landmark, Bitcoin, ArrowRightLeft } from 'lucide-react';
+import { Landmark, Coins, Bitcoin, ArrowRightLeft } from 'lucide-react';
 
-type TabId = 'fiat' | 'crypto' | 'exchange';
+export type TabId = 'fiat' | 'digital' | 'crypto' | 'exchange';
 
 interface WalletHubTabsProps {
   activeTab: TabId;
@@ -10,8 +10,9 @@ interface WalletHubTabsProps {
 }
 
 const TABS: { id: TabId; label: string; icon: React.ElementType; description: string }[] = [
-  { id: 'fiat', label: 'Fiat Wallets', icon: Landmark, description: 'NGN, USD, EUR, GBP' },
-  { id: 'crypto', label: 'Crypto Wallets', icon: Bitcoin, description: 'BTC, ETH, USDT, USDC' },
+  { id: 'fiat', label: 'Fiat Banking', icon: Landmark, description: 'NGN, USD, EUR, GBP' },
+  { id: 'digital', label: 'Digital Currency', icon: Coins, description: 'USDT, USDC, CNGN (Fincra)' },
+  { id: 'crypto', label: 'On-Chain Crypto', icon: Bitcoin, description: 'BTC, ETH (NOWPayments)' },
   { id: 'exchange', label: 'Exchange Hub', icon: ArrowRightLeft, description: 'Convert, Buy, Sell, Swap' },
 ];
 
@@ -53,7 +54,7 @@ export function WalletHubTabs({ activeTab, onTabChange }: WalletHubTabsProps) {
           transition={{ type: 'spring', stiffness: 400, damping: 35 }}
         />
 
-        <div className="relative z-10 grid grid-cols-3 gap-1">
+        <div className="relative z-10 grid grid-cols-4 gap-1">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
