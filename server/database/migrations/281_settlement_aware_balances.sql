@@ -29,6 +29,7 @@ ALTER TABLE public.wallets_store
   CHECK (pending_balance >= 0 AND locked_balance >= 0);
 
 -- ─── 2. Rebuild wallets_v6 view — expose all four tiers ──────────────────────
+DROP VIEW IF EXISTS public.wallets_v6 CASCADE;
 CREATE OR REPLACE VIEW public.wallets_v6 AS
 SELECT
     ws.id,
