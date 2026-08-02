@@ -14,6 +14,15 @@ CREATE TABLE IF NOT EXISTS public.chart_of_accounts (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Safe Schema Alterations for existing table instances
+ALTER TABLE public.chart_of_accounts ADD COLUMN IF NOT EXISTS code VARCHAR(50);
+ALTER TABLE public.chart_of_accounts ADD COLUMN IF NOT EXISTS name VARCHAR(255);
+ALTER TABLE public.chart_of_accounts ADD COLUMN IF NOT EXISTS type VARCHAR(50);
+ALTER TABLE public.chart_of_accounts ADD COLUMN IF NOT EXISTS parent_account_id UUID REFERENCES public.chart_of_accounts(id) ON DELETE RESTRICT;
+ALTER TABLE public.chart_of_accounts ADD COLUMN IF NOT EXISTS level INT DEFAULT 1;
+ALTER TABLE public.chart_of_accounts ADD COLUMN IF NOT EXISTS currency VARCHAR(10);
+ALTER TABLE public.chart_of_accounts ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+
 -- Indices for rapid hierarchy lookups
 CREATE INDEX IF NOT EXISTS idx_chart_of_accounts_code ON public.chart_of_accounts(code);
 CREATE INDEX IF NOT EXISTS idx_chart_of_accounts_parent ON public.chart_of_accounts(parent_account_id);
