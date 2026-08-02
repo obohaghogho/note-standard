@@ -29,6 +29,18 @@ ALTER TABLE public.circuit_breakers ADD COLUMN IF NOT EXISTS failed_requests INT
 ALTER TABLE public.circuit_breakers ADD COLUMN IF NOT EXISTS timeouts INT DEFAULT 0;
 ALTER TABLE public.circuit_breakers ADD COLUMN IF NOT EXISTS rejections INT DEFAULT 0;
 
+-- Safe Unique Constraint Addition for ON CONFLICT (provider) DO NOTHING
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'uq_circuit_breakers_provider'
+  ) THEN
+    ALTER TABLE public.circuit_breakers ADD CONSTRAINT uq_circuit_breakers_provider UNIQUE (provider);
+  END IF;
+EXCEPTION
+  WHEN OTHERS THEN NULL;
+END $$;
+
 -- Seed Default Circuit Breaker Records
 INSERT INTO public.circuit_breakers (provider, state)
 VALUES

@@ -25,6 +25,18 @@ ALTER TABLE public.provider_health ADD COLUMN IF NOT EXISTS last_success TIMESTA
 ALTER TABLE public.provider_health ADD COLUMN IF NOT EXISTS last_failure TIMESTAMPTZ;
 ALTER TABLE public.provider_health ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'HEALTHY';
 
+-- Safe Unique Constraint Addition for ON CONFLICT (provider) DO NOTHING
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'uq_provider_health_provider'
+  ) THEN
+    ALTER TABLE public.provider_health ADD CONSTRAINT uq_provider_health_provider UNIQUE (provider);
+  END IF;
+EXCEPTION
+  WHEN OTHERS THEN NULL;
+END $$;
+
 -- Seed Default Providers
 INSERT INTO public.provider_health (provider, latency_ms, success_rate, status)
 VALUES
