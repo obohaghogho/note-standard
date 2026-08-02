@@ -60,74 +60,74 @@ interface TeamHeaderProps {
 const TeamHeader: React.FC<TeamHeaderProps> = ({ team, myRole, onBack, isInfoOpen, onToggleInfo, onInvite, onJoinCall, activeTab, onSelectTab }) => {
 
   return (
-    <div className="teams-page__header flex items-center justify-between p-3 md:p-5 bg-gray-900/50 backdrop-blur-3xl border-b border-white/5 z-20">
-      <div className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer group" onClick={onToggleInfo}>
+    <div className="teams-page__header flex items-center justify-between p-2.5 md:p-5 bg-gray-900/50 backdrop-blur-3xl border-b border-white/5 z-20 gap-2 min-w-0">
+      <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1 cursor-pointer group" onClick={onToggleInfo}>
          <button 
-           className="p-2 -ml-2 text-gray-400 hover:text-white md:hidden"
+           className="p-1.5 -ml-1 text-gray-400 hover:text-white md:hidden shrink-0"
            onClick={(e) => { e.stopPropagation(); onBack(); }}
          >
-           <ArrowLeft size={20} />
+           <ArrowLeft size={18} />
          </button>
-         <div className="w-10 h-10 md:w-11 md:h-11 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg overflow-hidden flex-shrink-0 group-hover:scale-105 transition-transform">
+         <div className="w-9 h-9 md:w-11 md:h-11 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg overflow-hidden shrink-0 group-hover:scale-105 transition-transform">
             {team.avatar_url ? (
               <SecureImage src={team.avatar_url} alt="" className="w-full h-full object-cover" />
             ) : (
-              <span className="text-white font-black text-lg">{(team.name || 'T').charAt(0).toUpperCase()}</span>
+              <span className="text-white font-black text-base md:text-lg">{(team.name || 'T').charAt(0).toUpperCase()}</span>
             )}
          </div>
-         <div className="min-w-0">
-            <h1 className="text-sm md:text-base font-black text-white truncate group-hover:text-primary transition-colors flex items-center gap-2">
-              {team?.name || 'Unnamed Team'}
-              {(myRole === 'owner' || myRole === 'admin') && <Shield size={12} className="text-primary hidden md:inline" />}
+         <div className="min-w-0 flex-1">
+            <h1 className="text-xs md:text-base font-black text-white truncate group-hover:text-primary transition-colors flex items-center gap-1.5">
+              <span className="truncate">{team?.name || 'Unnamed Team'}</span>
+              {(myRole === 'owner' || myRole === 'admin') && <Shield size={12} className="text-primary hidden md:inline shrink-0" />}
             </h1>
-            <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest truncate mt-0.5">View team information</p>
+            <p className="text-[9px] md:text-[10px] text-gray-500 font-black uppercase tracking-widest truncate mt-0.5">View team info</p>
          </div>
       </div>
 
-      <div className="flex items-center gap-1 md:gap-3">
+      <div className="flex items-center gap-1 md:gap-3 shrink-0">
          {/* Toggle Chat vs Enterprise Workspace */}
-         <div className="flex items-center bg-gray-800/80 p-1 rounded-2xl border border-white/10">
+         <div className="flex items-center bg-gray-800/80 p-0.5 md:p-1 rounded-2xl border border-white/10 shrink-0">
             <button
               onClick={() => onSelectTab('chat')}
               className={cn(
-                "px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5",
+                "px-2 md:px-3 py-1 rounded-xl text-[11px] md:text-xs font-bold transition-all flex items-center gap-1",
                 activeTab === 'chat' ? "bg-blue-600 text-white shadow-md" : "text-gray-400 hover:text-white"
               )}
             >
-              <MessageSquare size={14} />
+              <MessageSquare size={13} />
               <span className="hidden sm:inline">Chat</span>
             </button>
             <button
               onClick={() => onSelectTab(activeTab === 'chat' ? 'overview' : activeTab)}
               className={cn(
-                "px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5",
+                "px-2 md:px-3 py-1 rounded-xl text-[11px] md:text-xs font-bold transition-all flex items-center gap-1",
                 activeTab !== 'chat' ? "bg-blue-600 text-white shadow-md" : "text-gray-400 hover:text-white"
               )}
             >
-              <BarChart3 size={14} />
-              <span>Workspace</span>
+              <BarChart3 size={13} />
+              <span className="hidden xs:inline">Workspace</span>
             </button>
          </div>
 
          <button 
           onClick={(e) => { e.stopPropagation(); onJoinCall(); }}
-          className="p-2.5 text-gray-400 hover:text-green-400 hover:bg-green-400/10 transition-all rounded-2xl active:scale-95"
+          className="p-2 text-gray-400 hover:text-green-400 hover:bg-green-400/10 transition-all rounded-2xl active:scale-95 shrink-0"
           title="Join Conference Call"
          >
-            <Video size={20} />
+            <Video size={18} />
          </button>
          <button 
           onClick={onToggleInfo}
           className={cn(
-            "p-2.5 rounded-2xl transition-all hidden md:flex active:scale-95",
+            "p-2 rounded-2xl transition-all hidden md:flex active:scale-95 shrink-0",
             isInfoOpen ? "bg-primary text-white shadow-lg shadow-primary/20" : "text-gray-400 hover:bg-white/5"
           )}
          >
-            <Users size={20} />
+            <Users size={18} />
          </button>
          {(myRole === 'owner' || myRole === 'admin') && (
-           <button onClick={(e) => { e.stopPropagation(); onInvite(); }} className="p-2.5 text-gray-400 hover:text-primary transition-all rounded-2xl hover:bg-primary/10 active:scale-95">
-              <UserPlus size={20} />
+           <button onClick={(e) => { e.stopPropagation(); onInvite(); }} className="p-2 text-gray-400 hover:text-primary transition-all rounded-2xl hover:bg-primary/10 active:scale-95 shrink-0">
+              <UserPlus size={18} />
            </button>
          )}
       </div>

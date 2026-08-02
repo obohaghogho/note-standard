@@ -515,8 +515,33 @@ export default function Settings() {
                                     }
                                     checked={isSubscribed && permission === 'granted'}
                                     disabled={permission === 'denied'}
-                                    onChange={(c) => c ? subscribeUser() : unsubscribeUser()}
+                                    onChange={async (c) => {
+                                        try {
+                                            if (c) {
+                                                await subscribeUser();
+                                            } else {
+                                                await unsubscribeUser();
+                                            }
+                                        } catch (err) {
+                                            console.warn('[Settings] Push toggle action error:', err);
+                                        }
+                                    }}
                                 />
+                                {typeof navigator !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) && !(window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone) && (
+                                    <div className="mt-2 flex flex-col gap-2 text-xs bg-blue-500/10 border border-blue-500/20 p-3.5 rounded-xl">
+                                        <p className="text-blue-300 font-bold flex items-center gap-1.5 text-xs">
+                                            📱 iOS Push Notification Requirement
+                                        </p>
+                                        <p className="text-slate-300 text-[11px]">
+                                            Apple iOS requires NoteStandard to be added to your Home Screen before Push Notifications can be enabled in Safari.
+                                        </p>
+                                        <ol className="list-decimal list-inside space-y-1 text-slate-400 text-[11px]">
+                                            <li>Tap the <strong className="text-white">Share button 📤</strong> at the bottom of Safari</li>
+                                            <li>Scroll down and tap <strong className="text-white">Add to Home Screen 📱</strong></li>
+                                            <li>Open NoteStandard from your Home Screen to enable push alerts</li>
+                                        </ol>
+                                    </div>
+                                )}
                                 {permission === 'denied' && (
                                     <div className="mt-2 flex flex-col gap-2 text-xs bg-red-500/5 border border-red-500/20 p-3 rounded-xl">
                                         <p className="text-red-400 font-semibold flex items-center gap-1.5">

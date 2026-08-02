@@ -68,7 +68,7 @@ server.on('error', (err) => {
   }
 });
 
-server.listen(PORT, async () => {
+server.listen(PORT, "0.0.0.0", async () => {
   logger.info(`Server running on port ${PORT}`);
   // ✅ HTTP server is bound — API layer is accepting connections
   bootManager.setService("api", true);

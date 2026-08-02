@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 import { resolveLocalUrl } from './networkUtils';
 
 // Vite automatically loads the correct .env file based on mode:
-const rawApiUrl = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5000' : 'https://note-standard-api.onrender.com');
+const rawApiUrl = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5000' : 'https://api.notestandard.com');
 export const API_URL = resolveLocalUrl(rawApiUrl, 'http://localhost:5000');
 
 if (!API_URL) {

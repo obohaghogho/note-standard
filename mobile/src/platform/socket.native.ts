@@ -14,7 +14,7 @@
 import { io, Socket } from 'socket.io-client';
 import { AppState, AppStateStatus } from 'react-native';
 
-const GATEWAY_URL = process.env.EXPO_PUBLIC_GATEWAY_URL || 'https://realtime-gateway-gsb5.onrender.com';
+const GATEWAY_URL = process.env.EXPO_PUBLIC_GATEWAY_URL || 'https://gateway.notestandard.com';
 
 type Listener = { event: string; handler: (...args: any[]) => void };
 
