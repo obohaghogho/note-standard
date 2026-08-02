@@ -1,112 +1,140 @@
 -- 319_provider_capabilities.sql
 -- NoteStandard Enterprise Banking Platform (Architecture v1.0)
--- Published Provider Capabilities Matrix per Currency & Payment Rail
--- Official Fincra Support Matrix Updated
+-- Country + Currency + Direction + Payment Rail Capability Matrix
+-- Official Fincra Support Matrix with Activation Status (ENABLED vs PENDING_APPROVAL)
 
 CREATE TABLE IF NOT EXISTS public.provider_capabilities_matrix (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   provider VARCHAR(50) NOT NULL,
+  country VARCHAR(10) NOT NULL DEFAULT 'NG',
   currency VARCHAR(10) NOT NULL,
   payment_rail VARCHAR(50) NOT NULL,
-  operation VARCHAR(50) NOT NULL,
+  direction VARCHAR(20) NOT NULL DEFAULT 'payin' CHECK (direction IN ('payin', 'payout')),
+  operation VARCHAR(50) NOT NULL DEFAULT 'deposit',
+  activation_status VARCHAR(30) NOT NULL DEFAULT 'ENABLED' CHECK (activation_status IN ('ENABLED', 'PENDING_APPROVAL', 'DISABLED', 'NOT_SUPPORTED')),
   is_supported BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT uq_prov_cap_matrix UNIQUE(provider, currency, payment_rail, operation)
+  CONSTRAINT uq_prov_cap_matrix_v2 UNIQUE(provider, country, currency, payment_rail, direction)
 );
 
--- Safe Schema Alterations
+-- Safe Schema Alterations for pre-existing table instances
+ALTER TABLE public.provider_capabilities_matrix ADD COLUMN IF NOT EXISTS country VARCHAR(10) DEFAULT 'NG';
+ALTER TABLE public.provider_capabilities_matrix ADD COLUMN IF NOT EXISTS direction VARCHAR(20) DEFAULT 'payin';
+ALTER TABLE public.provider_capabilities_matrix ADD COLUMN IF NOT EXISTS activation_status VARCHAR(30) DEFAULT 'ENABLED';
 ALTER TABLE public.provider_capabilities_matrix ADD COLUMN IF NOT EXISTS is_supported BOOLEAN DEFAULT true;
 
 -- Safe Unique Constraint Addition
 DO $$ 
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'uq_prov_cap_matrix'
+    SELECT 1 FROM pg_constraint WHERE conname = 'uq_prov_cap_matrix_v2'
   ) THEN
-    ALTER TABLE public.provider_capabilities_matrix ADD CONSTRAINT uq_prov_cap_matrix UNIQUE (provider, currency, payment_rail, operation);
+    ALTER TABLE public.provider_capabilities_matrix ADD CONSTRAINT uq_prov_cap_matrix_v2 UNIQUE (provider, country, currency, payment_rail, direction);
   END IF;
 EXCEPTION
   WHEN OTHERS THEN NULL;
 END $$;
 
--- Seed Fincra Official Supported Currencies, Payment Types & Schemes Matrix
-INSERT INTO public.provider_capabilities_matrix (provider, currency, payment_rail, operation, is_supported)
+-- Seed Fincra Official Capabilities Matrix with Country, Direction, and Activation Status
+INSERT INTO public.provider_capabilities_matrix (provider, country, currency, payment_rail, direction, operation, activation_status)
 VALUES
-  -- NGN (Nigeria)
-  ('fincra', 'NGN', 'CARDS', 'deposit', true),
-  ('fincra', 'NGN', 'BANK_TRANSFER', 'deposit', true),
-  ('fincra', 'NGN', 'PALMPAY_WALLET', 'deposit', true),
-  ('fincra', 'NGN', 'BANK_TRANSFER', 'withdraw', true),
+  -- Nigeria (NGN)
+  ('fincra', 'NG', 'NGN', 'CARDS', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'NG', 'NGN', 'BANK_TRANSFER', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'NG', 'NGN', 'PALMPAY_WALLET', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'NG', 'NGN', 'BANK_TRANSFER', 'payout', 'withdraw', 'ENABLED'),
 
-  -- UGX (Uganda)
-  ('fincra', 'UGX', 'MTN_MOBILE_MONEY', 'deposit', true),
-  ('fincra', 'UGX', 'AIRTEL_MONEY', 'deposit', true),
-  ('fincra', 'UGX', 'MTN_MOBILE_MONEY', 'withdraw', true),
-  ('fincra', 'UGX', 'AIRTEL_MONEY', 'withdraw', true),
-  ('fincra', 'UGX', 'BANK_TRANSFER', 'withdraw', true),
+  -- Uganda (UGX)
+  ('fincra', 'UG', 'UGX', 'MTN_MOBILE_MONEY', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'UG', 'UGX', 'AIRTEL_MONEY', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'UG', 'UGX', 'MTN_MOBILE_MONEY', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'UG', 'UGX', 'AIRTEL_MONEY', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'UG', 'UGX', 'BANK_TRANSFER', 'payout', 'withdraw', 'ENABLED'),
 
-  -- ZAR (South Africa)
-  ('fincra', 'ZAR', 'CARDS', 'deposit', true),
-  ('fincra', 'ZAR', 'EFT', 'deposit', true),
-  ('fincra', 'ZAR', 'BANK_TRANSFER', 'withdraw', true),
+  -- South Africa (ZAR)
+  ('fincra', 'ZA', 'ZAR', 'CARDS', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'ZA', 'ZAR', 'EFT', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'ZA', 'ZAR', 'BANK_TRANSFER', 'payout', 'withdraw', 'ENABLED'),
 
-  -- GHS (Ghana)
-  ('fincra', 'GHS', 'MTN_MOBILE_MONEY', 'deposit', true),
-  ('fincra', 'GHS', 'AIRTEL_MONEY', 'deposit', true),
-  ('fincra', 'GHS', 'VODAFONE_CASH', 'deposit', true),
-  ('fincra', 'GHS', 'MTN_MOBILE_MONEY', 'withdraw', true),
-  ('fincra', 'GHS', 'AIRTEL_MONEY', 'withdraw', true),
-  ('fincra', 'GHS', 'VODAFONE_CASH', 'withdraw', true),
-  ('fincra', 'GHS', 'BANK_TRANSFER', 'withdraw', true),
+  -- Ghana (GHS)
+  ('fincra', 'GH', 'GHS', 'MTN_MOBILE_MONEY', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'GH', 'GHS', 'AIRTEL_MONEY', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'GH', 'GHS', 'VODAFONE_CASH', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'GH', 'GHS', 'MTN_MOBILE_MONEY', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'GH', 'GHS', 'AIRTEL_MONEY', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'GH', 'GHS', 'VODAFONE_CASH', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'GH', 'GHS', 'BANK_TRANSFER', 'payout', 'withdraw', 'ENABLED'),
 
-  -- KES (Kenya)
-  ('fincra', 'KES', 'MPESA', 'deposit', true),
-  ('fincra', 'KES', 'AIRTEL_MONEY', 'deposit', true),
-  ('fincra', 'KES', 'MPESA', 'withdraw', true),
-  ('fincra', 'KES', 'AIRTEL_MONEY', 'withdraw', true),
-  ('fincra', 'KES', 'BANK_TRANSFER', 'withdraw', true),
+  -- Kenya (KES)
+  ('fincra', 'KE', 'KES', 'MPESA', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'KE', 'KES', 'AIRTEL_MONEY', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'KE', 'KES', 'MPESA', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'KE', 'KES', 'AIRTEL_MONEY', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'KE', 'KES', 'BANK_TRANSFER', 'payout', 'withdraw', 'ENABLED'),
 
-  -- TZS (Tanzania)
-  ('fincra', 'TZS', 'TIGO_YAS', 'deposit', true),
-  ('fincra', 'TZS', 'AIRTEL_MONEY', 'deposit', true),
-  ('fincra', 'TZS', 'VODACOM', 'deposit', true),
-  ('fincra', 'TZS', 'HALOTEL', 'deposit', true),
-  ('fincra', 'TZS', 'TIGO_YAS', 'withdraw', true),
-  ('fincra', 'TZS', 'AIRTEL_MONEY', 'withdraw', true),
-  ('fincra', 'TZS', 'VODACOM', 'withdraw', true),
-  ('fincra', 'TZS', 'HALOTEL', 'withdraw', true),
-  ('fincra', 'TZS', 'BANK_TRANSFER', 'withdraw', true),
+  -- Tanzania (TZS)
+  ('fincra', 'TZ', 'TZS', 'TIGO_YAS', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'TZ', 'TZS', 'AIRTEL_MONEY', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'TZ', 'TZS', 'VODACOM', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'TZ', 'TZS', 'HALOTEL', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'TZ', 'TZS', 'TIGO_YAS', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'TZ', 'TZS', 'AIRTEL_MONEY', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'TZ', 'TZS', 'VODACOM', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'TZ', 'TZS', 'HALOTEL', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'TZ', 'TZS', 'BANK_TRANSFER', 'payout', 'withdraw', 'ENABLED'),
 
-  -- ZMW (Zambia)
-  ('fincra', 'ZMW', 'MTN_MOBILE_MONEY', 'deposit', true),
-  ('fincra', 'ZMW', 'AIRTEL_MONEY', 'deposit', true),
-  ('fincra', 'ZMW', 'MTN_MOBILE_MONEY', 'withdraw', true),
-  ('fincra', 'ZMW', 'AIRTEL_MONEY', 'withdraw', true),
-  ('fincra', 'ZMW', 'ZAMTEL', 'withdraw', true),
-  ('fincra', 'ZMW', 'BANK_TRANSFER', 'withdraw', true),
+  -- Zambia (ZMW)
+  ('fincra', 'ZM', 'ZMW', 'MTN_MOBILE_MONEY', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'ZM', 'ZMW', 'AIRTEL_MONEY', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'ZM', 'ZMW', 'MTN_MOBILE_MONEY', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'ZM', 'ZMW', 'AIRTEL_MONEY', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'ZM', 'ZMW', 'ZAMTEL', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'ZM', 'ZMW', 'BANK_TRANSFER', 'payout', 'withdraw', 'ENABLED'),
 
-  -- XOF (Burkina Faso, Senegal, Ivory Coast)
-  ('fincra', 'XOF', 'ORANGE_MONEY', 'deposit', true),
-  ('fincra', 'XOF', 'MOOV_MONEY', 'deposit', true),
-  ('fincra', 'XOF', 'WAVE', 'deposit', true),
-  ('fincra', 'XOF', 'FREE_MONEY', 'deposit', true),
-  ('fincra', 'XOF', 'CORIS', 'deposit', true),
-  ('fincra', 'XOF', 'ORANGE_MONEY', 'withdraw', true),
-  ('fincra', 'XOF', 'MOOV_MONEY', 'withdraw', true),
-  ('fincra', 'XOF', 'WAVE', 'withdraw', true),
-  ('fincra', 'XOF', 'FREEMONEY', 'withdraw', true),
-  ('fincra', 'XOF', 'CORIS', 'withdraw', true),
-  ('fincra', 'XOF', 'BANK_TRANSFER', 'withdraw', true),
+  -- Burkina Faso (BF - XOF)
+  ('fincra', 'BF', 'XOF', 'MOOV_MONEY', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'BF', 'XOF', 'ORANGE_MONEY', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'BF', 'XOF', 'CORIS', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'BF', 'XOF', 'MOOV_MONEY', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'BF', 'XOF', 'ORANGE_MONEY', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'BF', 'XOF', 'CORIS', 'payout', 'withdraw', 'ENABLED'),
 
-  -- XAF (Cameroon)
-  ('fincra', 'XAF', 'MTN_MOBILE_MONEY', 'deposit', true),
-  ('fincra', 'XAF', 'ORANGE_MONEY', 'deposit', true),
-  ('fincra', 'XAF', 'MTN_MOBILE_MONEY', 'withdraw', true),
-  ('fincra', 'XAF', 'ORANGE_MONEY', 'withdraw', true),
+  -- Senegal (SN - XOF)
+  ('fincra', 'SN', 'XOF', 'ORANGE_MONEY', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'SN', 'XOF', 'FREE_MONEY', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'SN', 'XOF', 'MOOV_MONEY', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'SN', 'XOF', 'WAVE', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'SN', 'XOF', 'ORANGE_MONEY', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'SN', 'XOF', 'FREEMONEY', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'SN', 'XOF', 'WAVE', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'SN', 'XOF', 'BANK_TRANSFER', 'payout', 'withdraw', 'ENABLED'),
+
+  -- Ivory Coast (CI - XOF)
+  ('fincra', 'CI', 'XOF', 'MTN_MOBILE_MONEY', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'CI', 'XOF', 'MOOV_MONEY', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'CI', 'XOF', 'ORANGE_MONEY', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'CI', 'XOF', 'WAVE', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'CI', 'XOF', 'MTN_MOBILE_MONEY', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'CI', 'XOF', 'MOOV_MONEY', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'CI', 'XOF', 'ORANGE_MONEY', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'CI', 'XOF', 'WAVE', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'CI', 'XOF', 'BANK_TRANSFER', 'payout', 'withdraw', 'ENABLED'),
+
+  -- Cameroon (CM - XAF)
+  ('fincra', 'CM', 'XAF', 'MTN_MOBILE_MONEY', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'CM', 'XAF', 'ORANGE_MONEY', 'payin', 'deposit', 'ENABLED'),
+  ('fincra', 'CM', 'XAF', 'MTN_MOBILE_MONEY', 'payout', 'withdraw', 'ENABLED'),
+  ('fincra', 'CM', 'XAF', 'ORANGE_MONEY', 'payout', 'withdraw', 'ENABLED'),
+
+  -- Pending Merchant Account Approvals (EUR, GBP, USD Collections)
+  ('fincra', 'GB', 'GBP', 'FASTER_PAYMENTS', 'payin', 'deposit', 'PENDING_APPROVAL'),
+  ('fincra', 'EU', 'EUR', 'SEPA', 'payin', 'deposit', 'PENDING_APPROVAL'),
+  ('fincra', 'US', 'USD', 'ACH', 'payin', 'deposit', 'PENDING_APPROVAL'),
+  ('fincra', 'US', 'USD', 'WIRE', 'payin', 'deposit', 'PENDING_APPROVAL'),
 
   -- Partner Provider Defaults (Anchor & Conduit)
-  ('anchor', 'NGN', 'BANK_TRANSFER', 'deposit', true),
-  ('anchor', 'USD', 'WIRE', 'deposit', true),
-  ('conduit', 'USD', 'ACH', 'deposit', true),
-  ('conduit', 'EUR', 'SEPA', 'deposit', true)
-ON CONFLICT (provider, currency, payment_rail, operation) DO NOTHING;
+  ('anchor', 'NG', 'NGN', 'BANK_TRANSFER', 'payin', 'deposit', 'ENABLED'),
+  ('anchor', 'US', 'USD', 'WIRE', 'payin', 'deposit', 'ENABLED'),
+  ('conduit', 'US', 'USD', 'ACH', 'payin', 'deposit', 'ENABLED'),
+  ('conduit', 'EU', 'EUR', 'SEPA', 'payin', 'deposit', 'ENABLED')
+ON CONFLICT (provider, country, currency, payment_rail, direction) DO NOTHING;
