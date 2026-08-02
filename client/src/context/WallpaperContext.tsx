@@ -43,6 +43,9 @@ interface WallpaperContextProps {
   updateAutoThemeSettings: (settings: Partial<AutoThemeSettings>) => void;
   isBatterySaverActive: boolean;
   isReducedMotionActive: boolean;
+  previewWallpaper: WallpaperConfig | null;
+  setPreviewWallpaper: (wp: WallpaperConfig | null) => void;
+  clearPreviewWallpaper: () => void;
 }
 
 const WallpaperContext = createContext<WallpaperContextProps | undefined>(undefined);
@@ -427,8 +430,20 @@ export const WallpaperProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return () => mediaQuery.removeEventListener('change', handler);
   }, []);
 
+  // Live transient preview wallpaper state
+  const [previewWallpaper, setPreviewWallpaper] = useState<WallpaperConfig | null>(null);
+
+  const clearPreviewWallpaper = useCallback(() => {
+    setPreviewWallpaper(null);
+  }, []);
+
   // ─── CORE GET / SET / SAVE LOGIC ───
   const getWallpaper = useCallback((chatId?: string): WallpaperConfig => {
+    // 0. Live Preview Override takes immediate priority for real-time live preview
+    if (previewWallpaper) {
+      return previewWallpaper;
+    }
+
     // 1. Check if auto-theme switching is enabled and conditions are met
     if (autoThemeSettings.enabled) {
       const isDarkMode = document.documentElement.classList.contains('dark') || 
@@ -472,7 +487,7 @@ export const WallpaperProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     // 3. Fallback to global setting
     return globalWallpaper;
-  }, [globalWallpaper, chatWallpapers, autoThemeSettings]);
+  }, [previewWallpaper, globalWallpaper, chatWallpapers, autoThemeSettings]);
 
   const saveWallpaper = useCallback((chatId: string | 'global', config: Partial<WallpaperConfig>) => {
     if (config.fontTheme) {
@@ -525,7 +540,7 @@ export const WallpaperProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const addRecentlyUsed = useCallback((id: string) => {
     setRecentlyUsed(prev => {
       const filtered = prev.filter(r => r !== id);
-      const next = [id, ...filtered].slice(0, 8); // Max 8 recently used
+      const next = [id, ...filtered].slice(0, 10); // Max 10 recently used per requirement 9
       localStorage.setItem(`${storagePrefix}recently_used`, JSON.stringify(next));
       return next;
     });
@@ -552,7 +567,10 @@ export const WallpaperProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     autoThemeSettings,
     updateAutoThemeSettings,
     isBatterySaverActive,
-    isReducedMotionActive
+    isReducedMotionActive,
+    previewWallpaper,
+    setPreviewWallpaper,
+    clearPreviewWallpaper,
   }), [
     getWallpaper,
     saveWallpaper,
@@ -564,7 +582,9 @@ export const WallpaperProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     autoThemeSettings,
     updateAutoThemeSettings,
     isBatterySaverActive,
-    isReducedMotionActive
+    isReducedMotionActive,
+    previewWallpaper,
+    clearPreviewWallpaper,
   ]);
 
   return (

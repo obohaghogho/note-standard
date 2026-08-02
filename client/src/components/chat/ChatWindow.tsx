@@ -963,7 +963,7 @@ const ChatWindow: React.FC = () => {
                                 <button onClick={() => handleCall('video')} className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-full transition-all flex-shrink-0" aria-label="Video call">
                                     <Video size={18} className="md:w-5 md:h-5" />
                                 </button>
-                                <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-gray-400 hover:text-purple-400 hover:bg-purple-400/10 rounded-full transition-all flex-shrink-0" title="Chat Appearance & Themes">
+                                <button onClick={() => setShowCustomizeModal(true)} className="p-2 text-gray-400 hover:text-purple-400 hover:bg-purple-400/10 rounded-full transition-all flex-shrink-0" title="Chat Wallpaper & Theme">
                                     <Palette size={18} className="md:w-5 md:h-5" />
                                 </button>
                             </div>
@@ -1027,7 +1027,7 @@ const ChatWindow: React.FC = () => {
                         </div>
                     </div>
                 ) : (
-                    <ChatWallpaper className="flex-1 min-h-0">
+                    <ChatWallpaper className="flex-1 min-h-0" chatId={activeConversationId || undefined}>
                         <div 
                             className="chat-messages custom-scrollbar px-3 md:px-6 h-full overflow-y-auto overscroll-y-contain"
                             style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' }}
@@ -1489,6 +1489,13 @@ const ChatWindow: React.FC = () => {
                     }
                 }}
             />
+            {/* Wallpaper & Theme Picker Bottom Sheet */}
+            {showCustomizeModal && (
+                <WallpaperPicker
+                    chatId={activeConversationId || 'global'}
+                    onClose={() => setShowCustomizeModal(false)}
+                />
+            )}
             {/* Theme Settings & Gallery Modals */}
             <ChatThemeSettingsModal />
             <ThemeGalleryModal />

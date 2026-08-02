@@ -1,13 +1,15 @@
 import React from 'react';
 import { useChatTheme } from '../../context/ChatThemeContext';
 import { ChatCanvasBackground } from './ChatCanvasBackground';
+import { WallpaperEngine } from './WallpaperEngine';
 
 interface ChatWallpaperProps {
   children?: React.ReactNode;
   className?: string;
+  chatId?: string;
 }
 
-export const ChatWallpaper: React.FC<ChatWallpaperProps> = ({ children, className = '' }) => {
+export const ChatWallpaper: React.FC<ChatWallpaperProps> = ({ children, className = '', chatId }) => {
   const { activeTheme, customizer } = useChatTheme();
   const wp = customizer.wallpaper;
 
@@ -15,6 +17,7 @@ export const ChatWallpaper: React.FC<ChatWallpaperProps> = ({ children, classNam
     const style: React.CSSProperties = {
       filter: `blur(${wp.blur}px) brightness(${wp.brightness}%) contrast(${wp.contrast}%) saturate(${wp.saturation}%)`,
       opacity: wp.opacity,
+      transition: 'opacity 150ms ease, filter 150ms ease, background 150ms ease',
     };
 
     if (wp.solidColor) {
@@ -39,9 +42,14 @@ export const ChatWallpaper: React.FC<ChatWallpaperProps> = ({ children, classNam
 
   return (
     <div className={`relative w-full h-full overflow-hidden ${className}`}>
-      {/* ─── Wallpaper Layer ─── */}
+      {/* ─── Wallpaper Engine Backdrop Layer (High performance canvas/gradient/doodle) ─── */}
+      <div className="absolute inset-0 z-0 transition-opacity duration-150 ease-out pointer-events-none">
+        <WallpaperEngine chatId={chatId} />
+      </div>
+
+      {/* ─── Secondary Theme Fallback Layer ─── */}
       <div 
-        className={`absolute inset-0 z-0 transition-all duration-300 pointer-events-none ${isMeshAnimated ? 'chat-mesh-animated' : ''}`}
+        className={`absolute inset-0 z-0 transition-all duration-150 ease-out pointer-events-none opacity-40 ${isMeshAnimated ? 'chat-mesh-animated' : ''}`}
         style={getBackgroundStyle()}
       />
 
@@ -54,7 +62,7 @@ export const ChatWallpaper: React.FC<ChatWallpaperProps> = ({ children, classNam
         />
       )}
 
-      {/* ─── Content Layer ─── */}
+      {/* ─── Content Layer (Messages & Controls) ─── */}
       <div className="relative z-10 w-full h-full flex flex-col">
         {children}
       </div>
