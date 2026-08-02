@@ -19,8 +19,18 @@ CREATE TABLE IF NOT EXISTS public.fx_quotes (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Safe Schema Alterations
+-- Safe Schema Alterations for pre-existing table instances
+ALTER TABLE public.fx_quotes ADD COLUMN IF NOT EXISTS quote_id VARCHAR(100);
+ALTER TABLE public.fx_quotes ADD COLUMN IF NOT EXISTS base_currency VARCHAR(10);
+ALTER TABLE public.fx_quotes ADD COLUMN IF NOT EXISTS quote_currency VARCHAR(10);
+ALTER TABLE public.fx_quotes ADD COLUMN IF NOT EXISTS mid_rate NUMERIC(20,8);
 ALTER TABLE public.fx_quotes ADD COLUMN IF NOT EXISTS spread NUMERIC(10,6) DEFAULT 0.005;
+ALTER TABLE public.fx_quotes ADD COLUMN IF NOT EXISTS locked_rate NUMERIC(20,8);
+ALTER TABLE public.fx_quotes ADD COLUMN IF NOT EXISTS amount NUMERIC(20,8);
+ALTER TABLE public.fx_quotes ADD COLUMN IF NOT EXISTS converted_amount NUMERIC(20,8);
+ALTER TABLE public.fx_quotes ADD COLUMN IF NOT EXISTS provider VARCHAR(50) DEFAULT 'fincra';
+ALTER TABLE public.fx_quotes ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+ALTER TABLE public.fx_quotes ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'ACTIVE';
 ALTER TABLE public.fx_quotes ADD COLUMN IF NOT EXISTS trace_id VARCHAR(100);
 
 -- Safe Unique Constraint Addition for ON CONFLICT (quote_id) DO NOTHING

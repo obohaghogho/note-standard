@@ -16,9 +16,16 @@ CREATE TABLE IF NOT EXISTS public.treasury_transfers (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Safe Schema Alterations
+-- Safe Schema Alterations for pre-existing table instances
+ALTER TABLE public.treasury_transfers ADD COLUMN IF NOT EXISTS source_account_id UUID;
+ALTER TABLE public.treasury_transfers ADD COLUMN IF NOT EXISTS target_account_id UUID;
+ALTER TABLE public.treasury_transfers ADD COLUMN IF NOT EXISTS currency VARCHAR(10);
+ALTER TABLE public.treasury_transfers ADD COLUMN IF NOT EXISTS amount NUMERIC(20,8);
+ALTER TABLE public.treasury_transfers ADD COLUMN IF NOT EXISTS reason TEXT;
+ALTER TABLE public.treasury_transfers ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'PENDING';
 ALTER TABLE public.treasury_transfers ADD COLUMN IF NOT EXISTS journal_id UUID;
 ALTER TABLE public.treasury_transfers ADD COLUMN IF NOT EXISTS approved_by VARCHAR(100);
+ALTER TABLE public.treasury_transfers ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
 
 -- Indices
 CREATE INDEX IF NOT EXISTS idx_treasury_transfers_status ON public.treasury_transfers(status);

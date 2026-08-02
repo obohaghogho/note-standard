@@ -14,8 +14,15 @@ CREATE TABLE IF NOT EXISTS public.liquidity_snapshots (
   snapshot_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Safe Schema Alterations
+-- Safe Schema Alterations for pre-existing table instances
+ALTER TABLE public.liquidity_snapshots ADD COLUMN IF NOT EXISTS treasury_account_id UUID;
+ALTER TABLE public.liquidity_snapshots ADD COLUMN IF NOT EXISTS currency VARCHAR(10);
+ALTER TABLE public.liquidity_snapshots ADD COLUMN IF NOT EXISTS available_balance NUMERIC(20,8) DEFAULT 0.00;
+ALTER TABLE public.liquidity_snapshots ADD COLUMN IF NOT EXISTS reserved_balance NUMERIC(20,8) DEFAULT 0.00;
+ALTER TABLE public.liquidity_snapshots ADD COLUMN IF NOT EXISTS settlement_balance NUMERIC(20,8) DEFAULT 0.00;
+ALTER TABLE public.liquidity_snapshots ADD COLUMN IF NOT EXISTS pending_balance NUMERIC(20,8) DEFAULT 0.00;
 ALTER TABLE public.liquidity_snapshots ADD COLUMN IF NOT EXISTS projected_24h_req NUMERIC(20,8) DEFAULT 0.00;
+ALTER TABLE public.liquidity_snapshots ADD COLUMN IF NOT EXISTS snapshot_at TIMESTAMPTZ DEFAULT NOW();
 
 -- Indices
 CREATE INDEX IF NOT EXISTS idx_liquidity_curr_snap ON public.liquidity_snapshots(currency, snapshot_at DESC);
