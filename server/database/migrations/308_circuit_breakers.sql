@@ -19,11 +19,15 @@ CREATE TABLE IF NOT EXISTS public.circuit_breakers (
 );
 
 -- Safe Schema Alterations for pre-existing tables
+ALTER TABLE public.circuit_breakers ADD COLUMN IF NOT EXISTS provider VARCHAR(50);
 ALTER TABLE public.circuit_breakers ADD COLUMN IF NOT EXISTS state VARCHAR(20) DEFAULT 'CLOSED';
 ALTER TABLE public.circuit_breakers ADD COLUMN IF NOT EXISTS failure_threshold INT DEFAULT 5;
 ALTER TABLE public.circuit_breakers ADD COLUMN IF NOT EXISTS recovery_timeout_sec INT DEFAULT 60;
+ALTER TABLE public.circuit_breakers ADD COLUMN IF NOT EXISTS half_open_probes INT DEFAULT 3;
 ALTER TABLE public.circuit_breakers ADD COLUMN IF NOT EXISTS successful_requests INT DEFAULT 0;
 ALTER TABLE public.circuit_breakers ADD COLUMN IF NOT EXISTS failed_requests INT DEFAULT 0;
+ALTER TABLE public.circuit_breakers ADD COLUMN IF NOT EXISTS timeouts INT DEFAULT 0;
+ALTER TABLE public.circuit_breakers ADD COLUMN IF NOT EXISTS rejections INT DEFAULT 0;
 
 -- Seed Default Circuit Breaker Records
 INSERT INTO public.circuit_breakers (provider, state)

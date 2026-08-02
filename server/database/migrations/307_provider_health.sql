@@ -15,11 +15,15 @@ CREATE TABLE IF NOT EXISTS public.provider_health (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Safe Schema Alterations for pre-existing tables
+-- Safe Schema Alterations for pre-existing table instances
+ALTER TABLE public.provider_health ADD COLUMN IF NOT EXISTS provider VARCHAR(50);
 ALTER TABLE public.provider_health ADD COLUMN IF NOT EXISTS latency_ms INT DEFAULT 0;
 ALTER TABLE public.provider_health ADD COLUMN IF NOT EXISTS success_rate NUMERIC(5,2) DEFAULT 100.00;
 ALTER TABLE public.provider_health ADD COLUMN IF NOT EXISTS consecutive_failures INT DEFAULT 0;
 ALTER TABLE public.provider_health ADD COLUMN IF NOT EXISTS consecutive_successes INT DEFAULT 0;
+ALTER TABLE public.provider_health ADD COLUMN IF NOT EXISTS last_success TIMESTAMPTZ;
+ALTER TABLE public.provider_health ADD COLUMN IF NOT EXISTS last_failure TIMESTAMPTZ;
+ALTER TABLE public.provider_health ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'HEALTHY';
 
 -- Seed Default Providers
 INSERT INTO public.provider_health (provider, latency_ms, success_rate, status)
