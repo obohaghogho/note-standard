@@ -20,12 +20,20 @@ ALTER TABLE public.accounting_periods ADD COLUMN IF NOT EXISTS month INT CHECK (
 ALTER TABLE public.accounting_periods ADD COLUMN IF NOT EXISTS year INT CHECK (year >= 2024 AND year <= 2100);
 ALTER TABLE public.accounting_periods ADD COLUMN IF NOT EXISTS opened_at TIMESTAMPTZ DEFAULT NOW();
 
--- Backfill month and year for existing records if null
+-- Ensure start_time and end_time have defaults and relax NOT NULL constraints for legacy compatibility
+ALTER TABLE public.accounting_periods ALTER COLUMN start_time SET DEFAULT NOW();
+ALTER TABLE public.accounting_periods ALTER COLUMN end_time SET DEFAULT NOW() + INTERVAL '1 month';
+ALTER TABLE public.accounting_periods ALTER COLUMN start_time DROP NOT NULL;
+ALTER TABLE public.accounting_periods ALTER COLUMN end_time DROP NOT NULL;
+
+-- Backfill month, year, start_time, and end_time for existing records if null
 UPDATE public.accounting_periods 
 SET 
   month = COALESCE(month, EXTRACT(MONTH FROM NOW())::INT),
-  year = COALESCE(year, EXTRACT(YEAR FROM NOW())::INT)
-WHERE month IS NULL OR year IS NULL;
+  year = COALESCE(year, EXTRACT(YEAR FROM NOW())::INT),
+  start_time = COALESCE(start_time, NOW()),
+  end_time = COALESCE(end_time, NOW() + INTERVAL '1 month')
+WHERE month IS NULL OR year IS NULL OR start_time IS NULL OR end_time IS NULL;
 
 -- Add Unique Constraint if not present
 DO $$ 
@@ -40,12 +48,14 @@ EXCEPTION
 END $$;
 
 -- Seed current & default period
-INSERT INTO public.accounting_periods (period_code, month, year, status, opened_at)
+INSERT INTO public.accounting_periods (period_code, month, year, start_time, end_time, status, opened_at)
 VALUES 
   (
     TO_CHAR(NOW(), 'YYYY-MM'),
     EXTRACT(MONTH FROM NOW())::INT,
     EXTRACT(YEAR FROM NOW())::INT,
+    NOW(),
+    NOW() + INTERVAL '1 month',
     'OPEN',
     NOW()
   )
