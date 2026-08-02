@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS public.ledger_entries (
   amount NUMERIC(20,8) NOT NULL CHECK (amount > 0),
   direction VARCHAR(10) CHECK (direction IN ('DEBIT', 'CREDIT')),
   posted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+)
 
 -- Safe Schema Alterations for existing table instances (e.g., from migration 072/164)
 ALTER TABLE public.ledger_entries ADD COLUMN IF NOT EXISTS journal_line_id UUID REFERENCES public.journal_lines(id) ON DELETE RESTRICT;
