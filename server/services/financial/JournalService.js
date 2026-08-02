@@ -20,7 +20,7 @@ class JournalService {
   /**
    * Create a balanced Journal entry with atomic lines
    * @param {Object} journalData { reference, entryType, description, periodId, lines }
-   * lines: Array of { chartAccountId, debit, credit, currency, memo, referenceType, referenceId }
+   * lines: Array of { chartAccountId, debit, credit, currency, memo, referenceType, referenceId, treasuryAccountId, walletAccountId }
    */
   async createJournal(journalData) {
     const { reference, entryType, description, periodId, lines } = journalData;
@@ -72,7 +72,9 @@ class JournalService {
         currency: l.currency,
         memo: l.memo,
         reference_type: l.referenceType || l.reference_type,
-        reference_id: l.referenceId || l.reference_id
+        reference_id: l.referenceId || l.reference_id,
+        treasuryAccountId: l.treasuryAccountId || l.treasury_account_id,
+        walletAccountId: l.walletAccountId || l.wallet_account_id
       }))
     };
 

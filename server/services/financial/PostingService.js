@@ -41,11 +41,13 @@ class PostingService {
       const direction = line.debit > 0 ? 'DEBIT' : 'CREDIT';
       const amount = line.debit > 0 ? line.debit : line.credit;
       const chartCode = String(line.chart_account_id);
+      const targetTreasuryId = line.treasuryAccountId || line.treasury_account_id || journalData.treasuryAccountId;
+      const targetWalletId = line.walletAccountId || line.wallet_account_id || journalData.walletAccountId;
 
       const ledgerEntry = await this.ledgerService.postEntry({
         journalLineId: line.id,
-        walletAccountId: chartCode.startsWith('2') ? (journalData.walletAccountId || null) : null,
-        treasuryAccountId: chartCode.startsWith('1') ? (journalData.treasuryAccountId || null) : null,
+        walletAccountId: chartCode.startsWith('2') ? (targetWalletId || null) : null,
+        treasuryAccountId: chartCode.startsWith('1') ? (targetTreasuryId || null) : null,
         transactionId: journalData.transactionId || null,
         paymentIntentId: journalData.paymentIntentId || null,
         providerReference: journalData.providerReference || null,
@@ -57,18 +59,18 @@ class PostingService {
       postedLedgerEntries.push(ledgerEntry);
 
       // 3. Target Balance Projection based on Chart Account Code (1xxx = Treasury Assets, 2xxx = Customer Liabilities)
-      if (chartCode.startsWith('2') && journalData.walletAccountId) {
+      if (chartCode.startsWith('2') && targetWalletId) {
         await this.walletAccountService.updateProjection(
-          journalData.walletAccountId,
+          targetWalletId,
           amount,
           direction,
           journalData.entryType
         );
       }
 
-      if (chartCode.startsWith('1') && journalData.treasuryAccountId) {
+      if (chartCode.startsWith('1') && targetTreasuryId) {
         await this.treasuryService.updateProjection(
-          journalData.treasuryAccountId,
+          targetTreasuryId,
           amount,
           direction
         );
