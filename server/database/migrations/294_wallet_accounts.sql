@@ -13,9 +13,28 @@ CREATE TABLE IF NOT EXISTS public.wallet_accounts (
   locked_balance NUMERIC(20,8) NOT NULL DEFAULT 0 CHECK (locked_balance >= 0),
   status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'FROZEN', 'CLOSED')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT uq_wallet_accounts_user_curr_type UNIQUE(user_id, currency, account_type)
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Safe column additions for pre-existing tables
+ALTER TABLE public.wallet_accounts ADD COLUMN IF NOT EXISTS account_type VARCHAR(20) DEFAULT 'PRIMARY';
+ALTER TABLE public.wallet_accounts ADD COLUMN IF NOT EXISTS available_balance NUMERIC(20,8) DEFAULT 0;
+ALTER TABLE public.wallet_accounts ADD COLUMN IF NOT EXISTS reserved_balance NUMERIC(20,8) DEFAULT 0;
+ALTER TABLE public.wallet_accounts ADD COLUMN IF NOT EXISTS pending_balance NUMERIC(20,8) DEFAULT 0;
+ALTER TABLE public.wallet_accounts ADD COLUMN IF NOT EXISTS locked_balance NUMERIC(20,8) DEFAULT 0;
+ALTER TABLE public.wallet_accounts ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'ACTIVE';
+
+-- Add Unique Constraint if not present
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'uq_wallet_accounts_user_curr_type'
+  ) THEN
+    ALTER TABLE public.wallet_accounts ADD CONSTRAINT uq_wallet_accounts_user_curr_type UNIQUE(user_id, currency, account_type);
+  END IF;
+EXCEPTION
+  WHEN OTHERS THEN NULL;
+END $$;
 
 -- Indices for fast user & currency balance queries
 CREATE INDEX IF NOT EXISTS idx_wallet_accounts_user ON public.wallet_accounts(user_id);
