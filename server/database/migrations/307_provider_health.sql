@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS public.provider_health (
   consecutive_successes INT NOT NULL DEFAULT 0,
   last_success TIMESTAMPTZ DEFAULT NULL,
   last_failure TIMESTAMPTZ DEFAULT NULL,
-  status VARCHAR(20) NOT NULL DEFAULT 'HEALTHY' CHECK (status IN ('HEALTHY', 'DEGRADED', 'UNAVAILABLE')),
+  status VARCHAR(20) NOT NULL DEFAULT 'HEALTHY',
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -31,6 +31,16 @@ ALTER TABLE public.provider_health ADD COLUMN IF NOT EXISTS status VARCHAR(20) D
 DO $$ 
 BEGIN
   ALTER TABLE public.provider_health ALTER COLUMN provider_name DROP NOT NULL;
+EXCEPTION
+  WHEN OTHERS THEN NULL;
+END $$;
+
+-- Safe Check Constraint Update for legacy table instances
+DO $$ 
+BEGIN
+  ALTER TABLE public.provider_health DROP CONSTRAINT IF EXISTS provider_health_status_check;
+  ALTER TABLE public.provider_health DROP CONSTRAINT IF EXISTS chk_provider_health_status;
+  ALTER TABLE public.provider_health ADD CONSTRAINT chk_provider_health_status CHECK (status IN ('HEALTHY', 'DEGRADED', 'UNAVAILABLE', 'healthy', 'degraded', 'unavailable', 'ONLINE', 'OFFLINE', 'active'));
 EXCEPTION
   WHEN OTHERS THEN NULL;
 END $$;
