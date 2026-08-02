@@ -19,7 +19,6 @@ CREATE TABLE IF NOT EXISTS public.provider_health (
 -- Safe Schema Alterations for pre-existing and legacy table instances
 ALTER TABLE public.provider_health ADD COLUMN IF NOT EXISTS provider VARCHAR(50);
 ALTER TABLE public.provider_health ADD COLUMN IF NOT EXISTS provider_name VARCHAR(50);
-ALTER TABLE public.provider_health ALTER COLUMN provider_name DROP NOT NULL;
 ALTER TABLE public.provider_health ADD COLUMN IF NOT EXISTS latency_ms INT DEFAULT 0;
 ALTER TABLE public.provider_health ADD COLUMN IF NOT EXISTS success_rate NUMERIC(5,2) DEFAULT 100.00;
 ALTER TABLE public.provider_health ADD COLUMN IF NOT EXISTS consecutive_failures INT DEFAULT 0;
@@ -27,6 +26,14 @@ ALTER TABLE public.provider_health ADD COLUMN IF NOT EXISTS consecutive_successe
 ALTER TABLE public.provider_health ADD COLUMN IF NOT EXISTS last_success TIMESTAMPTZ;
 ALTER TABLE public.provider_health ADD COLUMN IF NOT EXISTS last_failure TIMESTAMPTZ;
 ALTER TABLE public.provider_health ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'HEALTHY';
+
+-- Safely attempt DROP NOT NULL on provider_name if not part of primary key
+DO $$ 
+BEGIN
+  ALTER TABLE public.provider_health ALTER COLUMN provider_name DROP NOT NULL;
+EXCEPTION
+  WHEN OTHERS THEN NULL;
+END $$;
 
 -- Safe Unique Constraint Addition for ON CONFLICT (provider) DO NOTHING
 DO $$ 
@@ -46,7 +53,7 @@ VALUES
   ('fincra', 'fincra', 120, 100.00, 'HEALTHY'),
   ('anchor', 'anchor', 140, 100.00, 'HEALTHY'),
   ('conduit', 'conduit', 160, 100.00, 'HEALTHY')
-ON CONFLICT (provider) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- Indices
 CREATE INDEX IF NOT EXISTS idx_provider_health_status ON public.provider_health(status);
