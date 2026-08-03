@@ -11,10 +11,14 @@ import {
     Filter,
     Loader2,
     Zap,
-    X
+    X,
+    Users as UsersIcon
 } from 'lucide-react';
 import { API_URL } from '../../lib/api';
 import SecureImage from '../../components/common/SecureImage';
+import ResponsiveTableWrapper from '../../components/common/ResponsiveTableWrapper';
+import BottomSheet from '../../components/common/BottomSheet';
+import TruncatedId from '../../components/common/TruncatedId';
 import './UserManagement.css';
 
 interface User {
@@ -133,6 +137,7 @@ export const UserManagement = () => {
             setUsers(prev => prev.map(u =>
                 u.id === userId ? { ...u, status: newStatus } : u
             ));
+            toast.success(`User status updated to ${newStatus}`);
         } catch (err) {
             console.error('Failed to update user:', err);
             toast.error(err instanceof Error ? err.message : 'Failed to update user');
@@ -150,293 +155,314 @@ export const UserManagement = () => {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session.access_token}`
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Accept': 'application/json'
                 },
-                body: JSON.stringify({ daily_limit: parseFloat(newLimit) })
+                body: JSON.stringify({ limit: newLimit ? parseFloat(newLimit) : null })
             });
 
-            if (!res.ok) throw new Error('Failed to update limit');
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.error || 'Failed to update limit');
+            }
 
-            setUsers(prev => prev.map(u =>
-                u.id === selectedUser.id ? { ...u, daily_deposit_limit: parseFloat(newLimit) } : u
-            ));
-            toast.success('Limit updated successfully');
+            toast.success('User deposit limit updated!');
             setIsLimitModalOpen(false);
-        } catch {
-            toast.error('Failed to update limit');
+            fetchUsers();
+        } catch (err) {
+            console.error('Failed to update limit:', err);
+            toast.error(err instanceof Error ? err.message : 'Failed to update limit');
         } finally {
             setActionLoading(null);
         }
     };
 
     const formatDate = (dateStr: string) => {
-        return new Date(dateStr).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
-        });
+        if (!dateStr) return 'N/A';
+        return new Date(dateStr).toLocaleDateString();
     };
 
+    const headers = [
+        { key: 'user', label: 'User' },
+        { key: 'email', label: 'Email' },
+        { key: 'ip', label: 'IP Address' },
+        { key: 'country', label: 'Country' },
+        { key: 'role', label: 'Role' },
+        { key: 'status', label: 'Status' },
+        { key: 'notes', label: 'Notes' },
+        { key: 'joined', label: 'Joined' },
+        { key: 'actions', label: 'Actions' }
+    ];
+
     return (
-        <div className="user-management">
-            <div className="page-header">
-                <h2>User Management</h2>
-                <span className="total-count">{pagination.total} users</span>
+        <div className="user-management px-2 sm:px-4 py-3">
+            <div className="page-header flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <div className="flex items-center gap-3">
+                    <UsersIcon className="text-indigo-400 shrink-0" size={28} />
+                    <div>
+                        <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">User Management</h2>
+                        <p className="text-xs sm:text-sm text-gray-400">View and manage customer permissions and limits</p>
+                    </div>
+                </div>
+                <span className="total-count text-xs sm:text-sm bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-3 py-1.5 rounded-lg font-semibold self-start sm:self-auto">
+                    {pagination.total} Total Users
+                </span>
             </div>
 
-            {/* Filters */}
-            <div className="filters-bar">
-                <div className="search-box">
-                    <Search size={18} />
+            {/* Sticky Filters */}
+            <div className="filters-bar sticky top-14 z-30 bg-[#0F1220]/95 backdrop-blur-md p-3 rounded-xl border border-gray-800/80 mb-4 flex flex-col sm:flex-row gap-3">
+                <div className="search-box flex-1 flex items-center gap-2 bg-gray-900/80 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300">
+                    <Search size={18} className="text-gray-400 shrink-0" />
                     <input
                         id="user-search"
                         name="search"
                         type="text"
-                        placeholder="Search by username, email, or name..."
+                        placeholder="Search username, email, or name..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        aria-label="Search users by username, email, or name"
+                        className="bg-transparent border-none outline-none text-gray-200 text-sm w-full"
+                        aria-label="Search users"
                     />
                 </div>
-                <div className="filter-group">
-                    <Filter size={18} />
+                <div className="filter-group flex items-center gap-2 bg-gray-900/80 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300">
+                    <Filter size={18} className="text-gray-400 shrink-0" />
                     <select
                         id="user-status-filter"
                         name="status"
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
+                        className="bg-transparent border-none outline-none text-gray-200 text-sm cursor-pointer"
                         aria-label="Filter by status"
                     >
-                        <option value="">All Status</option>
-                        <option value="active">Active</option>
-                        <option value="suspended">Suspended</option>
+                        <option value="" className="bg-gray-900">All Status</option>
+                        <option value="active" className="bg-gray-900">Active</option>
+                        <option value="suspended" className="bg-gray-900">Suspended</option>
                     </select>
                 </div>
             </div>
 
-            {/* Users Table */}
-            <div className="users-table-container">
-                <table className="users-table">
-                    <thead>
-                        <tr>
-                            <th>User</th>
-                            <th>Email</th>
-                            <th>IP Address</th>
-                            <th>Country</th>
-                            <th>Role</th>
-                            <th>Status</th>
-                            <th>Notes</th>
-                            <th>Joined</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading ? (
-                            <tr>
-                                <td colSpan={9} className="loading-row">
-                                    <div className="loader-small" />
-                                    Loading users...
-                                </td>
-                            </tr>
-                        ) : users.length === 0 ? (
-                            <tr>
-                                <td colSpan={9} className="empty-row">
-                                    No users found
-                                </td>
-                            </tr>
-                        ) : (
-                            users?.map(user => {
-                                const isProxy = user.last_ip?.includes('(Proxy)');
-                                const cleanIp = user.last_ip?.replace('(Proxy)', '').trim();
-                                
-                                return (
-                                <tr key={user.id}>
-                                    <td className="user-cell">
-                                        <div className="user-info">
-                                            {user.avatar_url ? (
-                                                <SecureImage src={user.avatar_url} alt={user.username} fallbackType="profile" />
-                                            ) : (
-                                                <div className="avatar-placeholder">
-                                                    {user.username?.[0]?.toUpperCase() || '?'}
-                                                </div>
-                                            )}
-                                            <div className="user-details min-w-0">
-                                                <span className="username truncate">
-                                                    {user.username}
-                                                    {user.is_online && <span className="online-dot flex-shrink-0" />}
-                                                </span>
-                                                <span className="fullname truncate text-xs text-gray-500">{user.full_name}</span>
-                                            </div>
+            <ResponsiveTableWrapper
+                headers={headers}
+                data={users}
+                loading={loading}
+                emptyTitle="No Users Found"
+                emptyDescription="No customer accounts match your search or filter parameters."
+                keyExtractor={(u) => u.id}
+                renderRow={(user) => {
+                    const isProxy = user.last_ip?.includes('(Proxy)');
+                    const cleanIp = user.last_ip?.replace('(Proxy)', '').trim();
+                    return (
+                        <tr key={user.id} className="hover:bg-white/5 transition-colors">
+                            <td className="user-cell px-4 py-3">
+                                <div className="user-info flex items-center gap-3">
+                                    {user.avatar_url ? (
+                                        <SecureImage src={user.avatar_url} alt={user.username} fallbackType="profile" className="w-8 h-8 rounded-full object-cover" />
+                                    ) : (
+                                        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-xs text-white">
+                                            {user.username?.[0]?.toUpperCase() || '?'}
                                         </div>
-                                    </td>
-                                    <td className="max-w-[150px] md:max-w-[200px]">
-                                        <div className="truncate" title={user.email}>{user.email}</div>
-                                    </td>
-                                    <td>
-                                        <div className="flex flex-col items-start gap-1">
-                                            <span className="font-mono text-xs">{cleanIp || 'Unknown'}</span>
-                                            {isProxy && (
-                                                <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded border border-red-500/30">
-                                                    PROXY/VPN
-                                                </span>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div className="flex items-center gap-2">
-                                            {user.country_code ? (
-                                                <>
-                                                    <span className="text-lg" title={user.country_code}>
-                                                        {String.fromCodePoint(...[...user.country_code.toUpperCase()].map(c => 0x1F1E6 - 65 + c.charCodeAt(0)))}
-                                                    </span>
-                                                    <span className="text-xs text-gray-400">{user.country_code}</span>
-                                                </>
-                                            ) : (
-                                                <span className="text-xs text-gray-500">N/A</span>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span className={`role-badge ${user.role}`}>
-                                            {user.role}
+                                    )}
+                                    <div className="user-details min-w-0">
+                                        <span className="username font-bold text-sm text-white flex items-center gap-1.5">
+                                            {user.username}
+                                            {user.is_online && <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />}
                                         </span>
-                                    </td>
-                                    <td>
-                                        <span className={`status-badge ${user.status}`}>
-                                            {user.status}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <span className="notes-count">
-                                            <FileText size={14} />
-                                            {user.notesCount}
-                                        </span>
-                                    </td>
-                                    <td className="date-cell">{formatDate(user.created_at)}</td>
-                                    <td className="actions-cell">
-                                        <div className="flex items-center gap-1">
+                                        <span className="fullname block truncate text-xs text-gray-400">{user.full_name}</span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td className="px-4 py-3 text-xs text-gray-300 truncate max-w-[180px]">{user.email}</td>
+                            <td className="px-4 py-3 text-xs">
+                                <span className="font-mono text-gray-300">{cleanIp || 'Unknown'}</span>
+                                {isProxy && <span className="ml-1 text-[10px] bg-red-500/20 text-red-400 px-1 py-0.5 rounded font-bold">PROXY</span>}
+                            </td>
+                            <td className="px-4 py-3 text-xs text-gray-400">{user.country_code || 'N/A'}</td>
+                            <td className="px-4 py-3">
+                                <span className={`px-2 py-0.5 rounded text-xs font-semibold ${user.role === 'admin' ? 'bg-purple-500/20 text-purple-300' : 'bg-gray-800 text-gray-300'}`}>{user.role}</span>
+                            </td>
+                            <td className="px-4 py-3">
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${user.status === 'active' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'}`}>{user.status}</span>
+                            </td>
+                            <td className="px-4 py-3 text-xs text-gray-400">{user.notesCount}</td>
+                            <td className="px-4 py-3 text-xs text-gray-400">{formatDate(user.created_at)}</td>
+                            <td className="px-4 py-3">
+                                <div className="flex items-center gap-1.5">
+                                    <button
+                                        className="p-2 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-300 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
+                                        onClick={() => {
+                                            setSelectedUser(user);
+                                            setNewLimit(user.daily_deposit_limit?.toString() || '');
+                                            setIsLimitModalOpen(true);
+                                        }}
+                                        title="Manage Limits"
+                                    >
+                                        <Zap size={16} />
+                                    </button>
+                                    {user.role !== 'admin' && (
+                                        user.status === 'active' ? (
                                             <button
-                                                className="action-btn limit"
-                                                onClick={() => {
-                                                    setSelectedUser(user);
-                                                    setNewLimit(user.daily_deposit_limit?.toString() || '');
-                                                    setIsLimitModalOpen(true);
-                                                }}
-                                                title="Manage Limits"
+                                                className="p-2 rounded-lg bg-red-500/20 hover:bg-red-500/40 text-red-300 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center disabled:opacity-40"
+                                                onClick={() => updateUserStatus(user.id, 'suspended')}
+                                                disabled={actionLoading === user.id}
+                                                title="Suspend user"
                                             >
-                                                <Zap size={16} />
+                                                {actionLoading === user.id ? <Loader2 size={16} className="animate-spin" /> : <UserX size={16} />}
                                             </button>
-                                            
-                                            {user.role !== 'admin' && (
-                                                <>
-                                                    {user.status === 'active' ? (
-                                                        <button
-                                                            className="action-btn suspend"
-                                                            onClick={() => updateUserStatus(user.id, 'suspended')}
-                                                            disabled={actionLoading === user.id}
-                                                            title="Suspend user"
-                                                        >
-                                                            {actionLoading === user.id ? <Loader2 size={16} className="animate-spin" /> : <UserX size={16} />}
-                                                        </button>
-                                                    ) : (
-                                                        <button
-                                                            className="action-btn activate"
-                                                            onClick={() => updateUserStatus(user.id, 'active')}
-                                                            disabled={actionLoading === user.id}
-                                                            title="Reactivate user"
-                                                        >
-                                                            {actionLoading === user.id ? <Loader2 size={16} className="animate-spin" /> : <UserCheck size={16} />}
-                                                        </button>
-                                                    )}
-                                                </>
-                                            )}
-                                        </div>
-                                    </td>
-                                </tr>
-                                );
-                            })
-                        )}
-                    </tbody>
-                </table>
-            </div>
+                                        ) : (
+                                            <button
+                                                className="p-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center disabled:opacity-40"
+                                                onClick={() => updateUserStatus(user.id, 'active')}
+                                                disabled={actionLoading === user.id}
+                                                title="Reactivate user"
+                                            >
+                                                {actionLoading === user.id ? <Loader2 size={16} className="animate-spin" /> : <UserCheck size={16} />}
+                                            </button>
+                                        )
+                                    )}
+                                </div>
+                            </td>
+                        </tr>
+                    );
+                }}
+                renderCard={(user) => (
+                    <div className="p-4 rounded-xl bg-gray-900/90 border border-gray-800 space-y-3 shadow-lg">
+                        <div className="flex items-center justify-between border-b border-gray-800 pb-2.5">
+                            <div className="flex items-center gap-2.5">
+                                {user.avatar_url ? (
+                                    <SecureImage src={user.avatar_url} alt={user.username} fallbackType="profile" className="w-8 h-8 rounded-full object-cover" />
+                                ) : (
+                                    <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-xs text-white">
+                                        {user.username?.[0]?.toUpperCase() || '?'}
+                                    </div>
+                                )}
+                                <div>
+                                    <span className="font-bold text-white text-sm block">{user.username}</span>
+                                    <span className="text-xs text-gray-400 block">{user.full_name}</span>
+                                </div>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${user.status === 'active' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'}`}>{user.status}</span>
+                        </div>
 
-            {/* Pagination */}
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div className="col-span-2">
+                                <span className="text-gray-500 block">Email:</span>
+                                <span className="text-gray-200 font-medium truncate block">{user.email}</span>
+                            </div>
+                            <div>
+                                <span className="text-gray-500 block">Role:</span>
+                                <span className="text-gray-300 font-semibold uppercase">{user.role}</span>
+                            </div>
+                            <div>
+                                <span className="text-gray-500 block">Country:</span>
+                                <span className="text-gray-300">{user.country_code || 'N/A'}</span>
+                            </div>
+                            <div className="col-span-2">
+                                <span className="text-gray-500 block">User ID:</span>
+                                <TruncatedId id={user.id} startChars={6} endChars={6} />
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2 pt-2 border-t border-gray-800">
+                            <button
+                                className="flex-1 py-2 px-3 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors border border-indigo-500/40 min-h-[44px]"
+                                onClick={() => {
+                                    setSelectedUser(user);
+                                    setNewLimit(user.daily_deposit_limit?.toString() || '');
+                                    setIsLimitModalOpen(true);
+                                }}
+                            >
+                                <Zap size={16} /> Edit Limit
+                            </button>
+                            {user.role !== 'admin' && (
+                                user.status === 'active' ? (
+                                    <button
+                                        className="flex-1 py-2 px-3 rounded-lg bg-red-500/20 hover:bg-red-500/40 text-red-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors border border-red-500/30 min-h-[44px] disabled:opacity-40"
+                                        onClick={() => updateUserStatus(user.id, 'suspended')}
+                                        disabled={actionLoading === user.id}
+                                    >
+                                        {actionLoading === user.id ? <Loader2 size={16} className="animate-spin" /> : <UserX size={16} />} Suspend
+                                    </button>
+                                ) : (
+                                    <button
+                                        className="flex-1 py-2 px-3 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors border border-emerald-500/30 min-h-[44px] disabled:opacity-40"
+                                        onClick={() => updateUserStatus(user.id, 'active')}
+                                        disabled={actionLoading === user.id}
+                                    >
+                                        {actionLoading === user.id ? <Loader2 size={16} className="animate-spin" /> : <UserCheck size={16} />} Reactivate
+                                    </button>
+                                )
+                            )}
+                        </div>
+                    </div>
+                )}
+            />
+
             {pagination.totalPages > 1 && (
-                <div className="pagination">
+                <div className="pagination flex items-center justify-between mt-6 pt-4 border-t border-gray-800">
                     <button
-                        className="page-btn"
+                        className="px-3.5 py-2 rounded-lg bg-gray-900 border border-gray-800 text-sm font-semibold text-gray-300 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 min-h-[44px]"
                         onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
                         disabled={pagination.page <= 1}
                     >
-                        <ChevronLeft size={18} />
-                        Previous
+                        <ChevronLeft size={18} /> Previous
                     </button>
-                    <span className="page-info">
-                        Page {pagination.page} of {pagination.totalPages}
-                    </span>
+                    <span className="text-xs sm:text-sm text-gray-400">Page {pagination.page} of {pagination.totalPages}</span>
                     <button
-                        className="page-btn"
+                        className="px-3.5 py-2 rounded-lg bg-gray-900 border border-gray-800 text-sm font-semibold text-gray-300 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 min-h-[44px]"
                         onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
                         disabled={pagination.page >= pagination.totalPages}
                     >
-                        Next
-                        <ChevronRight size={18} />
+                        Next <ChevronRight size={18} />
                     </button>
                 </div>
             )}
 
-            {/* Limit Edit Modal */}
-            {isLimitModalOpen && selectedUser && (
-                <div className="modal-overlay" onClick={() => setIsLimitModalOpen(false)}>
-                    <div className="modal-content limit-modal" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h3>Manage Limits: {selectedUser.username}</h3>
-                            <button className="close-btn" onClick={() => setIsLimitModalOpen(false)}>
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <div className="modal-body">
-                            <div className="current-info mb-4 text-sm text-gray-400">
-                                <p>Current Plan: <span className="capitalize text-white">{selectedUser.plan_tier}</span></p>
-                                <p>Current Limit: <span className="text-white">${selectedUser.daily_deposit_limit?.toLocaleString() || 'Default'}</span></p>
-                            </div>
-                            
-                            <div className="form-group mb-6">
-                                <label className="block text-xs uppercase tracking-wider text-gray-500 mb-2">Daily Deposit Limit (USD)</label>
-                                <div className="relative">
-                                    <input
-                                        id="daily-limit-input"
-                                        name="dailyLimit"
-                                        type="number"
-                                        value={newLimit}
-                                        onChange={e => setNewLimit(e.target.value)}
-                                        placeholder="e.g. 5000"
-                                        className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-primary"
-                                    />
-                                    <span className="absolute right-3 top-3 text-gray-400">$</span>
-                                </div>
-                                <p className="text-[10px] text-gray-500 mt-2 italic">Setting a custom limit will override the default plan limits for this user.</p>
-                            </div>
+            <BottomSheet
+                isOpen={isLimitModalOpen && !!selectedUser}
+                onClose={() => setIsLimitModalOpen(false)}
+                title={`Manage Limits: ${selectedUser?.username}`}
+                footer={
+                    <div className="flex gap-2">
+                        <button
+                            className="flex-1 py-2.5 px-4 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium text-xs sm:text-sm transition-colors border border-gray-700 min-h-[44px]"
+                            onClick={() => setIsLimitModalOpen(false)}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            className="flex-1 py-2.5 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm transition-colors shadow-lg shadow-indigo-600/20 disabled:opacity-50 min-h-[44px]"
+                            onClick={handleUpdateLimit}
+                            disabled={actionLoading === selectedUser?.id}
+                        >
+                            {actionLoading === selectedUser?.id ? <Loader2 className="animate-spin mx-auto" size={18} /> : 'Save Changes'}
+                        </button>
+                    </div>
+                }
+            >
+                <div className="space-y-4">
+                    <div className="current-info text-xs sm:text-sm text-gray-400 space-y-1 bg-gray-900/60 p-3 rounded-xl border border-gray-800">
+                        <p>Current Plan: <span className="capitalize text-white font-semibold">{selectedUser?.plan_tier}</span></p>
+                        <p>Current Limit: <span className="text-white font-semibold">${selectedUser?.daily_deposit_limit?.toLocaleString() || 'Default Plan Limit'}</span></p>
+                    </div>
 
-                            <div className="modal-actions flex gap-3">
-                                <button 
-                                    className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
-                                    onClick={() => setIsLimitModalOpen(false)}
-                                >
-                                    Cancel
-                                </button>
-                                <button 
-                                    className="flex-1 py-3 bg-primary hover:bg-primary-dark rounded-lg font-bold transition-colors disabled:opacity-50"
-                                    onClick={handleUpdateLimit}
-                                    disabled={actionLoading === selectedUser.id}
-                                >
-                                    {actionLoading === selectedUser.id ? <Loader2 className="animate-spin mx-auto" size={20} /> : 'Save Changes'}
-                                </button>
-                            </div>
+                    <div className="form-group space-y-1.5">
+                        <label className="block text-xs font-semibold text-gray-300">Daily Deposit Limit (USD)</label>
+                        <div className="relative">
+                            <input
+                                id="daily-limit-input"
+                                name="dailyLimit"
+                                type="number"
+                                value={newLimit}
+                                onChange={e => setNewLimit(e.target.value)}
+                                placeholder="e.g. 5000"
+                                className="w-full bg-gray-950 border border-gray-700 rounded-xl p-3 text-white text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                            />
+                            <span className="absolute right-3 top-3 text-gray-400">$</span>
                         </div>
+                        <p className="text-[11px] text-gray-400 italic">Custom limits override default plan limits for this user.</p>
                     </div>
                 </div>
-            )}
+            </BottomSheet>
         </div>
     );
 };

@@ -166,7 +166,27 @@ class AiSupportService {
         "resolved", "problem solved", "issue resolved"
     ];
 
-    if (closeTriggers.some(trigger => lowerMsg === trigger || lowerMsg.includes(trigger))) {
+    const isCloseTrigger = closeTriggers.some(trigger => lowerMsg === trigger || lowerMsg.includes(trigger));
+
+    if (isCloseTrigger) {
+        const idempotencyKey = `ai_close_${conversationId}`;
+        
+        // Idempotency Check: Has a closing message already been sent for this conversation?
+        const { data: existingClosingMsg } = await supabase
+            .from("messages")
+            .select("id")
+            .eq("conversation_id", conversationId)
+            .ilike("content", "%resolved and closed%")
+            .limit(1)
+            .maybeSingle();
+
+        if (existingClosingMsg) {
+            console.log(`[AI Diagnostic] trigger: close_chat | convId: ${conversationId} | idempotencyKey: ${idempotencyKey} | status: SKIPPED_DUPLICATE`);
+            return null;
+        }
+
+        console.log(`[AI Diagnostic] trigger: close_chat | convId: ${conversationId} | idempotencyKey: ${idempotencyKey} | status: GENERATED`);
+
         // Automatically resolve conversation status
         await supabase
             .from("conversations")
@@ -179,7 +199,8 @@ class AiSupportService {
             operationalMetadata: {
                 intent: "close_chat",
                 category: "support",
-                confidence: 1.0
+                confidence: 1.0,
+                idempotency_key: idempotencyKey
             }
         };
     }

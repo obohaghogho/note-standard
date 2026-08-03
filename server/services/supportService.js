@@ -121,11 +121,23 @@ class SupportService {
       botSenderId = await this.getBotSenderId(userId);
     }
 
+    // Check conversation session state
+    const { data: convInfo } = await supabase
+      .from("conversations")
+      .select("support_status")
+      .eq("id", conversationId)
+      .maybeSingle();
+
+    if (convInfo?.support_status === "resolved" || convInfo?.support_status === "closed") {
+      logger.info(`[AI Diagnostic] trigger: user_message | convId: ${conversationId} | status: SKIPPED_RESOLVED_SESSION`);
+      return { isEscalated: false, skipped: true, reason: "RESOLVED_SESSION" };
+    }
+
     // ── STEP 1: AI Decision & Evaluation ──────────────────────────────────────
     logger.info(`[Escalation:Step1_AiDecision] Processing message for conv ${conversationId}`, {
       conversationId,
       userId,
-      messageLength: content.length
+      messageLength: content ? content.length : 0
     });
 
     let aiResponse = null;
@@ -134,6 +146,10 @@ class SupportService {
     try {
       if (aiSupportService.isConfigured()) {
         aiResponse = await aiSupportService.processSupportMessage(conversationId, content, userId, botSenderId);
+        if (!aiResponse) {
+          logger.info(`[AI Diagnostic] trigger: user_message | convId: ${conversationId} | status: SKIPPED_DUPLICATE_OR_EMPTY`);
+          return { isEscalated: false, skipped: true };
+        }
       } else {
         escalationReason = "API_FAILURE";
       }

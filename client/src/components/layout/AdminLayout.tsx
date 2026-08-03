@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { API_URL } from '../../lib/api';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -31,6 +31,7 @@ import {
 
 import { LanguageSelector } from '../common/LanguageSelector';
 import SecureImage from '../common/SecureImage';
+import OfflineBanner from '../common/OfflineBanner';
 import { preloadRoute, preloadCoreAdminRoutes } from '../../utils/routePreloader';
 import './AdminLayout.css';
 
@@ -46,10 +47,11 @@ export const AdminLayout = () => {
     const { session, signOut } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
-    const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 1024);
     const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
     const [newChatsCount] = useState(0);
     const [chatActive, setChatActive] = useState(false);
+    const touchStartX = useRef<number | null>(null);
 
     const fetchAdminProfile = useCallback(async () => {
         if (!session?.access_token) return;
@@ -83,11 +85,34 @@ export const AdminLayout = () => {
         preloadCoreAdminRoutes();
     }, [session, fetchAdminProfile]);
 
+    // Auto-close sidebar on route navigation on mobile viewports
+    useEffect(() => {
+        if (window.innerWidth < 1024) {
+            setSidebarOpen(false);
+        }
+    }, [location.pathname]);
+
     useEffect(() => {
         const handleChatActive = (e: any) => setChatActive(e.detail);
         window.addEventListener('admin-chat-active', handleChatActive);
         return () => window.removeEventListener('admin-chat-active', handleChatActive);
     }, []);
+
+    // Touch swipe gesture handling for mobile drawer
+    const handleTouchStart = (e: React.TouchEvent) => {
+        touchStartX.current = e.touches[0].clientX;
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        if (touchStartX.current === null) return;
+        const currentX = e.touches[0].clientX;
+        const diffX = currentX - touchStartX.current;
+        // Swipe left to close sidebar
+        if (diffX < -60 && sidebarOpen && window.innerWidth < 1024) {
+            setSidebarOpen(false);
+            touchStartX.current = null;
+        }
+    };
 
     const handleLogout = async () => {
         await signOut();
@@ -119,7 +144,7 @@ export const AdminLayout = () => {
 
 
     return (
-        <div className="admin-layout">
+        <div className="admin-layout" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove}>
             {/* Sidebar */}
             <aside className={`admin-sidebar ${sidebarOpen ? 'open' : 'collapsed'}`}>
                 <div className="sidebar-header">
@@ -128,8 +153,9 @@ export const AdminLayout = () => {
                         {sidebarOpen && <span>Admin Panel</span>}
                     </div>
                     <button
-                        className="toggle-btn"
+                        className="toggle-btn min-h-[44px] min-w-[44px] flex items-center justify-center"
                         onClick={() => setSidebarOpen(!sidebarOpen)}
+                        aria-label="Toggle navigation menu"
                     >
                         {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
                     </button>
@@ -175,7 +201,7 @@ export const AdminLayout = () => {
                 </nav>
 
                 <div className="sidebar-footer">
-                    <button className="logout-btn" onClick={handleLogout}>
+                    <button className="logout-btn min-h-[44px]" onClick={handleLogout}>
                         <LogOut size={20} />
                         {sidebarOpen && <span>Logout</span>}
                     </button>
@@ -184,20 +210,24 @@ export const AdminLayout = () => {
 
             {/* Main Content */}
             <div className="admin-main">
+                <OfflineBanner />
+
                 {/* Top Header */}
                 <header className="admin-header">
                     <div className="header-left">
                         {chatActive ? (
                             <button 
-                                className="mobile-toggle-btn"
+                                className="mobile-toggle-btn min-h-[44px] min-w-[44px] flex items-center justify-center"
                                 onClick={() => window.dispatchEvent(new CustomEvent('admin-chat-back'))}
+                                aria-label="Go back"
                             >
                                 <ArrowLeft size={20} />
                             </button>
                         ) : (
                             <button 
-                                className="mobile-toggle-btn"
+                                className="mobile-toggle-btn min-h-[44px] min-w-[44px] flex items-center justify-center"
                                 onClick={() => setSidebarOpen(!sidebarOpen)}
+                                aria-label="Toggle drawer menu"
                             >
                                 {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
                             </button>
@@ -209,7 +239,7 @@ export const AdminLayout = () => {
                             <LanguageSelector />
                         </div>
                         <div className="h-6 w-[1px] bg-white/10 mx-1 md:mx-2 desktop-only-lang" />
-                        <button className="notification-btn">
+                        <button className="notification-btn min-h-[44px] min-w-[44px] flex items-center justify-center" aria-label="Notifications">
                             <Bell size={20} />
                             {newChatsCount > 0 && <span className="notif-dot" />}
                         </button>
@@ -247,3 +277,4 @@ export const AdminLayout = () => {
         </div>
     );
 };
+

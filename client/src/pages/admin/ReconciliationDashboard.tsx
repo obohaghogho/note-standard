@@ -290,20 +290,20 @@ export const ReconciliationDashboard: React.FC = () => {
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-2xl sm:text-3xl font-extrabold flex items-center gap-3 text-white tracking-tight">
-                        <Activity className="text-emerald-500" size={32} />
+                    <h1 className="text-xl sm:text-3xl font-extrabold flex items-center gap-3 text-white tracking-tight">
+                        <Activity className="text-emerald-500 shrink-0" size={28} />
                         Financial Infrastructure (NFI)
                     </h1>
-                    <p className="text-gray-400 text-sm mt-1">
+                    <p className="text-gray-400 text-xs sm:text-sm mt-1">
                         Enterprise-Grade Multi-Bank Ledger & AI Fraud Intelligence Control Plane
                     </p>
                 </div>
 
                 {/* Tab Navigation */}
-                <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
+                <div className="flex bg-white/5 p-1 rounded-xl border border-white/10 w-full sm:w-auto overflow-x-auto">
                     <button
                         onClick={() => setActiveTab('reconciliation')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                        className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-all min-h-[44px] flex-1 sm:flex-none ${
                             activeTab === 'reconciliation'
                                 ? 'bg-emerald-600 text-white shadow-md'
                                 : 'text-gray-400 hover:text-white'
@@ -314,7 +314,7 @@ export const ReconciliationDashboard: React.FC = () => {
                     </button>
                     <button
                         onClick={() => setActiveTab('connectors')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                        className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-all min-h-[44px] flex-1 sm:flex-none ${
                             activeTab === 'connectors'
                                 ? 'bg-emerald-600 text-white shadow-md'
                                 : 'text-gray-400 hover:text-white'
@@ -325,7 +325,7 @@ export const ReconciliationDashboard: React.FC = () => {
                     </button>
                     <button
                         onClick={() => setActiveTab('ai-intelligence')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                        className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-all min-h-[44px] flex-1 sm:flex-none ${
                             activeTab === 'ai-intelligence'
                                 ? 'bg-emerald-600 text-white shadow-md'
                                 : 'text-gray-400 hover:text-white'

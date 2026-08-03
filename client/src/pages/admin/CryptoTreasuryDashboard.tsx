@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import ResponsiveTableWrapper from '../../components/common/ResponsiveTableWrapper';
+import TruncatedId from '../../components/common/TruncatedId';
 
 interface CustodyBalance {
   id: string;
@@ -59,13 +61,13 @@ export const CryptoTreasuryDashboard: React.FC = () => {
         axios.get('/api/admin/crypto/approvals', { headers })
       ]);
 
-      if (custodyRes.data.success) {
+      if (custodyRes.data?.success) {
         setCustodyBalances(custodyRes.data.custodyBalances || []);
         setUserLiabilities(custodyRes.data.userLiabilities || []);
         setReserveRatios(custodyRes.data.reserveRatios || []);
       }
 
-      if (approvalsRes.data.success) {
+      if (approvalsRes.data?.success) {
         setPendingApprovals(approvalsRes.data.pendingApprovals || []);
       }
     } catch (err: any) {
@@ -112,10 +114,27 @@ export const CryptoTreasuryDashboard: React.FC = () => {
     return <div className="p-6 text-center text-gray-400">Loading Crypto Treasury & Reserve Metrics...</div>;
   }
 
+  const approvalHeaders = [
+    { key: 'user', label: 'User' },
+    { key: 'amount', label: 'Amount' },
+    { key: 'network', label: 'Network' },
+    { key: 'approvals', label: 'Approvals' },
+    { key: 'requested', label: 'Requested At' },
+    { key: 'actions', label: 'Actions' }
+  ];
+
+  const balanceHeaders = [
+    { key: 'provider', label: 'Provider' },
+    { key: 'currency', label: 'Currency' },
+    { key: 'available', label: 'Available' },
+    { key: 'pending', label: 'Pending' },
+    { key: 'synced', label: 'Last Synced' }
+  ];
+
   return (
-    <div className="p-3 sm:p-6 w-full max-w-7xl mx-auto space-y-6 min-w-0 overflow-hidden">
+    <div className="p-2 sm:p-4 w-full max-w-7xl mx-auto space-y-6 min-w-0">
       {/* Header & Controls */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-900 p-4 sm:p-6 rounded-xl border border-gray-800">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-900/80 p-4 sm:p-6 rounded-xl border border-gray-800">
         <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2 flex-wrap">
             🏦 Crypto Treasury & Settlement Hub
@@ -127,33 +146,33 @@ export const CryptoTreasuryDashboard: React.FC = () => {
         <button
           onClick={handleManualSync}
           disabled={syncing}
-          className="w-full sm:w-auto justify-center bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2.5 rounded-lg text-sm font-medium shadow transition flex items-center gap-2 shrink-0"
+          className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-4 py-2.5 rounded-lg text-sm font-semibold shadow transition flex items-center justify-center gap-2 shrink-0 min-h-[44px]"
         >
           {syncing ? 'Syncing...' : '🔄 Trigger Custody Sync'}
         </button>
       </div>
 
       {actionMessage && (
-        <div className="p-3 sm:p-4 bg-blue-950 border border-blue-800 text-blue-200 text-xs sm:text-sm rounded-lg break-words">
+        <div className="p-3 sm:p-4 bg-indigo-950/80 border border-indigo-800 text-indigo-200 text-xs sm:text-sm rounded-xl break-words">
           {actionMessage}
         </div>
       )}
 
       {/* Reserve Ratio Cards */}
       <div>
-        <h2 className="text-base sm:text-lg font-semibold text-gray-200 mb-3 sm:mb-4">Reserve Ratio Health Index</h2>
+        <h2 className="text-base sm:text-lg font-bold text-gray-200 mb-3 sm:mb-4">Reserve Ratio Health Index</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {reserveRatios.map((r) => (
-            <div key={r.currency} className="bg-gray-900 p-4 sm:p-5 rounded-xl border border-gray-800 min-w-0">
+            <div key={r.currency} className="bg-gray-900/80 p-4 sm:p-5 rounded-xl border border-gray-800 min-w-0 space-y-3">
               <div className="flex justify-between items-center gap-2">
                 <span className="text-base sm:text-lg font-bold text-white truncate">{r.currency}</span>
                 <span className={`px-2.5 py-1 text-xs font-bold rounded-full shrink-0 ${
-                  r.status === 'GREEN' ? 'bg-green-900 text-green-300' : (r.status === 'YELLOW' ? 'bg-yellow-900 text-yellow-300' : 'bg-red-900 text-red-300')
+                  r.status === 'GREEN' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : (r.status === 'YELLOW' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30')
                 }`}>
                   {r.reserveRatioPercent}% {r.status}
                 </span>
               </div>
-              <div className="mt-3 space-y-1.5 text-xs sm:text-sm text-gray-400">
+              <div className="space-y-1.5 text-xs text-gray-400">
                 <div className="flex justify-between items-center gap-2">
                   <span className="shrink-0">Custody Asset:</span>
                   <span className="text-white font-mono truncate">{r.custodyAsset} {r.currency}</span>
@@ -169,87 +188,117 @@ export const CryptoTreasuryDashboard: React.FC = () => {
       </div>
 
       {/* Multi-Sig Approval Queue */}
-      <div className="bg-gray-900 p-4 sm:p-6 rounded-xl border border-gray-800">
-        <h2 className="text-base sm:text-lg font-semibold text-white mb-4 flex items-center gap-2 flex-wrap">
+      <div className="bg-gray-900/60 p-4 sm:p-6 rounded-xl border border-gray-800 space-y-4">
+        <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2 flex-wrap">
           🔐 Multi-Signature Payout Approval Queue ({pendingApprovals.length})
         </h2>
-        {pendingApprovals.length === 0 ? (
-          <p className="text-gray-500 text-xs sm:text-sm">No pending payout approvals. High-value withdrawal queue is clear.</p>
-        ) : (
-          <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
-            <table className="w-full text-left text-xs sm:text-sm text-gray-300 min-w-[550px]">
-              <thead className="bg-gray-800 text-gray-400 uppercase text-[10px] sm:text-xs">
-                <tr>
-                  <th className="py-2.5 px-3 sm:px-4">User</th>
-                  <th className="py-2.5 px-3 sm:px-4">Amount</th>
-                  <th className="py-2.5 px-3 sm:px-4">Network</th>
-                  <th className="py-2.5 px-3 sm:px-4">Approvals</th>
-                  <th className="py-2.5 px-3 sm:px-4">Requested At</th>
-                  <th className="py-2.5 px-3 sm:px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-800">
-                {pendingApprovals.map((app) => (
-                  <tr key={app.id}>
-                    <td className="py-3 px-3 sm:px-4 font-mono text-xs truncate max-w-[120px]">{app.user_email || app.user_id}</td>
-                    <td className="py-3 px-3 sm:px-4 font-bold text-white whitespace-nowrap">{app.amount} {app.currency}</td>
-                    <td className="py-3 px-3 sm:px-4 whitespace-nowrap">{app.network || 'NATIVE'}</td>
-                    <td className="py-3 px-3 sm:px-4 font-mono whitespace-nowrap">{app.approvals_count} / {app.required_approvals}</td>
-                    <td className="py-3 px-3 sm:px-4 text-xs text-gray-500 whitespace-nowrap">{new Date(app.created_at).toLocaleString()}</td>
-                    <td className="py-3 px-3 sm:px-4 text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => handleApprovalAction(app.id, 'APPROVED')}
-                          className="bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 text-xs rounded font-semibold transition"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          onClick={() => handleApprovalAction(app.id, 'REJECTED')}
-                          className="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 text-xs rounded font-semibold transition"
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <ResponsiveTableWrapper
+          headers={approvalHeaders}
+          data={pendingApprovals}
+          loading={false}
+          emptyTitle="Queue Clear"
+          emptyDescription="No pending payout approvals. High-value withdrawal queue is clear."
+          keyExtractor={(app) => app.id}
+          renderRow={(app) => (
+            <tr key={app.id} className="hover:bg-white/5 transition-colors">
+              <td className="py-3 px-4 text-xs font-mono text-gray-300"><TruncatedId id={app.user_email || app.user_id} /></td>
+              <td className="py-3 px-4 text-xs font-bold text-white">{app.amount} {app.currency}</td>
+              <td className="py-3 px-4 text-xs text-gray-300">{app.network || 'NATIVE'}</td>
+              <td className="py-3 px-4 text-xs font-mono text-indigo-300">{app.approvals_count} / {app.required_approvals}</td>
+              <td className="py-3 px-4 text-xs text-gray-400">{new Date(app.created_at).toLocaleString()}</td>
+              <td className="py-3 px-4 text-right">
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => handleApprovalAction(app.id, 'APPROVED')}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs rounded-lg font-semibold transition shadow min-h-[36px]"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => handleApprovalAction(app.id, 'REJECTED')}
+                    className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs rounded-lg font-semibold transition shadow min-h-[36px]"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </td>
+            </tr>
+          )}
+          renderCard={(app) => (
+            <div className="p-4 rounded-xl bg-gray-900/90 border border-gray-800 space-y-3 shadow-lg">
+              <div className="flex items-center justify-between border-b border-gray-800 pb-2">
+                <span className="text-sm font-bold text-white">{app.amount} {app.currency}</span>
+                <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-indigo-500/20 text-indigo-300">{app.approvals_count}/{app.required_approvals} approvals</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span className="text-gray-500 block">User:</span>
+                  <TruncatedId id={app.user_email || app.user_id} startChars={6} endChars={6} />
+                </div>
+                <div>
+                  <span className="text-gray-500 block">Network:</span>
+                  <span className="text-gray-200 font-medium">{app.network || 'NATIVE'}</span>
+                </div>
+              </div>
+              <div className="flex gap-2 pt-2 border-t border-gray-800">
+                <button
+                  onClick={() => handleApprovalAction(app.id, 'APPROVED')}
+                  className="flex-1 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow min-h-[44px]"
+                >
+                  Approve
+                </button>
+                <button
+                  onClick={() => handleApprovalAction(app.id, 'REJECTED')}
+                  className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow min-h-[44px]"
+                >
+                  Reject
+                </button>
+              </div>
+            </div>
+          )}
+        />
       </div>
 
       {/* Provider Custody Balances Table */}
-      <div className="bg-gray-900 p-4 sm:p-6 rounded-xl border border-gray-800">
-        <h2 className="text-base sm:text-lg font-semibold text-white mb-4">Provider Settlement Balances</h2>
-        <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
-          <table className="w-full text-left text-xs sm:text-sm text-gray-300 min-w-[500px]">
-            <thead className="bg-gray-800 text-gray-400 uppercase text-[10px] sm:text-xs">
-              <tr>
-                <th className="py-2.5 px-3 sm:px-4">Provider</th>
-                <th className="py-2.5 px-3 sm:px-4">Currency</th>
-                <th className="py-2.5 px-3 sm:px-4">Available</th>
-                <th className="py-2.5 px-3 sm:px-4">Pending</th>
-                <th className="py-2.5 px-3 sm:px-4">Last Synced</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-800">
-              {custodyBalances.map((b) => (
-                <tr key={b.id}>
-                  <td className="py-3 px-3 sm:px-4 font-bold text-white whitespace-nowrap">{b.provider_name || b.provider_id}</td>
-                  <td className="py-3 px-3 sm:px-4 font-mono whitespace-nowrap">{b.currency}</td>
-                  <td className="py-3 px-3 sm:px-4 font-mono text-green-400 whitespace-nowrap">{b.available}</td>
-                  <td className="py-3 px-3 sm:px-4 font-mono text-yellow-400 whitespace-nowrap">{b.pending}</td>
-                  <td className="py-3 px-3 sm:px-4 text-xs text-gray-500 whitespace-nowrap">{new Date(b.last_synced_at).toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <div className="bg-gray-900/60 p-4 sm:p-6 rounded-xl border border-gray-800 space-y-4">
+        <h2 className="text-base sm:text-lg font-bold text-white">Provider Settlement Balances</h2>
+        <ResponsiveTableWrapper
+          headers={balanceHeaders}
+          data={custodyBalances}
+          loading={false}
+          emptyTitle="No Provider Balances"
+          emptyDescription="Custody balances will appear here once synchronized."
+          keyExtractor={(b) => b.id}
+          renderRow={(b) => (
+            <tr key={b.id} className="hover:bg-white/5 transition-colors">
+              <td className="py-3 px-4 text-xs font-bold text-white">{b.provider_name || b.provider_id}</td>
+              <td className="py-3 px-4 text-xs font-mono text-indigo-300">{b.currency}</td>
+              <td className="py-3 px-4 text-xs font-mono text-emerald-400 font-bold">{b.available}</td>
+              <td className="py-3 px-4 text-xs font-mono text-amber-300">{b.pending}</td>
+              <td className="py-3 px-4 text-xs text-gray-400">{new Date(b.last_synced_at).toLocaleString()}</td>
+            </tr>
+          )}
+          renderCard={(b) => (
+            <div className="p-4 rounded-xl bg-gray-900/90 border border-gray-800 space-y-2 shadow-lg text-xs">
+              <div className="flex justify-between items-center border-b border-gray-800 pb-2">
+                <span className="font-bold text-white text-sm">{b.provider_name || b.provider_id}</span>
+                <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono font-bold">{b.currency}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Available:</span>
+                <span className="font-mono text-emerald-400 font-bold">{b.available}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Pending:</span>
+                <span className="font-mono text-amber-300">{b.pending}</span>
+              </div>
+            </div>
+          )}
+        />
       </div>
     </div>
   );
 };
 
 export default CryptoTreasuryDashboard;
+

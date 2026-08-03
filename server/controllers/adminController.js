@@ -405,9 +405,13 @@ exports.updateChatStatus = async (req, res) => {
     if (error) throw error;
 
     // Log the action
-    await logAdminAction(req, "update_support_status", "conversation", id, {
-      status: support_status,
-    });
+    try {
+      await logAdminAction(req, "update_support_status", "conversation", id, {
+        status: support_status,
+      });
+    } catch (logErr) {
+      console.warn("[AdminController] Non-fatal logAdminAction error:", logErr.message);
+    }
 
     // Realtime notification of status change
     const realtime = require("../services/realtimeService");
@@ -415,6 +419,47 @@ exports.updateChatStatus = async (req, res) => {
       id,
       support_status
     });
+
+    // If reopened by admin, insert a single system message notification
+    if (support_status === "open") {
+      const adminId = req.user?.id || "00000000-0000-0000-0000-000000000000";
+      try {
+        const { data: rpcData, error: rpcErr } = await serviceSupabase.rpc('rpc_send_message', {
+          p_conversation_id: id,
+          p_sender_id: adminId,
+          p_content: "Conversation reopened by Admin",
+          p_type: "text",
+          p_event_id: require("crypto").randomUUID(),
+          p_original_language: "en",
+          p_attachment_id: null,
+          p_reply_to_id: null
+        });
+
+        let sysMsg = rpcData?.message;
+        if (rpcErr || !sysMsg) {
+          const { data: directMsg } = await serviceSupabase
+            .from("messages")
+            .insert([{
+              conversation_id: id,
+              sender_id: adminId,
+              content: "Conversation reopened by Admin",
+              type: "text",
+              sender_type: "system"
+            }])
+            .select()
+            .single();
+          sysMsg = directMsg;
+        }
+
+        if (sysMsg) {
+          sysMsg.sender_type = "system";
+          await serviceSupabase.from("messages").update({ sender_type: "system" }).eq("id", sysMsg.id);
+          await realtime.emitToConversation(id, "chat:message", sysMsg);
+        }
+      } catch (sysErr) {
+        console.warn("[AdminController] Failed to create reopen system message:", sysErr.message);
+      }
+    }
 
     // Notify user if resolved
     if (support_status === "resolved") {
@@ -1970,14 +2015,20 @@ exports.getCommunicationHealth = async (req, res, next) => {
       msgs1hRes,
       activeCallsRes,
       recentCallsRes,
-      activeUsersRes
+      activeUsersRes,
+      pushMetricsRes,
+      tracesRes,
+      failedCallsRes
     ] = await Promise.allSettled([
       serviceSupabase.from("conversations").select("*", { count: "exact", head: true }),
       serviceSupabase.from("messages").select("*", { count: "exact", head: true }).gte("created_at", oneDayAgo),
       serviceSupabase.from("messages").select("*", { count: "exact", head: true }).gte("created_at", oneHourAgo),
       serviceSupabase.from("call_sessions").select("*", { count: "exact", head: true }).in("status", ["ringing", "connecting", "active"]),
       serviceSupabase.from("call_sessions").select("*").order("started_at", { ascending: false }).limit(10),
-      serviceSupabase.from("profiles").select("*", { count: "exact", head: true }).gte("last_seen_at", oneHourAgo)
+      serviceSupabase.from("profiles").select("*", { count: "exact", head: true }).gte("last_seen_at", oneHourAgo),
+      serviceSupabase.from("push_metrics").select("status").gte("created_at", oneDayAgo),
+      serviceSupabase.from("messaging_delivery_traces").select("ack_latency_ms").gte("created_at", oneDayAgo).not("ack_latency_ms", "is", null),
+      serviceSupabase.from("call_sessions").select("*", { count: "exact", head: true }).gte("started_at", oneDayAgo).eq("status", "failed")
     ]);
 
     const totalConvs = convsRes.status === 'fulfilled' ? convsRes.value.count : 0;
@@ -1986,6 +2037,28 @@ exports.getCommunicationHealth = async (req, res, next) => {
     const activeCallsCount = activeCallsRes.status === 'fulfilled' ? activeCallsRes.value.count : 0;
     const recentCalls = recentCallsRes.status === 'fulfilled' ? recentCallsRes.value.data : [];
     const activeUsersCount = activeUsersRes.status === 'fulfilled' ? activeUsersRes.value.count : 0;
+
+    // Calculate delivery success rate from push_metrics
+    let deliverySuccessRate = 100;
+    if (pushMetricsRes.status === 'fulfilled' && Array.isArray(pushMetricsRes.value.data) && pushMetricsRes.value.data.length > 0) {
+      const totalPush = pushMetricsRes.value.data.length;
+      const acceptedPush = pushMetricsRes.value.data.filter(m => m.status === 'accepted' || m.status === 'sent' || m.status === 'delivered').length;
+      deliverySuccessRate = Math.round((acceptedPush / totalPush) * 10000) / 100;
+    }
+
+    // Calculate average latency from traces
+    let averageLatencyMs = 0;
+    if (tracesRes.status === 'fulfilled' && Array.isArray(tracesRes.value.data) && tracesRes.value.data.length > 0) {
+      const totalLat = tracesRes.value.data.reduce((acc, curr) => acc + (curr.ack_latency_ms || 0), 0);
+      averageLatencyMs = Math.round(totalLat / tracesRes.value.data.length);
+    }
+
+    // Calculate call ICE failure rate
+    let iceFailureRate = 0;
+    const failedCalls = failedCallsRes.status === 'fulfilled' ? failedCallsRes.value.count || 0 : 0;
+    if (recentCalls.length > 0) {
+      iceFailureRate = Math.round((failedCalls / Math.max(recentCalls.length, 1)) * 1000) / 1000;
+    }
 
     const memoryUsage = process.memoryUsage();
     const systemMemory = {
@@ -1998,7 +2071,7 @@ exports.getCommunicationHealth = async (req, res, next) => {
 
     res.json({
       timestamp: new Date().toISOString(),
-      status: "HEALTHY",
+      status: deliverySuccessRate < 90 ? "DEGRADED" : "HEALTHY",
       metrics: {
         activeConversations: totalConvs || 0,
         messages24h: msgs24h || 0,
@@ -2006,10 +2079,10 @@ exports.getCommunicationHealth = async (req, res, next) => {
         messagesPerMin: Math.round((msgs1h || 0) / 60),
         activeCalls: activeCallsCount || 0,
         activeUsers1h: activeUsersCount || 0,
-        deliverySuccessRate: 99.94,
-        averageLatencyMs: 18,
-        socketReconnectRate: 0.02,
-        iceFailureRate: 0.01,
+        deliverySuccessRate,
+        averageLatencyMs,
+        socketReconnectRate: 0,
+        iceFailureRate,
       },
       systemMemory,
       recentCalls: recentCalls || [],

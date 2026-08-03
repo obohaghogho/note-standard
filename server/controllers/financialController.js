@@ -59,14 +59,33 @@ exports.getFinancialAnalytics = async (req, res) => {
       });
     }
 
-    // 3. Compute simple KPI cards
+    // 3. Compute prior 30-day period volume for growth calculation
+    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: priorEntries } = await supabase
+      .from("ledger_entries_v6")
+      .select("amount")
+      .eq("user_id", userId)
+      .gte("created_at", sixtyDaysAgo)
+      .lt("created_at", thirtyDaysAgo);
+
+    let priorVolume = 0;
+    if (priorEntries) {
+      priorEntries.forEach(e => { priorVolume += Math.abs(parseFloat(e.amount || 0)); });
+    }
+
+    const currentVolume = totalDeposits + totalWithdrawals + totalTransfers;
+    const growthRate = priorVolume > 0 
+      ? Math.round(((currentVolume - priorVolume) / priorVolume) * 1000) / 10
+      : (currentVolume > 0 ? 100 : 0);
+
+    // 4. Compute simple KPI cards
     const stats = {
       wallets: wallets || [],
-      volume30d: totalDeposits + totalWithdrawals + totalTransfers,
+      volume30d: currentVolume,
       deposits30d: totalDeposits,
       withdrawals30d: totalWithdrawals,
       transfers30d: totalTransfers,
-      growthRate: 12.5, // 12.5% increase month-on-month
+      growthRate,
       cashFlowStatus: totalDeposits >= totalWithdrawals ? "Surplus" : "Deficit"
     };
 

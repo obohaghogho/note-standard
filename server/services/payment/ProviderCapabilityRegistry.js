@@ -90,9 +90,12 @@ class ProviderCapabilityRegistry {
         icon: this.getRailIcon(row.rail_type),
         recommendedScore: row.recommended_score || 5,
         recommendationBadge: row.recommendation_badge || 'Recommended',
+        icon: this.getRailIcon(row.rail_type),
+        recommendedScore: row.recommended_score || 5,
+        recommendationBadge: row.recommendation_badge || 'Recommended',
         health: {
-          latency: 180 + Math.floor(Math.random() * 80),
-          successRate: 99.9,
+          latency: Number(row.avg_latency_ms) || 120,
+          successRate: Number(row.success_rate) || 100.0,
           lastChecked: new Date().toISOString()
         }
       });
@@ -205,6 +208,7 @@ class ProviderCapabilityRegistry {
   static async getAdminCapabilitiesGrid() {
     const rawCapabilities = await this.fetchRails();
     const rows = [];
+    const providerStatsMap = {};
 
     for (const [code, data] of Object.entries(rawCapabilities)) {
       for (const rail of data.rails) {
@@ -226,17 +230,28 @@ class ProviderCapabilityRegistry {
           recommendationBadge: rail.recommendationBadge,
           health: rail.health
         });
+
+        if (!providerStatsMap[rail.provider]) {
+          providerStatsMap[rail.provider] = {
+            name: rail.provider,
+            status: rail.availability === 'OFFLINE' ? 'OFFLINE' : 'ONLINE',
+            latency: rail.health.latency,
+            successRate: rail.health.successRate
+          };
+        }
       }
     }
+
+    const providers = Object.values(providerStatsMap);
 
     return {
       version: _globalVersion,
       totalRails: rows.length,
       rails: rows,
-      providers: [
-        { name: 'fincra', status: 'ONLINE', latency: 190, successRate: 99.95 },
-        { name: 'anchor', status: 'ONLINE', latency: 220, successRate: 99.85 },
-        { name: 'nowpayments', status: 'ONLINE', latency: 150, successRate: 99.90 }
+      providers: providers.length > 0 ? providers : [
+        { name: 'fincra', status: 'ONLINE', latency: 120, successRate: 100.0 },
+        { name: 'anchor', status: 'ONLINE', latency: 140, successRate: 100.0 },
+        { name: 'nowpayments', status: 'ONLINE', latency: 110, successRate: 100.0 }
       ],
       retrievedAt: new Date().toISOString()
     };
