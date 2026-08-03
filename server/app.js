@@ -251,6 +251,8 @@ app.use("/api/provider-health", require("./routes/providerHealthRoutes"));
 app.use("/api/treasury", require("./routes/treasuryRoutes"));
 app.use("/api/v1/withdrawals", require("./routes/v1/withdrawals")); // Enterprise Payout Infrastructure v1
 app.use("/api/v1/admin/withdrawals", require("./routes/v1/adminWithdrawals")); // Admin Operations & Webhook Replay v1
+app.use("/api/v1", require("./routes/v1/depositInstructionRoutes")); // Enterprise Deposit Instructions v1
+app.use("/api/v1/admin", require("./routes/adminCollectionRoutes")); // Enterprise Collection Admin Routes v1
 app.use("/api/limit-requests", requireAuth, require("./routes/limitRequests"));
 app.use("/api/webrtc", require("./routes/webrtc"));
 app.use("/api/teams", teamRoutes);

@@ -80,6 +80,8 @@ const FincraAdminPanel = lazyWithRetry(() => import('./components/admin/FincraAd
 const SupportCenter = lazyWithRetry(() => import('./pages/admin/SupportCenter'), 'SupportCenter');
 const PaymentCapabilitiesPage = lazyWithRetry(() => import('./pages/admin/PaymentCapabilitiesPage'), 'PaymentCapabilitiesPage');
 const CryptoTreasuryDashboard = lazyWithRetry(() => import('./pages/admin/CryptoTreasuryDashboard'), 'CryptoTreasuryDashboard');
+const CollectionAccountsPage = lazyWithRetry(() => import('./pages/admin/CollectionAccountsPage'), 'CollectionAccountsPage');
+const DepositMonitoringPage = lazyWithRetry(() => import('./pages/admin/DepositMonitoringPage'), 'DepositMonitoringPage');
 
 
 
@@ -231,6 +233,8 @@ function App() {
                                 <Route path="fincra" element={<FincraAdminPanel />} />
                                 <Route path="crypto-treasury" element={<CryptoTreasuryDashboard />} />
                                 <Route path="payment-capabilities" element={<PaymentCapabilitiesPage />} />
+                                <Route path="collection-accounts" element={<CollectionAccountsPage />} />
+                                <Route path="deposit-monitoring" element={<DepositMonitoringPage />} />
                                 <Route path="support-center" element={<SupportCenter />} />
 
                               </Route>

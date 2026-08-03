@@ -99,6 +99,8 @@ export const AdminLayout = () => {
         { to: '/admin/users', icon: Users, label: 'Users' },
         { to: '/admin/crypto-treasury', icon: Coins, label: 'Crypto Treasury' },
         { to: '/admin/payment-capabilities', icon: Landmark, label: 'Payment Rails' },
+        { to: '/admin/collection-accounts', icon: Landmark, label: 'Collection Accounts' },
+        { to: '/admin/deposit-monitoring', icon: Activity, label: 'Deposit Monitoring' },
         { to: '/admin/chats', icon: MessageSquare, label: 'Support Chats', badge: newChatsCount },
         { to: '/admin/ads', icon: Target, label: 'Manage Ads' },
         { to: '/admin/audit-logs', icon: HistoryIcon, label: 'Audit Logs' },

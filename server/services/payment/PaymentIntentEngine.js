@@ -4,6 +4,7 @@
  * PaymentIntentEngine.js
  * =======================
  * Engine for managing customer business payment intents.
+ * Extended in Architecture v4.0 to support DepositInstructionPolicyService.
  * Lifecycle: CREATED -> ACTIVE -> COMPLETED / CANCELLED / EXPIRED.
  */
 class PaymentIntentEngine {
@@ -61,6 +62,26 @@ class PaymentIntentEngine {
   }
 
   /**
+   * Generate deposit instructions attaching Merchant Collection Account or Virtual Account
+   */
+  async generateDepositInstructions(params, services = {}) {
+    const DepositInstructionPolicyService = require('./DepositInstructionPolicyService');
+    const CollectionAccountService = require('./CollectionAccountService');
+    const DepositReferenceService = require('./DepositReferenceService');
+
+    const collectionAccountService = services.collectionAccountService || new CollectionAccountService(this.db);
+    const depositRefService = services.depositRefService || new DepositReferenceService(this.db);
+
+    const policyService = new DepositInstructionPolicyService({
+      collectionAccountService,
+      depositRefService,
+      paymentIntentEngine: this
+    });
+
+    return policyService.generateDepositInstructions(params);
+  }
+
+  /**
    * Complete payment intent
    */
   async completeIntent(intentId) {
@@ -87,11 +108,12 @@ class PaymentIntentEngine {
    */
   async expireStaleIntents() {
     const now = new Date();
-    const expiredCount = 0;
+    let expiredCount = 0;
 
     for (const [id, intent] of this.inMemoryIntents.entries()) {
       if (intent.status === 'ACTIVE' && intent.expires_at < now) {
         intent.status = 'EXPIRED';
+        expiredCount++;
       }
     }
 
