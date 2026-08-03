@@ -1784,7 +1784,6 @@ exports.sendMessage = async (req, res) => {
           }
         }, 30000); // 30 second window — enough for reconnect backoff (max 10s) + handshake
       }
-    }
 // --- Notification Logic ---
     // PERF FIX: Reuse `members` fetched at the top of sendMessage.
     // Filter to non-sender members here (was previously a 3rd redundant SELECT).
@@ -1912,55 +1911,56 @@ exports.sendMessage = async (req, res) => {
     } catch (notifErr) {
       console.error("Failed to send notification or mention:", notifErr);
     }
-          // Original Offline Hours Fallback Logic
-          const { data: settings } = await supabase
-            .from("auto_reply_settings")
-            .select("*")
+
+    // Offline Hours Auto-Reply Logic
+    try {
+      const { data: settings } = await supabase
+        .from("auto_reply_settings")
+        .select("*")
+        .single();
+
+      if (settings?.enabled) {
+        const now = new Date();
+        const hours = now.getUTCHours();
+        
+        const parseHour = (h) => {
+          if (typeof h === 'string' && h.includes(':')) {
+            return parseInt(h.split(':')[0]);
+          }
+          return parseInt(h);
+        };
+
+        const start = parseHour(settings.start_hour);
+        const end = parseHour(settings.end_hour);
+
+        let isOffline = false;
+        if (start > end) {
+          isOffline = hours >= start || hours < end;
+        } else {
+          isOffline = hours >= start && hours < end;
+        }
+
+        if (isOffline) {
+          const { data: autoMsg, error: autoErr } = await supabase
+            .from("messages")
+            .insert([{
+              conversation_id: conversationId,
+              sender_id: botSenderId,
+              content: settings.message,
+              type: "text",
+            }])
+            .select()
             .single();
 
-          if (settings?.enabled) {
-            const now = new Date();
-            const hours = now.getUTCHours();
-            
-            const parseHour = (h) => {
-              if (typeof h === 'string' && h.includes(':')) {
-                return parseInt(h.split(':')[0]);
-              }
-              return parseInt(h);
-            };
-
-            const start = parseHour(settings.start_hour);
-            const end = parseHour(settings.end_hour);
-
-            let isOffline = false;
-            if (start > end) {
-              isOffline = hours >= start || hours < end;
-            } else {
-              isOffline = hours >= start && hours < end;
-            }
-
-            if (isOffline) {
-              const { data: autoMsg, error: autoErr } = await supabase
-                .from("messages")
-                .insert([{
-                  conversation_id: conversationId,
-                  sender_id: botSenderId,
-                  content: settings.message,
-                  type: "text",
-                }])
-                .select()
-                .single();
-
-              if (!autoErr) {
-                 await realtime.emitToConversation(conversationId, "chat:message", autoMsg);
-              }
-            }
+          if (!autoErr) {
+             await realtime.emitToConversation(conversationId, "chat:message", autoMsg);
           }
         }
       }
     } catch (autoReplyErr) {
       console.error("Auto-reply logic failed:", autoReplyErr);
     }
+  }
   } catch (error) {
     console.error("🔥 SEND MESSAGE FAILED");
     console.error("Correlation ID:", req.correlationId);
