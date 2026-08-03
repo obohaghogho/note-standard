@@ -234,6 +234,3 @@ export const DepositMonitoringPage: React.FC = () => {
 };
 
 export default DepositMonitoringPage;
-
-
-export default DepositMonitoringPage;
