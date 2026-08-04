@@ -54,6 +54,7 @@ export const UniversalPostCard: React.FC<Props> = ({
   onOptimisticLike,
   onOptimisticBookmark,
 }) => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { socket } = useSocket();
   const isOwner = user?.id === post.author_id;
