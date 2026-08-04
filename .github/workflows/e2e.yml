@@ -14,6 +14,10 @@ jobs:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     
+    # Explicitly grant read permissions to the GITHUB_TOKEN
+    permissions:
+      contents: read
+    
     # We define the staging environment variables via GitHub Secrets
     env:
       SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
@@ -22,6 +26,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     
     - uses: actions/setup-node@v4
       with:
