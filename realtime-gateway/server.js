@@ -237,7 +237,7 @@ app.get('/internal/push/health', async (req, res) => {
   });
 });
 
-// ✅ 3b. BOOT-READY SIGNAL ENDPOINT
+// ✅ 3b. BOOT-READY SIGNAL ENDPOINT (reloaded)
 // Called by the API BootManager when ALL services are ready.
 // This is the ONLY event that unlocks socket acceptance.
 app.post('/internal/boot-ready', (req, res) => {

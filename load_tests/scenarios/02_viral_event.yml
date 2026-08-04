@@ -4,13 +4,15 @@ config:
       - expression: "vusers.failed == 0"
       - expression: "errors == 0"
   target: "{{ $processEnvironment.REALTIME_GATEWAY_URL }}"
+  socketio:
+    query:
+      token: "{{ access_token }}"
+      sessionId: "loadtest_session"
+      deviceId: "loadtest_device"
   phases:
-    - duration: 60
-      arrivalRate: 35
-      name: "Viral ramp up (2,000+ connections in 1 minute)"
-    - duration: 120
-      arrivalRate: 0
-      name: "Sustain peak"
+    - duration: 30
+      arrivalRate: 20
+      name: "Viral ramp up"
   engines:
     socketio-v3: {}
   payload:

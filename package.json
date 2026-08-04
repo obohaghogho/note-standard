@@ -31,6 +31,7 @@
     "start:payments": "next start",
     "loadtest:seed": "node load_tests/scripts/seed_users.js",
     "loadtest:teardown": "node load_tests/scripts/teardown_users.js",
+    "loadtest:stress": "node load_tests/scripts/run_stress_test.js",
     "loadtest:normal": "npx artillery run load_tests/scenarios/01_normal_usage.yml",
     "loadtest:viral": "npx artillery run load_tests/scenarios/02_viral_event.yml",
     "loadtest:storm": "npx artillery run load_tests/scenarios/03_reconnect_storm.yml",

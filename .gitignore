@@ -38,6 +38,11 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# load test credentials
+users.csv
+load_tests/users.csv
+
 next-env.d.ts
 
 # chaos reports

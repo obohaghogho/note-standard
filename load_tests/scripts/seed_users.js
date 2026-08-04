@@ -1,13 +1,16 @@
-require('dotenv').config({ path: '../../server/.env' });
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../../server/.env') });
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
-const path = require('path');
+
+const jwt = require('jsonwebtoken');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const JWT_SECRET = process.env.JWT_SECRET || process.env.SUPABASE_JWT_SECRET;
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment variables.");
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !JWT_SECRET) {
+  console.error("Missing SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, or JWT_SECRET in environment variables.");
   process.exit(1);
 }
 
@@ -29,7 +32,7 @@ async function seedUsers() {
   console.log(`Starting to seed ${USER_COUNT} users...`);
   
   // Header for Artillery CSV
-  let csvContent = 'user_id,email,password,access_token\n';
+  fs.writeFileSync(OUTPUT_FILE, 'user_id,email,password,access_token\n', 'utf8');
   
   for (let i = 0; i < USER_COUNT; i++) {
     const email = `loadtest_user_${Date.now()}_${i}@notestandard.test`;
@@ -48,26 +51,31 @@ async function seedUsers() {
       });
       
       if (adminErr) {
+        if (adminErr.message.includes('rate limit')) {
+           console.error('Admin API rate limit reached, pausing for 2 seconds...');
+           await new Promise(r => setTimeout(r, 2000));
+           i--; // retry this user
+           continue;
+        }
         console.error(`Error creating user ${i}:`, adminErr.message);
         continue;
       }
 
-      // Wait a moment for trigger to create the profile (if any)
-      await new Promise(r => setTimeout(r, 100));
+      // 2. Create JWT token manually to bypass signIn rate limits
+      const userId = adminData.user.id;
+      const token = jwt.sign(
+        { 
+          aud: 'authenticated',
+          exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24), // 24 hours
+          sub: userId,
+          email: email,
+          role: 'authenticated'
+        },
+        JWT_SECRET
+      );
       
-      // 2. Sign in to get JWT (Artillery needs the access_token for auth)
-      const { data: loginData, error: loginErr } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-
-      if (loginErr) {
-        console.error(`Error logging in user ${i}:`, loginErr.message);
-        continue;
-      }
-      
-      // Save to CSV format
-      csvContent += `${adminData.user.id},${email},${password},${loginData.session.access_token}\n`;
+      // Append to CSV format immediately
+      fs.appendFileSync(OUTPUT_FILE, `${userId},${email},${password},${token}\n`, 'utf8');
       
       if ((i + 1) % 10 === 0) {
         console.log(`Created ${i + 1} users...`);
@@ -77,9 +85,7 @@ async function seedUsers() {
     }
   }
   
-  fs.writeFileSync(OUTPUT_FILE, csvContent, 'utf8');
   console.log(`\nSuccessfully created users and saved JWTs to ${OUTPUT_FILE}`);
-  console.log(`Note: Tokens expire after a certain time based on Supabase project settings.`);
 }
 
 seedUsers();
