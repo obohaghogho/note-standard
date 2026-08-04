@@ -31,6 +31,9 @@ This checklist must be fully verified by the engineering and operations team bef
 - [ ] **Alerts Configured**: PagerDuty/Slack/Discord webhook alerts linked to Sentry project DSN.
 
 ## 5. Beta Program (Sprint 4)
+- [x] **Closed Beta Launch Framework**: In-app feedback widget, telemetry capturing, and `354_beta_feedback_table.sql` deployed.
+- [x] **Tester Guidance & Scenarios**: `BETA_TESTING_GUIDE.md` published with cohort rollout milestones and SLA matrices.
+- [x] **Admin Triage Dashboard**: Operations triage center available at `/admin/beta-feedback` for live sentiment tracking.
 - [ ] **Closed Beta Launch**: Platform opened to 100-500 controlled real users.
 - [ ] **Telemetry Review**: Crash frequency and API errors monitored during beta.
 - [ ] **User Feedback**: Feedback aggregated and critical UX bugs triaged.

@@ -5,6 +5,7 @@ import { CreateNoteModal } from '../dashboard/CreateNoteModal';
 import { BroadcastBanner } from '../chat/BroadcastBanner';
 import { PushNotificationBanner } from '../common/PushNotificationBanner';
 import PWAAwarenessBanner from '../PWAAwarenessBanner';
+import { BetaWelcomeBanner } from '../common/BetaWelcomeBanner';
 import { useAuth } from '../../context/AuthContext';
 import { NotificationBell } from '../dashboard/NotificationBell';
 import { Menu, Plus } from 'lucide-react';
@@ -100,6 +101,7 @@ export function DashboardLayout() {
             isChatActiveOnMobile ? "bg-gray-950" : "bg-crystal pt-safe pb-safe"
         )}>
             {!isChatActiveOnMobile && <BroadcastBanner />}
+            {!isChatActiveOnMobile && <BetaWelcomeBanner />}
             {!isChatActiveOnMobile && <PushNotificationBanner />}
             {!isChatActiveOnMobile && <PWAAwarenessBanner />}
             

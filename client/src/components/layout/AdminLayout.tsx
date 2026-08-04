@@ -26,7 +26,8 @@ import {
     Wallet,
     Coins,
     Landmark,
-    Activity
+    Activity,
+    Sparkles
 } from 'lucide-react';
 
 import { LanguageSelector } from '../common/LanguageSelector';
@@ -121,6 +122,7 @@ export const AdminLayout = () => {
 
     const navItems = [
         { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
+        { to: '/admin/beta-feedback', icon: Sparkles, label: 'Beta Feedback' },
         { to: '/admin/users', icon: Users, label: 'Users' },
         { to: '/admin/crypto-treasury', icon: Coins, label: 'Crypto Treasury' },
         { to: '/admin/payment-capabilities', icon: Landmark, label: 'Payment Rails' },

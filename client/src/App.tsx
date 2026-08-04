@@ -24,6 +24,7 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { VersionGuard } from './components/common/VersionGuard';
 import { IOSInstallPrompt } from './components/common/IOSInstallPrompt';
 import { WebNotificationRouter } from './components/common/WebNotificationRouter';
+import { BetaFeedbackModal } from './components/common/BetaFeedbackModal';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 
 // ─── Lazy-loaded Dashboard Pages (Code Splitting) ───
@@ -80,6 +81,7 @@ const PushHealthDashboard = lazyWithRetry(() => import('./pages/admin/PushHealth
 const CommunicationHealthDashboard = lazyWithRetry(() => import('./pages/admin/CommunicationHealthDashboard').then(m => ({ default: m.CommunicationHealthDashboard })), 'CommunicationHealthDashboard');
 const FincraAdminPanel = lazyWithRetry(() => import('./components/admin/FincraAdminPanel').then(m => ({ default: m.FincraAdminPanel })), 'FincraAdminPanel');
 const SupportCenter = lazyWithRetry(() => import('./pages/admin/SupportCenter'), 'SupportCenter');
+const BetaFeedbackDashboard = lazyWithRetry(() => import('./pages/admin/BetaFeedbackDashboard'), 'BetaFeedbackDashboard');
 const PaymentCapabilitiesPage = lazyWithRetry(() => import('./pages/admin/PaymentCapabilitiesPage'), 'PaymentCapabilitiesPage');
 const CryptoTreasuryDashboard = lazyWithRetry(() => import('./pages/admin/CryptoTreasuryDashboard'), 'CryptoTreasuryDashboard');
 const CollectionAccountsPage = lazyWithRetry(() => import('./pages/admin/CollectionAccountsPage'), 'CollectionAccountsPage');
@@ -240,12 +242,15 @@ function App() {
                                 <Route path="collection-accounts" element={<CollectionAccountsPage />} />
                                 <Route path="deposit-monitoring" element={<DepositMonitoringPage />} />
                                 <Route path="support-center" element={<SupportCenter />} />
+                                <Route path="beta-feedback" element={<BetaFeedbackDashboard />} />
 
                               </Route>
                             </Route>
                           </Routes>
                           {/* Global Chat Widget - visible on all authenticated pages */}
                           <ChatWidget />
+                          {/* Global Beta Feedback Widget */}
+                          <BetaFeedbackModal />
                           {/* iOS install prompt — shown after 8s to iOS Safari users not running as PWA */}
                           <IOSInstallPrompt />
                           </NotesDashboardProvider>
