@@ -80,8 +80,13 @@ class SupportInactivityWorker {
         // Dynamic bot sender ID fallback
         const botSenderId = latestMsg.sender_id && !lastSenderIsUser ? latestMsg.sender_id : (customerUserId || "00000000-0000-0000-0000-000000000000");
 
+        const isAlreadyWarningOrClosed = latestMsg.content && (
+          latestMsg.content.includes("I will be closing this chat") ||
+          latestMsg.content.includes("This support chat session is now closed")
+        );
+
         // ── SCENARIO 1: Send warning message if user hasn't responded in 5+ mins ──
-        if ((conv.support_status === "open" || conv.support_status === "pending") && !lastSenderIsUser) {
+        if ((conv.support_status === "open" || conv.support_status === "pending") && !lastSenderIsUser && !isAlreadyWarningOrClosed) {
           if (elapsedSinceLastMsg >= WARNING_TIMEOUT_MS) {
             logger.info(`[SupportInactivityWorker] Sending inactivity warning for conv ${conv.id}`);
 
@@ -111,8 +116,10 @@ class SupportInactivityWorker {
           }
         }
 
+        const isAlreadyClosed = latestMsg.content && latestMsg.content.includes("This support chat session is now closed");
+
         // ── SCENARIO 2: Auto-close support chat if user still hasn't responded after warning ──
-        if (conv.support_status === "warning_sent" && !lastSenderIsUser) {
+        if (conv.support_status === "warning_sent" && !lastSenderIsUser && !isAlreadyClosed) {
           if (elapsedSinceLastMsg >= CLOSING_TIMEOUT_MS) {
             logger.info(`[SupportInactivityWorker] Auto-closing idle support chat ${conv.id}`);
 

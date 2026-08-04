@@ -11,6 +11,7 @@ import { Plus, MessageSquare, Menu } from 'lucide-react';
 import { useSearchParams, useOutletContext } from 'react-router-dom';
 import { useChat } from '../../context/ChatContext';
 import { useAuth } from '../../context/AuthContext';
+import { PerformanceDashboardOverlay } from '../../components/debug/PerformanceDashboardOverlay';
 
 
 const StatusOverlays = () => {
@@ -135,6 +136,7 @@ function ChatContent() {
 
             <NewChatModal isOpen={isNewChatOpen} onClose={() => setIsNewChatOpen(false)} />
             <StatusOverlays />
+            <PerformanceDashboardOverlay />
         </div>
     );
 }

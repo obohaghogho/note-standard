@@ -77,11 +77,16 @@ class AiSupportService {
      const queryLower = query.toLowerCase();
      
      const categoryKeywords = {
-         wallet: ['wallet', 'transfer', 'deposit', 'withdraw', 'cash', 'money', 'payout', 'pending', 'fee', 'fiat', 'bank', 'purchase', 'buy', 'fund', 'add', 'credit', 'virtual', 'account', 'balance', 'limit', 'settle', 'cross', 'currency', 'ngn'],
-         messaging: ['message', 'tick', 'notification', 'chat', 'receipt', 'read'],
-         crypto: ['crypto', 'swap', 'network', 'chain', 'coin', 'token', 'usdt', 'btc', 'eth', 'memo'],
-         authentication: ['auth', 'login', 'password', 'verify', 'verification', '2fa', 'otp', 'sign'],
-         workspace: ['workspace', 'trend', 'note', 'folder', 'tag']
+         wallet: ['wallet', 'transfer', 'deposit', 'withdraw', 'cash', 'money', 'payout', 'pending', 'fee', 'fiat', 'bank', 'purchase', 'buy', 'fund', 'add', 'credit', 'virtual', 'account', 'balance', 'limit', 'settle', 'cross', 'currency', 'ngn', 'usd', 'eur', 'gbp', 'aud', 'cad', 'zar', 'jpy', 'nzd', 'paystack', 'fincra', 'anchor'],
+         messaging: ['message', 'tick', 'notification', 'chat', 'receipt', 'read', 'push', 'call', 'video', 'audio', 'voice', 'media', 'attachment', 'reaction', 'disappearing'],
+         crypto: ['crypto', 'swap', 'network', 'chain', 'coin', 'token', 'usdt', 'btc', 'eth', 'memo', 'tag', 'nowpayments', 'trc20', 'erc20', 'bitcoin'],
+         authentication: ['auth', 'login', 'password', 'verify', 'verification', '2fa', 'otp', 'sign', 'kyc', 'bvn', 'nin', 'tier', 'session', 'pin'],
+         workspace: ['workspace', 'trend', 'note', 'folder', 'tag', 'export', 'summary', 'ai', 'editor', 'community'],
+         teams: ['team', 'member', 'invite', 'role', 'permission', 'owner', 'guest', 'organization', 'collaborate'],
+         monetization: ['monetization', 'subscription', 'pro', 'plan', 'billing', 'upgrade', 'pricing', 'affiliate', 'referral', 'commission', 'ad', 'advertisement', 'banner', 'paid'],
+         settings: ['setting', 'settings', 'profile', 'avatar', 'theme', 'dark', 'light', 'wallpaper', 'ad', 'advertisement', 'privacy', 'pwa', 'install', 'language'],
+         support: ['support', 'ticket', 'agent', 'help', 'contact', 'hours', 'issue', 'problem', 'escalate', 'human', 'session', 'close'],
+         troubleshooting: ['troubleshoot', 'error', 'fail', 'failed', 'slow', 'broken', 'load', 'bug', 'fix', 'app', 'freeze', 'blank', 'disconnect', 'permission', 'push']
      };
 
      let allIntents = [];
@@ -101,7 +106,16 @@ class AiSupportService {
              
              const words = intentKw.split(' ');
              for (const word of words) {
-                 if (word.length > 2 && queryLower.includes(word)) score += 3;
+                 const stem = word.replace(/s$/, '');
+                 if (word.length > 2 && (queryLower.includes(word) || (stem.length > 2 && queryLower.includes(stem)))) {
+                     score += 4;
+                 }
+             }
+
+             if (intent.keywords && Array.isArray(intent.keywords)) {
+                 for (const kw of intent.keywords) {
+                     if (kw && queryLower.includes(kw.toLowerCase())) score += 3;
+                 }
              }
              
              allIntents.push({
@@ -161,12 +175,15 @@ class AiSupportService {
     // Check for user close/resolution intent keywords
     const lowerMsg = (userMessage || "").trim().toLowerCase();
     const closeTriggers = [
-        "close", "close chat", "close support", "no further questions", 
-        "thanks, close", "close it", "done", "no more questions", "i am done", 
-        "resolved", "problem solved", "issue resolved"
+        "close chat", "close support", "close this chat", "no further questions", 
+        "thanks, close", "close it", "no more questions", "i am done", 
+        "problem solved", "issue resolved"
     ];
 
-    const isCloseTrigger = closeTriggers.some(trigger => lowerMsg === trigger || lowerMsg.includes(trigger));
+    const exactSingleWordTriggers = ["close", "done", "resolved"];
+
+    const isCloseTrigger = exactSingleWordTriggers.includes(lowerMsg) || 
+      closeTriggers.some(trigger => lowerMsg === trigger || lowerMsg.includes(trigger));
 
     if (isCloseTrigger) {
         const idempotencyKey = `ai_close_${conversationId}`;

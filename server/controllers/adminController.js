@@ -514,6 +514,18 @@ exports.joinSupportChat = async (req, res) => {
         });
     }
 
+    // Check current conversation status first
+    const { data: convInfo } = await serviceSupabase
+      .from("conversations")
+      .select("support_status")
+      .eq("id", id)
+      .single();
+
+    // If chat is ALREADY resolved or closed, keep it in read-only resolved state
+    if (convInfo && (convInfo.support_status === "resolved" || convInfo.support_status === "closed")) {
+      return res.json({ success: true, message: "Joined view mode for resolved support chat", support_status: convInfo.support_status });
+    }
+
     // Try claiming the ticket optimistically via supportService
     const { data: ticket } = await serviceSupabase
       .from("support_tickets")

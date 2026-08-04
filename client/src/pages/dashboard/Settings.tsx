@@ -15,6 +15,7 @@ import { Toggle } from '../../components/common/Toggle';
 import { User, Camera, Save, Loader2, Megaphone, BadgeCheck, Shield, Lock, Download, Trash2, Activity as ActivityIcon, MessageSquare, Globe } from 'lucide-react';
 import { UserBadge } from '../../components/common/UserBadge';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
+import { KycStatusCard } from '../../components/profile/KycStatusCard';
 
 export default function Settings() {
     const { user, profile: authProfile, isBusiness, signOut } = useAuth();
@@ -23,9 +24,9 @@ export default function Settings() {
     const navigate = useNavigate();
 
     // Check params for tab or payment status
-    const initialTab = searchParams.get('tab') === 'ads' || searchParams.get('ad_success') ? 'ads' : (searchParams.get('tab') === 'privacy' ? 'privacy' : 'profile');
+    const initialTab = searchParams.get('tab') === 'ads' || searchParams.get('ad_success') ? 'ads' : (searchParams.get('tab') === 'kyc' ? 'kyc' : (searchParams.get('tab') === 'privacy' ? 'privacy' : 'profile'));
 
-    const [activeTab, setActiveTab] = useState<'profile' | 'ads' | 'privacy' | 'chat' | 'security'>(initialTab as 'profile' | 'ads' | 'privacy' | 'chat' | 'security');
+    const [activeTab, setActiveTab] = useState<'profile' | 'kyc' | 'ads' | 'privacy' | 'chat' | 'security'>(initialTab as any);
     const [preferredChatLanguage, setPreferredChatLanguage] = useState(authProfile?.preferred_language || 'en');
     const [privacySettings, setPrivacySettings] = useState({
         analytics: true,
@@ -416,6 +417,13 @@ export default function Settings() {
                 >
                     <span className="flex items-center gap-2 whitespace-nowrap"><User size={18} /> Profile</span>
                     {activeTab === 'profile' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
+                </button>
+                <button
+                    onClick={() => setActiveTab('kyc')}
+                    className={`pb-3 px-1 relative flex-shrink-0 ${activeTab === 'kyc' ? 'text-primary font-medium' : 'text-gray-400 hover:text-white'}`}
+                >
+                    <span className="flex items-center gap-2 whitespace-nowrap"><BadgeCheck size={18} /> Verification (KYC)</span>
+                    {activeTab === 'kyc' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
                 </button>
                 <button
                     onClick={() => setActiveTab('ads')}
@@ -889,6 +897,18 @@ export default function Settings() {
                             </div>
                         </div>
                     </Card>
+                )
+            }
+
+            {
+                activeTab === 'kyc' && (
+                    <KycStatusCard 
+                        userEmail={user?.email}
+                        phone={profile?.phone || ''}
+                        isVerified={authProfile?.is_verified}
+                        kycLevel={(authProfile as any)?.kyc_level || 1}
+                        onPhoneUpdated={(newPhone) => setProfile(prev => prev ? { ...prev, phone: newPhone } : null)}
+                    />
                 )
             }
 
