@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Loader2, ArrowLeft, UserPlus, UserCheck, MessageCircle, Share2, Sparkles, TrendingUp, Users, MoreVertical, Plus, Edit3 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Loader2, ArrowLeft, UserPlus, UserCheck, MessageCircle, Share2, Sparkles, TrendingUp, Users, MoreVertical, Plus, Edit3, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -13,6 +13,7 @@ import { ProfileTabs, type ProfileTab } from './ProfileTabs';
 import { ProfileEmptyStates } from './ProfileEmptyStates';
 import { ProfilePostCard } from './ProfilePostCard';
 import { FeaturedNote } from './FeaturedNote';
+import { Dropdown } from '../common/Dropdown';
 
 export interface PublicProfile {
   id: string;
@@ -25,6 +26,7 @@ export interface PublicProfile {
   country_code?: string;
   is_verified?: boolean;
   kyc_level?: string;
+  plan_tier?: string;
   created_at?: string;
   followers_count: number;
   following_count: number;
@@ -76,6 +78,15 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
   const [notes, setNotes] = useState<any[]>([]);
   const [isFetchingTab, setIsFetchingTab] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  
+  const [isActionLoading, setIsActionLoading] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
+  
+  const [suggestedUsers, setSuggestedUsers] = useState<any[]>([]);
+  const [trendingNotes, setTrendingNotes] = useState<any[]>([]);
+  
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
 
   const isSelf = currentUser?.id === profile?.id;
 
@@ -93,6 +104,8 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
           setProfile(res.data.profile);
           setPosts(res.data.posts || []);
           setIsFollowing(res.data.isFollowing || false);
+          setIsBlocked(res.data.isBlocked || false);
+          setIsMuted(res.data.isMuted || false);
         }
       } catch (err: any) {
         console.error('Failed to load profile:', err);
@@ -146,6 +159,24 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
     fetchTabData();
   }, [activeTab, profile?.id, isSelf]);
 
+  useEffect(() => {
+    if (isPage) {
+      const fetchSidebarData = async () => {
+        try {
+          const [suggestedRes, notesRes] = await Promise.all([
+            api.get('/community/suggested-creators?limit=3'),
+            supabase.from('notes').select('*').order('created_at', { ascending: false }).limit(3)
+          ]);
+          if (suggestedRes.data?.creators) setSuggestedUsers(suggestedRes.data.creators);
+          if (notesRes.data) setTrendingNotes(notesRes.data);
+        } catch (e) {
+          console.error('Failed to fetch sidebar data', e);
+        }
+      };
+      fetchSidebarData();
+    }
+  }, [isPage]);
+
   const handleToggleFollow = async () => {
     if (!profile || isSelf || followLoading) return;
     setFollowLoading(true);
@@ -170,6 +201,97 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
       toast.error('Action failed');
     } finally {
       setFollowLoading(false);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!profile) return;
+    const url = `${window.location.origin}/profile/${profile.username}`;
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${profile.full_name || profile.username} on NoteStandard`,
+          text: profile.bio || `Check out ${profile.username}'s profile on NoteStandard`,
+          url: url,
+        });
+        toast.success('Shared successfully!');
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          navigator.clipboard.writeText(url);
+          toast.success('Link copied to clipboard!');
+        }
+      }
+    } else {
+      navigator.clipboard.writeText(url);
+      toast.success('Link copied to clipboard!');
+    }
+  };
+
+  const handleBlockUser = async () => {
+    if (!profile) return;
+    if (window.confirm(`Are you sure you want to block ${profile.username}?\nYou won't see each other's content or be able to message each other.`)) {
+      setIsActionLoading(true);
+      try {
+        await api.post('/chat/block', { blockedId: profile.id });
+        toast.success('User blocked successfully');
+        setIsBlocked(true);
+      } catch (err) {
+        toast.error('Failed to block user');
+      } finally {
+        setIsActionLoading(false);
+      }
+    }
+  };
+
+  const handleReportUser = async () => {
+    if (!profile) return;
+    const reason = window.prompt(`Please provide a reason for reporting ${profile.username}:`);
+    if (reason && reason.trim()) {
+      setIsActionLoading(true);
+      try {
+        await api.post('/community/report-user', { reportedId: profile.id, reason: reason.trim() });
+        toast.success('User reported successfully. Our team will review this.');
+      } catch (err) {
+        toast.error('Failed to submit report');
+      } finally {
+        setIsActionLoading(false);
+      }
+    }
+  };
+
+  const [isMuted, setIsMuted] = useState(false);
+
+  const handleMuteUser = async () => {
+    if (!profile) return;
+    setIsActionLoading(true);
+    try {
+      if (isMuted) {
+        await api.delete(`/status/mute/${profile.id}`);
+        toast.success('User unmuted.');
+      } else {
+        await api.post(`/status/mute/${profile.id}`);
+        toast.success('User muted. Their posts will no longer appear in your feed.');
+      }
+      setIsMuted(!isMuted);
+    } catch (err) {
+      toast.error(`Failed to ${isMuted ? 'unmute' : 'mute'} user`);
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleUnblockUser = async () => {
+    if (!profile) return;
+    setIsActionLoading(true);
+    try {
+      await api.post('/chat/unblock', { blockedId: profile.id });
+      toast.success('User unblocked');
+      setIsBlocked(false);
+    } catch (err) {
+      toast.error('Failed to unblock user');
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
@@ -233,6 +355,67 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
   const completionPercentage = isSelf ? (
     [profile.avatar_url, profile.cover_url, profile.bio, profile.website, profile.country_code].filter(Boolean).length / 5 * 100
   ) : 100;
+
+  if (isBlocked) {
+    return (
+      <div className={isPage ? "min-h-screen bg-gray-950 flex items-center justify-center p-6" : "fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"}>
+        <div className="bg-gray-900 border border-white/10 rounded-3xl p-8 max-w-sm w-full text-center space-y-4 text-white">
+          <Sparkles className="mx-auto text-gray-500" size={40} />
+          <h3 className="text-lg font-bold">User Blocked</h3>
+          <p className="text-xs text-gray-400">You have blocked this user. You will no longer see their profile or content.</p>
+          <div className="flex flex-col gap-2 w-full mt-4">
+            <button onClick={handleUnblockUser} disabled={isActionLoading} className="w-full py-2.5 bg-white text-black hover:bg-gray-200 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2">
+              {isActionLoading ? <Loader2 size={16} className="animate-spin" /> : 'Unblock User'}
+            </button>
+            <button onClick={() => isPage ? navigate(-1) : onClose?.()} className="w-full py-2.5 bg-white/10 hover:bg-white/20 rounded-2xl text-xs font-bold transition-all">Go Back</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'avatar' | 'banner') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be less than 5MB');
+      return;
+    }
+
+    setIsActionLoading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const uploadRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/upload/image`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData,
+      });
+
+      if (!uploadRes.ok) throw new Error('Upload failed');
+      const data = await uploadRes.json();
+      
+      const updateData = type === 'avatar' 
+        ? { avatar_url: data.url } 
+        : { cover_url: data.url };
+      
+      setProfile(prev => prev ? { ...prev, ...updateData } : null);
+      toast.success(`${type === 'avatar' ? 'Avatar' : 'Banner'} updated successfully!`);
+    } catch (err) {
+      toast.error(`Failed to update ${type}`);
+    } finally {
+      setIsActionLoading(false);
+      if (e.target) e.target.value = ''; // Reset input
+    }
+  };
 
   const MainContent = (
     <div className="flex flex-col w-full bg-gray-950 border-x sm:border border-white/10 sm:rounded-3xl shadow-2xl relative min-h-screen sm:min-h-0">
@@ -300,13 +483,34 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
               <Edit3 size={16} /> Edit Profile
             </button>
           )}
-          <button onClick={() => { navigator.clipboard.writeText(window.location.href); toast.success('Link copied!'); }} className="w-11 h-11 shrink-0 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-2xl text-white transition-all border border-white/5" title="Share Profile">
+          <button onClick={handleShare} className="w-11 h-11 shrink-0 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-2xl text-white transition-all border border-white/5" title="Share Profile">
             <Share2 size={18} />
           </button>
-          <button className="w-11 h-11 shrink-0 flex items-center justify-center bg-white/5 hover:bg-white/15 rounded-2xl text-gray-400 hover:text-white transition-all border border-transparent hover:border-white/5">
-            <MoreVertical size={18} />
-          </button>
+          
+          <div className="shrink-0 flex items-center justify-center bg-white/5 hover:bg-white/15 rounded-2xl text-gray-400 hover:text-white transition-all border border-transparent hover:border-white/5">
+            <Dropdown 
+              trigger={<div className="w-11 h-11 flex items-center justify-center"><MoreVertical size={18} /></div>}
+              items={isSelf ? [
+                { label: 'Edit Profile', onClick: () => navigate('/dashboard/settings?tab=profile') },
+                { label: 'Edit Avatar', onClick: () => avatarInputRef.current?.click() },
+                { label: 'Edit Banner', onClick: () => bannerInputRef.current?.click() },
+                { label: 'Account Settings', onClick: () => navigate('/dashboard/settings') },
+                { label: 'Privacy Settings', onClick: () => navigate('/dashboard/settings') },
+                { label: 'Download My Data', onClick: () => navigate('/dashboard/settings') },
+                { label: 'Delete Account', variant: 'danger', onClick: () => navigate('/dashboard/settings') },
+              ] : [
+                { label: 'Copy Profile Link', onClick: () => { navigator.clipboard.writeText(`${window.location.origin}/profile/${profile.username}`); toast.success('Link copied'); } },
+                { label: isMuted ? 'Unmute User' : 'Mute User', onClick: handleMuteUser },
+                { label: 'Report User', variant: 'danger', onClick: handleReportUser },
+                { label: 'Block User', variant: 'danger', onClick: handleBlockUser },
+              ]}
+            />
+          </div>
         </div>
+
+        {/* Hidden inputs for file uploads */}
+        <input type="file" ref={avatarInputRef} className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'avatar')} />
+        <input type="file" ref={bannerInputRef} className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'banner')} />
 
         {/* Profile Completion for New Users */}
         {isSelf && completionPercentage < 100 && (
@@ -425,26 +629,24 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                 <Users size={18} className="text-emerald-400" /> Suggested Users
               </h3>
               <div className="flex flex-col gap-4">
-                {[
-                  { name: 'Sarah Johnson', user: 'sarahj', role: 'UI Designer', followers: 128 },
-                  { name: 'Michael Chen', user: 'mchen', role: 'Product Manager', followers: 842 },
-                  { name: 'Alex Rivera', user: 'arivera', role: 'Frontend Dev', followers: 32 }
-                ].map((u, i) => (
-                  <div key={i} className="flex items-center justify-between group">
+                {suggestedUsers.length > 0 ? suggestedUsers.map((u, i) => (
+                  <div key={u.id || i} className="flex items-center justify-between group">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-gray-800 to-gray-700 flex items-center justify-center text-white font-bold text-sm shadow-inner">
-                        {u.name.charAt(0)}
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-gray-800 to-gray-700 flex items-center justify-center text-white font-bold text-sm shadow-inner overflow-hidden">
+                        {u.avatar_url ? <img src={u.avatar_url} alt="" className="w-full h-full object-cover" /> : (u.full_name || u.username || '?').charAt(0)}
                       </div>
                       <div>
-                        <div className="text-sm font-bold text-white group-hover:underline cursor-pointer">{u.name}</div>
-                        <div className="text-[11px] text-gray-500">{u.role} • {u.followers} followers</div>
+                        <div className="text-sm font-bold text-white group-hover:underline cursor-pointer" onClick={() => navigate(`/profile/${u.username}`)}>{u.full_name || u.username}</div>
+                        <div className="text-[11px] text-gray-500">@{u.username} • {u.followers_count || 0} followers</div>
                       </div>
                     </div>
-                    <button className="text-xs text-white bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-full font-bold transition-colors border border-white/5">
-                      Follow
+                    <button onClick={() => navigate(`/profile/${u.username}`)} className="text-xs text-white bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-full font-bold transition-colors border border-white/5">
+                      View
                     </button>
                   </div>
-                ))}
+                )) : (
+                  <div className="text-sm text-gray-500">No suggestions right now.</div>
+                )}
               </div>
             </div>
 
@@ -454,20 +656,17 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                 <TrendingUp size={18} className="text-indigo-400" /> Trending Notes
               </h3>
               <div className="flex flex-col gap-4">
-                {[
-                  { title: 'Building My Startup', likes: 421, comments: 89, views: '4.2k' },
-                  { title: 'React Performance Tips', likes: 215, comments: 34, views: '1.8k' },
-                  { title: 'The Future of NoteStandard', likes: 892, comments: 156, views: '12k' }
-                ].map((note, i) => (
-                  <div key={i} className="flex flex-col gap-1 cursor-pointer group">
-                    <div className="text-sm font-bold text-gray-300 group-hover:text-white transition-colors">{note.title}</div>
+                {trendingNotes.length > 0 ? trendingNotes.map((note, i) => (
+                  <div key={note.id || i} className="flex flex-col gap-1 cursor-pointer group" onClick={() => navigate('/dashboard/notes')}>
+                    <div className="text-sm font-bold text-gray-300 group-hover:text-white transition-colors">{note.title || 'Untitled Note'}</div>
                     <div className="flex items-center gap-3 text-[11px] font-semibold text-gray-500">
-                      <span className="flex items-center gap-1">❤️ {note.likes}</span>
-                      <span className="flex items-center gap-1">💬 {note.comments}</span>
-                      <span className="flex items-center gap-1">👁 {note.views}</span>
+                      <span className="flex items-center gap-1">❤️ {note.likes_count || 0}</span>
+                      <span className="flex items-center gap-1">👁 {note.views_count || 0}</span>
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="text-sm text-gray-500">No trending notes right now.</div>
+                )}
               </div>
             </div>
             

@@ -2,6 +2,10 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const cloudinary = require('../config/cloudinary');
+const { requireAuth } = require('../middleware/auth');
+const supabase = require('../config/database');
+const { uploadLimiter } = require('../middleware/rateLimiter');
+const logger = require('../utils/logger');
 
 // Multer setup for image-only (legacy profile uploads)
 const storage = multer.memoryStorage();
@@ -36,7 +40,7 @@ const uploadMedia = multer({
 });
 
 // Upload endpoint for profile images (legacy)
-router.post('/image', uploadImage.single('file'), async (req, res) => {
+router.post('/image', requireAuth, uploadLimiter, uploadImage.single('file'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No file uploaded' });
@@ -61,6 +65,34 @@ router.post('/image', uploadImage.single('file'), async (req, res) => {
             );
 
             uploadStream.end(req.file.buffer);
+        });
+
+        const isCover = req.query.type === 'cover';
+        
+        // Update Supabase profile
+        const updateData = isCover ? { cover_url: result.secure_url } : { avatar_url: result.secure_url };
+        
+        // Handle concurrent updates safely using updated_at to ensure optimistic locking
+        const { error: dbError } = await supabase
+            .from('profiles')
+            .update({ ...updateData, updated_at: new Date().toISOString() })
+            .eq('id', req.user.id);
+            
+        if (dbError) {
+            // Delete orphaned image
+            await cloudinary.uploader.destroy(result.public_id);
+            logger.error(`Profile image database update failed, orphaned image deleted`, { 
+                event: isCover ? 'banner_update_failed' : 'avatar_update_failed',
+                user_id: req.user.id,
+                error: dbError.message
+            });
+            throw dbError;
+        }
+
+        logger.info(`Profile image updated successfully`, {
+            event: isCover ? 'banner_updated' : 'avatar_updated',
+            user_id: req.user.id,
+            url: result.secure_url
         });
 
         res.json({

@@ -109,7 +109,7 @@ const logger = {
  */
 const requestLogger = (req, res, next) => {
     const reqStart = Date.now();
-    req.id = req.headers['x-request-id'] || require('crypto').randomUUID();
+    req.id = req.correlationId || req.headers['x-request-id'] || require('crypto').randomUUID();
     req.traceId = req.headers['x-trace-id'] || req.id;
   
     res.on('finish', () => {
@@ -120,9 +120,9 @@ const requestLogger = (req, res, next) => {
             request_id: req.id,
             trace_id: req.traceId,
             user_id: req.user?.id || 'anonymous',
-            space_id: req.params.spaceId || req.body.spaceId || undefined,
-            node_id: req.params.nodeId || req.body.nodeId || undefined,
-            product_id: req.params.productId || req.body.productId || undefined,
+            space_id: req.params?.spaceId || req.body?.spaceId || undefined,
+            node_id: req.params?.nodeId || req.body?.nodeId || undefined,
+            product_id: req.params?.productId || req.body?.productId || undefined,
             method: req.method,
             path: req.originalUrl,
             status: res.statusCode,

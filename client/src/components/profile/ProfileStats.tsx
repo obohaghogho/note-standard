@@ -12,9 +12,10 @@ interface StatItemProps {
 }
 
 const formatNumber = (num: number) => {
-  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-  return num.toLocaleString();
+  return new Intl.NumberFormat('en-US', { 
+    notation: 'compact', 
+    maximumFractionDigits: 1 
+  }).format(num);
 };
 
 const AnimatedCounter: React.FC<{ value: number; delay: number }> = ({ value, delay }) => {
@@ -99,14 +100,7 @@ export const ProfileStats: React.FC<ProfileStatsProps> = ({
         highlight
         onClick={() => onStatClick?.('notes')} 
       />
-      <StatItem 
-        label="Reads" 
-        value={notesCount * 14} 
-        icon={<Eye size={14} />} 
-        delay={0.15} 
-        highlight
-        onClick={() => onStatClick?.('reads')} 
-      />
+
       <StatItem 
         label="Posts" 
         value={postsCount} 

@@ -42,3 +42,33 @@ This document contains standard operating procedures (SOPs) and incident respons
   1. Inspect release audit log in `326_release_audits`.
   2. Identify failing commit/migration.
   3. File post-mortem report and prepare hotfix release.
+
+---
+
+### Playbook 5: Realtime Gateway Restart / Reconnect Storm
+- **Trigger**: Realtime Gateway health check fails or process crashes, triggering automated restart.
+- **Impact**: All connected WebSockets drop and immediately attempt to reconnect, causing a "Reconnect Storm".
+- **Automated Mitigation**: The Gateway auto-restarts. `ChatContext` on client-side automatically refetches `loadConversations` and `loadMessages` to catch up on any missed activity.
+- **Manual Actions**:
+  1. Monitor Render dashboard for Gateway CPU/Memory spikes during the reconnect surge.
+  2. Verify that duplicate messages are not being generated (idempotency checks).
+  3. If Gateway loops in crashing, inspect `pm2` or Render logs for memory leaks.
+
+---
+
+### Playbook 6: Supabase / Database Outage
+- **Trigger**: Express API or Gateway reports persistent `Connection timeout` or `5xx` errors from Supabase REST/GraphQL endpoints.
+- **Automated Mitigation**: Express API utilizes exponential backoff for critical writes. Read queries fail fast to prevent connection pool exhaustion.
+- **Manual Actions**:
+  1. Check [Supabase Status](https://status.supabase.com).
+  2. If database is in recovery, disable heavy background jobs (e.g., `DLQProcessor`).
+  3. Post status update to end users: "Messaging is temporarily degraded."
+
+---
+
+### Playbook 7: Cloudinary (Media) Outage
+- **Trigger**: High failure rate on `CloudinaryService.uploadBase64()`.
+- **Automated Mitigation**: Rollback manager automatically cleans up local database records if the Cloudinary upload fails, preventing orphaned references.
+- **Manual Actions**:
+  1. Check Cloudinary status.
+  2. Temporarily disable avatar/banner uploads in the frontend UI if outage is prolonged.

@@ -17,7 +17,10 @@
     "ci": "npm run typecheck && npm run lint && npm run build && npm run test:e2e"
   },
   "dependencies": {
+    "@prerenderer/renderer-jsdom": "^1.1.9",
+    "@prerenderer/rollup-plugin": "^0.3.12",
     "@supabase/supabase-js": "^2.89.0",
+    "@tailwindcss/vite": "^4.2.1",
     "@types/dompurify": "^3.0.5",
     "@types/node": "^22.0.0",
     "@types/react": "^19.2.5",
@@ -35,6 +38,7 @@
     "framer-motion": "^12.23.26",
     "i18next": "^25.7.4",
     "i18next-browser-languagedetector": "^8.2.0",
+    "jsdom": "^29.1.1",
     "lucide-react": "^0.562.0",
     "peerjs": "^1.5.5",
     "postcss": "^8.5.6",
@@ -52,17 +56,14 @@
     "socket.io-client": "^4.8.3",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.2.1",
+    "terser": "^5.46.1",
     "typescript": "~5.9.3",
     "uuid": "^13.0.0",
-    "zustand": "^5.0.9",
-    "@prerenderer/renderer-jsdom": "^1.1.9",
-    "@prerenderer/rollup-plugin": "^0.3.12",
-    "@tailwindcss/vite": "^4.2.1",
-    "jsdom": "^29.1.1",
-    "terser": "^5.46.1",
-    "vite": "^6.4.1"
+    "vite": "^6.4.1",
+    "zustand": "^5.0.9"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@babel/core": "^7.29.0",
     "@playwright/test": "^1.61.1",
     "@types/uuid": "^10.0.0"

@@ -1,0 +1,47 @@
+config:
+  ensure:
+    conditions:
+      - expression: "vusers.failed == 0"
+      - expression: "errors == 0"
+  target: "{{ $processEnvironment.REALTIME_GATEWAY_URL }}"
+  phases:
+    - duration: 600
+      arrivalRate: 2
+      name: "Ramp up to base load"
+    - duration: 21600 # 6 hours
+      arrivalRate: 0.5
+      name: "6-Hour Soak Test"
+  engines:
+    socketio-v3: {}
+  payload:
+    path: "../users.csv"
+    fields:
+      - "user_id"
+      - "email"
+      - "password"
+      - "access_token"
+    order: "sequence"
+    skipHeader: true
+  processor: "../processor.js"
+
+scenarios:
+  - name: "Sustained Long-Running Connection"
+    engine: "socketio-v3"
+    flow:
+      - function: "setupVuser"
+      - emit:
+          channel: "auth"
+          data:
+            token: "{{ access_token }}"
+      - think: 5
+      - loop:
+          - function: "beforeSendMessage"
+          - emit:
+              channel: "chat:message"
+              data:
+                conversationId: "soak_test_convo"
+                content: "Soak test message from {{ user_id }}"
+                deviceId: "{{ deviceId }}"
+          # In a real soak test, users might stay idle for 5-10 minutes between messages
+          - think: 300
+        count: 72 # 72 * 5 minutes = 6 hours

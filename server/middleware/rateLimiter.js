@@ -91,3 +91,44 @@ exports.emailLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+// ── Profile & Community Rate Limiters ──────────────────
+exports.reportLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
+  message: { error: "Too many reports submitted. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+exports.blockLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 30,
+  message: { error: "Too many block actions. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+exports.uploadLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10,
+  message: { error: "Too many upload attempts. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+exports.followLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 120,
+  message: { error: "Too many follow actions. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+exports.profileViewLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 300,
+  message: { error: "Rate limit exceeded for profile views." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});

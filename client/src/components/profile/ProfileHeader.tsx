@@ -132,10 +132,12 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, isOwner, 
 
         {/* Metadata Details */}
         <div className="flex flex-wrap gap-y-3 gap-x-4 text-sm text-gray-400 mt-2 items-center">
-          {/* Mock Profession */}
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-white/5 rounded-full border border-white/10 text-white font-bold shrink-0">
-            ⭐ Creator
-          </div>
+          {/* Profession / Role */}
+          {(profile.plan_tier === 'pro' || profile.kyc_level === 'premium' || profile.kyc_level === 'admin') && (
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-white/5 rounded-full border border-white/10 text-white font-bold shrink-0">
+              ⭐ Creator
+            </div>
+          )}
           
           {profile.country_code && (
             <div className="flex items-center gap-1.5 shrink-0">

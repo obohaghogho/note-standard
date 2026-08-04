@@ -4,12 +4,14 @@ const { requireAuth } = require("../middleware/auth");
 const { 
   createCommunityPost, addComment, toggleLike, getFeed, getComments,
   toggleBookmark, deletePost, editPost, deleteComment, editComment,
-  toggleFollow, reportItem, votePollOption
+  toggleFollow, reportItem, reportUser, votePollOption
 } = require("../controllers/communityController");
 const spaceController = require("../controllers/spaceController");
 const spaceAiController = require("../controllers/spaceAiController");
 const aiTutorController = require("../controllers/aiTutorController");
 const supabase = require("../config/database");
+const { followLimiter, reportLimiter, profileViewLimiter } = require("../middleware/rateLimiter");
+const logger = require("../utils/logger");
 
 router.use(requireAuth);
 
@@ -27,8 +29,9 @@ router.delete("/comment/:commentId", deleteComment);
 
 router.post("/like", toggleLike);
 
-router.post("/report", reportItem);
-router.post("/profile/:profileId/follow", toggleFollow);
+router.post("/report", reportLimiter, reportItem);
+router.post("/report-user", reportLimiter, reportUser);
+router.post("/profile/:profileId/follow", followLimiter, toggleFollow);
 
 // ── Suggested creators / user search ────────────────────────────
 router.get("/suggested-creators", async (req, res, next) => {
@@ -106,11 +109,13 @@ const getProfileHandler = async (req, res, next, isUsername = false) => {
     const targetProfileId = profileData.id;
 
     // Check follow status & dynamic counts
-    const [{ data: follows }, { count: followersCount }, { count: followingCount }, { count: postsCount }] = await Promise.all([
+    const [{ data: follows }, { count: followersCount }, { count: followingCount }, { count: postsCount }, { data: blockData }, { data: muteData }] = await Promise.all([
       supabase.from('community_follows').select('id').eq('follower_id', userId).eq('following_id', targetProfileId).maybeSingle(),
       supabase.from('community_follows').select('*', { count: 'exact', head: true }).eq('following_id', targetProfileId),
       supabase.from('community_follows').select('*', { count: 'exact', head: true }).eq('follower_id', targetProfileId),
       supabase.from('community_posts').select('*', { count: 'exact', head: true }).eq('author_id', targetProfileId).eq('status', 'public'),
+      supabase.from('user_blocks').select('id').eq('blocker_id', userId).eq('blocked_id', targetProfileId).maybeSingle(),
+      supabase.from('status_mutes').select('id').eq('user_id', userId).eq('muted_user_id', targetProfileId).maybeSingle(),
     ]);
 
     const profile = {
@@ -141,12 +146,20 @@ const getProfileHandler = async (req, res, next, isUsername = false) => {
       return clean;
     });
 
-    res.json({ profile, posts: postsWithCommentCount, isFollowing: !!follows });
+    logger.info('Profile viewed', { event: 'profile_viewed', user_id: userId, target_user_id: targetProfileId });
+
+    res.json({ 
+      profile, 
+      posts: postsWithCommentCount, 
+      isFollowing: !!follows,
+      isBlocked: !!blockData,
+      isMuted: !!muteData
+    });
   } catch (err) { next(err); }
 };
 
-router.get("/profile/username/:identifier", (req, res, next) => getProfileHandler(req, res, next, true));
-router.get("/profile/:identifier", (req, res, next) => getProfileHandler(req, res, next, false));
+router.get("/profile/username/:identifier", profileViewLimiter, (req, res, next) => getProfileHandler(req, res, next, true));
+router.get("/profile/:identifier", profileViewLimiter, (req, res, next) => getProfileHandler(req, res, next, false));
 
 // Spaces
 router.get("/spaces", spaceController.getSpaces);

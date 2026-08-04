@@ -4,6 +4,7 @@ const chatController = require("../controllers/chatController");
 const translationController = require("../controllers/translationController");
 const { requireAuth } = require("../middleware/auth");
 const { accMiddleware } = require("../tools/acc");
+const { blockLimiter } = require("../middleware/rateLimiter");
 
 // Public Webhooks
 router.post("/messages/:messageId/webhook-deliver", chatController.webhookDeliver);
@@ -78,8 +79,8 @@ router.patch("/messages/:messageId", chatController.editMessage);
 router.post("/events", chatController.emitLedgerEvent);
 
 // User Blocking
-router.post("/block", chatController.blockUser);
-router.post("/unblock", chatController.unblockUser);
+router.post("/block", blockLimiter, chatController.blockUser);
+router.post("/unblock", blockLimiter, chatController.unblockUser);
 router.get("/blocked", chatController.getBlockedUsers);
 
 module.exports = router;

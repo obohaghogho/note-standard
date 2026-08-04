@@ -169,6 +169,20 @@ exports.getConversations = async (req, res) => {
       // Deduplicate direct conversations by peer user ID
       conversations = deduplicateDirectConversations(conversations, userId);
 
+      // Background Delivery Sync: Mark any unread conversations as delivered automatically.
+      const convsWithUnread = conversations.filter(c => c.unreadCount > 0 || c.unread_count > 0);
+      if (convsWithUnread.length > 0) {
+        const unreadConvIds = convsWithUnread.map(c => c.id);
+        supabase.from('messages')
+          .update({ delivered_at: new Date().toISOString() })
+          .in('conversation_id', unreadConvIds)
+          .neq('sender_id', userId)
+          .is('delivered_at', null)
+          .then(({ error }) => {
+            if (error) console.error('[Chat] Background delivery sync failed:', error.message);
+          });
+      }
+
       console.log(`[Chat RPC] getConversations: ${conversations.length} convs in ${Date.now() - t0}ms`);
       return res.json(conversations);
     } catch (rpcErr) {
@@ -369,7 +383,7 @@ exports.syncMessages = async (req, res) => {
         .order("created_at", { ascending: true })
         .limit(200);
       if (plainErr) throw plainErr;
-      return await _mapSenderTypeBatch(plain || []);
+      await _mapSenderTypeBatch(plain || []);
       return res.json(plain || []);
     }
 
@@ -1712,6 +1726,29 @@ exports.sendMessage = async (req, res) => {
         conversationId,
       ).then();
 
+      // --- 3a. Fast Push Notification ---
+      // Trigger native push notifications via Gateway for offline recipients
+      if (members && members.length > 0) {
+        const recipientIds = members.map(m => m.user_id).filter(id => id !== userId);
+        const senderName = safePayload.sender?.full_name || safePayload.sender?.username || 'Someone';
+        let pushText = safePayload.content || '';
+        if (safePayload.type === 'image') pushText = '📸 Sent an image';
+        if (safePayload.type === 'audio') pushText = '🎤 Sent a voice message';
+        if (!pushText && safePayload.attachment_id) pushText = '📎 Sent an attachment';
+
+        recipientIds.forEach(recipientId => {
+          dispatchFastPush({
+            receiverId: recipientId,
+            type: 'chat_message',
+            title: senderName,
+            message: pushText,
+            link: `/dashboard/chat?id=${conversationId}`,
+            messageId: safePayload.id,
+            conversationId: conversationId
+          });
+        });
+      }
+
       // --- 3b. AI Support Auto-Reply Trigger ---
       (async () => {
         try {
@@ -2494,9 +2531,10 @@ exports.blockUser = async (req, res) => {
     await realtime.emitToUser(blockedId, "chat:blocked", { blockerId });
     await realtime.emitToUser(blockerId, "chat:blocked_success", { blockedId });
 
+    logger.info("User blocked another user", { event: 'user_blocked', user_id: blockerId, target_user_id: blockedId });
     res.json({ success: true, data });
   } catch (err) {
-    console.error("Error blocking user:", err.message);
+    logger.error("Error blocking user", { error: err.message, user_id: req.user.id });
     res.status(500).json({ error: "Server Error" });
   }
 };
@@ -2518,9 +2556,10 @@ exports.unblockUser = async (req, res) => {
     await realtime.emitToUser(blockedId, "chat:unblocked", { blockerId });
     await realtime.emitToUser(blockerId, "chat:unblocked_success", { blockedId });
 
+    logger.info("User unblocked another user", { event: 'user_unblocked', user_id: blockerId, target_user_id: blockedId });
     res.json({ success: true, message: "User unblocked" });
   } catch (err) {
-    console.error("Error unblocking user:", err.message);
+    logger.error("Error unblocking user", { error: err.message, user_id: req.user.id });
     res.status(500).json({ error: "Server Error" });
   }
 };

@@ -1,0 +1,51 @@
+config:
+  ensure:
+    conditions:
+      - expression: "vusers.failed == 0"
+      - expression: "errors == 0"
+  target: "{{ $processEnvironment.REALTIME_GATEWAY_URL }}"
+  phases:
+    - duration: 60
+      arrivalRate: 2
+      name: "Warm up (Ramp to ~120 connections)"
+    - duration: 600
+      arrivalRate: 5
+      name: "Sustained load (Ramp to ~500+ connections)"
+  engines:
+    socketio-v3: {}
+  payload:
+    path: "../users.csv"
+    fields:
+      - "user_id"
+      - "email"
+      - "password"
+      - "access_token"
+    order: "sequence"
+    skipHeader: true
+  processor: "../processor.js"
+
+scenarios:
+  - name: "Connect, Authenticate, Send occasional messages"
+    engine: "socketio-v3"
+    flow:
+      - function: "setupVuser"
+      # Realtime Gateway uses access_token in the auth payload
+      - emit:
+          channel: "auth"
+          data:
+            token: "{{ access_token }}"
+      - think: 2 # Wait 2 seconds before sending first message
+      
+      # For a normal usage scenario, user sends a message every ~10s for 1 minute
+      - loop:
+          - function: "beforeSendMessage"
+          - emit:
+              channel: "chat:message"
+              data:
+                conversationId: "test_convo_id" # Real load tests might dynamically pick from the DB
+                content: "Load test message from {{ user_id }}"
+                deviceId: "{{ deviceId }}"
+              # artillery-engine-socketio-v3 supports expecting a response if the server uses ack callbacks
+              # but our server broadcasts asynchronously. We just emit.
+          - think: 10
+        count: 6

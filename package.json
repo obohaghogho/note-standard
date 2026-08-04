@@ -28,11 +28,16 @@
     "chaos:ci": "node server/tools/ciChaosGate/ciRunner.js",
     "dev:payments": "next dev",
     "build:payments": "next build",
-    "start:payments": "next start"
+    "start:payments": "next start",
+    "loadtest:seed": "node load_tests/scripts/seed_users.js",
+    "loadtest:teardown": "node load_tests/scripts/teardown_users.js",
+    "loadtest:normal": "npx artillery run load_tests/scenarios/01_normal_usage.yml",
+    "loadtest:viral": "npx artillery run load_tests/scenarios/02_viral_event.yml",
+    "loadtest:storm": "npx artillery run load_tests/scenarios/03_reconnect_storm.yml",
+    "loadtest:soak": "npx artillery run load_tests/scenarios/04_soak_test.yml"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",
-    "@supabase/supabase-js": "^2.110.6",
     "bip39": "^3.1.0",
     "cors": "^2.8.5",
     "docx": "^9.7.1",
@@ -48,10 +53,13 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.14.0",
+    "@supabase/supabase-js": "^2.112.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "ajv": "^8.12.0",
+    "artillery": "^2.0.33",
+    "artillery-engine-socketio-v3": "^1.2.0",
     "concurrently": "^8.2.2",
     "eslint": "^9.14.0",
     "eslint-config-next": "16.2.10",

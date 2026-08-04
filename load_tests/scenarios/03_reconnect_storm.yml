@@ -1,0 +1,44 @@
+config:
+  ensure:
+    conditions:
+      - expression: "vusers.failed == 0"
+      - expression: "errors == 0"
+  target: "{{ $processEnvironment.REALTIME_GATEWAY_URL }}"
+  phases:
+    - duration: 300
+      arrivalRate: 3
+      name: "Initial connect ramp"
+  engines:
+    socketio-v3: {}
+  payload:
+    path: "../users.csv"
+    fields:
+      - "user_id"
+      - "email"
+      - "password"
+      - "access_token"
+    order: "sequence"
+    skipHeader: true
+  processor: "../processor.js"
+
+scenarios:
+  - name: "Reconnect Storm"
+    engine: "socketio-v3"
+    flow:
+      - function: "setupVuser"
+      - emit:
+          channel: "auth"
+          data:
+            token: "{{ access_token }}"
+      - think: 5
+      # In artillery-engine-socketio-v3, there isn't a direct "disconnect and reconnect" built into flow loops trivially.
+      # But we can simulate rapid connect/disconnects by keeping the phase arrival rate high but connection duration short.
+      - emit:
+          channel: "chat:message"
+          data:
+            conversationId: "test_convo_id"
+            content: "Before disconnect"
+            deviceId: "{{ deviceId }}"
+      # Disconnect after sending
+      # Artillery virtual users naturally disconnect when they reach the end of the flow.
+      # To simulate reconnect storms, we use high arrival rates and short session durations.

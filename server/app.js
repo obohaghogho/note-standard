@@ -102,6 +102,7 @@ if (process.env.NODE_ENV === "production") {
 } else {
   app.use(morgan("dev"));
 }
+app.use(logger.requestLogger);
 
 // ─── Middleware ──────────────────────────────────────────────
 const { requireAuth, requireAdmin } = require("./middleware/authMiddleware");

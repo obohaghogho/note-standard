@@ -4,6 +4,7 @@ const { createNotification, broadcastNotification } = require(
 );
 const activityService = require('../services/activityService');
 const feedRetrievalService = require('../services/feed/FeedRetrievalService');
+const logger = require('../utils/logger');
 
 /**
  * Creates a community post
@@ -321,6 +322,7 @@ const toggleFollow = async (req, res, next) => {
     const { data: existing } = await supabase.from('community_follows').select('id').eq('follower_id', userId).eq('following_id', profileId).maybeSingle();
     if (existing) {
       await supabase.from('community_follows').delete().eq('id', existing.id);
+      logger.info('User unfollowed profile', { event: 'user_unfollowed', user_id: userId, target_user_id: profileId });
       return res.json({ following: false });
     } else {
       await supabase.from('community_follows').insert([{ follower_id: userId, following_id: profileId }]);
@@ -332,6 +334,7 @@ const toggleFollow = async (req, res, next) => {
         entityId: profileId,
         metadata: { followed_user_id: profileId }
       });
+      logger.info('User followed profile', { event: 'user_followed', user_id: userId, target_user_id: profileId });
       return res.json({ following: true });
     }
   } catch (err) { next(err); }
@@ -343,6 +346,32 @@ const reportItem = async (req, res, next) => {
     const { postId, commentId, reason } = req.body;
     const { data, error } = await supabase.from('community_reports').insert([{ reporter_id: userId, post_id: postId || null, comment_id: commentId || null, reason }]).select().single();
     if (error) throw error;
+    res.json(data);
+  } catch (err) { next(err); }
+};
+
+const reportUser = async (req, res, next) => {
+  try {
+    const { id: reporterId } = req.user;
+    const { reportedId, reason, description } = req.body;
+    if (!reportedId || !reason) {
+      return res.status(400).json({ error: 'Reported user ID and reason are required' });
+    }
+    const { data, error } = await supabase.from('user_reports').insert([{ 
+      reporter_id: reporterId, 
+      reported_user_id: reportedId, 
+      reason,
+      description
+    }]).select().single();
+    
+    if (error) {
+        if (error.code === '23505') {
+            return res.json({ success: true, message: 'User already reported' });
+        }
+        throw error;
+    }
+    
+    logger.info('User reported another user', { event: 'user_reported', user_id: reporterId, target_user_id: reportedId, reason });
     res.json(data);
   } catch (err) { next(err); }
 };
@@ -428,5 +457,6 @@ module.exports = {
   editComment,
   toggleFollow,
   reportItem,
+  reportUser,
   votePollOption
 };
