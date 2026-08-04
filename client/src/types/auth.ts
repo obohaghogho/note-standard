@@ -24,6 +24,8 @@ export interface Profile {
   bio?: string;
   website?: string;
   country_code?: string;
+  phone?: string;
+  kyc_level?: number;
 }
 
 export interface Subscription {

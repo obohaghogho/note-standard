@@ -3,6 +3,7 @@ import { useChatStore } from '../../stores/chatStore';
 
 export const PerformanceDashboardOverlay: React.FC = () => {
   const metrics = useChatStore((state) => state.metrics);
+  const activeConversationId = useChatStore((state) => state.activeConversationId);
   const [fps, setFps] = useState(60);
   const [isOpen, setIsOpen] = useState(false);
 
@@ -25,6 +26,17 @@ export const PerformanceDashboardOverlay: React.FC = () => {
     animId = requestAnimationFrame(calcFps);
     return () => cancelAnimationFrame(animId);
   }, []);
+
+  // Do NOT display the perf dashboard overlay inside an active chat room
+  // where a conversation between users is taking place so it never covers the message input bar.
+  // Also hide by default in production unless explicitly enabled via localStorage ('show_perf_dashboard' === 'true').
+  const isEnabledInProd = typeof window !== 'undefined' && localStorage.getItem('show_perf_dashboard') === 'true';
+  const isDev = process.env.NODE_ENV !== 'production';
+  const shouldRender = (isDev || isEnabledInProd) && !activeConversationId;
+
+  if (!shouldRender) {
+    return null;
+  }
 
   if (!isOpen) {
     return (

@@ -83,32 +83,39 @@ export const PushNotificationBanner: React.FC = () => {
     };
 
     return (
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 flex items-center justify-between shadow-md z-50">
-            <div className="flex items-center gap-3 min-w-0">
-                <div className="bg-white/20 p-2 rounded-lg flex-shrink-0">
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-3.5 py-3 sm:px-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-md z-50">
+            <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+                <div className="bg-white/20 p-2 rounded-lg flex-shrink-0 mt-0.5 sm:mt-0">
                     <Bell className="text-white" size={20} />
                 </div>
-                <div className="min-w-0">
-                    <h3 className="text-white font-medium text-sm sm:text-base leading-tight">
+                <div className="min-w-0 flex-1">
+                    <h3 className="text-white font-medium text-xs sm:text-base leading-tight">
                         {isIOS && !isStandalone ? "Enable Push Notifications on iPhone" : "Enable Push Notifications"}
                     </h3>
-                    <p className="text-blue-100 text-xs sm:text-sm mt-0.5 truncate">
+                    <p className="text-blue-100 text-[11px] sm:text-sm mt-0.5 leading-snug sm:truncate">
                         {isIOS && !isStandalone 
                             ? "Tap Share 📤 then 'Add to Home Screen' 📱 to enable push alerts." 
                             : "Never miss a message. Turn on alerts for the best experience."}
                     </p>
                 </div>
+                <button
+                    onClick={handleDismiss}
+                    className="text-blue-200 hover:text-white transition-colors p-1 sm:hidden flex-shrink-0"
+                    aria-label="Dismiss"
+                >
+                    <X size={18} />
+                </button>
             </div>
-            <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 justify-end sm:justify-start">
                 <button
                     onClick={handleEnable}
-                    className="whitespace-nowrap px-4 py-1.5 bg-white text-blue-600 text-sm font-bold rounded-full shadow-sm hover:bg-blue-50 transition-colors active:scale-95"
+                    className="w-full sm:w-auto text-center whitespace-nowrap px-4 py-2 sm:py-1.5 bg-white text-blue-600 text-xs sm:text-sm font-bold rounded-xl sm:rounded-full shadow-sm hover:bg-blue-50 transition-colors active:scale-95 cursor-pointer min-h-[38px] flex items-center justify-center"
                 >
-                    {isIOS && !isStandalone ? "How to Enable" : "Enable"}
+                    {isIOS && !isStandalone ? "How to Enable" : "Enable Notifications"}
                 </button>
                 <button
                     onClick={handleDismiss}
-                    className="text-blue-200 hover:text-white transition-colors"
+                    className="text-blue-200 hover:text-white transition-colors p-1 hidden sm:block flex-shrink-0"
                     aria-label="Dismiss"
                 >
                     <X size={20} />

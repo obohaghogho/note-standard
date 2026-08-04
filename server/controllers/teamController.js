@@ -786,3 +786,42 @@ exports.generateWebhookSecret = async (req, res, next) => {
     next(err);
   }
 };
+
+// ====================================
+// DELETE TEAM WORKSPACE
+// ====================================
+
+exports.deleteTeam = async (req, res, next) => {
+  try {
+    const { teamId } = req.params;
+    const userId = req.user.id;
+
+    const { data: team, error: fetchErr } = await supabase
+      .from('teams')
+      .select('id, owner_id, name')
+      .eq('id', teamId)
+      .single();
+
+    if (fetchErr || !team) {
+      return res.status(404).json({ error: 'Team workspace not found' });
+    }
+
+    if (team.owner_id !== userId) {
+      return res.status(403).json({ error: 'Only the team workspace owner can delete this workspace.' });
+    }
+
+    const { error: delErr } = await supabase
+      .from('teams')
+      .delete()
+      .eq('id', teamId);
+
+    if (delErr) throw delErr;
+
+    realtime.emitToUser(userId, 'team:deleted', { teamId, name: team.name });
+
+    res.json({ success: true, message: `Team workspace "${team.name}" deleted successfully` });
+  } catch (err) {
+    next(err);
+  }
+};
+

@@ -388,6 +388,11 @@ export function TeamsPage() {
                      activeTab={activeTab as any}
                      onTabChange={(tab) => setActiveTab(tab)}
                      onOpenChat={() => setActiveTab('chat')}
+                     onDeleted={() => {
+                       setSelectedTeamId(null);
+                       setActiveTab('overview');
+                       loadTeams();
+                     }}
                    />
                  )}
               </div>

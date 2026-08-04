@@ -6,6 +6,7 @@ const { requireAuth } = require("../middleware/authMiddleware");
 router.use(requireAuth);
 
 router.get("/my-teams", teamController.getMyTeams);
+router.delete("/:teamId", teamController.deleteTeam);
 router.get("/:teamId/messages", teamController.getTeamMessages);
 router.post("/:teamId/messages", teamController.sendTeamMessage);
 router.patch("/:teamId/messages/:messageId", teamController.editTeamMessage);

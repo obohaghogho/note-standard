@@ -49,13 +49,16 @@ import {
   Star,
   ExternalLink,
   Loader2,
+  AlertTriangle,
+  LogOut,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../api/axiosInstance';
 import type { Team, TeamMember } from '../../types/teams';
-import { getSharedNotes, getTeamMembers, removeMember, updateMemberRole } from '../../lib/teamsApi';
+import { getSharedNotes, getTeamMembers, removeMember, updateMemberRole, deleteTeam } from '../../lib/teamsApi';
 import SecureImage from '../common/SecureImage';
 import { cn } from '../../utils/cn';
+import { useAuth } from '../../context/AuthContext';
 
 ChartJS.register(
   CategoryScale, LinearScale, PointElement, LineElement,
@@ -159,6 +162,7 @@ interface TeamEnterpriseDashboardProps {
   onOpenChat?: () => void;
   activeTab?: WorkspaceTab;
   onTabChange?: (tab: WorkspaceTab) => void;
+  onDeleted?: () => void;
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────
@@ -169,7 +173,9 @@ export const TeamEnterpriseDashboard: React.FC<TeamEnterpriseDashboardProps> = (
   onOpenChat,
   activeTab: propActiveTab,
   onTabChange,
+  onDeleted,
 }) => {
+  const { user } = useAuth();
   const [internalActiveTab, setInternalActiveTab] = useState<WorkspaceTab>('overview');
   const activeTab = propActiveTab || internalActiveTab;
 
@@ -180,6 +186,45 @@ export const TeamEnterpriseDashboard: React.FC<TeamEnterpriseDashboardProps> = (
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const contentRef = useRef<HTMLDivElement>(null);
+
+  // Deletion / Leave state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
+  const [isDeletingTeam, setIsDeletingTeam] = useState(false);
+
+  const handleDeleteWorkspace = async () => {
+    if (myRole === 'owner' && deleteConfirmInput.trim() !== team.name.trim()) {
+      toast.error(`Please type "${team.name}" to confirm deletion`);
+      return;
+    }
+    setIsDeletingTeam(true);
+    try {
+      if (myRole === 'owner') {
+        const success = await deleteTeam(team.id);
+        if (success) {
+          toast.success('Team workspace deleted successfully');
+          setShowDeleteModal(false);
+          onDeleted?.();
+        } else {
+          toast.error('Failed to delete team workspace');
+        }
+      } else {
+        if (!user?.id) throw new Error('User session not found');
+        const success = await removeMember(team.id, user.id);
+        if (success) {
+          toast.success('You have left the team workspace');
+          setShowDeleteModal(false);
+          onDeleted?.();
+        } else {
+          toast.error('Failed to leave team workspace');
+        }
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || err.message || 'Action failed');
+    } finally {
+      setIsDeletingTeam(false);
+    }
+  };
 
   // ─── Data state ──────────────────────────────────────────────────────────
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
@@ -1240,6 +1285,46 @@ export const TeamEnterpriseDashboard: React.FC<TeamEnterpriseDashboardProps> = (
           </div>
         </div>
       </div>
+
+      {/* Danger Zone */}
+      <div className="p-6 rounded-2xl bg-red-950/20 border border-red-500/20 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="p-3 rounded-xl bg-red-500/10 text-red-400">
+            <AlertTriangle size={22} />
+          </div>
+          <div>
+            <h3 className="font-bold text-base text-red-400">Danger Zone</h3>
+            <p className="text-xs text-gray-400">
+              {myRole === 'owner' 
+                ? 'Permanently delete this team chat and workspace. This action cannot be undone.'
+                : 'Leave this team chat workspace.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="pt-2 flex justify-end">
+          {myRole === 'owner' ? (
+            <button
+              onClick={() => {
+                setDeleteConfirmInput('');
+                setShowDeleteModal(true);
+              }}
+              className="flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-red-900/30 active:scale-95"
+            >
+              <Trash2 size={15} />
+              Delete Team Chat Workspace
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/30 rounded-xl text-xs font-bold transition-all active:scale-95"
+            >
+              <LogOut size={15} />
+              Leave Team Workspace
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 
@@ -1380,6 +1465,83 @@ export const TeamEnterpriseDashboard: React.FC<TeamEnterpriseDashboardProps> = (
           {renderContent()}
         </div>
       </div>
+
+      {/* Delete / Leave Team Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-neutral-900 border border-red-500/20 rounded-2xl p-6 max-w-md w-full space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <AlertTriangle className="text-red-400" size={20} />
+                {myRole === 'owner' ? 'Delete Team Workspace' : 'Leave Team Workspace'}
+              </h3>
+              <button 
+                onClick={() => setShowDeleteModal(false)}
+                className="text-gray-400 hover:text-white text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="space-y-3">
+              <p className="text-xs text-gray-300 leading-relaxed">
+                {myRole === 'owner' ? (
+                  <>
+                    Are you sure you want to permanently delete <strong className="text-white">{team.name}</strong>? All team chat messages, files, bulletins, and member links will be permanently erased.
+                  </>
+                ) : (
+                  <>
+                    Are you sure you want to leave <strong className="text-white">{team.name}</strong>? You will lose access to team chat messages and workspace channels.
+                  </>
+                )}
+              </p>
+
+              {myRole === 'owner' && (
+                <div className="space-y-1.5 pt-2">
+                  <label className="block text-[11px] font-semibold text-gray-400">
+                    To confirm, type <span className="text-red-400 font-mono font-bold">{team.name}</span> below:
+                  </label>
+                  <input
+                    type="text"
+                    value={deleteConfirmInput}
+                    onChange={(e) => setDeleteConfirmInput(e.target.value)}
+                    placeholder={team.name}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-red-500 font-mono"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-white/5">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 text-xs font-semibold text-gray-400 hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingTeam || (myRole === 'owner' && deleteConfirmInput.trim() !== team.name.trim())}
+                onClick={handleDeleteWorkspace}
+                className="px-5 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:hover:bg-red-600 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+              >
+                {isDeletingTeam ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    {myRole === 'owner' ? 'Deleting...' : 'Leaving...'}
+                  </>
+                ) : (
+                  <>
+                    {myRole === 'owner' ? <Trash2 size={14} /> : <LogOut size={14} />}
+                    {myRole === 'owner' ? 'Delete Permanently' : 'Confirm Leave'}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

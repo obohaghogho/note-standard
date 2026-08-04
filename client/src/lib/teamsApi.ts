@@ -181,13 +181,18 @@ export async function updateTeam(teamId: string, req: UpdateTeamRequest): Promis
  */
 export async function deleteTeam(teamId: string): Promise<boolean> {
   const result = await safeCall<boolean>(`delete-team-${teamId}`, async () => {
-    const { error } = await supabase
-      .from('teams')
-      .delete()
-      .eq('id', teamId);
+    try {
+      await api.delete(`/teams/${teamId}`);
+      return true;
+    } catch {
+      const { error } = await supabase
+        .from('teams')
+        .delete()
+        .eq('id', teamId);
 
-    if (error) throw error;
-    return true;
+      if (error) throw error;
+      return true;
+    }
   }, { minDelay: 1000 });
 
   return result ?? false;

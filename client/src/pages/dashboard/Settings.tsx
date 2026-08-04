@@ -12,7 +12,7 @@ import { toast } from 'react-hot-toast';
 import { AdManager } from '../../components/ads/AdManager';
 import { adService } from '../../services/ads';
 import { Toggle } from '../../components/common/Toggle';
-import { User, Camera, Save, Loader2, Megaphone, BadgeCheck, Shield, Lock, Download, Trash2, Activity as ActivityIcon, MessageSquare, Globe } from 'lucide-react';
+import { User, Camera, Save, Loader2, Megaphone, BadgeCheck, Shield, Lock, Download, Trash2, Activity as ActivityIcon, MessageSquare, Globe, Phone } from 'lucide-react';
 import { UserBadge } from '../../components/common/UserBadge';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { KycStatusCard } from '../../components/profile/KycStatusCard';
@@ -41,6 +41,7 @@ export default function Settings() {
     const [bio, setBio] = useState('');
     const [website, setWebsite] = useState('');
     const [countryCode, setCountryCode] = useState('');
+    const [phone, setPhone] = useState('');
     const [loading, setLoading] = useState(!authProfile); // Only load if we don't have profile yet
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -92,6 +93,7 @@ export default function Settings() {
             setBio(authProfile.bio || '');
             setWebsite(authProfile.website || '');
             setCountryCode(authProfile.country_code || '');
+            setPhone(authProfile.phone || '');
             setPreferredChatLanguage(authProfile.preferred_language || 'en');
             setPrivacySettings({
                 analytics: authProfile.user_consent ?? true,
@@ -208,6 +210,7 @@ export default function Settings() {
                             bio,
                             website,
                             country_code: countryCode,
+                            phone,
                         })
                         .eq('id', user.id);
 
@@ -229,6 +232,7 @@ export default function Settings() {
                             bio,
                             website,
                             country_code: countryCode,
+                            phone,
                         }
                     });
 
@@ -828,6 +832,23 @@ export default function Settings() {
                                 />
                                 <p className="text-xs text-gray-500 mt-1">
                                     Email cannot be changed
+                                </p>
+                            </div>
+
+                            {/* Phone Number (Tier 1 Verification) */}
+                            <div>
+                                <Input
+                                    id="phone"
+                                    name="phone"
+                                    label="Phone Number (Tier 1 Verification)"
+                                    value={phone}
+                                    onChange={(e) => setPhone(e.target.value)}
+                                    placeholder="+234 801 234 5678"
+                                    className="bg-white/5"
+                                    autoComplete="tel"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Required for Tier 1 Verification & transaction limits
                                 </p>
                             </div>
 

@@ -4,6 +4,7 @@ import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import { toast } from 'react-hot-toast';
 import { walletApi } from '../../api/walletApi';
+import { supabase } from '../../lib/supabaseSafe';
 
 interface KycStatusCardProps {
   userEmail?: string;
@@ -21,8 +22,10 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
   onPhoneUpdated
 }) => {
   const [phone, setPhone] = useState(initialPhone);
+  const [phoneInput, setPhoneInput] = useState(initialPhone);
   const [bvnInput, setBvnInput] = useState('');
   const [dobInput, setDobInput] = useState('');
+  const [showTier1Modal, setShowTier1Modal] = useState(false);
   const [showTier2Modal, setShowTier2Modal] = useState(false);
   const [showTier3Modal, setShowTier3Modal] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -36,6 +39,42 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
   // Determine current active tier
   const hasPhone = Boolean(phone && phone.trim().length >= 8);
   const currentTier = kycLevel >= 3 ? 3 : (kycLevel === 2 || Boolean(initialPhone && isVerified) ? 2 : 1);
+
+  const handleTier1Submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanedPhone = phoneInput.trim();
+    if (!cleanedPhone || cleanedPhone.length < 8) {
+      toast.error('Please enter a valid phone number (at least 8 digits)');
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User session not found');
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ phone: cleanedPhone })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      await supabase.auth.updateUser({
+        data: { phone: cleanedPhone }
+      });
+
+      setPhone(cleanedPhone);
+      if (onPhoneUpdated) {
+        onPhoneUpdated(cleanedPhone);
+      }
+      toast.success('Phone number saved! Tier 1 Verification active.');
+      setShowTier1Modal(false);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save phone number');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleTier2Submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,8 +166,10 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                   <p className="text-xs text-emerald-400 font-medium">Daily Limit: 50,000 NGN</p>
                 </div>
               </div>
-              <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
-                ACTIVE
+              <span className={`text-xs px-2.5 py-1 rounded-full font-bold border ${
+                hasPhone ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+              }`}>
+                {hasPhone ? 'ACTIVE' : 'INCOMPLETE'}
               </span>
             </div>
 
@@ -152,6 +193,20 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                 <span>Standard Transfers & Wallet</span>
               </div>
             </div>
+          </div>
+
+          <div className="pt-4">
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full text-xs font-semibold border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-300"
+              onClick={() => {
+                setPhoneInput(phone || '');
+                setShowTier1Modal(true);
+              }}
+            >
+              {hasPhone ? 'Edit Phone Number' : 'Add Phone Number for Tier 1'} <ChevronRight size={14} className="ml-1" />
+            </Button>
           </div>
         </div>
 
@@ -271,6 +326,49 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
           </div>
         </div>
       </div>
+
+      {/* TIER 1 MODAL */}
+      {showTier1Modal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-neutral-900 border border-white/10 rounded-2xl p-6 max-w-md w-full space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Smartphone className="text-emerald-400" size={20} />
+                Tier 1: Phone Verification
+              </h3>
+              <button 
+                onClick={() => setShowTier1Modal(false)}
+                className="text-gray-400 hover:text-white text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs text-gray-300 leading-relaxed">
+              Add your phone number to complete Tier 1 Verification. This secures your account and enables standard wallet transfers.
+            </p>
+            <form onSubmit={handleTier1Submit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-300 mb-1">Phone Number</label>
+                <Input
+                  type="tel"
+                  placeholder="e.g. +234 801 234 5678"
+                  value={phoneInput}
+                  onChange={(e) => setPhoneInput(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="ghost" type="button" onClick={() => setShowTier1Modal(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={loading} className="bg-emerald-600 hover:bg-emerald-500 text-white">
+                  {loading ? 'Saving...' : 'Save & Verify Tier 1'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* TIER 2 MODAL */}
       {showTier2Modal && (
