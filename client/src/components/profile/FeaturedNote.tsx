@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pin, Heart, MessageCircle, Clock, ChevronRight } from 'lucide-react';
+import { Pin, ArrowRight } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 interface FeaturedNoteProps {
   note: any;
@@ -10,48 +11,27 @@ export const FeaturedNote: React.FC<FeaturedNoteProps> = ({ note, onClick }) => 
   if (!note) return null;
 
   return (
-    <div className="px-2 sm:px-6 py-4">
-      <div 
+    <div className="px-4 sm:px-6 py-4">
+      <motion.div 
+        whileHover={{ y: -2 }}
         onClick={onClick}
-        className="group relative flex flex-col bg-gradient-to-br from-indigo-950/40 to-gray-900/40 hover:from-indigo-900/50 hover:to-gray-800/50 border border-indigo-500/20 hover:border-indigo-500/40 rounded-2xl p-4 sm:p-5 cursor-pointer transition-all duration-300"
+        className="group relative flex flex-col bg-gradient-to-r from-indigo-950/60 to-purple-900/30 hover:from-indigo-900/60 hover:to-purple-800/40 border border-indigo-500/30 hover:border-indigo-400/50 rounded-2xl p-5 sm:p-6 cursor-pointer transition-all duration-300 shadow-lg shadow-indigo-900/10 overflow-hidden"
       >
-        <div className="flex items-center gap-2 mb-3">
-          <Pin size={14} className="text-indigo-400 rotate-45" />
-          <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Featured Note</span>
+        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none" />
+        
+        <div className="flex items-center gap-2 mb-2 relative z-10">
+          <Pin size={16} className="text-indigo-400 rotate-45" />
+          <span className="text-[11px] sm:text-xs font-bold text-indigo-400 uppercase tracking-widest">Featured Note</span>
         </div>
         
-        <h3 className="text-lg sm:text-xl font-bold text-white mb-2 group-hover:text-indigo-300 transition-colors line-clamp-1">
+        <h3 className="text-lg sm:text-2xl font-bold text-white mb-3 group-hover:text-indigo-300 transition-colors line-clamp-1 relative z-10 tracking-tight">
           {note.title || 'Untitled Note'}
         </h3>
         
-        <p className="text-sm text-gray-400 line-clamp-2 mb-4 leading-relaxed">
-          {note.content ? note.content.replace(/<[^>]*>?/gm, '') : 'No preview available'}
-        </p>
-        
-        <div className="flex items-center justify-between text-xs font-medium text-gray-500 mt-auto pt-4 border-t border-white/5">
-          <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1.5">
-              <Clock size={14} />
-              {new Date(note.created_at).toLocaleDateString()}
-            </span>
-            {/* Note metrics - usually private notes don't have public likes, but if it did, we show them */}
-            {note.likes_count !== undefined && (
-              <span className="flex items-center gap-1.5">
-                <Heart size={14} /> {note.likes_count}
-              </span>
-            )}
-            {note.comments_count !== undefined && (
-              <span className="flex items-center gap-1.5">
-                <MessageCircle size={14} /> {note.comments_count}
-              </span>
-            )}
-          </div>
-          
-          <div className="flex items-center text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity -translate-x-2 group-hover:translate-x-0 duration-300">
-            Read <ChevronRight size={16} className="ml-1" />
-          </div>
+        <div className="flex items-center text-indigo-400 font-bold text-sm group-hover:text-indigo-300 transition-colors relative z-10">
+          Read <ArrowRight size={16} className="ml-1.5 transition-transform group-hover:translate-x-1" />
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };
