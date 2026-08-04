@@ -20,9 +20,12 @@ jobs:
     
     # We define the staging environment variables via GitHub Secrets
     env:
+      CI: true
+      HUSKY: 0
       SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
       PLAYWRIGHT_BASE_URL: ${{ secrets.STAGING_PLAYWRIGHT_BASE_URL }}
+
 
     steps:
     - uses: actions/checkout@v4
