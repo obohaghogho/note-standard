@@ -72,3 +72,29 @@ This document contains standard operating procedures (SOPs) and incident respons
 - **Manual Actions**:
   1. Check Cloudinary status.
   2. Temporarily disable avatar/banner uploads in the frontend UI if outage is prolonged.
+
+---
+
+### Playbook 8: Sentry Alert & Incident Triaging
+- **Trigger**: Sentry alerts on error rate spike (>1% of requests) or uncaught exception in API / Realtime Gateway.
+- **Severity Classification**:
+  - **P1 (Critical)**: Payment/Ledger failure, Auth login down, Realtime Gateway crash loop.
+  - **P2 (Major)**: 500 error on non-critical endpoint, WebSocket latency > 1000ms.
+  - **P3 (Minor)**: UI render error gracefully caught by Sentry ErrorBoundary.
+- **Triage Steps**:
+  1. Open the Sentry Issue trace and extract the `correlation_id` tag.
+  2. Query server diagnostic logs by correlation ID: `grep "<correlation_id>" server/logs/*.log`.
+  3. Inspect stack trace and user context (user ID, browser version, route).
+  4. If security incident or token leak is suspected, execute immediate token revocation.
+
+---
+
+### Playbook 9: System Telemetry & Performance Monitoring
+- **Monitoring Endpoint**: `GET /api/system/metrics`
+- **Key Metrics to Track**:
+  - `memory.heapUtilizationPct`: Alert if sustained > 85% (potential memory leak).
+  - `performance.eventLoopLagMs`: Alert if > 150ms (CPU bound synchronous work blocking Express).
+  - `database.connected`: Alert immediately if `false` or `latencyMs` > 1500ms.
+- **Remediation**:
+  1. For high heap utilization: Inspect active worker queues via `WorkerManager.js` and restart the process if necessary.
+  2. For high event loop lag: Identify unindexed database queries or heavy synchronous JSON parsing.

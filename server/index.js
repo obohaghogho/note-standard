@@ -1,6 +1,10 @@
 const path = require("path");
 const logger = require("./utils/logger");
 const env = require("./config/env");
+const { initServerSentry, Sentry } = require("./config/sentry");
+
+// ─── Initialize Sentry Observability ───────────────────────────
+initServerSentry();
 
 const app = require("./app");
 const http = require("http");
@@ -18,11 +22,17 @@ const server = http.createServer(app);
 // Global Error Handlers for Process Stability
 process.on("uncaughtException", (err) => {
   logger.error("[Process] Uncaught Exception:", err);
+  if (process.env.SENTRY_DSN) {
+    Sentry.captureException(err);
+  }
   setTimeout(() => process.exit(1), 1000);
 });
 
 process.on("unhandledRejection", (reason, promise) => {
   logger.error("[Process] Unhandled Rejection at:", promise, "reason:", reason);
+  if (process.env.SENTRY_DSN) {
+    Sentry.captureException(reason instanceof Error ? reason : new Error(String(reason)));
+  }
 });
 
 const PORT = env.PORT;

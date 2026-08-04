@@ -19,10 +19,13 @@ router.get('/build-info', (req, res) => {
 });
 
 const systemStatusCtrl = require('../controllers/systemStatusController');
+const systemMetricsCtrl = require('../controllers/systemMetricsController');
 
 // GET /api/system/status     Lightweight public status endpoint for web & mobile app status badges
 // GET /api/system/trace/:id  End-to-end correlation trace linking customer, ledger, provider tx, webhooks, settlement & audit log
+// GET /api/system/metrics    Performance, memory, event loop lag, and system health metrics
 router.get('/status',    systemStatusCtrl.getPublicSystemStatus);
 router.get('/trace/:id', systemStatusCtrl.getTransactionTrace);
+router.get('/metrics',   systemMetricsCtrl.getSystemMetrics);
 
 module.exports = router;

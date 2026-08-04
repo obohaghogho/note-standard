@@ -7,6 +7,10 @@ import './i18n'
 import { APP_VERSION } from './version'
 import { API_URL } from './lib/api'
 import { initKLM } from './lib/KeyboardLayoutManager'
+import { initSentry } from './lib/sentry'
+
+// Initialize Sentry Observability
+initSentry();
 
 // Initialize Keyboard Layout Manager immediately
 initKLM();

@@ -8,8 +8,8 @@
     "start": "node server.js",
     "dev": "nodemon server.js"
   },
-
   "dependencies": {
+    "@sentry/node": "^10.69.0",
     "@supabase/supabase-js": "^2.39.0",
     "apn": "^2.2.0",
     "cors": "^2.8.5",

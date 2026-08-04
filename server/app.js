@@ -75,7 +75,10 @@ app.use((req, res, next) => {
 });
 
 const correlationId = require("./middleware/correlationId");
+const { sentryContextMiddleware, captureServerException } = require("./config/sentry");
+
 app.use(correlationId);
+app.use(sentryContextMiddleware);
 
 // ─── Webhook Pre-Parser Interceptor ──────────────────────────
 app.use((req, res, next) => {
@@ -450,6 +453,16 @@ app.use((err, req, res, next) => {
     stack: env.NODE_ENV !== "production" ? err.stack : undefined,
     details: err.details
   });
+
+  // Forward internal server errors to Sentry
+  if (statusCode >= 500) {
+    captureServerException(err, {
+      path: req.path,
+      method: req.method,
+      correlationId: req.correlationId,
+      userId: req.user?.id
+    });
+  }
   
   res.status(statusCode).json({
     success: false,

@@ -20,6 +20,18 @@ const fs = require('fs');
 const { createClient: createSupabaseClient } = require('@supabase/supabase-js');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
+const Sentry = require('@sentry/node');
+
+// ─── Sentry Observability ──────────────────────────────────────────────────
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.2 : 1.0,
+  });
+  console.info('[Observability] Sentry initialized on Realtime Gateway');
+}
+
 
 // ─── Push Environment Validation ──────────────────────────────────────────────
 // Runs at startup. Logs clear warnings for every missing push configuration
