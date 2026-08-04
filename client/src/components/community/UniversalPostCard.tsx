@@ -14,6 +14,7 @@ import {
   UserMinus,
   ExternalLink,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import type { CommunityPost } from '../../services/communityService';
@@ -201,13 +202,13 @@ export const UniversalPostCard: React.FC<Props> = ({
                 src={post.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${post.profiles?.username || 'U'}&background=6366f1&color=fff`}
                 alt={post.profiles?.username || 'User'}
                 className="w-10 h-10 rounded-full object-cover bg-gray-100 cursor-pointer"
-                onClick={() => window.location.hash = `#profile/${post.author_id}`}
+                onClick={() => post.author_id && navigate(`/dashboard/profile/${post.author_id}`)}
               />
               <div>
                 <div className="flex items-center space-x-1">
                   <h4
                     className="font-bold text-sm text-gray-900 dark:text-white hover:underline cursor-pointer"
-                    onClick={() => window.location.hash = `#profile/${post.author_id}`}
+                    onClick={() => post.author_id && navigate(`/dashboard/profile/${post.author_id}`)}
                   >
                     {post.profiles?.username || 'Unknown User'}
                   </h4>

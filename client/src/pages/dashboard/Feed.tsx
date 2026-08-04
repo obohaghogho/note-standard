@@ -133,6 +133,7 @@ export const Feed: React.FC = () => {
                 onOptimisticLike={optimisticLike}
                 onOptimisticBookmark={optimisticBookmark}
                 currentUserAvatar={profile?.avatar_url}
+                searchQuery={search}
               />
             </>
           }

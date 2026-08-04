@@ -1,7 +1,10 @@
-import React from 'react';
-import { Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Loader2, Users, BadgeCheck, Eye } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import api from '../../api/axiosInstance';
 import { UniversalPostCard } from './UniversalPostCard';
 import type { CommunityPost } from '../../services/communityService';
+import { toggleFollow } from '../../services/communityService';
 
 interface Props {
   posts: CommunityPost[];
@@ -14,6 +17,17 @@ interface Props {
   onOptimisticLike: (id: string, isLiked: boolean) => void;
   onOptimisticBookmark: (id: string, isBookmarked: boolean) => void;
   currentUserAvatar?: string;
+  searchQuery?: string;
+}
+
+interface MatchedUser {
+  id: string;
+  username: string;
+  full_name?: string;
+  avatar_url?: string;
+  is_verified?: boolean;
+  followers_count?: number;
+  is_following?: boolean;
 }
 
 const SkeletonCard = () => (
@@ -49,7 +63,51 @@ export const FeedContent: React.FC<Props> = ({
   onOptimisticLike,
   onOptimisticBookmark,
   currentUserAvatar,
+  searchQuery,
 }) => {
+  const navigate = useNavigate();
+  const [matchedUsers, setMatchedUsers] = useState<MatchedUser[]>([]);
+  const [searchingUsers, setSearchingUsers] = useState(false);
+  const [followingMap, setFollowingMap] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!searchQuery || searchQuery.trim().length < 2) {
+      setMatchedUsers([]);
+      setSearchingUsers(false);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchUsers = async () => {
+      setSearchingUsers(true);
+      try {
+        const res = await api.get(`/community/suggested-creators?search=${encodeURIComponent(searchQuery.trim())}&limit=10`);
+        if (isMounted && Array.isArray(res.data)) {
+          setMatchedUsers(res.data);
+          const map: Record<string, boolean> = {};
+          res.data.forEach((u: MatchedUser) => { map[u.id] = !!u.is_following; });
+          setFollowingMap(map);
+        }
+      } catch (err) {
+        // fail silently
+      } finally {
+        if (isMounted) setSearchingUsers(false);
+      }
+    };
+
+    fetchUsers();
+    return () => { isMounted = false; };
+  }, [searchQuery]);
+
+  const handleToggleFollow = async (userId: string) => {
+    const was = followingMap[userId];
+    setFollowingMap(prev => ({ ...prev, [userId]: !was }));
+    try {
+      await toggleFollow(userId);
+    } catch {
+      setFollowingMap(prev => ({ ...prev, [userId]: was }));
+    }
+  };
   return (
     <div className="flex-1 w-full max-w-2xl mx-auto px-4 py-6 space-y-6">
       {/* Create Post Button */}
@@ -67,6 +125,71 @@ export const FeedContent: React.FC<Props> = ({
           <span className="text-gray-500 dark:text-gray-400 text-sm">Share your knowledge…</span>
         </div>
       </button>
+
+      {/* People & Creators Search Results */}
+      {searchQuery && searchQuery.trim().length >= 2 && (
+        <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 shadow-sm border border-blue-500/20 space-y-3">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 flex items-center gap-2">
+            <Users size={14} className="text-blue-500" />
+            People & Creators ({matchedUsers.length})
+          </h3>
+
+          {searchingUsers ? (
+            <div className="flex justify-center py-4">
+              <Loader2 size={18} className="animate-spin text-blue-500" />
+            </div>
+          ) : matchedUsers.length === 0 ? (
+            <p className="text-xs text-gray-400 py-2">No matching users found for "{searchQuery}"</p>
+          ) : (
+            <div className="divide-y divide-gray-100 dark:divide-gray-800">
+              {matchedUsers.map(u => (
+                <div key={u.id} className="py-3 flex items-center justify-between gap-3">
+                  <div 
+                    onClick={() => navigate(`/dashboard/profile/${u.id}`)}
+                    className="flex items-center space-x-3 min-w-0 cursor-pointer group"
+                  >
+                    <img
+                      src={u.avatar_url || `https://ui-avatars.com/api/?name=${u.username}&background=6366f1&color=fff`}
+                      alt={u.username}
+                      className="w-10 h-10 rounded-full object-cover shrink-0 ring-2 ring-transparent group-hover:ring-blue-500 transition-all"
+                    />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1">
+                        <span className="font-bold text-sm text-gray-900 dark:text-white truncate group-hover:text-blue-500 transition-colors">
+                          {u.full_name || u.username}
+                        </span>
+                        {u.is_verified && <BadgeCheck size={14} className="text-blue-500 shrink-0" />}
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">@{u.username}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => navigate(`/dashboard/profile/${u.id}`)}
+                      className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white text-xs font-semibold rounded-xl flex items-center gap-1 transition-all cursor-pointer"
+                    >
+                      <Eye size={13} />
+                      <span>View Profile</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleToggleFollow(u.id)}
+                      className={`px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                        followingMap[u.id]
+                          ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 border border-gray-200 dark:border-gray-700'
+                          : 'bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-500/20'
+                      }`}
+                    >
+                      {followingMap[u.id] ? 'Following' : 'Follow'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Error state */}
       {error && (

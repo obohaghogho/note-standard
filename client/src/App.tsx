@@ -212,6 +212,7 @@ function App() {
                                 <Route path="trends" element={<Trends />} />
                                 <Route path="teams" element={<TeamsPage />} />
                                 <Route path="profile/:userId" element={<PublicProfilePage />} />
+                                <Route path="community/profile/:userId" element={<PublicProfilePage />} />
                                 {/* Download page is now at /download */}
                               </Route>
                             </Route>

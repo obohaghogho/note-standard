@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Send, X, Edit3, Trash2, Reply } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
@@ -26,6 +27,7 @@ interface CommentItemProps {
 }
 
 const CommentItem: React.FC<CommentItemProps> = ({ comment, postId, level = 0, onReply, onDeleted, onEdited }) => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [editMode, setEditMode] = useState(false);
   const [editText, setEditText] = useState(comment.content);
@@ -50,11 +52,15 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, postId, level = 0, o
         <img
           src={comment.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${comment.profiles?.username || 'U'}&background=6366f1&color=fff`}
           alt={comment.profiles?.username}
-          className="w-8 h-8 rounded-full object-cover shrink-0"
+          className="w-8 h-8 rounded-full object-cover shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={() => comment.author_id && navigate(`/dashboard/profile/${comment.author_id}`)}
         />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
-            <span className="text-sm font-semibold text-gray-900 dark:text-white">
+            <span
+              onClick={() => comment.author_id && navigate(`/dashboard/profile/${comment.author_id}`)}
+              className="text-sm font-semibold text-gray-900 dark:text-white cursor-pointer hover:underline"
+            >
               {comment.profiles?.username || 'User'}
             </span>
             {comment.is_edited && (

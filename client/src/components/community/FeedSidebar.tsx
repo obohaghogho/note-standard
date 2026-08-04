@@ -145,13 +145,13 @@ export const FeedSidebar: React.FC = () => {
                       src={creator.avatar_url || `https://ui-avatars.com/api/?name=${creator.username}&background=6366f1&color=fff`}
                       alt={creator.username}
                       className="w-8 h-8 rounded-full object-cover shrink-0 cursor-pointer"
-                      onClick={() => navigate(`/dashboard/community/profile/${creator.id}`)}
+                      onClick={() => navigate(`/dashboard/profile/${creator.id}`)}
                     />
                     <div className="min-w-0">
                       <div className="flex items-center gap-1">
                         <p
                           className="text-sm font-semibold text-gray-900 dark:text-white truncate hover:underline cursor-pointer"
-                          onClick={() => navigate(`/dashboard/community/profile/${creator.id}`)}
+                          onClick={() => navigate(`/dashboard/profile/${creator.id}`)}
                         >
                           {creator.username}
                         </p>
