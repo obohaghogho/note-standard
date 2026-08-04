@@ -24,6 +24,10 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Configure Git Safe Directory
+        run: git config --global --add safe.directory "*"
+
+
 
       - name: Setup Node
         uses: actions/setup-node@v4

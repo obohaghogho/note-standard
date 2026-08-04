@@ -30,7 +30,12 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
+        fetch-depth: 0
         token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Configure Git Safe Directory
+      run: git config --global --add safe.directory "*"
+
 
     
     - uses: actions/setup-node@v4
