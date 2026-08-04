@@ -30,7 +30,7 @@ export const ViewNoteModal = ({ isOpen, onClose, onEdit, onShare, note }: ViewNo
                 <div className="p-6 border-b border-white/10 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-primary/10 text-primary">
-                            {note.is_private ? <Lock size={20} /> : <Globe size={20} />}
+                            <FileText size={20} />
                         </div>
                         <div>
                             <h2 className="text-2xl font-bold text-white leading-tight">{note.title || 'Untitled'}</h2>
@@ -38,13 +38,6 @@ export const ViewNoteModal = ({ isOpen, onClose, onEdit, onShare, note }: ViewNo
                                 <span className="flex items-center gap-1 text-xs text-gray-500">
                                     <Calendar size={12} />
                                     {new Date(note.created_at).toLocaleDateString()}
-                                </span>
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium border ${
-                                    note.is_private 
-                                    ? 'bg-gray-500/10 text-gray-400 border-gray-500/20' 
-                                    : 'bg-primary/10 text-primary border-primary/20'
-                                }`}>
-                                    {note.is_private ? 'Private' : 'Public'}
                                 </span>
                                 {!isOwner && note.owner && (
                                     <span className="flex items-center gap-1 text-xs text-primary/80 ml-2">

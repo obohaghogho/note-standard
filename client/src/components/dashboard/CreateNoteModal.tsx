@@ -22,7 +22,6 @@ export const CreateNoteModal = ({ isOpen, onClose, onSuccess }: CreateNoteModalP
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [tags, setTags] = useState('');
-    const [isPrivate, setIsPrivate] = useState(true);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -52,7 +51,7 @@ export const CreateNoteModal = ({ isOpen, onClose, onSuccess }: CreateNoteModalP
                     content,
                     tags: tagArray,
                     owner_id: user.id, // Kept user.id as per original, but user?.id was in snippet. Sticking to original for minimal change.
-                    is_private: isPrivate // Added is_private
+                    is_private: true // Notes are now private by default
                 });
 
             if (error) throw error; // Used new error variable
@@ -166,20 +165,6 @@ export const CreateNoteModal = ({ isOpen, onClose, onSuccess }: CreateNoteModalP
                                 className="bg-[#121212]"
                                 autoComplete="off"
                             />
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="checkbox"
-                                id="isPrivate"
-                                name="isPrivate"
-                                checked={!isPrivate}
-                                onChange={(e) => setIsPrivate(!e.target.checked)}
-                                className="w-4 h-4 rounded border-gray-600 bg-[#121212] text-primary focus:ring-primary"
-                            />
-                            <label htmlFor="isPrivate" className="text-sm text-gray-300">
-                                Make this note public (visible in Community Feed)
-                            </label>
                         </div>
                         <div className="flex justify-end gap-3 pt-4">
                             <Button type="button" variant="ghost" onClick={onClose}>

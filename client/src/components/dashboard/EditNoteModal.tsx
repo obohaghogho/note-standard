@@ -39,7 +39,6 @@ export const EditNoteModal = ({ isOpen, onClose, onNoteUpdated, note }: EditNote
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [tags, setTags] = useState('');
-    const [isPrivate, setIsPrivate] = useState(true);
     const [isPinned, setIsPinned] = useState(false);
     const [categoryId, setCategoryId] = useState<string | null>(null);
     const [noteType, setNoteType] = useState<'text' | 'checklist' | 'voice' | 'image' | 'drawing' | 'document'>('text');
@@ -68,7 +67,6 @@ export const EditNoteModal = ({ isOpen, onClose, onNoteUpdated, note }: EditNote
             setTitle(note.title || '');
             setContent(note.content || '');
             setTags(note.tags ? note.tags.join(', ') : '');
-            setIsPrivate(note.is_private ?? true);
             setIsPinned(note.is_pinned ?? false);
             setCategoryId(note.category_id || null);
             setNoteType(note.note_type || 'text');
@@ -112,7 +110,7 @@ export const EditNoteModal = ({ isOpen, onClose, onNoteUpdated, note }: EditNote
                     title,
                     content,
                     tags: tagArray,
-                    is_private: isPrivate,
+                    is_private: true,
                     is_pinned: isPinned,
                     category_id: categoryId,
                     note_type: noteType,
@@ -144,7 +142,7 @@ export const EditNoteModal = ({ isOpen, onClose, onNoteUpdated, note }: EditNote
         }, 1500); // 1.5 seconds debounce
 
         return () => clearTimeout(delayDebounceFn);
-    }, [title, content, tags, isPrivate, isPinned, categoryId, noteType, color, reminderAt, repeatType, checklistItems, note?.id]);
+    }, [title, content, tags, isPinned, categoryId, noteType, color, reminderAt, repeatType, checklistItems, note?.id]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -165,7 +163,7 @@ export const EditNoteModal = ({ isOpen, onClose, onNoteUpdated, note }: EditNote
                 title,
                 content,
                 tags: tagArray,
-                is_private: isPrivate,
+                is_private: true,
                 is_pinned: isPinned,
                 category_id: categoryId,
                 note_type: noteType,
@@ -542,20 +540,7 @@ export const EditNoteModal = ({ isOpen, onClose, onNoteUpdated, note }: EditNote
                             </div>
                         </div>
 
-                        {/* RLS Privacy */}
-                        <div className="flex items-center gap-2 px-1">
-                            <input
-                                type="checkbox"
-                                id="editIsPrivate"
-                                name="isPrivate"
-                                checked={!isPrivate}
-                                onChange={(e) => setIsPrivate(!e.target.checked)}
-                                className="w-4 h-4 rounded border-gray-600 bg-[#121212] text-emerald-500 focus:ring-emerald-500"
-                            />
-                            <label htmlFor="editIsPrivate" className="text-xs text-gray-300 font-semibold cursor-pointer">
-                                Share publicly in Community Feed
-                            </label>
-                        </div>
+                        {/* RLS Privacy removed */}
 
                         {/* AI Copilot Panel */}
                         <div className="flex-grow flex flex-col gap-4 min-h-0">
