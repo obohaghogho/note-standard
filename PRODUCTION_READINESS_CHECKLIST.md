@@ -37,3 +37,9 @@ This checklist must be fully verified by the engineering and operations team bef
 - [ ] **Closed Beta Launch**: Platform opened to 100-500 controlled real users.
 - [ ] **Telemetry Review**: Crash frequency and API errors monitored during beta.
 - [ ] **User Feedback**: Feedback aggregated and critical UX bugs triaged.
+
+## 6. Enterprise Wallet & Treasury Architecture (Sprint 5)
+- [x] **Enterprise Collection & Deposit Allocation**: Multi-currency merchant collection accounts & unallocated deposits queue (`/admin/deposit-monitoring`, `/admin/collection-accounts`).
+- [x] **Manual Replay & Posting Engine**: `UnallocatedDepositsService` double-entry posting logic connected for crediting customer liability accounts.
+- [x] **Treasury Watchtower & Reconciliation**: Liquidity prediction engine, reserve ratio health index, and multi-sig approval queues deployed (`/admin/crypto-treasury`, `/admin/reconciliation`).
+
