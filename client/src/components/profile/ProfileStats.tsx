@@ -1,12 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import { Book, Eye, PenTool, Users, UserPlus, Heart } from 'lucide-react';
 
 interface StatItemProps {
   label: string;
   value: number;
+  icon: React.ReactNode;
   delay?: number;
+  highlight?: boolean;
   onClick?: () => void;
 }
+
+const formatNumber = (num: number) => {
+  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+  return num.toLocaleString();
+};
 
 const AnimatedCounter: React.FC<{ value: number; delay: number }> = ({ value, delay }) => {
   const [displayValue, setDisplayValue] = useState(0);
@@ -34,23 +43,30 @@ const AnimatedCounter: React.FC<{ value: number; delay: number }> = ({ value, de
     return () => clearTimeout(timeout);
   }, [value, delay]);
 
-  return <span>{displayValue.toLocaleString()}</span>;
+  return <span>{formatNumber(displayValue)}</span>;
 };
 
-const StatItem: React.FC<StatItemProps> = ({ label, value, delay = 0, onClick }) => {
+const StatItem: React.FC<StatItemProps> = ({ label, value, icon, delay = 0, highlight, onClick }) => {
   return (
     <motion.button 
       onClick={onClick}
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay }}
-      className="flex flex-col items-start px-2 py-2 sm:px-4 sm:py-3 rounded-2xl hover:bg-white/5 transition-colors text-left flex-1 min-w-0 border border-transparent hover:border-white/5"
+      className={`flex flex-col items-start p-3 sm:p-4 rounded-2xl transition-colors text-left flex-1 min-w-[90px] snap-start border ${
+        highlight 
+          ? 'bg-indigo-500/10 hover:bg-indigo-500/20 border-indigo-500/20' 
+          : 'bg-transparent hover:bg-white/5 border-transparent hover:border-white/5'
+      }`}
     >
-      <span className="text-xl sm:text-2xl md:text-3xl font-black text-white leading-none mb-1">
+      <div className="flex items-center gap-1.5 mb-2">
+        <span className={highlight ? 'text-indigo-400' : 'text-gray-400'}>{icon}</span>
+        <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-gray-400">
+          {label}
+        </span>
+      </div>
+      <span className={`text-2xl sm:text-3xl font-black leading-none ${highlight ? 'text-indigo-100' : 'text-white'}`}>
         <AnimatedCounter value={value} delay={delay} />
-      </span>
-      <span className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-500 uppercase tracking-wide truncate w-full">
-        {label}
       </span>
     </motion.button>
   );
@@ -74,13 +90,51 @@ export const ProfileStats: React.FC<ProfileStatsProps> = ({
   onStatClick
 }) => {
   return (
-    <div className="flex items-center gap-1 sm:gap-2 w-full pt-2">
-      <StatItem label="Posts" value={postsCount} delay={0.1} onClick={() => onStatClick?.('posts')} />
-      <StatItem label="Followers" value={followersCount} delay={0.15} onClick={() => onStatClick?.('followers')} />
-      <StatItem label="Following" value={followingCount} delay={0.2} onClick={() => onStatClick?.('following')} />
-      <StatItem label="Notes" value={notesCount} delay={0.25} onClick={() => onStatClick?.('notes')} />
-      <StatItem label="Reads" value={notesCount * 14} delay={0.3} onClick={() => onStatClick?.('reads')} />
-      <StatItem label="Likes" value={likesCount} delay={0.35} onClick={() => onStatClick?.('likes')} />
+    <div className="flex items-center gap-2 sm:gap-3 w-full pt-2 pb-2 overflow-x-auto scrollbar-hide snap-x">
+      <StatItem 
+        label="Notes" 
+        value={notesCount} 
+        icon={<Book size={14} />} 
+        delay={0.1} 
+        highlight
+        onClick={() => onStatClick?.('notes')} 
+      />
+      <StatItem 
+        label="Reads" 
+        value={notesCount * 14} 
+        icon={<Eye size={14} />} 
+        delay={0.15} 
+        highlight
+        onClick={() => onStatClick?.('reads')} 
+      />
+      <StatItem 
+        label="Posts" 
+        value={postsCount} 
+        icon={<PenTool size={14} />} 
+        delay={0.2} 
+        onClick={() => onStatClick?.('posts')} 
+      />
+      <StatItem 
+        label="Followers" 
+        value={followersCount} 
+        icon={<Users size={14} />} 
+        delay={0.25} 
+        onClick={() => onStatClick?.('followers')} 
+      />
+      <StatItem 
+        label="Following" 
+        value={followingCount} 
+        icon={<UserPlus size={14} />} 
+        delay={0.3} 
+        onClick={() => onStatClick?.('following')} 
+      />
+      <StatItem 
+        label="Likes" 
+        value={likesCount} 
+        icon={<Heart size={14} />} 
+        delay={0.35} 
+        onClick={() => onStatClick?.('likes')} 
+      />
     </div>
   );
 };

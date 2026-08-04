@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { CheckCircle, ShieldCheck, MapPin, Globe, Calendar, Star, Camera } from 'lucide-react';
 import SecureImage from '../common/SecureImage';
@@ -25,8 +25,37 @@ const getInitials = (name?: string, username?: string) => {
   return '?';
 };
 
+const getAvatarColor = (name: string) => {
+  const colors = [
+    'from-pink-500 to-rose-500',
+    'from-purple-500 to-indigo-500',
+    'from-blue-500 to-cyan-500',
+    'from-emerald-500 to-teal-500',
+    'from-orange-500 to-amber-500',
+    'from-red-500 to-pink-500'
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+};
+
+const getCountryName = (code: string) => {
+  try {
+    const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+    const name = regionNames.of(code.toUpperCase());
+    
+    // Quick emoji map for common ones, or use a library, but let's stick to name + code
+    return name;
+  } catch (e) {
+    return code.toUpperCase();
+  }
+};
+
 export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, isOwner, completionPercentage = 0 }) => {
   const badges = getBadges(profile);
+  const avatarBg = useMemo(() => getAvatarColor(profile.username || 'user'), [profile.username]);
   
   const handleEditClick = (type: 'avatar' | 'banner') => {
     toast.error(`Editing ${type} will be available in the next update. Head to settings for now!`);
@@ -35,7 +64,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, isOwner, 
   return (
     <div className="relative flex flex-col w-full bg-gray-950">
       {/* Banner */}
-      <div className="relative h-48 sm:h-64 md:h-72 w-full bg-gradient-to-br from-indigo-900 via-purple-900 to-gray-900 overflow-hidden group">
+      <div className="relative h-56 sm:h-64 md:h-72 w-full bg-gradient-to-br from-indigo-900 via-purple-900 to-gray-900 overflow-hidden group">
         {profile.cover_url ? (
           <SecureImage src={profile.cover_url} alt="Cover" className="w-full h-full object-cover" />
         ) : (
@@ -53,7 +82,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, isOwner, 
       </div>
 
       {/* Avatar & Info Container */}
-      <div className="px-4 sm:px-8 pb-4 -mt-16 sm:-mt-20 relative z-10 flex flex-col sm:flex-row gap-4 items-start sm:items-end justify-between">
+      <div className="px-4 sm:px-8 pb-8 -mt-20 sm:-mt-24 relative z-10 flex flex-col sm:flex-row gap-4 items-start sm:items-end justify-between">
         {/* Avatar */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
@@ -61,7 +90,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, isOwner, 
           transition={{ duration: 0.5, type: 'spring', stiffness: 200, damping: 20 }}
           className="relative group"
         >
-          <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-gray-950 bg-gray-900 overflow-hidden shadow-2xl flex items-center justify-center text-4xl sm:text-5xl font-black text-gray-400 relative">
+          <div className={`w-36 h-36 sm:w-44 sm:h-44 rounded-full border-[6px] border-gray-950 bg-gradient-to-br ${avatarBg} overflow-hidden shadow-2xl flex items-center justify-center text-5xl sm:text-6xl font-black text-white relative`}>
             {profile.avatar_url ? (
               <SecureImage src={profile.avatar_url} alt={profile.username} className="w-full h-full object-cover" />
             ) : (
@@ -81,50 +110,49 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, isOwner, 
       </div>
 
       {/* Profile Info Summary */}
-      <div className="px-4 sm:px-8 pt-2 pb-6 flex flex-col gap-4">
+      <div className="px-4 sm:px-8 pt-0 pb-6 flex flex-col gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-black text-white flex items-center gap-2 tracking-tight">
+          <h1 className="text-3xl sm:text-4xl font-black text-white flex flex-wrap items-center gap-2 tracking-tight leading-tight break-words">
             {profile.full_name || profile.username}
             {badges.map((badge, idx) => (
-              <span key={idx} title={badge.label} className="mt-1 flex items-center">
+              <span key={idx} title={badge.label} className="mt-1 flex items-center shrink-0">
                 {badge.icon}
               </span>
             ))}
           </h1>
-          <p className="text-gray-400 text-base sm:text-lg font-medium">@{profile.username}</p>
+          <p className="text-gray-400 text-base sm:text-lg font-medium mt-1">@{profile.username}</p>
         </div>
 
         {/* Bio Section */}
         {profile.bio && (
-          <p className="text-gray-200 text-base sm:text-lg leading-relaxed max-w-2xl whitespace-pre-wrap">
+          <p className="text-gray-200 text-base sm:text-lg leading-relaxed max-w-2xl whitespace-pre-wrap break-words">
             {profile.bio}
           </p>
         )}
 
         {/* Metadata Details */}
-        <div className="flex flex-wrap gap-y-3 gap-x-6 text-sm text-gray-400 mt-2">
+        <div className="flex flex-wrap gap-y-3 gap-x-4 text-sm text-gray-400 mt-2 items-center">
           {/* Mock Profession */}
-          <div className="flex items-center gap-1.5 text-gray-300 font-medium">
-            <span className="w-2 h-2 rounded-full bg-primary" />
-            Creator on NoteStandard
+          <div className="flex items-center gap-1.5 px-3 py-1 bg-white/5 rounded-full border border-white/10 text-white font-bold shrink-0">
+            ⭐ Creator
           </div>
           
           {profile.country_code && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0">
               <MapPin size={16} className="text-gray-500" />
-              <span>{profile.country_code.toUpperCase()}</span>
+              <span>{getCountryName(profile.country_code)}</span>
             </div>
           )}
           {profile.website && (
-            <div className="flex items-center gap-1.5">
-              <Globe size={16} className="text-gray-500" />
-              <a href={profile.website} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+            <div className="flex items-center gap-1.5 shrink-0 min-w-0">
+              <Globe size={16} className="text-gray-500 shrink-0" />
+              <a href={profile.website} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline truncate">
                 {profile.website.replace(/^https?:\/\//, '')}
               </a>
             </div>
           )}
           {profile.created_at && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0">
               <Calendar size={16} className="text-gray-500" />
               <span>Joined {new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
             </div>

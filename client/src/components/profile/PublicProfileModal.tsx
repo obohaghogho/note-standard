@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Loader2, ArrowLeft, UserPlus, UserCheck, MessageCircle, Share2, Sparkles, TrendingUp, Users, MoreVertical, Plus } from 'lucide-react';
+import { X, Loader2, ArrowLeft, UserPlus, UserCheck, MessageCircle, Share2, Sparkles, TrendingUp, Users, MoreVertical, Plus, Edit3 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import api from '../../api/axiosInstance';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabaseSafe';
@@ -75,6 +75,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
   const [featuredNote, setFeaturedNote] = useState<any>(null);
   const [notes, setNotes] = useState<any[]>([]);
   const [isFetchingTab, setIsFetchingTab] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
 
   const isSelf = currentUser?.id === profile?.id;
 
@@ -172,17 +173,35 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
     }
   };
 
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const y = e.currentTarget.scrollTop;
+    if (y > 200 && !scrolled) setScrolled(true);
+    if (y <= 200 && scrolled) setScrolled(false);
+  };
+
+  useEffect(() => {
+    if (isPage) {
+      const handleWindowScroll = () => {
+        const y = window.scrollY;
+        if (y > 200 && !scrolled) setScrolled(true);
+        if (y <= 200 && scrolled) setScrolled(false);
+      };
+      window.addEventListener('scroll', handleWindowScroll);
+      return () => window.removeEventListener('scroll', handleWindowScroll);
+    }
+  }, [isPage, scrolled]);
+
   const SkeletonLoader = () => (
     <div className="w-full bg-gray-950 min-h-screen animate-pulse">
-      <div className="h-48 sm:h-64 bg-gray-900 w-full"></div>
-      <div className="px-4 sm:px-8 -mt-16">
-        <div className="w-32 h-32 rounded-full bg-gray-800 border-4 border-gray-950 mb-4"></div>
+      <div className="h-56 sm:h-64 bg-gray-900 w-full"></div>
+      <div className="px-4 sm:px-8 -mt-20">
+        <div className="w-36 h-36 rounded-full bg-gray-800 border-[6px] border-gray-950 mb-4"></div>
         <div className="h-8 bg-gray-800 w-48 rounded mb-2"></div>
         <div className="h-4 bg-gray-800 w-32 rounded mb-6"></div>
         <div className="flex gap-4 mb-6">
-          <div className="h-12 bg-gray-800 w-16 rounded"></div>
-          <div className="h-12 bg-gray-800 w-16 rounded"></div>
-          <div className="h-12 bg-gray-800 w-16 rounded"></div>
+          <div className="h-16 bg-gray-800 w-20 rounded-2xl"></div>
+          <div className="h-16 bg-gray-800 w-20 rounded-2xl"></div>
+          <div className="h-16 bg-gray-800 w-20 rounded-2xl"></div>
         </div>
       </div>
     </div>
@@ -216,20 +235,35 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
   ) : 100;
 
   const MainContent = (
-    <div className="flex flex-col w-full bg-gray-950 border-x sm:border border-white/10 sm:rounded-3xl overflow-hidden shadow-2xl relative">
+    <div className="flex flex-col w-full bg-gray-950 border-x sm:border border-white/10 sm:rounded-3xl shadow-2xl relative min-h-screen sm:min-h-0">
       
-      {/* Top Navigation Overlay */}
-      <div className="absolute top-4 left-4 right-4 z-20 flex justify-between">
-        {isPage && (
-          <button onClick={() => navigate(-1)} className="p-2.5 rounded-full bg-black/40 hover:bg-black/60 text-white backdrop-blur-md transition-all shadow-lg">
-            <ArrowLeft size={18} />
-          </button>
-        )}
-        {!isPage && onClose && (
-          <button onClick={onClose} className="p-2.5 rounded-full bg-black/40 hover:bg-black/60 text-white backdrop-blur-md transition-all ml-auto shadow-lg">
-            <X size={18} />
-          </button>
-        )}
+      {/* Top Navigation Overlay & Sticky Header */}
+      <div className={`absolute sm:fixed sm:absolute top-0 left-0 right-0 z-40 transition-all duration-300 ${scrolled ? 'bg-gray-950/90 backdrop-blur-xl border-b border-white/10 py-3' : 'bg-transparent py-4'}`}>
+        <div className="px-4 flex items-center gap-4">
+          {isPage ? (
+            <button onClick={() => navigate(-1)} className={`p-2.5 rounded-full transition-all shadow-lg shrink-0 ${scrolled ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-black/40 hover:bg-black/60 text-white backdrop-blur-md'}`}>
+              <ArrowLeft size={18} />
+            </button>
+          ) : onClose ? (
+            <button onClick={onClose} className={`p-2.5 rounded-full transition-all shadow-lg shrink-0 ${scrolled ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-black/40 hover:bg-black/60 text-white backdrop-blur-md'}`}>
+              <X size={18} />
+            </button>
+          ) : null}
+          
+          <AnimatePresence>
+            {scrolled && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                className="flex flex-col min-w-0"
+              >
+                <span className="font-bold text-white truncate text-[15px]">{profile.full_name || profile.username}</span>
+                <span className="text-xs text-gray-400 truncate">{posts.length} Posts</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
       <ProfileHeader profile={profile} isOwner={isSelf} completionPercentage={completionPercentage} />
@@ -240,42 +274,43 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
           followersCount={profile.followers_count} 
           followingCount={profile.following_count} 
           notesCount={notes.length} 
+          likesCount={posts.filter(p => p.is_liked).length}
           onStatClick={(stat) => toast.success(`Viewing ${stat}`)}
         />
         
         {/* Action Buttons Row */}
-        <div className="flex items-center w-full gap-2 mt-6 pb-2 sticky top-0 z-30 bg-gray-950/80 backdrop-blur-md py-2">
+        <div className="flex items-center w-full gap-2 mt-4 pb-4 sticky top-[60px] sm:top-0 z-30 bg-gray-950/90 backdrop-blur-xl pt-2">
           {!isSelf ? (
             <>
               <button
                 onClick={handleToggleFollow}
                 disabled={followLoading}
-                className={`flex-1 px-6 py-2.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95 ${
+                className={`flex-1 h-11 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95 ${
                   isFollowing ? "bg-white/10 text-white border border-white/10" : "bg-white text-black hover:bg-gray-200"
                 }`}
               >
                 {followLoading ? <Loader2 size={18} className="animate-spin" /> : isFollowing ? <><UserCheck size={18} /> Following</> : <><Plus size={18} /> Follow</>}
               </button>
-              <button onClick={() => navigate(`/dashboard/chat?user=${profile.id}`)} className="px-4 py-2.5 bg-white/10 hover:bg-white/20 rounded-2xl text-white font-bold transition-all flex items-center gap-2 border border-white/5">
+              <button onClick={() => navigate(`/dashboard/chat?user=${profile.id}`)} className="flex-1 h-11 bg-white/10 hover:bg-white/20 rounded-2xl text-white font-bold transition-all flex items-center justify-center gap-2 border border-white/5">
                 <MessageCircle size={18} /> Message
               </button>
             </>
           ) : (
-            <button onClick={() => navigate('/dashboard/settings')} className="flex-1 px-6 py-2.5 bg-white text-black hover:bg-gray-200 rounded-2xl font-bold transition-all shadow-lg">
-              Edit Profile
+            <button onClick={() => navigate('/dashboard/settings')} className="flex-1 h-11 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-2xl font-bold transition-all shadow-sm flex items-center justify-center gap-2">
+              <Edit3 size={16} /> Edit Profile
             </button>
           )}
-          <button onClick={() => { navigator.clipboard.writeText(window.location.href); toast.success('Link copied!'); }} className="px-4 py-2.5 bg-white/10 hover:bg-white/20 rounded-2xl text-white transition-all border border-white/5" title="Share Profile">
+          <button onClick={() => { navigator.clipboard.writeText(window.location.href); toast.success('Link copied!'); }} className="w-11 h-11 shrink-0 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-2xl text-white transition-all border border-white/5" title="Share Profile">
             <Share2 size={18} />
           </button>
-          <button className="px-3 py-2.5 bg-white/5 hover:bg-white/15 rounded-2xl text-gray-400 hover:text-white transition-all border border-transparent hover:border-white/5">
+          <button className="w-11 h-11 shrink-0 flex items-center justify-center bg-white/5 hover:bg-white/15 rounded-2xl text-gray-400 hover:text-white transition-all border border-transparent hover:border-white/5">
             <MoreVertical size={18} />
           </button>
         </div>
 
         {/* Profile Completion for New Users */}
         {isSelf && completionPercentage < 100 && (
-          <div className="mt-4 p-4 rounded-2xl bg-gradient-to-r from-gray-900 to-gray-900/50 border border-white/10">
+          <div className="mt-2 p-4 rounded-2xl bg-gradient-to-r from-gray-900 to-gray-900/50 border border-white/10">
             <div className="flex justify-between items-center text-sm mb-2">
               <span className="font-bold text-white">Complete your profile</span>
               <span className="text-primary font-bold">{completionPercentage}%</span>
@@ -374,7 +409,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
 
   if (isPage) {
     return (
-      <div className="min-h-screen bg-black pt-0 sm:pt-4 pb-20 sm:pb-8 sm:p-4 md:p-6 lg:p-8 overflow-x-hidden">
+      <div className="min-h-screen bg-black pt-0 pb-20 sm:pb-8 sm:p-4 md:p-6 lg:p-8 overflow-x-hidden">
         <div className="max-w-[1050px] mx-auto flex flex-col lg:flex-row gap-6 relative items-start">
           
           {/* Main Content Column */}
@@ -452,7 +487,10 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-0 sm:p-4 overflow-y-auto">
-      <div className="w-full max-w-2xl min-h-screen sm:min-h-0 sm:max-h-[90vh] overflow-y-auto overflow-x-hidden scrollbar-hide">
+      <div 
+        className="w-full max-w-2xl min-h-screen sm:min-h-0 sm:max-h-[90vh] overflow-y-auto overflow-x-hidden scrollbar-hide relative bg-gray-950 sm:rounded-3xl"
+        onScroll={handleScroll}
+      >
         {MainContent}
       </div>
     </div>
