@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card } from '../../components/common/Card';
 import SecureImage from '../../components/common/SecureImage';
 import { Heart, MessageCircle, Share2, Bookmark, Clock } from 'lucide-react';
@@ -40,6 +41,7 @@ function getReadTime(content: string): string {
 }
 
 export const FeedNoteCard = ({ note, onCommentClick, onTagClick }: FeedNoteCardProps) => {
+    const navigate = useNavigate();
     const { user, session } = useAuth();
     const [liked, setLiked] = useState(note.user_has_liked || false);
     const [likesCount, setLikesCount] = useState(note.likes_count || 0);
@@ -107,8 +109,11 @@ export const FeedNoteCard = ({ note, onCommentClick, onTagClick }: FeedNoteCardP
             <div className="p-5">
                 {/* Author Row */}
                 <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary/30 to-secondary/30 flex items-center justify-center text-primary font-bold text-xs overflow-hidden ring-2 ring-white/5">
+                    <div 
+                        onClick={() => note.owner_id && navigate(`/dashboard/profile/${note.owner_id}`)}
+                        className="flex items-center gap-3 cursor-pointer group/author"
+                    >
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary/30 to-secondary/30 flex items-center justify-center text-primary font-bold text-xs overflow-hidden ring-2 ring-white/5 group-hover/author:ring-primary/40 transition-all">
                             {note.owner?.avatar_url ? (
                                 <SecureImage src={note.owner.avatar_url} alt={note.owner.username} className="w-full h-full object-cover" fallbackType="profile" />
                             ) : (
@@ -116,7 +121,7 @@ export const FeedNoteCard = ({ note, onCommentClick, onTagClick }: FeedNoteCardP
                             )}
                         </div>
                         <div>
-                            <div className="text-sm font-semibold text-white flex items-center gap-1">
+                            <div className="text-sm font-semibold text-white flex items-center gap-1 group-hover/author:text-primary transition-colors">
                                 {note.owner?.username || 'Unknown User'}
                                 <UserBadge
                                     planTier={note.owner?.plan_tier?.toLowerCase() as 'free' | 'pro' | 'team' | 'business' | 'enterprise'}

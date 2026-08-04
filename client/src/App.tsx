@@ -59,6 +59,8 @@ const ActivitySuccess = lazyWithRetry(() => import('./pages/ActivitySuccess'), '
 const ActivityCancel = lazyWithRetry(() => import('./pages/ActivityCancel'), 'ActivityCancel');
 const PaymentCallback = lazyWithRetry(() => import('./pages/PaymentCallback'), 'PaymentCallback');
 
+const PublicProfilePage = lazyWithRetry(() => import('./pages/dashboard/PublicProfilePage'), 'PublicProfilePage');
+
 // Dashboard pages are now static for performance and reliability
 
 const AdminDashboard = lazyWithRetry(() => import('./pages/admin/AdminDashboard'), 'AdminDashboard');
@@ -209,6 +211,7 @@ function App() {
                                 <Route path="notifications" element={<Notifications />} />
                                 <Route path="trends" element={<Trends />} />
                                 <Route path="teams" element={<TeamsPage />} />
+                                <Route path="profile/:userId" element={<PublicProfilePage />} />
                                 {/* Download page is now at /download */}
                               </Route>
                             </Route>

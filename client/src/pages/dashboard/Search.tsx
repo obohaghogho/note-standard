@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import SecureImage from '../../components/common/SecureImage';
 import { ViewNoteModal } from '../../components/dashboard/ViewNoteModal';
+import { PublicProfileModal } from '../../components/profile/PublicProfileModal';
 
 interface UserResult {
     id: string;
@@ -42,6 +43,7 @@ export const Search = () => {
     const [loading, setLoading] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
     const [viewingNote, setViewingNote] = useState<NoteResult | null>(null);
+    const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     const handleSearch = useCallback(async (explicitQuery?: string) => {
@@ -195,7 +197,8 @@ export const Search = () => {
                                 {filteredUsers?.map((u) => (
                                     <Card
                                         key={u.id}
-                                        className="p-4 flex items-center justify-between gap-4 group hover:border-primary/50 transition-all duration-300 bg-white/5"
+                                        onClick={() => setSelectedUserId(u.id)}
+                                        className="p-4 flex items-center justify-between gap-4 group hover:border-primary/50 transition-all duration-300 bg-white/5 cursor-pointer"
                                     >
                                         <div className="flex items-center gap-3 min-w-0">
                                         {u.avatar_url ? (
@@ -211,7 +214,7 @@ export const Search = () => {
                                             </div>
                                         )}
                                         <div className="flex-1 min-w-0">
-                                            <div className="font-medium text-white truncate">
+                                            <div className="font-medium text-white truncate group-hover:text-primary transition-colors">
                                                 {u.full_name || u.username}
                                             </div>
                                             <div className="text-sm text-gray-400 truncate">
@@ -222,11 +225,11 @@ export const Search = () => {
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                navigate(`/dashboard/chat?username=${u.username}`);
+                                                setSelectedUserId(u.id);
                                             }}
-                                            className="px-4 py-2 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-lg text-sm font-semibold transition-all flex-shrink-0"
+                                            className="px-4 py-2 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-xl text-sm font-semibold transition-all flex-shrink-0"
                                         >
-                                            Message
+                                            View Profile
                                         </button>
                                     </Card>
                                 ))}
@@ -308,6 +311,13 @@ export const Search = () => {
                 onClose={() => setViewingNote(null)}
                 note={viewingNote as unknown as React.ComponentProps<typeof ViewNoteModal>['note']}
             />
+
+            {selectedUserId && (
+                <PublicProfileModal
+                    userId={selectedUserId}
+                    onClose={() => setSelectedUserId(null)}
+                />
+            )}
         </div>
     );
 };
