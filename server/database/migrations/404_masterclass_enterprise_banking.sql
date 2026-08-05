@@ -5,7 +5,7 @@
 -- 1. Table for User Bank Accounts (Shared Mode A vs Individual Mode B)
 CREATE TABLE IF NOT EXISTS user_bank_accounts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   provider VARCHAR(50) NOT NULL,
   currency VARCHAR(10) NOT NULL,
   account_number VARCHAR(100) NOT NULL,
@@ -29,7 +29,7 @@ CREATE INDEX IF NOT EXISTS idx_user_bank_accounts_provider_curr ON user_bank_acc
 CREATE TABLE IF NOT EXISTS deposit_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   session_id VARCHAR(100) NOT NULL UNIQUE,
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   currency VARCHAR(10) NOT NULL,
   expected_amount NUMERIC(18,4),
   user_reference VARCHAR(100) NOT NULL,
@@ -107,7 +107,7 @@ SET enabled = EXCLUDED.enabled, updated_at = NOW();
 -- 5. Deposit Fraud Risk Screening Logs Table
 CREATE TABLE IF NOT EXISTS deposit_fraud_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id),
+  user_id UUID REFERENCES profiles(id),
   user_reference VARCHAR(100),
   risk_score INT NOT NULL,
   risk_flags JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -119,7 +119,7 @@ CREATE TABLE IF NOT EXISTS deposit_fraud_logs (
 -- 6. Comprehensive Banking Audit Logs Table
 CREATE TABLE IF NOT EXISTS banking_audit_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id),
+  user_id UUID REFERENCES profiles(id),
   admin_id UUID,
   action VARCHAR(100) NOT NULL,
   provider VARCHAR(50),
