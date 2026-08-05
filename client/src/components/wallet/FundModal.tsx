@@ -996,25 +996,47 @@ export const FundModal: React.FC<FundModalProps> = ({
                                         <span>ℹ️</span> Incoming Provider Fee Notice
                                     </p>
                                     <p className="text-[10.5px] text-blue-300/90">
-                                        Grey charges a flat fee for incoming bank transfers (ACH: $2.00, Wire: $15.00). These provider fees are recorded separately in NoteStandard's treasury and do not affect your wallet credit.
+                                        {effectivePayCurrency === 'NGN' 
+                                            ? "Fincra processes incoming Nigerian Naira (NGN) bank transfers with zero hidden deposit surcharges. Transfers settle directly into your NoteStandard wallet."
+                                            : "Grey charges a flat fee for incoming bank transfers (ACH: $2.00, Wire: $15.00). These provider fees are recorded separately in NoteStandard's treasury and do not affect your wallet credit."}
                                     </p>
                                 </div>
 
                                 {/* Deposit Boundaries Matrix */}
                                 <div className="grid grid-cols-2 gap-2 text-[11px] p-3 bg-gray-900/60 border border-gray-800 rounded-xl">
-                                    <div className="space-y-1">
-                                        <p className="font-bold text-emerald-400 text-[11px]">Supported</p>
-                                        <p className="text-gray-300">✓ ACH Transfers</p>
-                                        <p className="text-gray-300">✓ Domestic US Wires</p>
-                                        <p className="text-gray-300">✓ USD Currency</p>
-                                        <p className="text-gray-300">✓ US Domestic Banks</p>
-                                    </div>
-                                    <div className="space-y-1 border-l border-gray-800 pl-3">
-                                        <p className="font-bold text-red-400 text-[11px]">Not Supported</p>
-                                        <p className="text-gray-400">✗ SWIFT Transfers</p>
-                                        <p className="text-gray-400">✗ International Wires</p>
-                                        <p className="text-gray-400">✗ Non-USD Deposits</p>
-                                    </div>
+                                    {effectivePayCurrency === 'NGN' ? (
+                                        <>
+                                            <div className="space-y-1">
+                                                <p className="font-bold text-emerald-400 text-[11px]">Supported</p>
+                                                <p className="text-gray-300">✓ NGN Bank Transfers</p>
+                                                <p className="text-gray-300">✓ Nigerian Commercial Banks</p>
+                                                <p className="text-gray-300">✓ GTBank Virtual Accounts</p>
+                                                <p className="text-gray-300">✓ NIBSS Instant Payments (NIP)</p>
+                                            </div>
+                                            <div className="space-y-1 border-l border-gray-800 pl-3">
+                                                <p className="font-bold text-red-400 text-[11px]">Not Supported</p>
+                                                <p className="text-gray-400">✗ Foreign USD/EUR Banks</p>
+                                                <p className="text-gray-400">✗ International Wire/ACH</p>
+                                                <p className="text-gray-400">✗ Non-NGN Currency</p>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="space-y-1">
+                                                <p className="font-bold text-emerald-400 text-[11px]">Supported</p>
+                                                <p className="text-gray-300">✓ ACH Transfers</p>
+                                                <p className="text-gray-300">✓ Domestic US Wires</p>
+                                                <p className="text-gray-300">✓ USD Currency</p>
+                                                <p className="text-gray-300">✓ US Domestic Banks</p>
+                                            </div>
+                                            <div className="space-y-1 border-l border-gray-800 pl-3">
+                                                <p className="font-bold text-red-400 text-[11px]">Not Supported</p>
+                                                <p className="text-gray-400">✗ SWIFT Transfers</p>
+                                                <p className="text-gray-400">✗ International Wires</p>
+                                                <p className="text-gray-400">✗ Non-USD Deposits</p>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
 
                                 {/* Direct Deposit Slip Proof Upload */}
