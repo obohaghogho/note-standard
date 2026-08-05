@@ -3,27 +3,26 @@
 const supabase = require('../../config/database');
 const logger = require('../../utils/logger');
 const SettlementLayerRouter = require('../settlement/SettlementLayerRouter');
+const SettlementStateMachine = require('./SettlementStateMachine');
 const GreyDailyLimitService = require('./GreyDailyLimitService');
 const notificationService = require('../notificationService');
 const AuditLogService = require('../AuditLogService');
+const OutboxPublisher = require('../payment/OutboxPublisher');
 const { v4: uuidv4 } = require('uuid');
+
+const outbox = new OutboxPublisher();
 
 /**
  * WithdrawalWorkflowService
  * =========================
- * Production Payout & Withdrawal Execution Pipeline.
+ * Production Payout & Withdrawal Execution Pipeline with Rich Settlement State Machine
+ * and Transactional Outbox Pattern.
  *
- * Sequence:
- * 1. User Taps Withdraw
- * 2. Validate Auth & KYC Status
- * 3. Validate Wallet Balance
- * 4. Validate Daily Limits ($100k Cap)
- * 5. Run AML / Risk Checks
- * 6. Atomically Freeze Funds
- * 7. Create Pending Ledger Entry (Double-Entry Accounting)
- * 8. Dispatch to Settlement Router -> Settlement Provider (Grey/Fincra)
- * 9. Process Webhook Confirmation -> Mark Successful & Release Frozen Balance
- * 10. Failover / Unfreeze Funds on Failure
+ * Rich Lifecycle States:
+ * REQUESTED -> RISK_REVIEW -> FUNDS_RESERVED -> QUEUED -> SENDING -> PROVIDER_ACCEPTED -> PROVIDER_PROCESSING -> COMPLETED -> RECONCILED
+ *
+ * Failure States:
+ * PROVIDER_TIMEOUT | VALIDATION_FAILURE | REJECTED | CANCELLED | MANUAL_REVIEW
  */
 class WithdrawalWorkflowService {
   /**
@@ -42,7 +41,7 @@ class WithdrawalWorkflowService {
       accountNumber
     });
 
-    // 1. Validate Auth & KYC Status
+    // 1. Stage: REQUESTED -> Auth & KYC Check
     const { data: profile, error: pErr } = await supabase
       .from('profiles')
       .select('id, status, kyc_status, email, full_name')
@@ -57,7 +56,7 @@ class WithdrawalWorkflowService {
       throw new Error('[WithdrawalWorkflow] Account is suspended or frozen');
     }
 
-    // 2. Validate Wallet Balance & Lock Row
+    // 2. Stage: RISK_REVIEW -> Wallet Balance & Risk Engine
     const { data: wallet, error: wErr } = await supabase
       .from('wallets_store')
       .select('*')
@@ -74,16 +73,15 @@ class WithdrawalWorkflowService {
       throw new Error(`[WithdrawalWorkflow] Insufficient available balance. Required: ${numAmount} ${upCurrency}, Available: ${availableBal} ${upCurrency}`);
     }
 
-    // 3. Validate Daily Settlement Limit ($100,000 USD cap)
+    // Check Daily Settlement Limit ($100,000 USD cap)
     const capCheck = await GreyDailyLimitService.checkSettlementCapacity(numAmount, upCurrency);
     if (!capCheck.isAvailable) {
       throw new Error(`[WithdrawalWorkflow] ${capCheck.message}`);
     }
 
-    // 4. AML / Risk Engine Checks
     await this._runRiskChecks(userId, numAmount, upCurrency);
 
-    // 5. Atomically Freeze Funds in Database
+    // 3. Stage: FUNDS_RESERVED -> Atomically Freeze Balance in DB
     const newAvailBal = availableBal - numAmount;
     const { error: freezeErr } = await supabase
       .from('wallets_store')
@@ -95,7 +93,7 @@ class WithdrawalWorkflowService {
       throw new Error('[WithdrawalWorkflow] Failed to lock withdrawal balance');
     }
 
-    // 6. Create Pending Transaction & Double-Entry Ledger Record
+    // 4. Create Transaction Record & Enqueue Transactional Outbox Event
     let transaction;
     try {
       const { data: tx, error: txErr } = await supabase
@@ -106,7 +104,7 @@ class WithdrawalWorkflowService {
           amount: numAmount,
           currency: upCurrency,
           type: 'WITHDRAWAL',
-          status: 'PROCESSING',
+          status: 'FUNDS_RESERVED',
           reference_id: reference,
           idempotency_key: idempotencyKey || `idemp_wd_${reference}`,
           provider: 'grey',
@@ -116,7 +114,8 @@ class WithdrawalWorkflowService {
             account_number: accountNumber,
             account_name: accountName,
             frozen_amount: numAmount,
-            user_email: profile.email
+            user_email: profile.email,
+            state_history: ['REQUESTED', 'RISK_REVIEW', 'FUNDS_RESERVED']
           }
         })
         .select()
@@ -124,6 +123,15 @@ class WithdrawalWorkflowService {
 
       if (txErr) throw txErr;
       transaction = tx;
+
+      // Enqueue Transactional Outbox Event
+      await outbox.enqueueEvent({
+        eventType: 'PAYOUT_FUNDS_RESERVED',
+        aggregateType: 'Withdrawal',
+        aggregateId: transaction.id,
+        payload: { reference, userId, amount: numAmount, currency: upCurrency }
+      });
+
     } catch (createErr) {
       // Rollback balance freeze
       await supabase
@@ -134,8 +142,10 @@ class WithdrawalWorkflowService {
       throw new Error(`[WithdrawalWorkflow] Failed to record transaction: ${createErr.message}`);
     }
 
-    // 7. Dispatch Request to Settlement Router
+    // 5. Stage: QUEUED -> Dispatch Request to Settlement Router
     try {
+      await supabase.from('transactions').update({ status: 'QUEUED' }).eq('id', transaction.id);
+
       const { adapter, providerName } = SettlementLayerRouter.selectBestGateway({
         currency: upCurrency,
         method: 'bank_transfer'
@@ -143,6 +153,8 @@ class WithdrawalWorkflowService {
 
       const providerInstance = adapter.getInstance ? adapter.getInstance() : new (require('../settlement/GreySettlementProvider'))();
       
+      await supabase.from('transactions').update({ status: 'SENDING' }).eq('id', transaction.id);
+
       const payoutResult = await providerInstance.createPayout({
         address: accountNumber,
         amount: numAmount,
@@ -157,15 +169,25 @@ class WithdrawalWorkflowService {
         }
       });
 
-      // Update provider reference
+      const nextStatus = payoutResult.status === 'COMPLETED' ? 'COMPLETED' : 'PROVIDER_PROCESSING';
+
+      // Update provider reference & status
       await supabase
         .from('transactions')
         .update({ 
           provider: providerName,
           provider_reference: payoutResult.providerReference || reference,
-          status: payoutResult.status === 'COMPLETED' ? 'COMPLETED' : 'PROCESSING'
+          status: nextStatus
         })
         .eq('id', transaction.id);
+
+      // Enqueue Outbox event for dispatch
+      await outbox.enqueueEvent({
+        eventType: 'PAYOUT_DISPATCHED',
+        aggregateType: 'Withdrawal',
+        aggregateId: transaction.id,
+        payload: { reference, providerName, providerReference: payoutResult.providerReference }
+      });
 
       // Notify User
       await notificationService.createNotification({
@@ -189,14 +211,17 @@ class WithdrawalWorkflowService {
         success: true,
         transactionId: transaction.id,
         reference,
-        status: 'PROCESSING',
+        status: nextStatus,
         amount: numAmount,
         currency: upCurrency
       };
 
     } catch (settleErr) {
-      logger.error(`[WithdrawalWorkflow] Settlement dispatch failed: ${settleErr.message}. Executing auto-rollback...`);
-      await this.rollbackFailedWithdrawal(transaction.id, settleErr.message);
+      const isTimeout = settleErr.message.includes('timeout') || settleErr.code === 'ETIMEDOUT';
+      const failState = isTimeout ? 'PROVIDER_TIMEOUT' : 'VALIDATION_FAILURE';
+      
+      logger.error(`[WithdrawalWorkflow] Settlement dispatch failed (${failState}): ${settleErr.message}. Executing auto-rollback...`);
+      await this.rollbackFailedWithdrawal(transaction.id, settleErr.message, failState);
       throw settleErr;
     }
   }
@@ -204,8 +229,8 @@ class WithdrawalWorkflowService {
   /**
    * Rollback & Unfreeze Funds on Settlement Failure
    */
-  async rollbackFailedWithdrawal(transactionId, reason) {
-    logger.warn(`[WithdrawalWorkflow] Rolling back failed withdrawal ${transactionId}: ${reason}`);
+  async rollbackFailedWithdrawal(transactionId, reason, failState = 'REJECTED') {
+    logger.warn(`[WithdrawalWorkflow] Rolling back failed withdrawal ${transactionId} (${failState}): ${reason}`);
 
     const { data: tx } = await supabase
       .from('transactions')
@@ -213,8 +238,8 @@ class WithdrawalWorkflowService {
       .eq('id', transactionId)
       .single();
 
-    if (!tx || tx.status === 'FAILED' || tx.status === 'CANCELLED') {
-      return; // already handled
+    if (!tx || ['COMPLETED', 'RECONCILED', 'CANCELLED'].includes(tx.status)) {
+      return;
     }
 
     const { data: wallet } = await supabase
@@ -237,22 +262,22 @@ class WithdrawalWorkflowService {
         .eq('id', tx.wallet_id);
     }
 
-    // Mark Transaction as FAILED
+    // Mark Transaction as FAILED/REJECTED
     await supabase
       .from('transactions')
       .update({
-        status: 'FAILED',
-        metadata: { ...(tx.metadata || {}), failure_reason: reason, rolled_back_at: new Date().toISOString() }
+        status: failState,
+        metadata: { ...(tx.metadata || {}), failure_reason: reason, fail_state: failState, rolled_back_at: new Date().toISOString() }
       })
       .eq('id', transactionId);
 
-    // Notify User of Failure & Unfreeze
+    // Notify User
     await notificationService.createNotification({
       userId: tx.user_id,
       title: 'Withdrawal Unsuccessful',
       message: `Your withdrawal of ${tx.amount} ${tx.currency} could not be settled. Funds have been returned to your available balance.`,
       type: 'WITHDRAWAL_FAILED',
-      data: { reference: tx.reference_id, reason }
+      data: { reference: tx.reference_id, reason, failState }
     }).catch(() => {});
   }
 
@@ -266,7 +291,7 @@ class WithdrawalWorkflowService {
       .eq('reference_id', reference)
       .maybeSingle();
 
-    if (!tx || tx.status === 'COMPLETED') {
+    if (!tx || ['COMPLETED', 'RECONCILED'].includes(tx.status)) {
       return; // Idempotent skip
     }
 
@@ -290,7 +315,7 @@ class WithdrawalWorkflowService {
         .eq('id', tx.wallet_id);
     }
 
-    // Update Transaction State
+    // Update Transaction State to COMPLETED
     await supabase
       .from('transactions')
       .update({
@@ -299,6 +324,14 @@ class WithdrawalWorkflowService {
         updated_at: new Date().toISOString()
       })
       .eq('id', tx.id);
+
+    // Enqueue Outbox Event
+    await outbox.enqueueEvent({
+      eventType: 'PAYOUT_COMPLETED',
+      aggregateType: 'Withdrawal',
+      aggregateId: tx.id,
+      payload: { reference, providerReference }
+    });
 
     // Send Completion Notification
     await notificationService.createNotification({
@@ -310,9 +343,6 @@ class WithdrawalWorkflowService {
     }).catch(() => {});
   }
 
-  /**
-   * Basic AML / Velocity check engine
-   */
   async _runRiskChecks(userId, amount, currency) {
     if (amount > 50000 && currency === 'USD') {
       logger.warn(`[WithdrawalWorkflow] Large transaction flagged for user ${userId}: ${amount} ${currency}`);
