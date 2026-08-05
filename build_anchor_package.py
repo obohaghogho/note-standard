@@ -3,6 +3,10 @@ import zipfile
 import openpyxl
 import docx
 from docx.shared import Inches, Pt, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
+from docx.oxml import OxmlElement, parse_xml
+from docx.oxml.ns import nsdecls, qn
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, KeepTogether, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -167,9 +171,81 @@ print(f"[OK] Saved {FILE_EXCEL}")
 # ==============================================================================
 # 2. COMPLETE SERVICE AGREEMENT DOCX AUDIT & BLANK FIELD FIX
 # ==============================================================================
-print("[2/6] Processing Service Agreement DOCX & Filling All Blank Spaces...")
+print("[2/6] Processing Service Agreement DOCX & Filling All Blank Spaces & Schedule B SLA...")
 
 doc_sa = docx.Document(SOURCE_DOCX)
+
+def set_cell_background(cell, hex_color):
+    tcPr = cell._tc.get_or_add_tcPr()
+    tcPr.append(parse_xml(f'<w:shd {nsdecls("w")} w:fill="{hex_color}"/>'))
+
+def set_cell_margins(cell, top=100, bottom=100, left=140, right=140):
+    tcPr = cell._tc.get_or_add_tcPr()
+    tcMar = OxmlElement('w:tcMar')
+    for m, val in [('top', top), ('bottom', bottom), ('left', left), ('right', right)]:
+        node = OxmlElement(f'w:{m}')
+        node.set(qn('w:w'), str(val))
+        node.set(qn('w:type'), 'dxa')
+        tcMar.append(node)
+    tcPr.append(tcMar)
+
+def set_table_borders(table, color="CBD5E1", sz="4", val="single"):
+    tblPr = table._tbl.tblPr
+    borders = parse_xml(f'''
+        <w:tblBorders {nsdecls("w")}>
+            <w:top w:val="{val}" w:sz="{sz}" w:space="0" w:color="{color}"/>
+            <w:bottom w:val="{val}" w:sz="{sz}" w:space="0" w:color="{color}"/>
+            <w:left w:val="{val}" w:sz="{sz}" w:space="0" w:color="{color}"/>
+            <w:right w:val="{val}" w:sz="{sz}" w:space="0" w:color="{color}"/>
+            <w:insideH w:val="{val}" w:sz="{sz}" w:space="0" w:color="{color}"/>
+            <w:insideV w:val="{val}" w:sz="{sz}" w:space="0" w:color="{color}"/>
+        </w:tblBorders>
+    ''')
+    tblPr.append(borders)
+
+def create_styled_table(doc_obj, col_widths, headers, data):
+    table = doc_obj.add_table(rows=0, cols=len(headers))
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    set_table_borders(table, color="CBD5E1", sz="4")
+    
+    # Header row
+    hdr_row = table.add_row()
+    for ci, heading in enumerate(headers):
+        cell = hdr_row.cells[ci]
+        cell.text = heading
+        set_cell_background(cell, "1E293B")
+        set_cell_margins(cell, top=120, bottom=120, left=140, right=140)
+        p = cell.paragraphs[0]
+        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        for run in p.runs:
+            run.font.bold = True
+            run.font.size = Pt(8.5)
+            run.font.color.rgb = RGBColor(255, 255, 255)
+            run.font.name = 'Calibri'
+            
+    # Data rows
+    for ri, row_data in enumerate(data):
+        row = table.add_row()
+        bg_color = "F8FAFC" if ri % 2 == 1 else "FFFFFF"
+        for ci, val in enumerate(row_data):
+            cell = row.cells[ci]
+            cell.text = val
+            set_cell_background(cell, bg_color)
+            set_cell_margins(cell, top=90, bottom=90, left=140, right=140)
+            p = cell.paragraphs[0]
+            p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            for run in p.runs:
+                run.font.size = Pt(8.5)
+                run.font.color.rgb = RGBColor(30, 41, 59)
+                run.font.name = 'Calibri'
+
+    # Set widths
+    for row in table.rows:
+        for ci, w in enumerate(col_widths):
+            if ci < len(row.cells):
+                row.cells[ci].width = Inches(w)
+                
+    return table
 
 for i, p in enumerate(doc_sa.paragraphs):
     text = p.text.strip()
@@ -219,8 +295,145 @@ for i, p in enumerate(doc_sa.paragraphs):
     elif "Please find attached a list of our high risk and prohibited Jurisdictions" in text:
         p.text = "NoteStandard enforces FATF and OFAC high-risk and non-cooperative jurisdiction blacklists including North Korea (DPRK), Iran, Myanmar, Syria, and Cuba."
 
+# SLA Table 0 Data: ISSUE RESOLUTION
+table0_widths = [1.3, 2.7, 1.2, 1.3]
+table0_headers = ["REQUEST CATEGORY", "DESCRIPTION & OPERATIONAL SCOPE", "ACKNOWLEDGEMENT SLA", "TARGET RESOLUTION SLA"]
+table0_data = [
+    ["Account Request", "Virtual Account Creation (NGN & USD dedicated accounts)", "15 minutes", "2 hours"],
+    ["Account Request", "Account Profile Modifications, KYC Re-verification & Tier Upgrades", "30 minutes", "4 hours"],
+    ["Account Request", "Account Restrict / Freeze / Compliance Sanction Lock", "15 minutes", "1 hour"],
+    ["Transaction Request", "Transaction Verification & NIP Payout Status Inquiry", "15 minutes", "1 hour"],
+    ["Transaction Request", "Transaction Webhook Re-delivery & Event Re-sync", "15 minutes", "2 hours"],
+    ["Reporting Request", "Suspicious Transaction Report (STR/SAR) Data Inquiry", "2 hours", "12 hours (Mandatory filing via partners)"],
+    ["Reporting Request", "Fraud Reporting & Fraudulent Account Flagging", "1 hour", "6 hours"],
+    ["Electronic Fund Transfer", "Disputes on Electronic Transfers & Unallocated Credit Query", "30 minutes", "12 hours"],
+    ["Dispute Processing", "Card & Transfer Dispute Investigation & Chargeback Evidence", "1 hour", "24 hours"],
+    ["Other Requests", "API Configuration, IP Whitelist & Key Rotation", "30 minutes", "2 hours"],
+    ["Other Requests", "Product Inquiry & Integration Technical Clarification", "1 hour", "4 hours"],
+    ["Other Requests", "Compliance & Audit Documentation Request", "2 hours", "12 hours"]
+]
+
+# SLA Table 1 Data: PERFORMANCE INDICATORS
+table1_widths = [1.5, 1.1, 1.1, 1.1, 1.7]
+table1_headers = ["PERFORMANCE METRIC", "OPERATIONAL TARGET", "SUSPECT THRESHOLD", "CRITICAL THRESHOLD", "MEASUREMENT BASIS"]
+table1_data = [
+    ["Service Availability (Uptime)", "≥ 99.9%", "< 99.5%", "< 99.0%", "Monthly uptime across core BaaS APIs (excl. maintenance)"],
+    ["API Response Latency (P95)", "≤ 500 ms", "> 1,500 ms", "> 3,000 ms", "95th percentile response time over 5-min rolling windows"],
+    ["Transaction Processing Time", "≤ 3.0 seconds", "> 7.0 seconds", "> 15.0 seconds", "End-to-end execution from API call to partner bank response"],
+    ["Transaction Success Rate", "≥ 99.0%", "< 95.0%", "< 90.0%", "Ratio of successful transactions vs valid processing attempts"],
+    ["Webhook Delivery Success Rate", "≥ 99.9%", "< 98.0%", "< 95.0%", "Successful webhook receipt within 3 retries over rolling 24h"],
+    ["Webhook Delivery Latency (P95)", "≤ 2.0 seconds", "> 10.0 seconds", "> 30.0 seconds", "Time elapsed between core ledger event and webhook receipt"],
+    ["Daily Reconciliation Availability", "By 06:00 WAT", "By 09:00 WAT", "After 12:00 WAT", "Availability of daily transaction & settlement clearance files"]
+]
+
+# SLA Table 2 Data: SEVERITY, INCIDENT RESPONSE AND RESOLUTION MATRIX
+table2_widths = [1.2, 2.5, 0.9, 0.9, 1.0]
+table2_headers = ["SEVERITY LEVEL", "BUSINESS IMPACT DEFINITION", "INITIAL RESPONSE", "UPDATE FREQUENCY", "TARGET RESOLUTION"]
+table2_data = [
+    [
+        "P1 – CRITICAL (Emergency)",
+        "Complete service outage, core BaaS API failure, total virtual account provisioning failure, or systemic NIP transfer outage affecting all end-users with severe financial/regulatory risk.",
+        "15 minutes (24/7/365)",
+        "Every 30 mins",
+        "Within 2 hours"
+    ],
+    [
+        "P2 – MAJOR (High Impact)",
+        "Partial service disruption, delayed webhook delivery, single bank partner degradation, or transaction latency affecting a significant portion of user transactions with no immediate workaround.",
+        "30 minutes",
+        "Every 1 hour",
+        "Within 6 hours"
+    ],
+    [
+        "P3 – MINOR (Medium Impact)",
+        "Non-critical feature impairment, minor reporting/dashboard delay, sporadic latency on non-vital endpoints, or individual account query issue where an acceptable workaround exists.",
+        "2 hours (Business Hours)",
+        "Every 4 hours",
+        "Within 24 hours"
+    ],
+    [
+        "P4 – LOW (Informational / Enhancement)",
+        "Cosmetic UI/documentation issues, minor inquiry, enhancement request, or general technical clarification with zero operational impact on active transactions.",
+        "4 hours (Business Hours)",
+        "Every 24 hours",
+        "Within 48 hours / Next Release"
+    ]
+]
+
+# SLA Table 3 Data: ESCALATION CHANNELS
+table3_widths = [0.6, 1.4, 1.2, 1.7, 1.6]
+table3_headers = ["LEVEL", "ESCALATION TIER & ROLE", "RESPONSE SLA & TRIGGER", "ANCHOR CONTACT DETAILS", "CLIENT (NOTESTANDARD) CONTACT"]
+table3_data = [
+    [
+        "Level 1",
+        "Technical Support & Incident Intake",
+        "15 mins (P1/P2) / 1 hr (P3/P4)",
+        "Technical Partnership Support\nEmail: support@getanchor.co / hello@getanchor.co\nSlack: #notestandard-anchor-support",
+        "Engineering Support Lead\nEmail: support@notestandard.com / tech@notestandard.com\nPhone: +234 705 182 4027"
+    ],
+    [
+        "Level 2",
+        "Operations Analyst & Infrastructure Lead",
+        "30 mins (P1) / 2 hrs (P2/P3)\n(30% of SLA elapsed)",
+        "Precious Ehiwario (Operations Lead)\nEmail: precious@getanchor.co",
+        "Head of Fintech Operations & Infrastructure\nEmail: ops@notestandard.com\nPhone: +234 705 182 4027"
+    ],
+    [
+        "Level 3",
+        "Head of Product & Technical Operations",
+        "1 hr (P1) / 4 hrs (P2/P3)\n(50% of SLA elapsed)",
+        "Tayo Brahm (Head of Product) / Olamide Sobowale\nEmail: tayo@getanchor.co / olamide@getanchor.co",
+        "Chief Technology Officer / Product Lead\nEmail: admin@notestandard.com\nPhone: +234 705 182 4027"
+    ],
+    [
+        "Level 4",
+        "Emergency / Executive C-Suite (24/7)",
+        "Immediate / 24/7\n(75% of SLA elapsed or P1 Emergency)",
+        "Segun Adeyemi (Chief Executive Officer)\nEmail: segun@getanchor.co\nLine: 24/7 Emergency Line",
+        "Oboh Aghogho Jossy (Founder & CEO)\nEmail: admin@notestandard.com / jossy@notestandard.com\nPhone: +234 705 182 4027 (24/7)"
+    ]
+]
+
+# Create 4 new styled tables
+table0 = create_styled_table(doc_sa, table0_widths, table0_headers, table0_data)
+table1 = create_styled_table(doc_sa, table1_widths, table1_headers, table1_data)
+table2 = create_styled_table(doc_sa, table2_widths, table2_headers, table2_data)
+table3 = create_styled_table(doc_sa, table3_widths, table3_headers, table3_data)
+
+# Remove the old original incomplete tables (first 4 tables in source)
+for old_tbl in list(doc_sa.tables[:4]):
+    old_tbl._tbl.getparent().remove(old_tbl._tbl)
+
+# Locate paragraphs in Schedule B
+p_issue = None
+p_perf = None
+p_sev = None
+p_esc_intro = None
+
+for p in doc_sa.paragraphs:
+    txt = p.text.strip()
+    if txt == "ISSUE RESOLUTION":
+        p_issue = p
+    elif txt == "PERFORMANCE INDICATORS":
+        p_perf = p
+    elif txt == "SEVERITY, INCIDENT RESPONSE AND RESOLUTION":
+        p_sev = p
+    elif "Where the issue is not resolved based on the above service levels" in txt:
+        p_esc_intro = p
+
+if p_issue:
+    p_issue._p.addnext(table0._tbl)
+if p_perf:
+    p_perf._p.addnext(table1._tbl)
+if p_sev:
+    p_sev._p.addnext(table2._tbl)
+if p_esc_intro:
+    p_esc_intro._p.addnext(table3._tbl)
+
+# Save DOCX files
 doc_sa.save(FILE_DOCX)
-print(f"[OK] Saved {FILE_DOCX}")
+doc_sa.save(os.path.join(WORKSPACE_DIR, "NoteStandard_Anchor_Client_Service_Agreement.docx"))
+print(f"[OK] Saved {FILE_DOCX} and root NoteStandard_Anchor_Client_Service_Agreement.docx")
 
 # ==============================================================================
 # 3. FINCRA INDEMNITY PDF WITH EXTRACTED SIGNATURE & SEAL
