@@ -5,8 +5,6 @@ on:
   push:
     branches: [ main ]
 
-
-
 permissions:
   contents: read
 
@@ -18,21 +16,17 @@ jobs:
   chaos:
     runs-on: ubuntu-latest
 
-
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure Git Safe Directory
         run: git config --global --add safe.directory "*"
 
-
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: '22'
+          cache: 'npm'
 
       - name: Install Dependencies
         run: npm install
@@ -43,7 +37,6 @@ jobs:
       - name: Run ACC War-Game + Certification Gate (standalone)
         run: npm run chaos:ci
         env:
-          # Skip the live-server Phase 6.3 check in CI (no DB available)
           CI_SKIP_LIVE_SERVER: true
 
       # ── Upload report artifact ────────────────────────────────────
