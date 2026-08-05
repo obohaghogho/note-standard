@@ -191,7 +191,7 @@ exports.depositCard = async (req, res, next) => {
     const callbackUrl = `${sanitiseOrigin(req.headers.origin, defaultOrigin)}/payment/callback`;
 
     const upCurr = String(currency).toUpperCase();
-    const chosenProvider = req.body.provider || (['USD', 'EUR', 'GBP'].includes(upCurr) ? 'grey' : 'fincra');
+    const chosenProvider = req.body.provider || 'fincra';
 
     const result = await paymentService.initializePayment(
       req.user.id,
