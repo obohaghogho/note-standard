@@ -375,9 +375,9 @@ function WalletHubContent() {
                     <p className="text-xs text-gray-400">On-chain blockchain deposits, confirmations, network fees, & wallet addresses.</p>
                   </div>
                 </div>
-                <div className="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-medium flex items-center gap-1.5">
-                  <ShieldAlert size={14} className="text-amber-400 shrink-0" />
-                  <span>On-Chain Custody Integration Coming Soon</span>
+                <div className="px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-medium flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                  <span>NOWPayments Institutional Custody Active</span>
                 </div>
               </div>
 
