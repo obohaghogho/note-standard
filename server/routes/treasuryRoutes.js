@@ -29,5 +29,6 @@ router.post('/payout', treasuryController.processPayout);
 router.post('/rebalance', requireAdmin, treasuryController.triggerRebalance);
 router.post('/reconcile', requireAdmin, treasuryController.triggerReconciliation);
 router.post('/fund-provider', requireAdmin, treasuryController.fundProvider);
+router.get('/slo-metrics', treasuryController.getSloMetrics);
 
 module.exports = router;

@@ -21,14 +21,15 @@ class UserBankReferenceService {
    * Generate a random 7-character alphanumeric string formatted as NS-XXXXXXX.
    * Example: NS-9X2AB71
    */
-  generateCode() {
-    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // Exclude easily confused chars (0, O, 1, I)
+  generateCode(currency = null) {
+    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
     let code = '';
     const bytes = crypto.randomBytes(7);
     for (let i = 0; i < 7; i++) {
       code += chars[bytes[i] % chars.length];
     }
-    return `NS-${code}`;
+    const prefix = currency ? `NS-${String(currency).toUpperCase()}-` : 'NS-';
+    return `${prefix}${code}`;
   }
 
   /**
@@ -118,7 +119,8 @@ class UserBankReferenceService {
       }
 
       const hash = crypto.createHash('md5').update(`${userId}-${prov}`).digest('hex').substring(0, 7).toUpperCase();
-      const fallbackRef = `NS-${hash}`;
+      const prefix = prov === 'fincra' ? 'NS-NGN-' : 'NS-';
+      const fallbackRef = `${prefix}${hash}`;
       this.fallbackMemoryStore.set(storeKey, fallbackRef);
       return fallbackRef;
     } catch (err) {
@@ -128,7 +130,8 @@ class UserBankReferenceService {
         return this.fallbackMemoryStore.get(storeKey);
       }
       const hash = crypto.createHash('md5').update(`${userId}-${prov}`).digest('hex').substring(0, 7).toUpperCase();
-      const fallbackRef = `NS-${hash}`;
+      const prefix = prov === 'fincra' ? 'NS-NGN-' : 'NS-';
+      const fallbackRef = `${prefix}${hash}`;
       this.fallbackMemoryStore.set(storeKey, fallbackRef);
       return fallbackRef;
     }

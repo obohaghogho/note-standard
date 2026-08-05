@@ -162,3 +162,14 @@ exports.fundProvider = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+
+exports.getSloMetrics = async (req, res) => {
+  try {
+    const SloMonitoringService = require('../services/treasury/SloMonitoringService');
+    const data = await SloMonitoringService.getSloMetrics();
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    logger.error(`[treasuryController] getSloMetrics error: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};

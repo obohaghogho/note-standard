@@ -73,7 +73,7 @@ class GreyBankingProvider extends IBankingProvider {
       providerId: 'grey',
       name: 'Grey Finance (Lead Bank USD)',
       bankName: this.bankName,
-      supportedCurrencies: ['USD', 'EUR', 'GBP', 'NGN'],
+      supportedCurrencies: ['USD', 'EUR', 'GBP'],
       supportsACH: true,
       supportsWire: true,
       supportsSWIFT: false,

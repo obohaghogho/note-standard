@@ -754,10 +754,10 @@ export const FundModal: React.FC<FundModalProps> = ({
                                         <span className="text-gray-400 font-semibold">Provider:</span>
                                         <span className="bg-purple-600/20 text-purple-300 px-2.5 py-1 rounded-md font-bold flex items-center gap-1.5 border border-purple-500/30">
                                             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                                            GREY | Lead Bank (USA)
+                                            {effectivePayCurrency === 'NGN' ? 'FINCRA | Guaranty Trust Bank' : 'GREY | Lead Bank (USA)'}
                                         </span>
                                     </div>
-                                    <span className="text-emerald-400 font-bold text-[11px]">✓ Live Settlement</span>
+                                    <span className="text-emerald-400 font-bold text-[11px]">✓ Live Virtual Account</span>
                                 </div>
 
                                 {/* Transfer Type Selector */}

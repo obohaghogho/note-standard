@@ -1,16 +1,21 @@
 'use strict';
 
-const logger = require('../../utils/logger');
-const GreyBankingProvider = require('./GreyBankingProvider');
-const FincraSettlementProvider = require('./FincraSettlementProvider');
-const AnchorSettlementProvider = require('./AnchorSettlementProvider');
-
 /**
- * BankingProviderRouter
- * =====================
- * Provider-agnostic banking & collection router.
- * Dynamically selects banking providers based on capabilities, currency, and rail requirements.
+ * server/services/settlement/BankingProviderRouter.js
+ * ====================================================
+ * Provider-Agnostic Multi-Factor Banking & Collection Router.
+ * Features:
+ *  - Evaluates Currency, Rail, Provider Health Score (0-100), and DB Capabilities.
+ *  - Routes NGN to FincraBankingProviderV1 (Guaranty Trust Bank).
+ *  - Routes USD to GreyBankingProviderV1 (Lead Bank).
+ *  - Extensible for future providers (Anchor, Rapyd, Cignum) without UI or ledger code changes.
  */
+
+const logger = require('../../utils/logger');
+const FincraBankingProviderV1 = require('./FincraBankingProviderV1');
+const GreyBankingProviderV1 = require('./GreyBankingProviderV1');
+const ProviderHealthScorerService = require('./ProviderHealthScorerService');
+
 class BankingProviderRouter {
   constructor() {
     this.providers = new Map();
@@ -18,56 +23,64 @@ class BankingProviderRouter {
   }
 
   _registerDefaultProviders() {
-    const grey = new GreyBankingProvider();
-    this.providers.set(grey.getProviderId(), grey);
+    const fincra = new FincraBankingProviderV1();
+    this.providers.set(fincra.getProviderId().toLowerCase(), fincra);
 
-    try {
-      const fincra = new FincraSettlementProvider();
-      this.providers.set('fincra', fincra);
-    } catch { /* optional provider */ }
-
-    try {
-      const anchor = new AnchorSettlementProvider();
-      this.providers.set('anchor', anchor);
-    } catch { /* optional provider */ }
+    const grey = new GreyBankingProviderV1();
+    this.providers.set(grey.getProviderId().toLowerCase(), grey);
   }
 
   registerProvider(providerInstance) {
     if (!providerInstance || typeof providerInstance.getProviderId !== 'function') {
       throw new Error('Invalid banking provider instance');
     }
-    this.providers.set(providerInstance.getProviderId(), providerInstance);
-    logger.info(`[BankingProviderRouter] Registered banking provider: ${providerInstance.getProviderId()}`);
+    const id = String(providerInstance.getProviderId()).toLowerCase();
+    this.providers.set(id, providerInstance);
+    logger.info(`[BankingProviderRouter] Registered banking provider: ${id} (${providerInstance.getVersion?.() || 'v1'})`);
   }
 
-  getProvider(providerId = 'grey') {
-    const provider = this.providers.get(String(providerId).toLowerCase());
+  getProvider(providerId) {
+    const pId = String(providerId || 'fincra').toLowerCase();
+    const provider = this.providers.get(pId);
     if (!provider) {
       throw new Error(`Banking provider '${providerId}' not registered`);
     }
     return provider;
   }
 
-  selectBestBankingProvider({ currency = 'USD', rail = 'ACH' }) {
+  /**
+   * Multi-Factor Provider Routing Engine.
+   * Evaluates currency, rail, capabilities, and health score (0-100).
+   */
+  selectBestBankingProvider({ currency = 'NGN', rail = 'BANK_TRANSFER' }) {
     const upCurr = String(currency).toUpperCase();
-    const upRail = String(rail).toUpperCase();
+    const candidates = [];
 
     for (const [id, instance] of this.providers.entries()) {
-      if (typeof instance.getCapabilities !== 'function') continue;
       const caps = instance.getCapabilities();
 
       if (caps.supportedCurrencies && caps.supportedCurrencies.includes(upCurr)) {
-        if (upRail === 'ACH' && caps.supportsACH) return { providerId: id, provider: instance };
-        if (upRail === 'WIRE' && caps.supportsWire) return { providerId: id, provider: instance };
-        return { providerId: id, provider: instance };
+        const healthReport = ProviderHealthScorerService.getHealthReport(id);
+        candidates.push({
+          providerId: id,
+          provider: instance,
+          healthScore: healthReport.healthScore,
+          status: healthReport.status
+        });
       }
     }
 
-    // Default fallback
-    return { providerId: 'grey', provider: this.getProvider('grey') };
+    if (candidates.length === 0) {
+      const fallbackId = upCurr === 'USD' ? 'grey' : 'fincra';
+      return { providerId: fallbackId, provider: this.getProvider(fallbackId) };
+    }
+
+    // Sort by Health Score descending
+    candidates.sort((a, b) => b.healthScore - a.healthScore);
+    return candidates[0];
   }
 
-  async getDepositInstructions({ currency = 'USD', rail = 'ACH', userId }) {
+  async getDepositInstructions({ currency = 'NGN', rail = 'BANK_TRANSFER', userId }) {
     const { provider } = this.selectBestBankingProvider({ currency, rail });
     return provider.createDepositInstructions({ currency, rail, userId });
   }
