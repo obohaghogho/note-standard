@@ -4,36 +4,47 @@
  * treasuryController.js
  * =====================
  * API Controller exposing HTTP endpoints for the Enterprise Treasury & Liquidity Platform.
- *
- * Endpoints:
- *   - GET  /api/treasury/overview             - Complete platform status & telemetry
- *   - GET  /api/treasury/predictive-liquidity - Predictive liquidity forecasts
- *   - GET  /api/treasury/ai-risk              - AI intelligence & risk report
- *   - POST /api/treasury/rebalance            - Trigger auto-rebalance check
- *   - POST /api/treasury/reconcile            - Trigger automated checksummed reconciliation
- *   - POST /api/treasury/fund-provider        - Fund provider from Treasury Vault
- *
- * @module controllers/treasuryController
  */
 
 const enterpriseTreasuryEngine = require('../services/treasury/EnterpriseTreasuryEngine');
 const liquidityPredictionEngine = require('../services/treasury/LiquidityPredictionEngine');
+const GreyDailyLimitService = require('../services/treasury/GreyDailyLimitService');
+const ReconciliationEngine = require('../services/treasury/ReconciliationEngine');
+const WithdrawalWorkflowService = require('../services/treasury/WithdrawalWorkflowService');
 const logger = require('../utils/logger');
 
 exports.getOverview = async (req, res) => {
   try {
     const overview = await enterpriseTreasuryEngine.getDashboardOverview();
-    res.status(200).json({ success: true, data: overview });
+    const greyDailyCapacity = await GreyDailyLimitService.checkSettlementCapacity(0, 'USD');
+
+    res.status(200).json({ 
+      success: true, 
+      data: {
+        ...overview,
+        greyDailyCapacity
+      } 
+    });
   } catch (err) {
     logger.error(`[treasuryController] getOverview error: ${err.message}`);
     res.status(500).json({ success: false, error: err.message });
   }
 };
 
+exports.getGreyDailyLimit = async (req, res) => {
+  try {
+    const capacity = await GreyDailyLimitService.checkSettlementCapacity(0, 'USD');
+    res.status(200).json({ success: true, data: capacity });
+  } catch (err) {
+    logger.error(`[treasuryController] getGreyDailyLimit error: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
 exports.getPredictiveLiquidity = async (req, res) => {
   try {
-    const provider = req.query.provider || 'FINCRA';
-    const currency = req.query.currency || 'NGN';
+    const provider = req.query.provider || 'GREY';
+    const currency = req.query.currency || 'USD';
     const forecast = await liquidityPredictionEngine.predictLiquidity(provider, currency, 60);
     res.status(200).json({ success: true, data: forecast });
   } catch (err) {
@@ -64,11 +75,31 @@ exports.triggerRebalance = async (req, res) => {
 
 exports.triggerReconciliation = async (req, res) => {
   try {
-    const report = await enterpriseTreasuryEngine.runReconciliation();
+    const report = await ReconciliationEngine.runReconciliationBatch(24);
     res.status(200).json({ success: true, data: report });
   } catch (err) {
     logger.error(`[treasuryController] triggerReconciliation error: ${err.message}`);
     res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+exports.processPayout = async (req, res) => {
+  try {
+    const { walletId, amount, currency, bankCode, accountNumber, accountName, idempotencyKey } = req.body;
+    const result = await WithdrawalWorkflowService.processWithdrawal({
+      userId: req.user.id,
+      walletId,
+      amount,
+      currency,
+      bankCode,
+      accountNumber,
+      accountName,
+      idempotencyKey
+    });
+    res.status(200).json({ success: true, data: result });
+  } catch (err) {
+    logger.error(`[treasuryController] processPayout error: ${err.message}`);
+    res.status(err.statusCode || 500).json({ success: false, error: err.message });
   }
 };
 

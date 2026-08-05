@@ -87,6 +87,7 @@ const PaymentCapabilitiesPage = lazyWithRetry(() => import('./pages/admin/Paymen
 const CryptoTreasuryDashboard = lazyWithRetry(() => import('./pages/admin/CryptoTreasuryDashboard'), 'CryptoTreasuryDashboard');
 const CollectionAccountsPage = lazyWithRetry(() => import('./pages/admin/CollectionAccountsPage'), 'CollectionAccountsPage');
 const DepositMonitoringPage = lazyWithRetry(() => import('./pages/admin/DepositMonitoringPage'), 'DepositMonitoringPage');
+const TreasuryDashboard = lazyWithRetry(() => import('./pages/admin/TreasuryDashboard').then(m => ({ default: m.TreasuryDashboard })), 'TreasuryDashboard');
 
 
 
@@ -243,6 +244,7 @@ function App() {
                                 <Route path="payment-capabilities" element={<PaymentCapabilitiesPage />} />
                                 <Route path="collection-accounts" element={<CollectionAccountsPage />} />
                                 <Route path="deposit-monitoring" element={<DepositMonitoringPage />} />
+                                <Route path="treasury" element={<TreasuryDashboard />} />
                                 <Route path="support-center" element={<SupportCenter />} />
                                 <Route path="beta-feedback" element={<BetaFeedbackDashboard />} />
 

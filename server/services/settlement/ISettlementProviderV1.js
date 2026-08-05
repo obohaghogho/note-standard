@@ -3,8 +3,11 @@
 /**
  * ISettlementProviderV1
  * =====================
- * Versioned abstract interface defining contract for all crypto & fiat
- * settlement provider adapters (NOWPayments, Fincra, Anchor, Fireblocks, etc.).
+ * Enterprise Abstract Interface defining the common contract for all settlement providers
+ * (Grey, Fincra, Anchor, NOWPayments, Rapyd, etc.).
+ *
+ * All settlement provider implementations MUST extend or fulfill this contract.
+ * Wallet & Treasury business logic depend strictly on this interface.
  */
 
 class ISettlementProviderV1 {
@@ -16,27 +19,54 @@ class ISettlementProviderV1 {
     throw new Error("NOT_IMPLEMENTED: getCapabilities()");
   }
 
-  async getCustodyBalances() {
-    throw new Error("NOT_IMPLEMENTED: getCustodyBalances()");
+  async getBalance(currency) {
+    throw new Error("NOT_IMPLEMENTED: getBalance()");
   }
 
-  async createPayout({ address, amount, currency, network, reference }) {
+  async getCustodyBalances() {
+    return this.getBalance();
+  }
+
+  async createPayout({ address, amount, currency, network, reference, beneficiaryId }) {
     throw new Error("NOT_IMPLEMENTED: createPayout()");
+  }
+
+  async verifyWebhook(headers, payload) {
+    return this.verifyWebhookSignature(headers, payload);
   }
 
   async verifyWebhookSignature(headers, payload) {
     throw new Error("NOT_IMPLEMENTED: verifyWebhookSignature()");
   }
 
-  async getRateQuote(fromCurrency, toCurrency, amount = 1) {
-    throw new Error("NOT_IMPLEMENTED: getRateQuote()");
+  async getTransaction(reference) {
+    throw new Error("NOT_IMPLEMENTED: getTransaction()");
   }
 
-  /**
-   * Check if a deposit transaction is fully settled with the provider.
-   * @param {string} providerReference
-   * @returns {Promise<{ isSettled: boolean, status: string, settledAt?: string }>}
-   */
+  async getExchangeRate(fromCurrency, toCurrency, amount = 1) {
+    throw new Error("NOT_IMPLEMENTED: getExchangeRate()");
+  }
+
+  async getRateQuote(fromCurrency, toCurrency, amount = 1) {
+    return this.getExchangeRate(fromCurrency, toCurrency, amount);
+  }
+
+  async createBeneficiary(data) {
+    throw new Error("NOT_IMPLEMENTED: createBeneficiary()");
+  }
+
+  async verifyBeneficiary(accountNumber, bankCode) {
+    throw new Error("NOT_IMPLEMENTED: verifyBeneficiary()");
+  }
+
+  async reverseTransaction(reference, reason) {
+    throw new Error("NOT_IMPLEMENTED: reverseTransaction()");
+  }
+
+  async healthCheck() {
+    throw new Error("NOT_IMPLEMENTED: healthCheck()");
+  }
+
   async getDepositSettlementStatus(providerReference) {
     throw new Error("NOT_IMPLEMENTED: getDepositSettlementStatus()");
   }
