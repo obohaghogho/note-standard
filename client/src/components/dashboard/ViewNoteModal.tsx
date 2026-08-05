@@ -1,6 +1,6 @@
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
-import { X, Edit2, Share2, Calendar, Lock, Globe, User, CheckSquare } from 'lucide-react';
+import { X, Edit2, Share2, Calendar, Lock, Globe, User, CheckSquare, FileText } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import DOMPurify from 'dompurify';
 import { AttachmentsList } from './AttachmentsList';

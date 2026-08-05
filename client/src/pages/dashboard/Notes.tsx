@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ErrorBoundary } from "../../components/common/ErrorBoundary";
 import { Card } from "../../components/common/Card";
 import { Button } from "../../components/common/Button";
@@ -33,6 +34,7 @@ function NotesContent() {
   const { user } = useAuth();
   const { notes, loading, refreshNotes, setNotes } = useNotes();
   const { widgets, refreshDashboard } = useNotesDashboard();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [sortBy, setSortBy] = useState<"latest" | "oldest" | "title">("latest");
@@ -51,6 +53,68 @@ function NotesContent() {
   useEffect(() => {
     refreshNotes("", sortBy);
   }, [user, sortBy, refreshNotes]);
+
+  // Centralized Note Opener & Hydrator
+  const handleOpenNoteById = async (noteId: string) => {
+    if (!noteId) return;
+
+    // 1. Check local in-memory notes array first
+    const existing = notes.find((n) => n.id === noteId);
+    if (existing) {
+      setViewingNote(existing);
+      setSearchParams({ noteId }, { replace: true });
+      return;
+    }
+
+    // 2. Fetch full note directly from Supabase DB (Search/Calendar/Deep-link fallback)
+    try {
+      const { data, error } = await supabase
+        .from('notes')
+        .select(`
+          *,
+          owner:profiles!owner_id (username, avatar_url)
+        `)
+        .eq('id', noteId)
+        .single();
+
+      if (error || !data) {
+        toast.error('Note could not be loaded or was deleted.');
+        return;
+      }
+
+      const loadedNote = data as Note;
+
+      // 3. Update last_opened_at timestamp in background
+      supabase
+        .from('notes')
+        .update({ last_opened_at: new Date().toISOString() })
+        .eq('id', noteId)
+        .then(() => refreshDashboard());
+
+      setViewingNote(loadedNote);
+      setNotes((prev) => {
+        if (prev.some((n) => n.id === noteId)) return prev;
+        return [loadedNote, ...prev];
+      });
+      setSearchParams({ noteId }, { replace: true });
+    } catch (err) {
+      console.error('[Notes] Error loading note by ID:', err);
+      toast.error('Failed to load selected note');
+    }
+  };
+
+  // URL Deep Link Listener (`?noteId=...`)
+  useEffect(() => {
+    const urlNoteId = searchParams.get('noteId');
+    if (urlNoteId && (!viewingNote || viewingNote.id !== urlNoteId)) {
+      handleOpenNoteById(urlNoteId);
+    }
+  }, [searchParams]);
+
+  const handleCloseViewNote = () => {
+    setViewingNote(null);
+    setSearchParams({}, { replace: true });
+  };
 
   // Filter notes by selected category locally
   const filteredNotes = selectedCategoryId
@@ -117,10 +181,9 @@ function NotesContent() {
     }
   };
 
-  // Keyboard shortcuts listener
+  // Keyboard shortcuts listener (Ctrl + N -> New Note)
   useEffect(() => {
     const handleShortcuts = (e: KeyboardEvent) => {
-      // Ctrl + N -> New Note
       if (e.ctrlKey && e.key.toLowerCase() === "n") {
         e.preventDefault();
         handleCreateNoteTrigger("text");
@@ -151,7 +214,7 @@ function NotesContent() {
         return (
           <div className="space-y-3">
             <h3 className="text-white font-bold text-xs uppercase tracking-wider">Recently Opened</h3>
-            <RecentNotesScroller onSelectNote={(id) => setViewingNote(notes.find(n => n.id === id) || null)} />
+            <RecentNotesScroller onSelectNote={handleOpenNoteById} />
           </div>
         );
       case "categories":
@@ -165,13 +228,13 @@ function NotesContent() {
           </div>
         );
       case "calendar":
-        return <CalendarWidget onSelectNote={(id) => setViewingNote(notes.find(n => n.id === id) || null)} />;
+        return <CalendarWidget onSelectNote={handleOpenNoteById} />;
       case "timeline":
         return <ActivityTimeline />;
       case "suggestions":
         return (
           <SmartSuggestions
-            onSelectNote={(id) => setViewingNote(notes.find(n => n.id === id) || null)}
+            onSelectNote={handleOpenNoteById}
             onRefresh={refreshDashboard}
           />
         );
@@ -201,7 +264,7 @@ function NotesContent() {
           <p className="text-neutral-500 text-xs mt-1">Manage your knowledge base, checklists, and AI insights.</p>
         </div>
         <div className="flex items-center gap-2.5">
-          <GlobalSearch onSelectNote={(id) => setViewingNote(notes.find(n => n.id === id) || null)} />
+          <GlobalSearch onSelectNote={handleOpenNoteById} />
           <button
             onClick={() => setIsTrashOpen(true)}
             className="p-2.5 rounded-xl border border-white/10 bg-neutral-900 text-neutral-400 hover:text-white transition-all cursor-pointer"
@@ -308,7 +371,7 @@ function NotesContent() {
                   "cursor-pointer bg-neutral-900/40 border border-white/10 hover:border-white/20 transition-all flex flex-col justify-between group overflow-hidden relative",
                   viewMode === "grid" ? "p-5 h-[180px]" : "p-4 flex-row items-center gap-4 h-auto"
                 )}
-                onClick={() => setViewingNote(note)}
+                onClick={() => handleOpenNoteById(note.id)}
                 style={note.color ? { borderLeft: `4px solid ${note.color}` } : undefined}
               >
                 {note.cover_image && viewMode === "grid" && (
@@ -381,7 +444,7 @@ function NotesContent() {
       {viewingNote && (
         <ViewNoteModal
           isOpen={!!viewingNote}
-          onClose={() => setViewingNote(null)}
+          onClose={handleCloseViewNote}
           note={viewingNote}
           onEdit={() => {
             setEditingNote(viewingNote);

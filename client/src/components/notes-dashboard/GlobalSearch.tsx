@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { Search, Loader2, FileText, CornerDownLeft, Sparkles } from "lucide-react";
+import { supabase } from "../../lib/supabaseSafe";
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -22,8 +23,22 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSelectNote }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Simple inline debounce logic
+  // Global Ctrl + K / Cmd + K shortcut
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        inputRef.current?.focus();
+        setIsOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
+
+  // Search logic (Express API fallback to Supabase query if needed)
   useEffect(() => {
     if (!query.trim()) {
       setResults([]);
@@ -34,17 +49,38 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSelectNote }) => {
     const delayDebounce = setTimeout(async () => {
       try {
         const token = localStorage.getItem("token");
-        const { data } = await axios.get(
-          `${API_URL}/api/notes/search?q=${encodeURIComponent(query)}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        setResults(data);
+        let fetchedData: SearchResult[] = [];
+
+        if (token) {
+          try {
+            const { data } = await axios.get(
+              `${API_URL}/api/notes/search?q=${encodeURIComponent(query)}`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            fetchedData = data;
+          } catch (err) {
+            void err;
+          }
+        }
+
+        // Fallback to direct Supabase query if REST API endpoint didn't return data
+        if (!fetchedData || fetchedData.length === 0) {
+          const { data: supaNotes } = await supabase
+            .from('notes')
+            .select('id, title, content, note_type')
+            .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
+            .is('deleted_at', null)
+            .limit(10);
+          fetchedData = supaNotes || [];
+        }
+
+        setResults(fetchedData);
       } catch (err) {
         console.error("[Search] Failed to fetch search results:", err);
       } finally {
         setLoading(false);
       }
-    }, 300);
+    }, 250);
 
     return () => clearTimeout(delayDebounce);
   }, [query]);
@@ -60,7 +96,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSelectNote }) => {
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
-  // Keyboard navigation
+  // Keyboard navigation inside search dropdown
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!isOpen) return;
 
@@ -91,6 +127,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSelectNote }) => {
       <div className="relative">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
         <input
+          ref={inputRef}
           type="text"
           value={query}
           onChange={(e) => {
@@ -119,7 +156,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSelectNote }) => {
             <div className="p-2 flex flex-col gap-1">
               <div className="text-[10px] text-neutral-500 font-bold px-3 py-1.5 uppercase tracking-wider border-b border-white/5 flex items-center gap-1.5">
                 <Sparkles className="w-3 h-3 text-amber-500" />
-                Matched Results
+                Matched Results ({results.length})
               </div>
               
               {results.map((note, idx) => {
@@ -129,18 +166,18 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSelectNote }) => {
                     key={note.id}
                     onClick={() => handleSelect(note.id)}
                     className={`w-full flex items-center justify-between p-3 rounded-lg text-left transition-colors cursor-pointer ${
-                      isSelected ? "bg-white/10" : "hover:bg-white/5"
+                      isSelected ? "bg-white/10 border border-emerald-500/30" : "hover:bg-white/5"
                     }`}
                   >
                     <div className="flex items-center gap-3">
                       <FileText className="w-4 h-4 text-emerald-400" />
                       <div>
-                        <p className="text-white text-xs font-semibold">{note.title || "Untitled"}</p>
+                        <p className="text-white text-xs font-semibold">{note.title || "Untitled Note"}</p>
                         <p className="text-neutral-400 text-[10px] line-clamp-1 mt-0.5">{note.content || "No content."}</p>
                       </div>
                     </div>
                     {isSelected && (
-                      <span className="flex items-center gap-0.5 text-[8px] bg-white/10 text-neutral-400 px-1 py-0.5 rounded font-bold">
+                      <span className="flex items-center gap-0.5 text-[8px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-bold">
                         <CornerDownLeft className="w-2.5 h-2.5" />
                         Enter
                       </span>
