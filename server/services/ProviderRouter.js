@@ -203,6 +203,11 @@ function getProvider(currency, operation) {
   // ── Coming soon currencies (AUD, NZD, JPY) ───────────────────────────────
   if (COMING_SOON_SET.has(code)) return 'coming_soon';
 
+  // ── Grey Banking USD / EUR / GBP transfers & deposits ────────────────────
+  if (['USD', 'EUR', 'GBP'].includes(code) && (op === 'bank_transfer' || op === 'deposit' || op === 'withdraw')) {
+    return 'grey';
+  }
+
   // ── Fincra fiat currencies (all 21 approved) ─────────────────────────────
   // USDT/USDC route through fincra (merchant wallet fiat settlement).
   // BTC/ETH are in CRYPTO_CURRENCIES above and will not reach here.

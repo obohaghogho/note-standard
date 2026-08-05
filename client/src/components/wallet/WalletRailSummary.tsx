@@ -12,9 +12,9 @@ export const WalletRailSummary: React.FC<WalletRailSummaryProps> = ({ capability
 
   const depositList = capability.summary?.depositCapabilities || [];
   const withdrawList = capability.summary?.withdrawCapabilities || [];
-  const providers = capability.summary?.providers || ['Fincra'];
-  const primaryProvider = providers[0] || 'Fincra';
-  const backupProvider = providers[1] || 'Anchor';
+  const providers = capability.summary?.providers || ['Grey', 'Fincra'];
+  const primaryProvider = providers[0] || 'Grey';
+  const backupProvider = providers[1] || 'Fincra';
   const settlement = capability.summary?.settlementTime || 'Instant';
 
   return (

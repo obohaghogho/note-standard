@@ -312,6 +312,7 @@ exports.depositTransfer = async (req, res, next) => {
 
     res.json({
       ...result,
+      provider: chosenProvider,
       bankDetails: normalizedBankDetails,
       success: true 
     });

@@ -155,7 +155,7 @@ export function VirtualAccountDetails({ currency, onAccountCreated }: VirtualAcc
           <Upload className="text-indigo-400" size={20} />
           <div>
             <h4 className="text-white font-bold text-base">KYC Document Verification</h4>
-            <p className="text-gray-500 text-xs">Fincra compliance requirement for international {currency} funding</p>
+            <p className="text-gray-500 text-xs">Banking partner compliance requirement for international {currency} funding</p>
           </div>
         </div>
 
