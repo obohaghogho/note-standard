@@ -44,6 +44,7 @@ const Transactions = lazyWithRetry(() => import('./pages/dashboard/Transactions'
 const TeamsPage = lazyWithRetry(() => import('./pages/teams/TeamsPage'), 'TeamsPage');
 const DepositPage = lazyWithRetry(() => import('./pages/dashboard/DepositPage'), 'DepositPage');
 const DownloadPage = lazyWithRetry(() => import('./pages/dashboard/DownloadPage'), 'DownloadPage');
+const UserIssueTracker = lazyWithRetry(() => import('./pages/dashboard/UserIssueTracker'), 'UserIssueTracker');
 
 // ─── Lazy-loaded pages (route-level code splitting) ───
 // Public pages
@@ -213,6 +214,7 @@ function App() {
                                 <Route path="notifications" element={<Notifications />} />
                                 <Route path="trends" element={<Trends />} />
                                 <Route path="teams" element={<TeamsPage />} />
+                                <Route path="feedback" element={<UserIssueTracker />} />
                                 <Route path="profile/:userId" element={<PublicProfilePage />} />
                                 <Route path="community/profile/:userId" element={<PublicProfilePage />} />
                                 {/* Download page is now at /download */}

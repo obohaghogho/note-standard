@@ -1,0 +1,157 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "NoteStandard Enterprise Feedback & Issue Tracking API",
+    "description": "Production REST API specification for issue triage, crash reporting, telemetry, multi-ratings, release health, and third-party integration connectors.",
+    "version": "1.0.5"
+  },
+  "servers": [
+    {
+      "url": "https://api.notestandard.com/api/v1",
+      "description": "Production Server"
+    },
+    {
+      "url": "http://localhost:5000/api/v1",
+      "description": "Local Development Server"
+    }
+  ],
+  "paths": {
+    "/feedback/reports": {
+      "post": {
+        "summary": "Submit a new feedback or bug report",
+        "description": "Submits a feedback report with automatic telemetry, multi-ratings, and attachment metadata. Enforces rate limits and DOMPurify sanitization.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackSubmissionPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Report created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackReportResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or spam honeypot detected"
+          },
+          "429": {
+            "description": "Rate limit exceeded (Max 10 reports/15min)"
+          }
+        }
+      },
+      "get": {
+        "summary": "List reports with filtering (Admin)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "category", "in": "query", "schema": { "type": "string" } },
+          { "name": "priority", "in": "query", "schema": { "type": "string" } },
+          { "name": "status", "in": "query", "schema": { "type": "string" } },
+          { "name": "search", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Filtered list of reports"
+          }
+        }
+      }
+    },
+    "/feedback/crashes": {
+      "post": {
+        "summary": "Ingest automatic crash report",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrashIngestPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Crash ingested successfully"
+          }
+        }
+      }
+    },
+    "/feedback/analytics": {
+      "get": {
+        "summary": "Get telemetry & quality metrics (Admin)",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Aggregated analytics summary"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "FeedbackSubmissionPayload": {
+        "type": "object",
+        "required": ["report"],
+        "properties": {
+          "report": {
+            "type": "object",
+            "required": ["description"],
+            "properties": {
+              "title": { "type": "string" },
+              "description": { "type": "string" },
+              "categoryId": { "type": "string", "example": "payment" },
+              "priority": { "type": "string", "example": "high" }
+            }
+          },
+          "ratings": {
+            "type": "object",
+            "properties": {
+              "overallExperience": { "type": "integer", "minimum": 1, "maximum": 5 },
+              "performance": { "type": "integer", "minimum": 1, "maximum": 5 },
+              "design": { "type": "integer", "minimum": 1, "maximum": 5 },
+              "easeOfUse": { "type": "integer", "minimum": 1, "maximum": 5 },
+              "reliability": { "type": "integer", "minimum": 1, "maximum": 5 }
+            }
+          },
+          "telemetry": {
+            "type": "object"
+          }
+        }
+      },
+      "CrashIngestPayload": {
+        "type": "object",
+        "required": ["errorName", "errorMessage"],
+        "properties": {
+          "errorName": { "type": "string" },
+          "errorMessage": { "type": "string" },
+          "stackTrace": { "type": "string" },
+          "route": { "type": "string" }
+        }
+      },
+      "FeedbackReportResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": { "type": "object" }
+        }
+      }
+    }
+  }
+}
