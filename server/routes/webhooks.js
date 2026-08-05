@@ -93,9 +93,11 @@ router.post("/grey", webhookLimiter, async (req, res) => {
     const reference = payload.reference || payload.data?.reference;
     const providerRef = payload.id || payload.data?.id;
 
-    if (['payout.completed', 'payout.successful', 'transfer.success'].includes(eventType)) {
+    const eventTypeStr = String(eventType).toLowerCase().trim();
+
+    if (['transaction success', 'transaction_success', 'payout.completed', 'payout.successful', 'transfer.success', 'success'].includes(eventTypeStr)) {
       await WithdrawalWorkflowService.finalizeSuccessfulSettlement(reference, providerRef);
-    } else if (['payout.failed', 'payout.rejected', 'transfer.failed'].includes(eventType)) {
+    } else if (['transaction failed', 'transaction_failed', 'payout.failed', 'payout.rejected', 'transfer.failed', 'failed'].includes(eventTypeStr)) {
       const reason = payload.reason || payload.data?.reason || 'Provider payout failed';
       await WithdrawalWorkflowService.rollbackFailedWithdrawal(reference, reason, 'REJECTED');
     }
