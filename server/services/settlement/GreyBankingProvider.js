@@ -161,35 +161,50 @@ class GreyBankingProvider extends IBankingProvider {
   }
 
   /**
-   * Dynamic Deposit Instruction Generator with U.S. Boundary Notices & Official Fees
+   * Dynamic Deposit Instruction Generator returning unified contract with persistent reference
    */
   async createDepositInstructions({ currency = 'USD', rail = 'ACH', userId }) {
     const details = await this.getAccountDetails();
-    const memoCode = userId ? `NS-${String(userId).replace(/-/g, '').substring(0, 8).toUpperCase()}` : 'NS-GENERAL';
+    const UserBankReferenceService = require('../payment/UserBankReferenceService');
+    const persistentRef = await UserBankReferenceService.getOrCreateUserReference(userId, 'grey');
     const isWire = String(rail).toUpperCase() === 'WIRE';
 
     return {
-      providerId: 'grey',
-      currency: 'USD',
-      accountHolder: details.accountHolder,
-      bankName: details.bankName,
-      accountNumber: details.accountNumber,
-      achRouting: details.achRouting,
-      wireRouting: details.wireRouting,
-      bankAddress: details.bankAddress,
-      accountType: details.accountType,
-      referenceMemo: memoCode,
-      incomingFee: isWire ? details.wireFee : details.achFee,
-      feeDescription: isWire ? 'Receiving payments via WIRE has a flat fee of $15.' : 'Receiving payments via ACH has a flat fee of $2.',
-      supportedMethods: ['ACH', 'Domestic Wire', 'U.S. Bank Transfers'],
-      unsupportedMethods: ['SWIFT International Wires', 'Non-USD Currencies'],
-      estimatedProcessingTime: '1 - 3 Days depending on the payment scheme used by the sending bank',
+      provider: {
+        name: 'GREY',
+        bank_partner: details.bankName || 'Lead Bank'
+      },
+      account: {
+        holder: details.accountHolder,
+        number: details.accountNumber,
+        type: details.accountType || 'Checking',
+        ach_routing: details.achRouting,
+        wire_routing: details.wireRouting,
+        address: details.bankAddress
+      },
+      reference: {
+        code: persistentRef,
+        persistent: true
+      },
+      limits: {
+        minimum: isWire ? 100 : 10,
+        maximum: isWire ? 500000 : 50000
+      },
+      supported: {
+        ach: true,
+        wire: true,
+        swift: false
+      },
+      fees: {
+        ach: details.achFee || 2.00,
+        wire: details.wireFee || 15.00
+      },
       notices: [
-        'Receiving payments via ACH has a flat fee of $2. Please use the ACH routing number to receive payments via ACH.',
-        'Receiving payments via WIRE has a flat fee of $15.',
-        'Receiving payments via SWIFT is currently not supported.',
-        'USD payments can only be received from banks within the United States.',
-        'Processing time for incoming payments can take between 1-3 days, depending on the payment scheme used by the sending bank.'
+        'Only send USD from a US bank account.',
+        'ACH transfers typically take 1-2 business days.',
+        'Include your unique reference in the transfer memo.',
+        'Do not send from non-US banks or via SWIFT (not supported).',
+        'Payments without reference may be delayed or require manual review.'
       ]
     };
   }

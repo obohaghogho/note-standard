@@ -19,6 +19,9 @@ router.use(apiLimiter);
 // Wallet Endpoints
 router.get("/capabilities", walletController.getCapabilities);
 router.get("/capabilities/:currency", walletController.getCurrencyCapabilities);
+router.get("/user-reference", walletController.getUserBankReference);
+router.post("/generate-reference", walletController.generateUserBankReference);
+router.get("/banking/deposit-instructions", walletController.depositTransfer);
 router.get("/", walletController.getBalances);
 router.get("/address", walletController.getAddress);
 router.post("/address", walletController.getAddress); // Reusing getAddress for now, can be extended for rotation

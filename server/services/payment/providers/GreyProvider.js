@@ -25,37 +25,53 @@ class GreyProvider extends BaseProvider {
   async initialize(data) {
     const { currency, reference, amount, metadata } = data;
     const upCurrency = String(currency || 'USD').toUpperCase();
+    const userId = data.userId || metadata?.userId || metadata?.user_id;
 
-    logger.info(`[GreyProvider] Initializing payment for ${upCurrency}`, { reference, amount });
+    logger.info(`[GreyProvider] Initializing payment for ${upCurrency}`, { reference, amount, userId });
 
-    const userReference = reference.startsWith("NOTE-") || reference.startsWith("NS-")
-      ? reference
-      : `NS-${String(data.userId || 'GEN').replace(/-/g, '').substring(0, 8).toUpperCase()}`;
+    const UserBankReferenceService = require('../UserBankReferenceService');
+    const userReference = userId 
+      ? await UserBankReferenceService.getOrCreateUserReference(userId, 'grey')
+      : (reference.startsWith("NS-") ? reference : `NS-${String(userId || 'GEN').replace(/-/g, '').substring(0, 7).toUpperCase()}`);
 
     const expiresAt = new Date(Date.now() + this.expiryMinutes * 60 * 1000).toISOString();
 
     const instructions = {
-      bank_name: this.bankName,
-      account_name: this.accountHolder,
-      account_number: this.accountNumber,
-      ach_routing: this.achRouting,
-      wire_routing: this.wireRouting,
-      bank_address: this.bankAddress,
-      account_type: 'Checking',
-      reference: userReference,
-      amount,
-      currency: upCurrency,
-      expires_at: expiresAt,
-      expiry_minutes: this.expiryMinutes,
-      ach_fee: "$2.00 Flat Fee",
-      wire_fee: "$15.00 Flat Fee",
-      critical_warning: "USD payments can only be received from banks within the United States. SWIFT is NOT supported.",
+      provider: {
+        name: 'GREY',
+        bank_partner: this.bankName || 'Lead Bank'
+      },
+      account: {
+        holder: this.accountHolder,
+        number: this.accountNumber,
+        type: 'Checking',
+        ach_routing: this.achRouting,
+        wire_routing: this.wireRouting,
+        address: this.bankAddress
+      },
+      reference: {
+        code: userReference,
+        persistent: true
+      },
+      limits: {
+        minimum: 10,
+        maximum: 50000
+      },
+      supported: {
+        ach: true,
+        wire: true,
+        swift: false
+      },
+      fees: {
+        ach: 2,
+        wire: 15
+      },
       notices: [
-        'Receiving payments via ACH has a flat fee of $2. Please use the ACH routing number to receive payments via ACH.',
-        'Receiving payments via WIRE has a flat fee of $15.',
-        'Receiving payments via SWIFT is currently not supported.',
-        'USD payments can only be received from banks within the United States.',
-        'Processing time for incoming payments can take between 1-3 days, depending on the payment scheme used by the sending bank.'
+        'Only send USD from a US bank account.',
+        'ACH transfers typically take 1-2 business days.',
+        'Include your unique reference in the transfer memo.',
+        'Do not send from non-US banks or via SWIFT (not supported).',
+        'Payments without reference may be delayed or require manual review.'
       ]
     };
 
@@ -93,6 +109,7 @@ class GreyProvider extends BaseProvider {
     };
 
     return {
+      provider: 'GREY',
       checkoutUrl: null,
       providerReference: userReference,
       expiresAt,

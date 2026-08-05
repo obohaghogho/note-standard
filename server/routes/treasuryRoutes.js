@@ -17,6 +17,7 @@ router.use(requireAuth);
 
 router.get('/overview', treasuryController.getOverview);
 router.get('/banking/instructions', treasuryController.getDepositInstructions);
+router.get('/banking/deposit-instructions', treasuryController.getDepositInstructions);
 router.get('/banking/unallocated', requireAdmin, treasuryController.getUnallocatedDeposits);
 router.post('/banking/assign', requireAdmin, treasuryController.assignUnallocatedDeposit);
 

@@ -301,19 +301,41 @@ exports.depositTransfer = async (req, res, next) => {
       { provider: chosenProvider }
     );
 
-    const normalizedBankDetails = result.bankDetails || {
-      bankName: result.instructions?.bank_name || result.instructions?.bankName || 'Lead Bank',
-      accountName: result.instructions?.account_name || result.instructions?.accountName || 'JOSSY DIGITAL TECHNOLOGIES LTD',
-      accountNumber: result.instructions?.account_number || result.instructions?.accountNumber || '217394889898',
-      routingNumber: result.instructions?.ach_routing || result.instructions?.wire_routing || result.instructions?.routingNumber || '101019644',
-      reference: result.instructions?.reference || result.providerReference || 'NS-TRANSFER',
-      note: 'Include your reference memo in transfer details.'
+    const UserBankReferenceService = require("../services/payment/UserBankReferenceService");
+    const persistentRef = await UserBankReferenceService.getOrCreateUserReference(req.user.id, chosenProvider);
+
+    const normalizedBankDetails = {
+      bankName: result.instructions?.account?.bank_partner || result.bankDetails?.bankName || process.env.GREY_LEAD_BANK_NAME || 'Lead Bank',
+      accountName: result.instructions?.account?.holder || result.bankDetails?.accountName || process.env.GREY_LEAD_BANK_ACCOUNT_HOLDER || 'JOSSY DIGITAL TECHNOLOGIES LTD',
+      accountNumber: result.instructions?.account?.number || result.bankDetails?.accountNumber || process.env.GREY_LEAD_BANK_ACCOUNT_NUMBER || '217394889898',
+      routingNumber: result.instructions?.account?.ach_routing || result.bankDetails?.achRouting || process.env.GREY_LEAD_BANK_ACH_ROUTING || '101019644',
+      achRouting: result.instructions?.account?.ach_routing || result.bankDetails?.achRouting || process.env.GREY_LEAD_BANK_ACH_ROUTING || '101019644',
+      wireRouting: result.instructions?.account?.wire_routing || result.bankDetails?.wireRouting || process.env.GREY_LEAD_BANK_WIRE_ROUTING || '101019644',
+      bankAddress: result.instructions?.account?.address || result.bankDetails?.bankAddress || process.env.GREY_LEAD_BANK_ADDRESS || '1801 Main St., Kansas City, MO 64108, United States',
+      accountType: result.instructions?.account?.type || result.bankDetails?.accountType || 'Checking',
+      reference: persistentRef,
+      note: 'USD payments can only be received from banks within the United States. Include your permanent reference in transfer details.'
     };
 
     res.json({
       ...result,
-      provider: chosenProvider,
+      provider: chosenProvider.toUpperCase(),
       bankDetails: normalizedBankDetails,
+      instructions: result.instructions || {
+        provider: { name: "GREY", bank_partner: normalizedBankDetails.bankName },
+        account: {
+          holder: normalizedBankDetails.accountName,
+          number: normalizedBankDetails.accountNumber,
+          type: normalizedBankDetails.accountType,
+          ach_routing: normalizedBankDetails.achRouting,
+          wire_routing: normalizedBankDetails.wireRouting,
+          address: normalizedBankDetails.bankAddress
+        },
+        reference: { code: persistentRef, persistent: true },
+        limits: { minimum: 10, maximum: 50000 },
+        supported: { ach: true, wire: true, swift: false },
+        fees: { ach: 2, wire: 15 }
+      },
       success: true 
     });
   } catch (error) {
@@ -1155,6 +1177,38 @@ exports.getCurrencyCapabilities = async (req, res) => {
   } catch (err) {
     console.error("[WalletController] getCurrencyCapabilities Error:", err);
     res.status(500).json({ error: err.message });
+  }
+};
+
+/**
+ * GET /wallet/user-reference
+ * Returns persistent bank reference for current authenticated user.
+ */
+exports.getUserBankReference = async (req, res) => {
+  try {
+    const UserBankReferenceService = require("../services/payment/UserBankReferenceService");
+    const provider = req.query.provider || 'grey';
+    const reference = await UserBankReferenceService.getOrCreateUserReference(req.user.id, provider);
+    res.json({ success: true, reference, persistent: true });
+  } catch (err) {
+    console.error("[WalletController] getUserBankReference Error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+/**
+ * POST /wallet/generate-reference
+ * Admin / explicit regeneration of a user reference string.
+ */
+exports.generateUserBankReference = async (req, res) => {
+  try {
+    const UserBankReferenceService = require("../services/payment/UserBankReferenceService");
+    const provider = req.body.provider || 'grey';
+    const reference = await UserBankReferenceService.regenerateUserReference(req.user.id, provider);
+    res.json({ success: true, reference, persistent: true });
+  } catch (err) {
+    console.error("[WalletController] generateUserBankReference Error:", err);
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
