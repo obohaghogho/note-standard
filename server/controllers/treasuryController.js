@@ -11,6 +11,8 @@ const liquidityPredictionEngine = require('../services/treasury/LiquidityPredict
 const GreyDailyLimitService = require('../services/treasury/GreyDailyLimitService');
 const ReconciliationEngine = require('../services/treasury/ReconciliationEngine');
 const WithdrawalWorkflowService = require('../services/treasury/WithdrawalWorkflowService');
+const DepositInstructionService = require('../services/treasury/DepositInstructionService');
+const UnknownDepositService = require('../services/treasury/UnknownDepositService');
 const logger = require('../utils/logger');
 
 exports.getOverview = async (req, res) => {
@@ -27,6 +29,50 @@ exports.getOverview = async (req, res) => {
     });
   } catch (err) {
     logger.error(`[treasuryController] getOverview error: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+exports.getDepositInstructions = async (req, res) => {
+  try {
+    const currency = req.query.currency || 'USD';
+    const rail = req.query.rail || 'ACH';
+    const result = await DepositInstructionService.getDepositInstructions({
+      currency,
+      rail,
+      userId: req.user.id
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    logger.error(`[treasuryController] getDepositInstructions error: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+exports.getUnallocatedDeposits = async (req, res) => {
+  try {
+    const list = await UnknownDepositService.getPendingReviews();
+    res.status(200).json({ success: true, data: list });
+  } catch (err) {
+    logger.error(`[treasuryController] getUnallocatedDeposits error: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+exports.assignUnallocatedDeposit = async (req, res) => {
+  try {
+    const { unallocatedId, userId } = req.body;
+    if (!unallocatedId || !userId) {
+      return res.status(400).json({ success: false, error: 'unallocatedId and userId are required' });
+    }
+    const result = await UnknownDepositService.assignUser({
+      unallocatedId,
+      userId,
+      adminId: req.user.id
+    });
+    res.status(200).json(result);
+  } catch (err) {
+    logger.error(`[treasuryController] assignUnallocatedDeposit error: ${err.message}`);
     res.status(500).json({ success: false, error: err.message });
   }
 };

@@ -16,6 +16,10 @@ const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
 router.use(requireAuth);
 
 router.get('/overview', treasuryController.getOverview);
+router.get('/banking/instructions', treasuryController.getDepositInstructions);
+router.get('/banking/unallocated', requireAdmin, treasuryController.getUnallocatedDeposits);
+router.post('/banking/assign', requireAdmin, treasuryController.assignUnallocatedDeposit);
+
 router.get('/grey/daily-limit', treasuryController.getGreyDailyLimit);
 router.get('/predictive-liquidity', treasuryController.getPredictiveLiquidity);
 router.get('/ai-risk', treasuryController.getAIRiskReport);

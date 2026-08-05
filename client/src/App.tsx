@@ -88,6 +88,7 @@ const CryptoTreasuryDashboard = lazyWithRetry(() => import('./pages/admin/Crypto
 const CollectionAccountsPage = lazyWithRetry(() => import('./pages/admin/CollectionAccountsPage'), 'CollectionAccountsPage');
 const DepositMonitoringPage = lazyWithRetry(() => import('./pages/admin/DepositMonitoringPage'), 'DepositMonitoringPage');
 const TreasuryDashboard = lazyWithRetry(() => import('./pages/admin/TreasuryDashboard').then(m => ({ default: m.TreasuryDashboard })), 'TreasuryDashboard');
+const GreyBankingPanel = lazyWithRetry(() => import('./pages/admin/GreyBankingPanel').then(m => ({ default: m.GreyBankingPanel })), 'GreyBankingPanel');
 
 
 
@@ -245,6 +246,7 @@ function App() {
                                 <Route path="collection-accounts" element={<CollectionAccountsPage />} />
                                 <Route path="deposit-monitoring" element={<DepositMonitoringPage />} />
                                 <Route path="treasury" element={<TreasuryDashboard />} />
+                                <Route path="banking" element={<GreyBankingPanel />} />
                                 <Route path="support-center" element={<SupportCenter />} />
                                 <Route path="beta-feedback" element={<BetaFeedbackDashboard />} />
 
