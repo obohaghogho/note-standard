@@ -52,16 +52,17 @@ class DepositMatchingService {
       senderName
     });
 
-    // 1. Deduplication Check against provider_transactions & transactions
-    const { data: existingTx } = await supabase
-      .from('provider_transactions')
-      .select('*')
-      .eq('provider_tx_id', String(providerTxId || providerReference))
-      .maybeSingle();
+    // 1. Deduplication Check against provider_transactions & unallocated_deposits
+    if (providerTxId) {
+      const [{ data: existingProvTx }, { data: existingUnalloc }] = await Promise.all([
+        supabase.from('provider_transactions').select('*').eq('provider_tx_id', String(providerTxId)).maybeSingle(),
+        supabase.from('unallocated_deposits').select('*').eq('sender_account', String(providerTxId)).maybeSingle()
+      ]);
 
-    if (existingTx && existingTx.status === 'MATCHED') {
-      logger.info(`[DepositMatchingService] Duplicate deposit ${providerTxId} ignored (already matched).`);
-      return { status: 'DUPLICATE', confidenceScore: 100, message: 'Duplicate deposit ignored' };
+      if (existingProvTx || existingUnalloc) {
+        logger.info(`[DepositMatchingService] Duplicate deposit ${providerTxId} ignored (already processed).`);
+        return { status: 'DUPLICATE', confidenceScore: 100, message: 'Duplicate deposit ignored' };
+      }
     }
 
     // 2. Fetch candidates from deposit_references and profiles
@@ -82,19 +83,25 @@ class DepositMatchingService {
     logger.info(`[DepositMatchingService] Candidate scoring complete. Highest score: ${highestScore}%`);
 
     // Log Canonical Record in provider_transactions
-    const { data: provTx } = await supabase.from('provider_transactions').insert({
-      provider,
-      provider_tx_id: String(providerTxId || providerReference || uuidv4()),
-      provider_reference: String(providerReference || providerTxId),
-      currency: upCurrency,
-      rail: upRail,
-      amount: numAmount,
-      sender_name: senderName,
-      sender_account: senderAccount,
-      status: highestScore >= 95 ? 'MATCHED' : (highestScore >= 70 ? 'MATCHED' : 'UNALLOCATED'),
-      settlement_status: 'SETTLED',
-      raw_payload: depositPayload
-    }).select().single().catch(() => ({ data: null }));
+    let provTx = null;
+    try {
+      const { data } = await supabase.from('provider_transactions').insert({
+        provider,
+        provider_tx_id: String(providerTxId || providerReference || uuidv4()),
+        provider_reference: String(providerReference || providerTxId),
+        currency: upCurrency,
+        rail: upRail,
+        amount: numAmount,
+        sender_name: senderName,
+        sender_account: senderAccount,
+        status: highestScore >= 95 ? 'MATCHED' : (highestScore >= 70 ? 'MATCHED' : 'UNALLOCATED'),
+        settlement_status: 'SETTLED',
+        raw_payload: depositPayload
+      }).select().single();
+      provTx = data;
+    } catch (e) {
+      logger.warn(`[DepositMatchingService] Provider tx log warning: ${e.message}`);
+    }
 
     // 4. Threshold Action Dispatch
     if (highestScore >= 95 && bestMatch) {

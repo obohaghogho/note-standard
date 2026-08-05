@@ -29,11 +29,14 @@ class GreyBankingProvider extends IBankingProvider {
     this.timeoutMs = 30000;
 
     // Dynamic Lead Bank USD Account Credentials from Environment Configuration
-    this.accountHolder = (process.env.GREY_LEAD_BANK_HOLDER || 'Jossy Digital Technologies Ltd / NoteStandard').trim();
+    this.accountHolder = (process.env.GREY_LEAD_BANK_HOLDER || 'JOSSY DIGITAL TECHNOLOGIES LTD').trim();
     this.bankName = (process.env.GREY_LEAD_BANK_NAME || 'Lead Bank').trim();
-    this.accountNumber = (process.env.GREY_LEAD_BANK_ACCOUNT_NUMBER || '8839201948').trim();
-    this.achRouting = (process.env.GREY_LEAD_BANK_ACH_ROUTING || '074000010').trim();
-    this.wireRouting = (process.env.GREY_LEAD_BANK_WIRE_ROUTING || '074000010').trim();
+    this.accountNumber = (process.env.GREY_LEAD_BANK_ACCOUNT_NUMBER || '217394889898').trim();
+    this.achRouting = (process.env.GREY_LEAD_BANK_ACH_ROUTING || '101019644').trim();
+    this.wireRouting = (process.env.GREY_LEAD_BANK_WIRE_ROUTING || '101019644').trim();
+    this.bankAddress = (process.env.GREY_LEAD_BANK_ADDRESS || '1801 Main St., Kansas City, MO 64108').trim();
+    this.achFee = Number(process.env.GREY_ACH_INCOMING_FEE || 2.00);
+    this.wireFee = Number(process.env.GREY_WIRE_INCOMING_FEE || 15.00);
     this.accountType = 'Checking';
     this.country = 'US';
 
@@ -146,20 +149,24 @@ class GreyBankingProvider extends IBankingProvider {
       accountNumber: this.accountNumber,
       achRouting: this.achRouting,
       wireRouting: this.wireRouting,
+      bankAddress: this.bankAddress,
       accountType: this.accountType,
       country: this.country,
       currency: 'USD',
+      achFee: this.achFee,
+      wireFee: this.wireFee,
       supportedRails: ['ACH', 'WIRE'],
       unsupportedRails: ['SWIFT']
     };
   }
 
   /**
-   * Dynamic Deposit Instruction Generator with U.S. Boundary Notices
+   * Dynamic Deposit Instruction Generator with U.S. Boundary Notices & Official Fees
    */
   async createDepositInstructions({ currency = 'USD', rail = 'ACH', userId }) {
     const details = await this.getAccountDetails();
     const memoCode = userId ? `NS-${String(userId).replace(/-/g, '').substring(0, 8).toUpperCase()}` : 'NS-GENERAL';
+    const isWire = String(rail).toUpperCase() === 'WIRE';
 
     return {
       providerId: 'grey',
@@ -169,16 +176,20 @@ class GreyBankingProvider extends IBankingProvider {
       accountNumber: details.accountNumber,
       achRouting: details.achRouting,
       wireRouting: details.wireRouting,
+      bankAddress: details.bankAddress,
       accountType: details.accountType,
       referenceMemo: memoCode,
+      incomingFee: isWire ? details.wireFee : details.achFee,
+      feeDescription: isWire ? 'Receiving payments via WIRE has a flat fee of $15.' : 'Receiving payments via ACH has a flat fee of $2.',
       supportedMethods: ['ACH', 'Domestic Wire', 'U.S. Bank Transfers'],
       unsupportedMethods: ['SWIFT International Wires', 'Non-USD Currencies'],
-      estimatedProcessingTime: rail.toUpperCase() === 'WIRE' ? 'Same Day (Domestic Wire)' : '1 - 2 Business Days (ACH)',
+      estimatedProcessingTime: '1 - 3 Days depending on the payment scheme used by the sending bank',
       notices: [
-        'USD deposits MUST originate from a U.S. domestic bank account.',
-        'ACH and Domestic Wire transfers are fully supported.',
-        'International SWIFT transfers are NOT supported and will be rejected by Lead Bank.',
-        'Please include your reference memo in transfer details for instant automated matching.'
+        'Receiving payments via ACH has a flat fee of $2. Please use the ACH routing number to receive payments via ACH.',
+        'Receiving payments via WIRE has a flat fee of $15.',
+        'Receiving payments via SWIFT is currently not supported.',
+        'USD payments can only be received from banks within the United States.',
+        'Processing time for incoming payments can take between 1-3 days, depending on the payment scheme used by the sending bank.'
       ]
     };
   }

@@ -26,7 +26,7 @@ describe('Enterprise Grey Business Banking & Deposit Matching Integration Suite'
     assert.strictEqual(instructions.success, true);
     assert.strictEqual(instructions.data.bankName, 'Lead Bank');
     assert.ok(instructions.data.notices.length >= 3);
-    assert.ok(instructions.data.notices.some(n => n.includes('SWIFT transfers are NOT supported')));
+    assert.ok(instructions.data.notices.some(n => n.includes('SWIFT')));
   });
 
   it('2. Confidence-Scored Deposit Matching Engine — Exact Match (>=95%)', async () => {
@@ -60,8 +60,8 @@ describe('Enterprise Grey Business Banking & Deposit Matching Integration Suite'
   it('3. Confidence-Scored Matching — Low Confidence (<70%) routes to Unknown Queue', async () => {
     const lowMatchPayload = {
       provider: 'grey',
-      providerTxId: 'tx_ach_unknown_999',
-      providerReference: 'ref_ach_999',
+      providerTxId: `tx_ach_unknown_${Date.now()}`,
+      providerReference: `ref_ach_unknown_${Date.now()}`,
       amount: 125.0,
       currency: 'USD',
       rail: 'ACH',
@@ -76,10 +76,11 @@ describe('Enterprise Grey Business Banking & Deposit Matching Integration Suite'
   });
 
   it('4. Duplicate Deposit Prevention — 0 Double Credit Guarantee', async () => {
+    const dupTxId = `tx_dup_test_${Date.now()}`;
     const dupPayload = {
       provider: 'grey',
-      providerTxId: 'tx_dup_test_888',
-      providerReference: 'ref_dup_888',
+      providerTxId: dupTxId,
+      providerReference: `ref_dup_${Date.now()}`,
       amount: 250.0,
       currency: 'USD',
       rail: 'ACH',
