@@ -49,6 +49,13 @@ exports.executeSwap = async (req, res, next) => {
 exports.preview = async (req, res) => {
   try {
     const { from, to, amount, slippage } = req.body;
+    const CurrencyFeatureService = require("../services/payment/CurrencyFeatureService");
+    const isAdmin = req.user?.role === 'admin' || req.user?.is_admin === true;
+
+    if (!CurrencyFeatureService.canSwap(from, to, isAdmin)) {
+      return res.status(403).json({ success: false, error: "Currency not yet available." });
+    }
+
     const quote = await swapService.calculateSwap(
       req.user.id,
       from,

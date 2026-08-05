@@ -114,15 +114,18 @@ const CurrencyManagement: React.FC = () => {
   const fiatCurrencies = currencies.filter(c => c.type === 'fiat');
   const cryptoCurrencies = currencies.filter(c => c.type === 'crypto');
 
-  const renderStatusBadge = (status: string) => {
-    switch (status) {
-      case 'active':
-        return <span style={styles.badgeActive}>Active</span>;
-      case 'coming_soon':
-        return <span style={styles.badgeComingSoon}>Coming Soon</span>;
-      default:
-        return <span style={styles.badgeDisabled}>Disabled</span>;
+  const renderStatusBadge = (status: string, code?: string) => {
+    const upperCode = String(code || '').toUpperCase();
+    const isLive = status === 'active' && (upperCode === 'NGN' || upperCode === 'USD');
+    const isDev = status === 'coming_soon' || status === 'development' || ['EUR', 'GBP', 'CAD', 'AUD', 'ZAR'].includes(upperCode);
+
+    if (isLive) {
+      return <span style={{ ...styles.badgeActive, backgroundColor: '#065f46', color: '#34d399', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold' }}>🟢 Live</span>;
     }
+    if (isDev) {
+      return <span style={{ ...styles.badgeComingSoon, backgroundColor: '#78350f', color: '#fbbf24', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold' }}>🟡 Development</span>;
+    }
+    return <span style={{ ...styles.badgeDisabled, backgroundColor: '#1e293b', color: '#94a3b8', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold' }}>⚪ Coming Soon</span>;
   };
 
   const renderToggle = (label: string, field: keyof CurrencyRow, code: string, currency: CurrencyRow) => {
@@ -163,7 +166,7 @@ const CurrencyManagement: React.FC = () => {
             </div>
           </div>
           <div style={styles.statusArea}>
-            {renderStatusBadge((drafts[c.code]?.status as string) || c.status)}
+            {renderStatusBadge((drafts[c.code]?.status as string) || c.status, c.code)}
             <select 
               style={styles.statusSelect}
               value={(drafts[c.code]?.status as string) || c.status}

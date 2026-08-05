@@ -152,6 +152,12 @@ exports.depositCard = async (req, res, next) => {
 
     currency = String(currency).replace(/"/g, "");
 
+    const CurrencyFeatureService = require("../services/payment/CurrencyFeatureService");
+    const isAdmin = req.user?.role === 'admin' || req.user?.is_admin === true;
+    if (!CurrencyFeatureService.canDeposit(currency, isAdmin)) {
+      return res.status(403).json({ success: false, error: "Currency not yet available." });
+    }
+
     const upperCurrency = String(currency).toUpperCase();
     const cardSupportedCurrencies = ["NGN", "USD", "ZAR", "GHS"];
     if (!cardSupportedCurrencies.includes(upperCurrency)) {
@@ -250,6 +256,12 @@ exports.depositTransfer = async (req, res, next) => {
     }
 
     currency = String(currency).replace(/"/g, "");
+
+    const CurrencyFeatureService = require("../services/payment/CurrencyFeatureService");
+    const isAdmin = req.user?.role === 'admin' || req.user?.is_admin === true;
+    if (!CurrencyFeatureService.canDeposit(currency, isAdmin)) {
+      return res.status(403).json({ success: false, error: "Currency not yet available." });
+    }
 
     const paymentService = require("../services/payment/paymentService");
     

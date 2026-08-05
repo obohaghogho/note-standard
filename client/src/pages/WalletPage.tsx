@@ -150,13 +150,15 @@ function WalletHubContent() {
   };
 
   // Group Fiat Catalog into Fiat Banking vs Digital Currency vs Coming Soon
+  const CurrencyFeatureService = require('../../../shared/services/CurrencyFeatureService').CurrencyFeatureService;
+  const visibleCurrencies = CurrencyFeatureService.getVisibleCurrencies();
   const STABLECOIN_CODES = new Set(['USDT', 'USDC', 'CNGN']);
-  const activeBankingFiat = fiatCatalog.filter(c => c.status === 'active' && !STABLECOIN_CODES.has(c.code));
-  const digitalCurrencies = fiatCatalog.filter(c => c.status === 'active' && STABLECOIN_CODES.has(c.code));
-  const comingSoonFiatCurrencies = fiatCatalog.filter(c => c.status === 'coming_soon');
+  const activeBankingFiat = fiatCatalog.filter(c => c.status === 'active' && !STABLECOIN_CODES.has(c.code) && visibleCurrencies.includes(c.code));
+  const digitalCurrencies = fiatCatalog.filter(c => c.status === 'active' && STABLECOIN_CODES.has(c.code) && visibleCurrencies.includes(c.code));
+  const comingSoonFiatCurrencies = fiatCatalog.filter(c => c.status === 'coming_soon' && visibleCurrencies.includes(c.code));
 
   // Currencies available to create in modal
-  const availableToCreate = fiatCatalog.filter(c => !wallets.some(w => (w.asset || '').toUpperCase() === c.code));
+  const availableToCreate = fiatCatalog.filter(c => visibleCurrencies.includes(c.code) && !wallets.some(w => (w.asset || '').toUpperCase() === c.code));
 
   return (
     <div className="min-h-screen text-white" style={{ background: '#060611' }}>
