@@ -76,11 +76,28 @@ class GreyProvider extends BaseProvider {
       logger.warn("[GreyProvider] Could not update payment metadata:", updateErr.message);
     }
 
+    const bankDetailsObj = {
+      bankName: this.bankName,
+      accountName: this.accountHolder,
+      accountNumber: this.accountNumber,
+      routingNumber: this.achRouting,
+      achRouting: this.achRouting,
+      wireRouting: this.wireRouting,
+      bankAddress: this.bankAddress,
+      accountType: 'Checking',
+      reference: userReference,
+      amount,
+      currency: upCurrency,
+      expiresAt,
+      note: 'USD payments can only be received from banks within the United States. Include reference in transfer details.'
+    };
+
     return {
       checkoutUrl: null,
       providerReference: userReference,
       expiresAt,
       instructions,
+      bankDetails: bankDetailsObj
     };
   }
 

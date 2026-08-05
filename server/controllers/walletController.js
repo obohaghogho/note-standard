@@ -301,8 +301,18 @@ exports.depositTransfer = async (req, res, next) => {
       { provider: chosenProvider }
     );
 
+    const normalizedBankDetails = result.bankDetails || {
+      bankName: result.instructions?.bank_name || result.instructions?.bankName || 'Lead Bank',
+      accountName: result.instructions?.account_name || result.instructions?.accountName || 'JOSSY DIGITAL TECHNOLOGIES LTD',
+      accountNumber: result.instructions?.account_number || result.instructions?.accountNumber || '217394889898',
+      routingNumber: result.instructions?.ach_routing || result.instructions?.wire_routing || result.instructions?.routingNumber || '101019644',
+      reference: result.instructions?.reference || result.providerReference || 'NS-TRANSFER',
+      note: 'Include your reference memo in transfer details.'
+    };
+
     res.json({
       ...result,
+      bankDetails: normalizedBankDetails,
       success: true 
     });
   } catch (error) {
