@@ -112,6 +112,21 @@ const CURRENCY_REGISTRY = [
     supportedDepositMethods: ["EFT"],
     supportedWithdrawalMethods: ["EFT"],
     supportedSwapMethods: ["USD"]
+  },
+  {
+    code: "GHS",
+    name: "Ghanaian Cedi",
+    symbol: "GH₵",
+    flag: "🇬🇭",
+    status: "DEVELOPMENT",
+    provider: "fincra",
+    enabled: false,
+    visible: true,
+    comingSoon: true,
+    releaseStage: "BETA",
+    supportedDepositMethods: ["MOBILE_MONEY", "BANK_TRANSFER", "CARD"],
+    supportedWithdrawalMethods: ["MOBILE_MONEY", "BANK_TRANSFER"],
+    supportedSwapMethods: ["USD", "NGN"]
   }
 ];
 

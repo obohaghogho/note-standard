@@ -27,6 +27,7 @@ describe('Enterprise Currency Release Management & Feature Flag System', functio
     assert.ok(devCurrencies.includes('CAD'), 'Development must include CAD');
     assert.ok(devCurrencies.includes('AUD'), 'Development must include AUD');
     assert.ok(devCurrencies.includes('ZAR'), 'Development must include ZAR');
+    assert.ok(devCurrencies.includes('GHS'), 'Development must include GHS');
   });
 
   it('2. Production environment should expose ONLY production-ready currencies (NGN & USD)', function () {

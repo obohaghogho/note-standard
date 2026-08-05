@@ -78,5 +78,14 @@ export const FIAT_CURRENCIES: FiatCurrencyConfig[] = [
     enabledInProduction: false,
     enabledInDevelopment: true,
     comingSoon: true
+  },
+  {
+    code: "GHS",
+    name: "Ghanaian Cedi",
+    symbol: "GH₵",
+    flag: "🇬🇭",
+    enabledInProduction: false,
+    enabledInDevelopment: true,
+    comingSoon: true
   }
 ];

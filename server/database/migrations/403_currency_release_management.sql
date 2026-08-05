@@ -86,5 +86,6 @@ VALUES
   ('GBP', 'British Pound', '£', '🇬🇧', 'DEVELOPMENT', 'HEALTHY', 100, ARRAY['ALL'], false, false, false, false, false, 'grey', 'fincra', 'grey', 'grey'),
   ('CAD', 'Canadian Dollar', 'CA$', '🇨🇦', 'DEVELOPMENT', 'HEALTHY', 100, ARRAY['ALL'], false, false, false, false, false, 'grey', 'fincra', 'grey', 'grey'),
   ('AUD', 'Australian Dollar', 'A$', '🇦🇺', 'DEVELOPMENT', 'HEALTHY', 100, ARRAY['ALL'], false, false, false, false, false, 'grey', 'fincra', 'grey', 'grey'),
-  ('ZAR', 'South African Rand', 'R', '🇿🇦', 'DEVELOPMENT', 'HEALTHY', 100, ARRAY['ALL'], false, false, false, false, false, 'grey', 'fincra', 'grey', 'grey')
+  ('ZAR', 'South African Rand', 'R', '🇿🇦', 'DEVELOPMENT', 'HEALTHY', 100, ARRAY['ALL'], false, false, false, false, false, 'grey', 'fincra', 'grey', 'grey'),
+  ('GHS', 'Ghanaian Cedi', 'GH₵', '🇬🇭', 'DEVELOPMENT', 'HEALTHY', 100, ARRAY['ALL'], false, false, false, false, false, 'fincra', 'fincra', 'fincra', 'fincra')
 ON CONFLICT (code) DO NOTHING;
