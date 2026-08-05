@@ -57,10 +57,11 @@ export default defineConfig({
     },
   ],
   
-  // Only spin up the local webserver if we are NOT running against staging
-  webServer: process.env.PLAYWRIGHT_BASE_URL ? undefined : {
+  // Spin up local webserver if testing against localhost
+  webServer: baseURL.includes('localhost') ? {
     command: 'npm run dev',
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
-  },
+    timeout: 120 * 1000,
+  } : undefined,
 });
