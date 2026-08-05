@@ -98,7 +98,7 @@ responses = {
 
     67: "Nigeria",
     68: "Yes, subject to full KYC verification (valid Nigerian residency permit, alien registration, international passport, and proof of address).",
-    69: "Yes, provided compliance status remains active and ongoing KYC requirements are fulfilled.",
+    69: "Yes, subject to ongoing compliance requirements. Existing customers who relocate outside Nigeria may continue using eligible services after completing any required KYC refresh, sanctions screening, and regulatory checks. Services restricted by applicable laws, regulatory requirements, or provider availability may be limited or suspended depending on the customer's country of residence.",
     70: "Yes, subject to enhanced international KYC, valid government ID verification, and sanction screening.",
     71: "Current: International card collections and FX conversions supported via licensed partners (Paystack & Fincra).\nFuture: Dedicated USD accounts, ACH, SEPA, and SWIFT payouts are planned for Phase 2 post-Anchor approval.",
 
@@ -155,15 +155,12 @@ responses = {
     131: "NoteStandard Electronic Signature & Communications Agreement"
 }
 
+for rng in list(ws.merged_cells.ranges):
+    if "C68:C69" in str(rng):
+        ws.unmerge_cells("C68:C69")
+
 for row_idx, val in responses.items():
-    cell = ws.cell(row=row_idx, column=3)
-    if type(cell).__name__ == 'Cell':
-        cell.value = val
-    else:
-        for rng in ws.merged_cells.ranges:
-            if cell.coordinate in rng:
-                ws.cell(row=rng.min_row, column=rng.min_col, value=val)
-                break
+    ws.cell(row=row_idx, column=3, value=val)
 
 wb.save(FILE_EXCEL)
 print(f"[OK] Saved {FILE_EXCEL}")
