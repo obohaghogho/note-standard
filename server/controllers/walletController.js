@@ -161,12 +161,32 @@ exports.depositCard = async (req, res, next) => {
     }
 
     const paymentService = require("../services/payment/paymentService");
-    const { data: profile } = await supabase.from('profiles').select('email').eq('id', req.user.id).single();
-    const email = profile?.email || 'user@example.com';
+    
+    // Robust Email Resolution: Prefer req.user.email (from Auth token), then userProfile, then database query
+    const { data: profile } = await supabase.from('profiles').select('email, full_name, username').eq('id', req.user.id).maybeSingle();
+    let email = req.user?.email || req.userProfile?.email || profile?.email;
 
-    // BUG FIX: sanitise origin — mobile WebViews send null/"null"/"undefined".
-    // Previously used req.headers.origin !== 'undefined' which only caught the
-    // literal string 'undefined', not JS-null or the string 'null'.
+    if (!email || email === 'user@example.com' || !email.includes('@')) {
+      try {
+        const { data: authUser } = await supabase.auth.admin.getUserById(req.user.id);
+        if (authUser?.user?.email) {
+          email = authUser.user.email;
+        }
+      } catch (authErr) {
+        console.warn("[WalletController] Auth user email fallback warning:", authErr.message);
+      }
+    }
+
+    if (!email || !email.includes('@') || email.endsWith('@example.com')) {
+      return res.status(400).json({ error: "A valid account email is required for card deposits. Please verify your profile email." });
+    }
+
+    const customerName = req.userProfile?.full_name || 
+      profile?.full_name || 
+      req.user?.user_metadata?.full_name || 
+      req.user?.user_metadata?.name || 
+      `${(profile?.username || email.split('@')[0] || 'User')} Standard`;
+
     const defaultOrigin = process.env.FRONTEND_URL || 'https://notestandard.com';
     const callbackUrl = `${sanitiseOrigin(req.headers.origin, defaultOrigin)}/payment/callback`;
 
@@ -177,10 +197,12 @@ exports.depositCard = async (req, res, next) => {
       currency,
       {
         channel: "card",
+        method: "card",
         plan: req.userProfile?.plan || "FREE",
         targetCurrency: toCurrency,
         targetNetwork: toNetwork,
-        callbackUrl: callbackUrl
+        callbackUrl: callbackUrl,
+        customerName: customerName
       },
       { provider: "fincra" }
     );
@@ -227,12 +249,32 @@ exports.depositTransfer = async (req, res, next) => {
     currency = String(currency).replace(/"/g, "");
 
     const paymentService = require("../services/payment/paymentService");
-    const { data: profile } = await supabase.from('profiles').select('email').eq('id', req.user.id).single();
-    const email = profile?.email || 'user@example.com';
+    
+    // Robust Email Resolution
+    const { data: profile } = await supabase.from('profiles').select('email, full_name, username').eq('id', req.user.id).maybeSingle();
+    let email = req.user?.email || req.userProfile?.email || profile?.email;
 
-    // BUG FIX: same origin-sanitisation as depositCard.
-    // Previously fell back to `undefined` which Paystack ignores — meaning
-    // no redirect after bank transfer completes.
+    if (!email || email === 'user@example.com' || !email.includes('@')) {
+      try {
+        const { data: authUser } = await supabase.auth.admin.getUserById(req.user.id);
+        if (authUser?.user?.email) {
+          email = authUser.user.email;
+        }
+      } catch (authErr) {
+        console.warn("[WalletController] Auth user email fallback warning:", authErr.message);
+      }
+    }
+
+    if (!email || !email.includes('@') || email.endsWith('@example.com')) {
+      return res.status(400).json({ error: "A valid account email is required for bank transfers. Please verify your profile email." });
+    }
+
+    const customerName = req.userProfile?.full_name || 
+      profile?.full_name || 
+      req.user?.user_metadata?.full_name || 
+      req.user?.user_metadata?.name || 
+      `${(profile?.username || email.split('@')[0] || 'User')} Standard`;
+
     const defaultOrigin = process.env.FRONTEND_URL || 'https://notestandard.com';
     const callbackUrl = `${sanitiseOrigin(req.headers.origin, defaultOrigin)}/payment/callback`;
 
@@ -243,10 +285,12 @@ exports.depositTransfer = async (req, res, next) => {
       currency,
       {
         channel: "bank_transfer",
+        method: "bank_transfer",
         plan: req.userProfile?.plan || "FREE",
         targetCurrency: toCurrency,
         targetNetwork: toNetwork,
-        callbackUrl: callbackUrl
+        callbackUrl: callbackUrl,
+        customerName: customerName
       },
       { provider: "fincra" }
     );

@@ -392,29 +392,75 @@ class PaymentService {
         error: error.response?.data || error,
       });
 
-      // Special handling for bank transfers vs other methods
-      if (metadata.method !== "bank_transfer") {
+      // ── AUTOMATIC FAILOVER GATEWAY RESILIENCE ────────────────────────────────
+      // If primary provider (e.g. Fincra) fails for NGN deposit, attempt automatic failover to backup provider (Paystack)
+      let fallbackSuccess = false;
+      const isNgnDeposit = String(currency).toUpperCase() === 'NGN';
+      const fallbackProviderName = (providerName === 'fincra') ? 'paystack' : (providerName === 'paystack' ? 'fincra' : null);
+
+      if (isNgnDeposit && fallbackProviderName) {
         try {
+          logger.info(`[PaymentService] Primary provider '${providerName}' failed (${error.message}). Attempting automatic failover to backup provider '${fallbackProviderName}'...`);
+          const fallbackProvider = PaymentFactory.getProviderByName(fallbackProviderName);
+          initData = await fallbackProvider.initialize({
+            email,
+            amount: options.gatewayAmount || amount,
+            currency: options.gatewayCurrency || currency,
+            network,
+            reference,
+            callbackUrl,
+            plan: options.plan || metadata.plan || null,
+            metadata: {
+              ...metadata,
+              transactionId: transaction.id,
+              userId,
+              user_id: userId,
+              original_currency: currency,
+              original_amount: amount,
+              gateway_currency: options.gatewayCurrency || currency,
+              fallbackFrom: providerName,
+            },
+          });
+          providerName = fallbackProviderName;
+          fallbackSuccess = true;
+
+          // Update transaction record with the backup provider details
           await supabase
             .from("transactions")
-            .update({
-              status: "FAILED",
-              metadata: { ...transaction.metadata, error: error.message },
+            .update({ 
+              provider: fallbackProviderName,
+              provider_reference: initData.providerReference || initData.checkoutUrl || reference
             })
             .eq("id", transaction.id);
-        } catch (dbErr) {
-          logger.error(`[PaymentService] Failed to mark transaction as FAILED: ${dbErr.message}`);
-        }
 
-        const enrichedError = new Error(`Payment Initialization Failed: ${error.message}`);
-        enrichedError.details = error.response?.data || error;
-        enrichedError.location = "PaymentService.initializePayment";
-        throw enrichedError;
+          logger.info(`[PaymentService] ✅ Automatic failover to '${fallbackProviderName}' succeeded for reference ${reference}`);
+        } catch (fallbackErr) {
+          logger.error(`[PaymentService] Automatic failover to '${fallbackProviderName}' also failed: ${fallbackErr.message}`);
+        }
       }
-      
-      // For bank transfers, we might have partial success (e.g. virtual account created but checkout failed)
-      // but usually we want to throw to let the user know.
-      throw error;
+
+      if (!fallbackSuccess) {
+        if (metadata.method !== "bank_transfer") {
+          try {
+            await supabase
+              .from("transactions")
+              .update({
+                status: "FAILED",
+                metadata: { ...transaction.metadata, error: error.message },
+              })
+              .eq("id", transaction.id);
+          } catch (dbErr) {
+            logger.error(`[PaymentService] Failed to mark transaction as FAILED: ${dbErr.message}`);
+          }
+
+          const enrichedError = new Error(`Payment Initialization Failed: ${error.message}`);
+          enrichedError.details = error.response?.data || error;
+          enrichedError.location = "PaymentService.initializePayment";
+          throw enrichedError;
+        }
+        
+        throw error;
+      }
     }
 
     return {
