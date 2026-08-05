@@ -1,7 +1,7 @@
 import { test, expect, Page } from '@playwright/test';
 
-const PRIMARY_USER = { email: process.env.TEST_EMAIL!, password: process.env.TEST_PASSWORD! };
-const SECONDARY_USER = { email: process.env.TEST_EMAIL_2!, password: process.env.TEST_PASSWORD_2! };
+const PRIMARY_USER = { email: process.env.TEST_EMAIL || 'test1@notestandard.test', password: process.env.TEST_PASSWORD || 'TestPass123!' };
+const SECONDARY_USER = { email: process.env.TEST_EMAIL_2 || 'test2@notestandard.test', password: process.env.TEST_PASSWORD_2 || 'TestPass123!' };
 
 async function loginAs(page: Page, user: { email: string; password: string }) {
   await page.goto('/auth/login');

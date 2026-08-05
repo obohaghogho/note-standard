@@ -16,7 +16,9 @@ async function goToCommunity(page: Page) {
 
 test.describe('Community Feed & Infinite Scroll', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, process.env.TEST_EMAIL!, process.env.TEST_PASSWORD!);
+    const email = process.env.TEST_EMAIL || 'test@notestandard.test';
+    const password = process.env.TEST_PASSWORD || 'TestPass123!';
+    await loginAs(page, email, password);
     await goToCommunity(page);
   });
 
