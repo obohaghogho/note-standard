@@ -12,7 +12,14 @@ export class CurrencyFeatureService {
    * Determine current environment: 'production' vs 'development'
    */
   private static isProduction(envOverride?: string): boolean {
-    const nodeEnv = envOverride || (typeof process !== 'undefined' && process.env ? process.env.NODE_ENV || process.env.APP_ENV : 'development');
+    if (envOverride) return String(envOverride).toLowerCase() === 'production';
+    if (typeof window !== 'undefined' && window.location) {
+      const host = window.location.hostname;
+      if (host !== 'localhost' && host !== '127.0.0.1' && !host.endsWith('.local')) {
+        return true;
+      }
+    }
+    const nodeEnv = (typeof process !== 'undefined' && process.env ? process.env.NODE_ENV || process.env.APP_ENV : 'development');
     return String(nodeEnv).toLowerCase() === 'production';
   }
 
