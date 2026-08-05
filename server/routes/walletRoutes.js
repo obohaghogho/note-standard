@@ -85,9 +85,15 @@ router.post(
   walletController.internalTransfer,
 );
 
-// Admin Currency Management
+// Admin Currency Management & Governance Platform
 router.get('/admin/currencies', walletController.adminGetCurrencies);
 router.patch('/admin/currencies/:code', walletController.adminUpdateCurrency);
+router.get('/admin/currency-release-dashboard', walletController.getCurrencyReleaseDashboard);
+router.post('/admin/currencies/:code/request-promotion', walletController.requestCurrencyPromotion);
+router.post('/admin/currencies/:code/approve-promotion', walletController.approveCurrencyPromotion);
+router.post('/admin/currencies/:code/schedule', walletController.scheduleCurrencyRelease);
+router.patch('/admin/currencies/:code/health', walletController.updateCurrencyHealth);
+router.get('/admin/currency-audit-logs', walletController.getCurrencyAuditLogs);
 
 // Virtual Accounts Endpoints
 router.get("/virtual-account/:currency", walletController.getVirtualAccount);

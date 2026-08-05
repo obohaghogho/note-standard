@@ -1224,4 +1224,90 @@ exports.generateUserBankReference = async (req, res) => {
   }
 };
 
+/**
+ * Enterprise Currency Release Management Handlers
+ */
+const CurrencyReleaseManagerService = require('../services/payment/CurrencyReleaseManagerService');
+
+exports.getCurrencyReleaseDashboard = async (req, res) => {
+  try {
+    const settings = await CurrencyReleaseManagerService.getAllSettings();
+    const auditLogs = await CurrencyReleaseManagerService.getAuditLogs(30);
+
+    const checklists = {};
+    for (const c of settings) {
+      checklists[c.code] = await CurrencyReleaseManagerService.verifyPreLaunchChecklist(c.code);
+    }
+
+    res.json({
+      success: true,
+      settings,
+      checklists,
+      auditLogs,
+      summary: {
+        total: settings.length,
+        live: settings.filter(s => s.release_status === 'LIVE').length,
+        development: settings.filter(s => s.release_status === 'DEVELOPMENT').length,
+        pendingApproval: settings.filter(s => s.release_status === 'PENDING_APPROVAL').length,
+        inMaintenance: settings.filter(s => s.health_status === 'MAINTENANCE').length
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+exports.requestCurrencyPromotion = async (req, res) => {
+  try {
+    const { code } = req.params;
+    const { reason } = req.body;
+    const result = await CurrencyReleaseManagerService.requestPromotion(code, req.user, reason);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+};
+
+exports.approveCurrencyPromotion = async (req, res) => {
+  try {
+    const { code } = req.params;
+    const { reason } = req.body;
+    const result = await CurrencyReleaseManagerService.approvePromotion(code, req.user, reason);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+};
+
+exports.scheduleCurrencyRelease = async (req, res) => {
+  try {
+    const { code } = req.params;
+    const { scheduledAt, reason } = req.body;
+    const result = await CurrencyReleaseManagerService.scheduleRelease(code, scheduledAt, req.user, reason);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+};
+
+exports.updateCurrencyHealth = async (req, res) => {
+  try {
+    const { code } = req.params;
+    const { healthStatus, maintenanceNotice } = req.body;
+    const result = await CurrencyReleaseManagerService.updateHealthStatus(code, healthStatus, maintenanceNotice, req.user);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+};
+
+exports.getCurrencyAuditLogs = async (req, res) => {
+  try {
+    const logs = await CurrencyReleaseManagerService.getAuditLogs(100);
+    res.json({ success: true, logs });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
 

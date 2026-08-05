@@ -199,14 +199,38 @@ const CurrencyManagement: React.FC = () => {
     );
   };
 
+import { CurrencyReleaseDashboard } from './CurrencyReleaseDashboard';
+
+  const [activeViewTab, setActiveViewTab] = useState<'toggles' | 'governance'>('governance');
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
         <div>
-          <h1 style={styles.pageTitle}>Currency Management</h1>
-          <p style={styles.pageSubtitle}>Manage wallet currencies, capabilities and status</p>
+          <h1 style={styles.pageTitle}>Enterprise Currency Governance</h1>
+          <p style={styles.pageSubtitle}>Manage wallet release stages, maker-checker approvals, and capabilities</p>
         </div>
         <div style={styles.headerActions}>
+          <button
+            style={{
+              ...styles.refreshBtn,
+              backgroundColor: activeViewTab === 'governance' ? '#4f46e5' : '#1e293b',
+              color: '#fff'
+            }}
+            onClick={() => setActiveViewTab('governance')}
+          >
+            🛡️ Governance Platform
+          </button>
+          <button
+            style={{
+              ...styles.refreshBtn,
+              backgroundColor: activeViewTab === 'toggles' ? '#4f46e5' : '#1e293b',
+              color: '#fff'
+            }}
+            onClick={() => setActiveViewTab('toggles')}
+          >
+            ⚙️ Capabilities Toggles
+          </button>
           <button 
             style={styles.internationalBtn}
             onClick={handleEnableInternational}
@@ -219,6 +243,11 @@ const CurrencyManagement: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {activeViewTab === 'governance' ? (
+        <CurrencyReleaseDashboard />
+      ) : (
+        <>
 
       {source === 'fallback' && (
         <div style={styles.warningBanner}>
@@ -244,6 +273,8 @@ const CurrencyManagement: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );

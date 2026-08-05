@@ -4,7 +4,12 @@
  * server/services/payment/CurrencyFeatureService.js
  * ===================================================
  * Enterprise Currency Release & Feature Flag Engine (Server-side).
- * Enforces production currency visibility rules & HTTP 403 API protections.
+ * Integrates:
+ * - Runtime DB Settings & Dynamic Release Status
+ * - Health Status Awareness (HEALTHY vs MAINTENANCE)
+ * - Canary Phased Rollout Evaluation
+ * - Region-Based Jurisdiction Restrictions
+ * - Express Middleware HTTP 403 Protections
  */
 
 const { CURRENCY_REGISTRY, getCurrencyFromRegistry } = require('../../config/CurrencyRegistry');
