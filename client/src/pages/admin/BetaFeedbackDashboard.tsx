@@ -44,7 +44,7 @@ import {
 import toast from 'react-hot-toast';
 import { supabase } from '../../lib/supabaseSafe';
 import { useAuth } from '../../context/AuthContext';
-import { 
+import type { 
   FeedbackReport, 
   FeedbackCategoryType, 
   PriorityLevel, 

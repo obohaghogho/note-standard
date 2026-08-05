@@ -745,95 +745,83 @@ export const FundModal: React.FC<FundModalProps> = ({
                         )}
 
                         {/* Bank Details Display */}
-                        {method === 'bank' && bankDetails && (() => {
-                            const activeDetails = bankDetails.bankDetails || (bankDetails as any).instructions || bankDetails;
-                            const bName = activeDetails.bankName || activeDetails.bank_name || 'Lead Bank';
-                            const aNumber = activeDetails.accountNumber || activeDetails.account_number || '';
-                            const aName = activeDetails.accountName || activeDetails.account_name || 'JOSSY DIGITAL TECHNOLOGIES LTD';
-                            const rNumber = activeDetails.routingNumber || activeDetails.ach_routing || activeDetails.wire_routing || activeDetails.routing_number;
-                            const ref = activeDetails.reference || bankDetails.providerReference || 'NS-TRANSFER';
-                            const noteText = activeDetails.note || activeDetails.critical_warning;
-
-                            return (
-                                <div className="space-y-4">
-                                    <div className="bg-gray-800 rounded-lg p-4 space-y-3">
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-gray-400">Bank Name</span>
-                                            <span className="font-medium">{bName}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-gray-400">Account Number</span>
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-mono font-medium">{aNumber}</span>
-                                                <button onClick={() => copyToClipboard(aNumber)}>
-                                                    <Copy size={16} className="text-gray-400 hover:text-white" />
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {activeDetails.iban && (
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-gray-400">IBAN</span>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-mono font-medium text-xs">{activeDetails.iban}</span>
-                                                    <button onClick={() => copyToClipboard(activeDetails.iban)}>
-                                                        <Copy size={16} className="text-gray-400 hover:text-white" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {activeDetails.swiftCode && (
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-gray-400">SWIFT / BIC</span>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-mono font-medium">{activeDetails.swiftCode}</span>
-                                                    <button onClick={() => copyToClipboard(activeDetails.swiftCode)}>
-                                                        <Copy size={16} className="text-gray-400 hover:text-white" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {rNumber && (
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-gray-400">Routing / Sort Code</span>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-mono font-medium">{rNumber}</span>
-                                                    <button onClick={() => copyToClipboard(rNumber)}>
-                                                        <Copy size={16} className="text-gray-400 hover:text-white" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-gray-400">Account Holder</span>
-                                            <span className="font-medium">{aName}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-gray-400">Reference</span>
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-mono text-xs text-purple-400 break-all">{ref}</span>
-                                                <button onClick={() => copyToClipboard(ref)}>
-                                                    <Copy size={16} className="text-gray-400 hover:text-white" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                        
-                                        {noteText && (
-                                            <div className="pt-2 border-t border-gray-700/50 mt-1">
-                                                <p className="text-[10px] text-gray-500 leading-relaxed italic">
-                                                    {noteText}
-                                                </p>
-                                            </div>
-                                        )}
+                        {method === 'bank' && bankDetails && (
+                            <div className="space-y-4">
+                                <div className="bg-gray-800 rounded-lg p-4 space-y-3">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-gray-400">Bank Name</span>
+                                        <span className="font-medium">{bankDetails?.bankDetails?.bankName || (bankDetails as any)?.instructions?.bank_name || 'Lead Bank'}</span>
                                     </div>
-                                    <p className="text-sm text-yellow-400 text-center">
-                                        Include the reference in your transfer description
-                                    </p>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-gray-400">Account Number</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-mono font-medium">{bankDetails?.bankDetails?.accountNumber || (bankDetails as any)?.instructions?.account_number || ''}</span>
+                                            <button onClick={() => copyToClipboard(bankDetails?.bankDetails?.accountNumber || (bankDetails as any)?.instructions?.account_number || '')}>
+                                                <Copy size={16} className="text-gray-400 hover:text-white" />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {(bankDetails?.bankDetails?.iban || (bankDetails as any)?.instructions?.iban) && (
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-gray-400">IBAN</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-mono font-medium text-xs">{bankDetails?.bankDetails?.iban || (bankDetails as any)?.instructions?.iban}</span>
+                                                <button onClick={() => copyToClipboard(bankDetails?.bankDetails?.iban || (bankDetails as any)?.instructions?.iban)}>
+                                                    <Copy size={16} className="text-gray-400 hover:text-white" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {(bankDetails?.bankDetails?.swiftCode || (bankDetails as any)?.instructions?.swift_code) && (
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-gray-400">SWIFT / BIC</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-mono font-medium">{bankDetails?.bankDetails?.swiftCode || (bankDetails as any)?.instructions?.swift_code}</span>
+                                                <button onClick={() => copyToClipboard(bankDetails?.bankDetails?.swiftCode || (bankDetails as any)?.instructions?.swift_code)}>
+                                                    <Copy size={16} className="text-gray-400 hover:text-white" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {(bankDetails?.bankDetails?.routingNumber || (bankDetails as any)?.instructions?.ach_routing || (bankDetails as any)?.instructions?.wire_routing) && (
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-gray-400">Routing / Sort Code</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-mono font-medium">{bankDetails?.bankDetails?.routingNumber || (bankDetails as any)?.instructions?.ach_routing || (bankDetails as any)?.instructions?.wire_routing}</span>
+                                                <button onClick={() => copyToClipboard(bankDetails?.bankDetails?.routingNumber || (bankDetails as any)?.instructions?.ach_routing || (bankDetails as any)?.instructions?.wire_routing)}>
+                                                    <Copy size={16} className="text-gray-400 hover:text-white" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-gray-400">Account Holder</span>
+                                        <span className="font-medium">{bankDetails?.bankDetails?.accountName || (bankDetails as any)?.instructions?.account_name || 'JOSSY DIGITAL TECHNOLOGIES LTD'}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-gray-400">Reference</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-mono text-xs text-purple-400 break-all">{bankDetails?.bankDetails?.reference || (bankDetails as any)?.instructions?.reference || bankDetails?.providerReference || 'NS-TRANSFER'}</span>
+                                            <button onClick={() => copyToClipboard(bankDetails?.bankDetails?.reference || (bankDetails as any)?.instructions?.reference || bankDetails?.providerReference || 'NS-TRANSFER')}>
+                                                <Copy size={16} className="text-gray-400 hover:text-white" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    {(bankDetails?.bankDetails?.note || (bankDetails as any)?.instructions?.critical_warning) && (
+                                        <div className="pt-2 border-t border-gray-700/50 mt-1">
+                                            <p className="text-[10px] text-gray-500 leading-relaxed italic">
+                                                {bankDetails?.bankDetails?.note || (bankDetails as any)?.instructions?.critical_warning}
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
-                            );
-                        })()}
+                                <p className="text-sm text-yellow-400 text-center">
+                                    Include the reference in your transfer description
+                                </p>
 
                                 <div className="mt-4 p-4 bg-purple-600/10 border border-purple-500/20 rounded-xl space-y-4">
                                     <div className="flex items-center gap-3">
