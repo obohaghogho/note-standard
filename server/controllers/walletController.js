@@ -296,6 +296,33 @@ exports.depositTransfer = async (req, res, next) => {
     const upCurr = String(currency).toUpperCase();
     const chosenProvider = req.body.provider || (['USD', 'EUR', 'GBP'].includes(upCurr) ? 'grey' : 'fincra');
 
+    const BankingProviderRouter = require("../services/settlement/BankingProviderRouter");
+    const instructions = await BankingProviderRouter.getDepositInstructions({
+      currency: upCurr,
+      rail: "BANK_TRANSFER",
+      userId: req.user.id
+    });
+
+    if (upCurr === 'NGN' || chosenProvider === 'fincra') {
+      const normalizedBankDetails = {
+        bankName: instructions.account.bank_name || process.env.FINCRA_BANK_NAME || 'Guaranty Trust Bank',
+        accountName: instructions.account.holder || process.env.FINCRA_ACCOUNT_NAME || 'JOSSY DIGITAL TECHNOLOGIES LTD',
+        accountNumber: instructions.account.number || process.env.FINCRA_ACCOUNT_NUMBER || '5000701121',
+        bankCode: instructions.account.bank_code || process.env.FINCRA_BANK_CODE || '058',
+        accountType: instructions.account.type || 'Virtual Account',
+        reference: instructions.reference.code,
+        note: 'Transfer Nigerian Naira (NGN) only from a valid Nigerian bank account. Include your unique reference in transfer narration.'
+      };
+
+      return res.json({
+        success: true,
+        provider: 'FINCRA',
+        currency: 'NGN',
+        bankDetails: normalizedBankDetails,
+        instructions
+      });
+    }
+
     const result = await paymentService.initializePayment(
       req.user.id,
       email,

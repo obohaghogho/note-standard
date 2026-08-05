@@ -760,49 +760,53 @@ export const FundModal: React.FC<FundModalProps> = ({
                                     <span className="text-emerald-400 font-bold text-[11px]">✓ Live Virtual Account</span>
                                 </div>
 
-                                {/* Transfer Type Selector */}
-                                <div className="grid grid-cols-2 gap-2 p-1 bg-gray-900 border border-gray-800 rounded-xl">
-                                    <button
-                                        type="button"
-                                        onClick={() => setTransferRail('ACH')}
-                                        className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex flex-col items-center gap-0.5 ${
-                                            transferRail === 'ACH'
-                                                ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
-                                                : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                                        }`}
-                                    >
-                                        <span>ACH Transfer</span>
-                                        <span className="text-[10px] opacity-80 font-normal">1-2 Business Days</span>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setTransferRail('WIRE')}
-                                        className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex flex-col items-center gap-0.5 ${
-                                            transferRail === 'WIRE'
-                                                ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
-                                                : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                                        }`}
-                                    >
-                                        <span>Wire Transfer</span>
-                                        <span className="text-[10px] opacity-80 font-normal">Same Day</span>
-                                    </button>
-                                </div>
+                                {effectivePayCurrency === 'USD' && (
+                                    <>
+                                        {/* Transfer Type Selector */}
+                                        <div className="grid grid-cols-2 gap-2 p-1 bg-gray-900 border border-gray-800 rounded-xl">
+                                            <button
+                                                type="button"
+                                                onClick={() => setTransferRail('ACH')}
+                                                className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex flex-col items-center gap-0.5 ${
+                                                    transferRail === 'ACH'
+                                                        ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                                                        : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                                                }`}
+                                            >
+                                                <span>ACH Transfer</span>
+                                                <span className="text-[10px] opacity-80 font-normal">1-2 Business Days</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setTransferRail('WIRE')}
+                                                className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex flex-col items-center gap-0.5 ${
+                                                    transferRail === 'WIRE'
+                                                        ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                                                        : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                                                }`}
+                                            >
+                                                <span>Wire Transfer</span>
+                                                <span className="text-[10px] opacity-80 font-normal">Same Day</span>
+                                            </button>
+                                        </div>
 
-                                {/* Transfer Rail Meta Summary Banner */}
-                                <div className="grid grid-cols-3 gap-2 text-center text-xs p-3 bg-gray-900/60 border border-gray-800 rounded-xl">
-                                    <div>
-                                        <p className="text-[10px] text-gray-500 font-medium">Est. Settlement</p>
-                                        <p className="font-bold text-white mt-0.5">{transferRail === 'ACH' ? '1-2 Business Days' : 'Same Day'}</p>
-                                    </div>
-                                    <div className="border-x border-gray-800 px-1">
-                                        <p className="text-[10px] text-gray-500 font-medium">Fee</p>
-                                        <p className="font-bold text-purple-300 mt-0.5">{transferRail === 'ACH' ? '$2.00 Flat' : '$15.00 Flat'}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] text-gray-500 font-medium">Limits</p>
-                                        <p className="font-bold text-white mt-0.5">{transferRail === 'ACH' ? '$10 - $50k' : '$100 - $500k'}</p>
-                                    </div>
-                                </div>
+                                        {/* Transfer Rail Meta Summary Banner */}
+                                        <div className="grid grid-cols-3 gap-2 text-center text-xs p-3 bg-gray-900/60 border border-gray-800 rounded-xl">
+                                            <div>
+                                                <p className="text-[10px] text-gray-500 font-medium">Est. Settlement</p>
+                                                <p className="font-bold text-white mt-0.5">{transferRail === 'ACH' ? '1-2 Business Days' : 'Same Day'}</p>
+                                            </div>
+                                            <div className="border-x border-gray-800 px-1">
+                                                <p className="text-[10px] text-gray-500 font-medium">Fee</p>
+                                                <p className="font-bold text-purple-300 mt-0.5">{transferRail === 'ACH' ? '$2.00 Flat' : '$15.00 Flat'}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] text-gray-500 font-medium">Limits</p>
+                                                <p className="font-bold text-white mt-0.5">{transferRail === 'ACH' ? '$10 - $50k' : '$100 - $500k'}</p>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
 
                                 {/* Safe & Secure Banner */}
                                 <div className="flex items-center gap-2.5 p-3 bg-emerald-950/20 border border-emerald-500/30 rounded-xl text-xs text-emerald-300">
@@ -815,21 +819,24 @@ export const FundModal: React.FC<FundModalProps> = ({
                                     <div className="flex justify-between items-center pb-2 border-b border-gray-700/60">
                                         <div>
                                             <h4 className="text-xs font-bold text-white uppercase tracking-wider">Bank Account Details</h4>
-                                            <p className="text-[10px] text-gray-400">Send your {transferRail} transfer to the account below</p>
+                                            <p className="text-[10px] text-gray-400">
+                                                {effectivePayCurrency === 'NGN' 
+                                                    ? 'Transfer NGN to the GTBank Virtual Account below' 
+                                                    : `Send your ${transferRail} transfer to the account below`}
+                                            </p>
                                         </div>
                                         <button
                                             type="button"
                                             onClick={() => {
-                                                const bName = bankDetails?.bankDetails?.bankName || (bankDetails as any)?.instructions?.account?.bank_partner || 'Lead Bank';
+                                                const bName = bankDetails?.bankDetails?.bankName || (bankDetails as any)?.instructions?.account?.bank_name || (effectivePayCurrency === 'NGN' ? 'Guaranty Trust Bank' : 'Lead Bank');
                                                 const aHolder = bankDetails?.bankDetails?.accountName || (bankDetails as any)?.instructions?.account?.holder || 'JOSSY DIGITAL TECHNOLOGIES LTD';
-                                                const aNum = bankDetails?.bankDetails?.accountNumber || (bankDetails as any)?.instructions?.account?.number || '217394889898';
-                                                const aType = bankDetails?.bankDetails?.accountType || (bankDetails as any)?.instructions?.account?.type || 'Checking';
-                                                const achRoute = bankDetails?.bankDetails?.achRouting || (bankDetails as any)?.instructions?.account?.ach_routing || '101019644';
-                                                const wireRoute = bankDetails?.bankDetails?.wireRouting || (bankDetails as any)?.instructions?.account?.wire_routing || '101019644';
-                                                const bAddr = bankDetails?.bankDetails?.bankAddress || (bankDetails as any)?.instructions?.account?.address || '1801 Main St., Kansas City, MO 64108, United States';
-                                                const refCode = bankDetails?.bankDetails?.reference || (bankDetails as any)?.instructions?.reference?.code || bankDetails?.providerReference || 'NS-TRANSFER';
+                                                const aNum = bankDetails?.bankDetails?.accountNumber || (bankDetails as any)?.instructions?.account?.number || (effectivePayCurrency === 'NGN' ? '5000701121' : '217394889898');
+                                                const bCode = bankDetails?.bankDetails?.bankCode || (bankDetails as any)?.instructions?.account?.bank_code || (effectivePayCurrency === 'NGN' ? '058' : '');
+                                                const refCode = bankDetails?.bankDetails?.reference || (bankDetails as any)?.instructions?.reference?.code || bankDetails?.providerReference || 'NS-NGN-TRANSFER';
                                                 
-                                                const formatted = `Bank Name: ${bName}\nAccount Holder: ${aHolder}\nAccount Number: ${aNum}\nAccount Type: ${aType}\nACH Routing Number: ${achRoute}\nWire Routing Number: ${wireRoute}\nBank Address: ${bAddr}\nReference: ${refCode}`;
+                                                const formatted = effectivePayCurrency === 'NGN'
+                                                    ? `Bank Name: ${bName}\nBank Code: ${bCode}\nAccount Holder: ${aHolder}\nAccount Number: ${aNum}\nReference: ${refCode}`
+                                                    : `Bank Name: ${bName}\nAccount Holder: ${aHolder}\nAccount Number: ${aNum}\nACH Routing: ${bankDetails?.bankDetails?.achRouting || '101019644'}\nReference: ${refCode}`;
                                                 copyToClipboard(formatted);
                                                 toast.success('All bank details copied to clipboard!');
                                             }}
@@ -843,70 +850,98 @@ export const FundModal: React.FC<FundModalProps> = ({
                                     {/* Bank Name */}
                                     <div className="flex justify-between items-center text-xs">
                                         <span className="text-gray-400">Bank Name</span>
-                                        <span className="font-bold text-white">{bankDetails?.bankDetails?.bankName || (bankDetails as any)?.instructions?.account?.bank_partner || 'Lead Bank'}</span>
+                                        <span className="font-bold text-white">
+                                            {bankDetails?.bankDetails?.bankName || (bankDetails as any)?.instructions?.account?.bank_name || (effectivePayCurrency === 'NGN' ? 'Guaranty Trust Bank' : 'Lead Bank')}
+                                        </span>
                                     </div>
+
+                                    {/* Bank Code (For NGN) */}
+                                    {effectivePayCurrency === 'NGN' && (
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="text-gray-400">Bank Code</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-mono font-bold text-white">
+                                                    {bankDetails?.bankDetails?.bankCode || (bankDetails as any)?.instructions?.account?.bank_code || '058'}
+                                                </span>
+                                                <button onClick={() => copyToClipboard(bankDetails?.bankDetails?.bankCode || (bankDetails as any)?.instructions?.account?.bank_code || '058')}>
+                                                    <Copy size={14} className="text-gray-400 hover:text-white" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Account Holder */}
                                     <div className="flex justify-between items-center text-xs">
                                         <span className="text-gray-400">Account Holder</span>
-                                        <span className="font-bold text-white">{bankDetails?.bankDetails?.accountName || (bankDetails as any)?.instructions?.account?.holder || 'JOSSY DIGITAL TECHNOLOGIES LTD'}</span>
+                                        <span className="font-bold text-white">
+                                            {bankDetails?.bankDetails?.accountName || (bankDetails as any)?.instructions?.account?.holder || 'JOSSY DIGITAL TECHNOLOGIES LTD'}
+                                        </span>
                                     </div>
 
                                     {/* Account Type */}
                                     <div className="flex justify-between items-center text-xs">
                                         <span className="text-gray-400">Account Type</span>
-                                        <span className="font-bold text-white">{bankDetails?.bankDetails?.accountType || (bankDetails as any)?.instructions?.account?.type || 'Checking'}</span>
+                                        <span className="font-bold text-white">
+                                            {bankDetails?.bankDetails?.accountType || (bankDetails as any)?.instructions?.account?.type || (effectivePayCurrency === 'NGN' ? 'Virtual Account' : 'Checking')}
+                                        </span>
                                     </div>
 
                                     {/* Account Number */}
                                     <div className="flex justify-between items-center text-xs">
                                         <span className="text-gray-400">Account Number</span>
                                         <div className="flex items-center gap-2">
-                                            <span className="font-mono font-bold text-white text-sm">{bankDetails?.bankDetails?.accountNumber || (bankDetails as any)?.instructions?.account?.number || '217394889898'}</span>
-                                            <button onClick={() => copyToClipboard(bankDetails?.bankDetails?.accountNumber || (bankDetails as any)?.instructions?.account?.number || '217394889898')}>
+                                            <span className="font-mono font-bold text-white text-sm">
+                                                {bankDetails?.bankDetails?.accountNumber || (bankDetails as any)?.instructions?.account?.number || (effectivePayCurrency === 'NGN' ? '5000701121' : '217394889898')}
+                                            </span>
+                                            <button onClick={() => copyToClipboard(bankDetails?.bankDetails?.accountNumber || (bankDetails as any)?.instructions?.account?.number || (effectivePayCurrency === 'NGN' ? '5000701121' : '217394889898'))}>
                                                 <Copy size={14} className="text-gray-400 hover:text-white" />
                                             </button>
                                         </div>
                                     </div>
 
-                                    {/* ACH Routing Number */}
-                                    <div className="flex justify-between items-center text-xs">
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="text-gray-400">ACH Routing Number</span>
-                                            <span className="text-[9px] bg-purple-600/30 text-purple-300 font-bold px-1.5 py-0.5 rounded">ACH</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-mono font-bold text-white">{bankDetails?.bankDetails?.achRouting || (bankDetails as any)?.instructions?.account?.ach_routing || '101019644'}</span>
-                                            <button onClick={() => copyToClipboard(bankDetails?.bankDetails?.achRouting || (bankDetails as any)?.instructions?.account?.ach_routing || '101019644')}>
-                                                <Copy size={14} className="text-gray-400 hover:text-white" />
-                                            </button>
-                                        </div>
-                                    </div>
+                                    {/* USD Routing & Address Fields */}
+                                    {effectivePayCurrency === 'USD' && (
+                                        <>
+                                            {/* ACH Routing Number */}
+                                            <div className="flex justify-between items-center text-xs">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-gray-400">ACH Routing Number</span>
+                                                    <span className="text-[9px] bg-purple-600/30 text-purple-300 font-bold px-1.5 py-0.5 rounded">ACH</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-mono font-bold text-white">{bankDetails?.bankDetails?.achRouting || (bankDetails as any)?.instructions?.account?.ach_routing || '101019644'}</span>
+                                                    <button onClick={() => copyToClipboard(bankDetails?.bankDetails?.achRouting || (bankDetails as any)?.instructions?.account?.ach_routing || '101019644')}>
+                                                        <Copy size={14} className="text-gray-400 hover:text-white" />
+                                                    </button>
+                                                </div>
+                                            </div>
 
-                                    {/* Wire Routing Number */}
-                                    <div className="flex justify-between items-center text-xs">
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="text-gray-400">Wire Routing Number</span>
-                                            <span className="text-[9px] bg-blue-600/30 text-blue-300 font-bold px-1.5 py-0.5 rounded">WIRE</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-mono font-bold text-white">{bankDetails?.bankDetails?.wireRouting || (bankDetails as any)?.instructions?.account?.wire_routing || '101019644'}</span>
-                                            <button onClick={() => copyToClipboard(bankDetails?.bankDetails?.wireRouting || (bankDetails as any)?.instructions?.account?.wire_routing || '101019644')}>
-                                                <Copy size={14} className="text-gray-400 hover:text-white" />
-                                            </button>
-                                        </div>
-                                    </div>
+                                            {/* Wire Routing Number */}
+                                            <div className="flex justify-between items-center text-xs">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-gray-400">Wire Routing Number</span>
+                                                    <span className="text-[9px] bg-blue-600/30 text-blue-300 font-bold px-1.5 py-0.5 rounded">WIRE</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-mono font-bold text-white">{bankDetails?.bankDetails?.wireRouting || (bankDetails as any)?.instructions?.account?.wire_routing || '101019644'}</span>
+                                                    <button onClick={() => copyToClipboard(bankDetails?.bankDetails?.wireRouting || (bankDetails as any)?.instructions?.account?.wire_routing || '101019644')}>
+                                                        <Copy size={14} className="text-gray-400 hover:text-white" />
+                                                    </button>
+                                                </div>
+                                            </div>
 
-                                    {/* Bank Address */}
-                                    <div className="flex justify-between items-start text-xs pt-1 border-t border-gray-700/40">
-                                        <span className="text-gray-400 shrink-0 mr-2">Bank Address (For Wires)</span>
-                                        <div className="flex items-start gap-2 text-right">
-                                            <span className="font-medium text-gray-300 text-[11px] leading-tight break-all max-w-[200px]">{bankDetails?.bankDetails?.bankAddress || (bankDetails as any)?.instructions?.account?.address || '1801 Main St., Kansas City, MO 64108, United States'}</span>
-                                            <button onClick={() => copyToClipboard(bankDetails?.bankDetails?.bankAddress || (bankDetails as any)?.instructions?.account?.address || '1801 Main St., Kansas City, MO 64108, United States')}>
-                                                <Copy size={14} className="text-gray-400 hover:text-white shrink-0 mt-0.5" />
-                                            </button>
-                                        </div>
-                                    </div>
+                                            {/* Bank Address */}
+                                            <div className="flex justify-between items-start text-xs pt-1 border-t border-gray-700/40">
+                                                <span className="text-gray-400 shrink-0 mr-2">Bank Address (For Wires)</span>
+                                                <div className="flex items-start gap-2 text-right">
+                                                    <span className="font-medium text-gray-300 text-[11px] leading-tight break-all max-w-[200px]">{bankDetails?.bankDetails?.bankAddress || (bankDetails as any)?.instructions?.account?.address || '1801 Main St., Kansas City, MO 64108, United States'}</span>
+                                                    <button onClick={() => copyToClipboard(bankDetails?.bankDetails?.bankAddress || (bankDetails as any)?.instructions?.account?.address || '1801 Main St., Kansas City, MO 64108, United States')}>
+                                                        <Copy size={14} className="text-gray-400 hover:text-white shrink-0 mt-0.5" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
 
                                 {/* Persistent Unique Reference Box */}
@@ -921,11 +956,11 @@ export const FundModal: React.FC<FundModalProps> = ({
 
                                     <div className="flex items-center justify-between bg-purple-900/60 p-3 rounded-lg border border-purple-400/30">
                                         <span className="font-mono text-base font-extrabold text-purple-200 tracking-wider">
-                                            {bankDetails?.bankDetails?.reference || (bankDetails as any)?.instructions?.reference?.code || bankDetails?.providerReference || 'NS-9X2AB71'}
+                                            {bankDetails?.bankDetails?.reference || (bankDetails as any)?.instructions?.reference?.code || bankDetails?.providerReference || (effectivePayCurrency === 'NGN' ? 'NS-NGN-REGISTERING' : 'NS-9X2AB71')}
                                         </span>
                                         <button
                                             type="button"
-                                            onClick={() => copyToClipboard(bankDetails?.bankDetails?.reference || (bankDetails as any)?.instructions?.reference?.code || bankDetails?.providerReference || 'NS-9X2AB71')}
+                                            onClick={() => copyToClipboard(bankDetails?.bankDetails?.reference || (bankDetails as any)?.instructions?.reference?.code || bankDetails?.providerReference || (effectivePayCurrency === 'NGN' ? 'NS-NGN-REGISTERING' : 'NS-9X2AB71'))}
                                             className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-md text-xs font-bold transition-colors flex items-center gap-1.5 shadow"
                                         >
                                             <Copy size={14} />
