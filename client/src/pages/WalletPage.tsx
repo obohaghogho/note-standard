@@ -23,6 +23,7 @@ import {
   CRYPTO_CURRENCY_CATALOG,
 } from '../config/currencyConfig';
 import type { CurrencyConfig, CryptoCurrencyConfig } from '../config/currencyConfig';
+import { CurrencyFeatureService } from '../../../shared/services/CurrencyFeatureService';
 
 import type { TabId as HubTab } from '../components/wallet/WalletHubTabs';
 
@@ -150,7 +151,6 @@ function WalletHubContent() {
   };
 
   // Group Fiat Catalog into Fiat Banking vs Digital Currency vs Coming Soon
-  const CurrencyFeatureService = require('../../../shared/services/CurrencyFeatureService').CurrencyFeatureService;
   const visibleCurrencies = CurrencyFeatureService.getVisibleCurrencies();
   const STABLECOIN_CODES = new Set(['USDT', 'USDC', 'CNGN']);
   const activeBankingFiat = fiatCatalog.filter(c => c.status === 'active' && !STABLECOIN_CODES.has(c.code) && visibleCurrencies.includes(c.code));
