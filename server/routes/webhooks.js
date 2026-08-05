@@ -74,10 +74,38 @@ async function safeProactiveCredit(tx) {
 router.post("/paystack", WebhookService.processPaystackWebhook.bind(WebhookService));
 
 /**
- * POST /api/webhooks/grey
- * Direct Grey webhook (for future API support)
+ * POST /webhooks/grey
+ * Direct Grey Settlement Webhook Handler
  */
-router.post("/grey", webhookLimiter, (req, res) => res.status(200).json({ received: true, status: "disabled" }));
+router.post("/grey", webhookLimiter, async (req, res) => {
+  try {
+    const GreySettlementProvider = require('../services/settlement/GreySettlementProvider');
+    const WithdrawalWorkflowService = require('../services/treasury/WithdrawalWorkflowService');
+    const greyProvider = new GreySettlementProvider();
+
+    const isValid = await greyProvider.verifyWebhookSignature(req.headers, req.body);
+    if (!isValid) {
+      return res.status(401).json({ success: false, message: "Invalid signature or expired timestamp" });
+    }
+
+    const payload = req.body || {};
+    const eventType = payload.event || payload.event_type || 'payout.completed';
+    const reference = payload.reference || payload.data?.reference;
+    const providerRef = payload.id || payload.data?.id;
+
+    if (['payout.completed', 'payout.successful', 'transfer.success'].includes(eventType)) {
+      await WithdrawalWorkflowService.finalizeSuccessfulSettlement(reference, providerRef);
+    } else if (['payout.failed', 'payout.rejected', 'transfer.failed'].includes(eventType)) {
+      const reason = payload.reason || payload.data?.reason || 'Provider payout failed';
+      await WithdrawalWorkflowService.rollbackFailedWithdrawal(reference, reason, 'REJECTED');
+    }
+
+    return res.status(200).json({ success: true, message: "Grey webhook processed successfully" });
+  } catch (err) {
+    logger.error(`[Grey Webhook] Processing error: ${err.message}`);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 /**
  * POST /webhooks/flutterwave
