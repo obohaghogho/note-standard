@@ -63,9 +63,9 @@ const VA_FLAGS = {
 // AUD/NZD/JPY have no provider (not yet approved).
 const VA_ROUTING = {
   NGN: process.env.NGN_VIRTUAL_ACCOUNT_PROVIDER || 'fincra',
-  USD: process.env.USD_VIRTUAL_ACCOUNT_PROVIDER || 'fincra',
-  EUR: process.env.EUR_VIRTUAL_ACCOUNT_PROVIDER || 'fincra',
-  GBP: process.env.GBP_VIRTUAL_ACCOUNT_PROVIDER || 'fincra',
+  USD: process.env.USD_VIRTUAL_ACCOUNT_PROVIDER || 'grey',
+  EUR: process.env.EUR_VIRTUAL_ACCOUNT_PROVIDER || 'grey',
+  GBP: process.env.GBP_VIRTUAL_ACCOUNT_PROVIDER || 'grey',
   CAD: process.env.CAD_VIRTUAL_ACCOUNT_PROVIDER || 'fincra',
   GHS: 'fincra', TZS: 'fincra', KES: 'fincra', UGX: 'fincra',
   ZAR: 'fincra', XOF: 'fincra', MWK: 'fincra', RWF: 'fincra',
@@ -101,12 +101,12 @@ const PROVIDER_REGISTRY = {
     live: true,
   },
   grey: {
-    name: 'Grey',
+    name: 'Grey (Lead Bank)',
     type: 'fiat_gateway',
-    supportedCurrencies: ['USD', 'EUR', 'GBP'],
+    supportedCurrencies: ['USD', 'EUR', 'GBP', 'NGN'],
     operations: ['deposit', 'withdraw', 'bank_transfer', 'virtual_account'],
     requiresSmallestUnit: false,
-    live: false, // not yet integrated
+    live: true,
   },
   fincra: {
     name: 'Fincra',

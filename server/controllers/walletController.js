@@ -190,6 +190,9 @@ exports.depositCard = async (req, res, next) => {
     const defaultOrigin = process.env.FRONTEND_URL || 'https://notestandard.com';
     const callbackUrl = `${sanitiseOrigin(req.headers.origin, defaultOrigin)}/payment/callback`;
 
+    const upCurr = String(currency).toUpperCase();
+    const chosenProvider = req.body.provider || (['USD', 'EUR', 'GBP'].includes(upCurr) ? 'grey' : 'fincra');
+
     const result = await paymentService.initializePayment(
       req.user.id,
       email,
@@ -204,7 +207,7 @@ exports.depositCard = async (req, res, next) => {
         callbackUrl: callbackUrl,
         customerName: customerName
       },
-      { provider: "fincra" }
+      { provider: chosenProvider }
     );
 
     // Return the structure expected by the frontend
@@ -278,6 +281,9 @@ exports.depositTransfer = async (req, res, next) => {
     const defaultOrigin = process.env.FRONTEND_URL || 'https://notestandard.com';
     const callbackUrl = `${sanitiseOrigin(req.headers.origin, defaultOrigin)}/payment/callback`;
 
+    const upCurr = String(currency).toUpperCase();
+    const chosenProvider = req.body.provider || (['USD', 'EUR', 'GBP'].includes(upCurr) ? 'grey' : 'fincra');
+
     const result = await paymentService.initializePayment(
       req.user.id,
       email,
@@ -292,7 +298,7 @@ exports.depositTransfer = async (req, res, next) => {
         callbackUrl: callbackUrl,
         customerName: customerName
       },
-      { provider: "fincra" }
+      { provider: chosenProvider }
     );
 
     res.json({

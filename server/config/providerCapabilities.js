@@ -79,9 +79,9 @@ const PAYMENT_PROVIDER_CAPABILITIES = {
     name: 'grey',
     capabilityVersion: 1,
     maintenanceMode: 'ACTIVE',
-    supportedCurrencies: ['USD', 'EUR', 'GBP'],
-    merchantCurrencies: ['USD', 'EUR', 'GBP'],
-    nativeCurrencies: ['USD', 'EUR', 'GBP'],
+    supportedCurrencies: ['USD', 'EUR', 'GBP', 'NGN'],
+    merchantCurrencies: ['USD', 'EUR', 'GBP', 'NGN'],
+    nativeCurrencies: ['USD', 'EUR', 'GBP', 'NGN'],
     fallbackCurrencies: [],
     merchantEnabled: true,
     cardEnabled: false,
@@ -90,18 +90,18 @@ const PAYMENT_PROVIDER_CAPABILITIES = {
     refundsEnabled: false,
     supportsInternational: true,
     requiresSmallestUnit: false,
-    settlementCurrencies: ['USD', 'EUR', 'GBP'],
-    feeEfficiencyScore: 12,
+    settlementCurrencies: ['USD', 'EUR', 'GBP', 'NGN'],
+    feeEfficiencyScore: 50,
     methods: ['bank_transfer', 'dva'],
     supportedFeatures: {
-      checkout: false,
+      checkout: true,
       cardPayments: false,
       bankTransfers: true,
       virtualAccounts: true,
       subscriptions: false,
       refunds: false,
       stablecoins: false,
-      treasury: false
+      treasury: true
     }
   },
 

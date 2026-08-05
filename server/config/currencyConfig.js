@@ -41,11 +41,11 @@ const FX_VOLATILITY_BUFFER = 0.01; // 1%
 // Active = full fiat banking support via Fincra.
 // coming_soon = not yet enabled for NoteStandard; display-only.
 const BANK_TRANSFER_SUPPORT = {
-  // Core fiat — Fincra
+  // Core fiat — Grey (Lead Bank USD) & Fincra
   NGN:  { provider: "fincra",  supported: true },
-  USD:  { provider: "fincra",  supported: true },
-  EUR:  { provider: "fincra",  supported: true },
-  GBP:  { provider: "fincra",  supported: true },
+  USD:  { provider: "grey",    supported: true },
+  EUR:  { provider: "grey",    supported: true },
+  GBP:  { provider: "grey",    supported: true },
   CAD:  { provider: "fincra",  supported: true },
   // African fiat — Fincra
   GHS:  { provider: "fincra",  supported: true },

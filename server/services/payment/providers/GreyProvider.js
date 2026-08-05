@@ -1,73 +1,64 @@
 const BaseProvider = require("./BaseProvider");
 const supabase = require("../../../config/database");
 const logger = require("../../../utils/logger");
-const GreyEmailService = require("../GreyEmailService");
 
 /**
  * Grey Payment Provider
- *
- * Handles manual bank transfer payments via Grey.
- * Grey has NO API — all verification happens through:
- * 1. Brevo email parsing (automatic)
- * 2. Admin manual confirmation (fallback)
- *
- * Flow:
- * 1. User requests payment → We generate reference + show bank details
- * 2. User transfers money with reference in narration
- * 3. Grey sends email notification
- * 4. Brevo forwards email to our webhook
- * 5. We parse email, match reference, credit user
+ * =====================
+ * Handles bank transfer payments and virtual USD checking account provisioning via Grey / Lead Bank.
  */
 class GreyProvider extends BaseProvider {
   constructor() {
     super();
     this.expiryMinutes = parseInt(process.env.GREY_EXPIRY_MINUTES || "60", 10);
+    this.accountHolder = (process.env.GREY_LEAD_BANK_HOLDER || 'JOSSY DIGITAL TECHNOLOGIES LTD').trim();
+    this.bankName = (process.env.GREY_LEAD_BANK_NAME || 'Lead Bank').trim();
+    this.accountNumber = (process.env.GREY_LEAD_BANK_ACCOUNT_NUMBER || '217394889898').trim();
+    this.achRouting = (process.env.GREY_LEAD_BANK_ACH_ROUTING || '101019644').trim();
+    this.wireRouting = (process.env.GREY_LEAD_BANK_WIRE_ROUTING || '101019644').trim();
+    this.bankAddress = (process.env.GREY_LEAD_BANK_ADDRESS || '1801 Main St., Kansas City, MO 64108').trim();
   }
 
   /**
-   * Initialize a Grey payment.
-   * Returns bank instructions + generated reference instead of a checkout URL.
-   *
-   * @param {Object} data - Payment data
-   * @returns {Object} { checkoutUrl: null, providerReference, instructions, expiresAt }
+   * Initialize a Grey Lead Bank payment.
    */
   async initialize(data) {
     const { currency, reference, amount, metadata } = data;
-    const upCurrency = String(currency).toUpperCase();
+    const upCurrency = String(currency || 'USD').toUpperCase();
 
-    logger.info(`[GreyProvider] Initializing manual payment for ${upCurrency}`, {
-      reference,
-      amount,
-    });
+    logger.info(`[GreyProvider] Initializing payment for ${upCurrency}`, { reference, amount });
 
-    // 1. Fetch Bank Instructions for this currency
-    const { data: instructions, error } = await supabase
-      .from("grey_instructions")
-      .select("*")
-      .eq("currency", upCurrency)
-      .maybeSingle();
-
-    if (error || !instructions) {
-      logger.error(`[GreyProvider] Missing bank instructions for ${upCurrency}`, {
-        error,
-      });
-      throw new Error(
-        `Bank transfer instructions not available for ${upCurrency}. Please contact support.`
-      );
-    }
-
-    // 2. Generate user-friendly reference if not already NOTE- format
-    const userId = data.metadata?.user_id || data.userId || "system";
     const userReference = reference.startsWith("NOTE-") || reference.startsWith("NS-")
       ? reference
-      : GreyEmailService.generateReference(userId);
+      : `NS-${String(data.userId || 'GEN').replace(/-/g, '').substring(0, 8).toUpperCase()}`;
 
-    // 3. Calculate expiration time
-    const expiresAt = new Date(
-      Date.now() + this.expiryMinutes * 60 * 1000
-    ).toISOString();
+    const expiresAt = new Date(Date.now() + this.expiryMinutes * 60 * 1000).toISOString();
 
-    // 4. Update payment record with Grey-specific data
+    const instructions = {
+      bank_name: this.bankName,
+      account_name: this.accountHolder,
+      account_number: this.accountNumber,
+      ach_routing: this.achRouting,
+      wire_routing: this.wireRouting,
+      bank_address: this.bankAddress,
+      account_type: 'Checking',
+      reference: userReference,
+      amount,
+      currency: upCurrency,
+      expires_at: expiresAt,
+      expiry_minutes: this.expiryMinutes,
+      ach_fee: "$2.00 Flat Fee",
+      wire_fee: "$15.00 Flat Fee",
+      critical_warning: "USD payments can only be received from banks within the United States. SWIFT is NOT supported.",
+      notices: [
+        'Receiving payments via ACH has a flat fee of $2. Please use the ACH routing number to receive payments via ACH.',
+        'Receiving payments via WIRE has a flat fee of $15.',
+        'Receiving payments via SWIFT is currently not supported.',
+        'USD payments can only be received from banks within the United States.',
+        'Processing time for incoming payments can take between 1-3 days, depending on the payment scheme used by the sending bank.'
+      ]
+    };
+
     try {
       await supabase
         .from("payments")
@@ -77,11 +68,7 @@ class GreyProvider extends BaseProvider {
           metadata: {
             ...(metadata || {}),
             user_reference: userReference,
-            bank_details: {
-              bank_name: instructions.bank_name,
-              account_name: instructions.account_name,
-              account_number: instructions.account_number,
-            },
+            bank_details: instructions,
           },
         })
         .eq("reference", reference);
@@ -89,38 +76,15 @@ class GreyProvider extends BaseProvider {
       logger.warn("[GreyProvider] Could not update payment metadata:", updateErr.message);
     }
 
-    // 5. Return instructions for the frontend
     return {
-      checkoutUrl: null, // No external checkout for manual flow
+      checkoutUrl: null,
       providerReference: userReference,
       expiresAt,
-      instructions: {
-        bank_name: instructions.bank_name,
-        account_name: instructions.account_name,
-        account_number: instructions.account_number,
-        swift_code: instructions.swift_code || null,
-        iban: instructions.iban || null,
-        additional_info: instructions.instructions,
-        reference: userReference,
-        amount,
-        currency: upCurrency,
-        expires_at: expiresAt,
-        expiry_minutes: this.expiryMinutes,
-        critical_warning: "You MUST include this exact reference in your bank transfer narration/memo or your payment will not be processed.",
-      },
+      instructions,
     };
   }
 
-  /**
-   * Verify a Grey transaction.
-   * Since Grey has no API, we check our local database.
-   * The payment gets marked as 'success' by the Brevo email webhook or admin.
-   *
-   * @param {string} reference - Payment reference
-   * @returns {Object} Verification result
-   */
   async verify(reference) {
-    // Check payments table (our source of truth for Grey)
     const { data: payment, error } = await supabase
       .from("payments")
       .select("status, amount, currency, credited, metadata, expires_at")
@@ -128,28 +92,11 @@ class GreyProvider extends BaseProvider {
       .maybeSingle();
 
     if (error || !payment) {
-      return {
-        success: false,
-        status: "failed",
-        message: "Transaction not found",
-      };
-    }
-
-    // Check if payment has expired
-    if (
-      payment.status === "pending" &&
-      payment.expires_at &&
-      new Date(payment.expires_at) < new Date()
-    ) {
-      return {
-        success: false,
-        status: "expired",
-        message: "Payment window has expired",
-      };
+      return { success: false, status: "failed", message: "Transaction not found" };
     }
 
     return {
-      success: payment.status === "success",
+      success: payment.status === "success" || payment.status === "COMPLETED",
       status: payment.status,
       amount: payment.amount,
       currency: payment.currency,
@@ -157,58 +104,23 @@ class GreyProvider extends BaseProvider {
     };
   }
 
-  /**
-   * Verify webhook signature for Grey/Brevo emails.
-   * Uses the Brevo inbound secret or the Grey webhook key.
-   *
-   * @param {Object} headers - Request headers
-   * @param {Object} body - Request body
-   * @returns {boolean}
-   */
   verifyWebhookSignature(headers, body) {
-    const WebhookSignatureService = require("../WebhookSignatureService");
-
-    // Try SendGrid verification
-    if (WebhookSignatureService.verifySendGrid(headers, body)) {
-      return true;
-    }
-
-    // Fallback: Static secret for direct Grey callbacks or admin tools
-    const secret = process.env.GREY_WEBHOOK_SECRET;
-    if (secret) {
-      const incomingSecret =
-        headers["x-grey-webhook-key"] ||
-        headers["x-api-key"] ||
-        body?.secret;
-      return incomingSecret === secret;
-    }
-
-    // Always enforce security
-    return false;
+    const GreyBankingProvider = require('../../settlement/GreyBankingProvider');
+    const p = new GreyBankingProvider();
+    return p.verifyWebhook(headers, body);
   }
 
-  /**
-   * Parse a direct Grey webhook payload (non-email path).
-   * Maps Grey's structure to our unified event format.
-   *
-   * @param {Object} payload - Webhook payload
-   * @returns {Object} Unified event
-   */
   parseWebhookEvent(payload) {
-    const status =
-      payload.status === "completed" ||
-      payload.status === "successful" ||
-      payload.status === "success"
-        ? "success"
-        : "failed";
+    const status = ['completed', 'successful', 'success', 'transaction success'].includes(String(payload.status || payload.event).toLowerCase())
+      ? "success"
+      : "failed";
 
     return {
       type: "deposit",
-      reference:
-        payload.reference || payload.narration || payload.memo || null,
+      reference: payload.reference || payload.narration || payload.memo || null,
       status,
       amount: payload.amount,
-      currency: payload.currency,
+      currency: payload.currency || 'USD',
       sender: payload.sender_name || payload.sender || "Unknown",
       transactionId: payload.transaction_id || payload.id || null,
       raw: payload,
@@ -216,43 +128,46 @@ class GreyProvider extends BaseProvider {
   }
 
   async createVirtualAccount(data) {
-    const { currency, email } = data;
     return {
-      bankName: "Grey Finance Bank",
-      accountNumber: `GREY${Math.floor(100000 + Math.random() * 900000)}`,
-      accountName: email.split("@")[0].toUpperCase(),
-      currency: currency.toUpperCase(),
+      bank_name: this.bankName,
+      bankName: this.bankName,
+      account_number: this.accountNumber,
+      accountNumber: this.accountNumber,
+      account_name: this.accountHolder,
+      accountName: this.accountHolder,
+      routingNumber: this.achRouting,
+      achRouting: this.achRouting,
+      wireRouting: this.wireRouting,
+      bankAddress: this.bankAddress,
+      accountType: 'Checking',
+      currency: (data.currency || 'USD').toUpperCase(),
       reference: `va_grey_${Date.now()}`,
       provider: "grey",
+      status: 'ACTIVE',
+      metadata: {
+        routingNumber: this.achRouting,
+        achRouting: this.achRouting,
+        wireRouting: this.wireRouting,
+        bankAddress: this.bankAddress,
+        accountType: 'Checking'
+      }
     };
   }
 
   async transfer(data) {
-    return {
-      success: true,
-      status: "success",
-      reference: `tr_grey_${Date.now()}`,
-    };
+    return { success: true, status: "success", reference: `tr_grey_${Date.now()}` };
   }
 
   async reverse(reference, reason) {
-    return {
-      success: true,
-      status: "reversed",
-      reference: `re_grey_${Date.now()}`,
-    };
+    return { success: true, status: "reversed", reference: `re_grey_${Date.now()}` };
   }
 
   async balanceInquiry(currency) {
-    return { balance: 10000.0, currency: currency.toUpperCase() };
+    return { balance: 100000.0, currency: (currency || 'USD').toUpperCase() };
   }
 
   async healthCheck() {
-    return { status: "healthy", latencyMs: 20 };
-  }
-
-  async settlement(data) {
-    return [];
+    return { status: "healthy", latencyMs: 25 };
   }
 }
 

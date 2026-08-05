@@ -17,7 +17,7 @@ const logger = require('../../utils/logger');
 const { BASELINE_CURRENCY_CAPABILITIES } = require('../../config/currencyCapabilities');
 const supabase = require('../../config/database');
 
-let _globalVersion = 24;
+let _globalVersion = 25;
 let _cachedCapabilities = null;
 let _lastFetchedAt = 0;
 const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes TTL
