@@ -59,7 +59,8 @@ exports.deposit = async (req, res, next) => {
     // Isolate crypto deposits
     const isCrypto = ["BTC", "ETH", "USDT", "USDC"].includes(String(currency).toUpperCase());
     if (isCrypto) {
-      const network = reqNetwork || targetNetwork || "native";
+      const providerNetwork = (provider && provider !== "fincra" && provider !== "paystack" && provider !== "fiat" && provider !== "nowpayments") ? provider : null;
+      const network = reqNetwork || targetNetwork || providerNetwork || "native";
       const result = await CryptoWalletService.deposit(
         req.user.id,
         currency,

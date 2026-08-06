@@ -10,21 +10,31 @@ class NowPaymentsProvider {
       "https://api.nowpayments.io/v1";
 
     this.payCurrencyMap = {
+      "BTC": "btc",
       "BTC_BITCOIN": "btc",
+      "BTC_NATIVE": "btc",
+      "ETH": "eth",
       "ETH_ETHEREUM": "eth",
+      "ETH_NATIVE": "eth",
+      "USDT": "usdttrc20",
+      "USDT_NATIVE": "usdttrc20",
       "USDT_TRC20": "usdttrc20",
       "USDT_ERC20": "usdterc20",
       "USDT_BEP20": "usdtbsc",
+      "USDC": "usdcerc20",
+      "USDC_NATIVE": "usdcerc20",
       "USDC_ERC20": "usdcerc20",
       "USDC_POLYGON": "usdcmatictoken",
     };
   }
 
   getTicker(currency, network = "native") {
-    const key = `${currency.toUpperCase()}_${
-      (network || "native").toUpperCase()
-    }`;
-    return this.payCurrencyMap[key] || currency.toLowerCase();
+    const upCurr = (currency || "").toUpperCase();
+    const upNet = (network || "native").toUpperCase();
+    const key = `${upCurr}_${upNet}`;
+    return this.payCurrencyMap[key] || 
+      this.payCurrencyMap[upCurr] || 
+      (upCurr === "USDT" ? "usdttrc20" : upCurr === "USDC" ? "usdcerc20" : currency.toLowerCase());
   }
 
   async createPayout(address, amount, currency, reference, network = "native") {

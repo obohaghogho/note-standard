@@ -19,20 +19,31 @@ class NowPaymentsProvider extends BaseProvider {
     try {
       // Derive payCurrency from currency and network
       const payCurrencyMap = {
+        "BTC": "btc",
         "BTC_BITCOIN": "btc",
+        "BTC_NATIVE": "btc",
+        "ETH": "eth",
         "ETH_ETHEREUM": "eth",
+        "ETH_NATIVE": "eth",
+        "USDT": "usdttrc20",
+        "USDT_NATIVE": "usdttrc20",
         "USDT_TRC20": "usdttrc20",
         "USDT_ERC20": "usdterc20",
         "USDT_BEP20": "usdtbsc",
+        "USDC": "usdcerc20",
+        "USDC_NATIVE": "usdcerc20",
         "USDC_ERC20": "usdcerc20",
         "USDC_POLYGON": "usdcmatictoken",
       };
 
-      const lookupKey = `${currency.toUpperCase()}_${
-        (network || "native").toUpperCase()
-      }`;
-      const payCurrency = metadata.payCurrency || payCurrencyMap[lookupKey] ||
-        currency.toLowerCase();
+      const upCurrency = (currency || "").toUpperCase();
+      const upNetwork = (network || "native").toUpperCase();
+      const lookupKey = `${upCurrency}_${upNetwork}`;
+
+      const payCurrency = metadata.payCurrency || 
+        payCurrencyMap[lookupKey] || 
+        payCurrencyMap[upCurrency] || 
+        (upCurrency === "USDT" ? "usdttrc20" : upCurrency === "USDC" ? "usdcerc20" : currency.toLowerCase());
 
       const paymentData = await nowpaymentsService.createNowPaymentsPayment({
         amount,

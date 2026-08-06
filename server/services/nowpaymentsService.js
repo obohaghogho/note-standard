@@ -32,9 +32,12 @@ const nowpayments = axios.create({
  */
 exports.createNowPaymentsPayment = async (data) => {
   try {
+    const rawPriceCurrency = String(data.currency || "usd").toLowerCase();
+    const priceCurrency = (rawPriceCurrency === "usdt" || rawPriceCurrency === "usdc") ? "usd" : rawPriceCurrency;
+
     const payload = {
       price_amount: data.amount,
-      price_currency: data.currency.toLowerCase(),
+      price_currency: priceCurrency,
       pay_currency: data.payCurrency || "btc",
       ipn_callback_url: getNowPaymentsIpnUrl(data.ipnCallbackUrl),
       order_id: data.orderId,
@@ -86,21 +89,24 @@ exports.getOrCreateDepositAddress = async (
   const upNetwork = (network || "").toUpperCase();
 
   const payCurrencyMap = {
+    BTC: "btc",
     BTC_BITCOIN: "btc",
     BTC_NATIVE: "btc",
+    ETH: "eth",
     ETH_ETHEREUM: "eth",
     ETH_NATIVE: "eth",
+    USDT: "usdttrc20",
     USDT_ERC20: "usdterc20",
     USDT_TRC20: "usdttrc20",
     USDT_BEP20: "usdtbsc",
     USDT_NATIVE: "usdttrc20", // Default to TRC20 for native
+    USDC: "usdcerc20",
     USDC_ERC20: "usdcerc20",
     USDC_POLYGON: "usdcmatictoken",
     USDC_NATIVE: "usdcerc20", // Default to ERC20 for native
   };
 
   // Construct lookup key.
-  // We now handle NATIVE specifically in the map, so we just normalize it.
   const networkKey = upNetwork === "NATIVE" || !network
     ? (upAsset === "BTC"
       ? "BITCOIN"
@@ -115,7 +121,7 @@ exports.getOrCreateDepositAddress = async (
 
   const lookupKey = `${upAsset}_${networkKey}`;
 
-  const payCurrency = payCurrencyMap[lookupKey];
+  const payCurrency = payCurrencyMap[lookupKey] || payCurrencyMap[upAsset] || (upAsset === "USDT" ? "usdttrc20" : upAsset === "USDC" ? "usdcerc20" : null);
   if (!payCurrency) {
     throw new Error(
       `Asset ${upAsset} on network ${upNetwork} is not supported`,

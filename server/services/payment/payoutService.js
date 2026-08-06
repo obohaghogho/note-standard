@@ -213,17 +213,29 @@ class PayoutService {
 
       // Step 2: Map currency tickers
       const payCurrencyMap = {
+        "BTC": "btc",
         "BTC_BITCOIN": "btc",
+        "BTC_NATIVE": "btc",
+        "ETH": "eth",
         "ETH_ETHEREUM": "eth",
+        "ETH_NATIVE": "eth",
+        "USDT": "usdttrc20",
+        "USDT_NATIVE": "usdttrc20",
         "USDT_TRC20": "usdttrc20",
         "USDT_ERC20": "usdterc20",
         "USDT_BEP20": "usdtbsc",
+        "USDC": "usdcerc20",
+        "USDC_NATIVE": "usdcerc20",
         "USDC_ERC20": "usdcerc20",
         "USDC_POLYGON": "usdcmatictoken",
       };
 
-      const lookupKey = `${currency.toUpperCase()}_${(network || "native").toUpperCase()}`;
-      const payCurrency = payCurrencyMap[lookupKey] || currency.toLowerCase();
+      const upCurr = (currency || "").toUpperCase();
+      const upNet = (network || "native").toUpperCase();
+      const lookupKey = `${upCurr}_${upNet}`;
+      const payCurrency = payCurrencyMap[lookupKey] || 
+        payCurrencyMap[upCurr] || 
+        (upCurr === "USDT" ? "usdttrc20" : upCurr === "USDC" ? "usdcerc20" : currency.toLowerCase());
 
       // Step 3: Request withdrawal
       const payload = {
