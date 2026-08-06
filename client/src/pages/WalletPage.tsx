@@ -27,6 +27,13 @@ import { CurrencyFeatureService } from '../../../shared/services/CurrencyFeature
 
 import type { TabId as HubTab } from '../components/wallet/WalletHubTabs';
 
+const isLocalhostOrSandbox = typeof window !== 'undefined' && (
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1' ||
+  import.meta.env.DEV ||
+  import.meta.env.VITE_ENABLE_ANCHOR_SANDBOX === 'true'
+);
+
 function WalletHubContent() {
   const { wallets, loading, refresh, createWallet } = useWallet();
 
@@ -287,7 +294,7 @@ function WalletHubContent() {
                 </div>
               </div>
 
-              {selectedAsset.currency && activeBankingFiat.some(c => c.code === selectedAsset.currency) && (
+              {isLocalhostOrSandbox && selectedAsset.currency && activeBankingFiat.some(c => c.code === selectedAsset.currency) && (
                 <VirtualAccountDetails 
                   currency={selectedAsset.currency} 
                   onAccountCreated={handleRefresh}
