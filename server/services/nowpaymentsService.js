@@ -2,6 +2,7 @@ const axios = require("axios");
 const crypto = require("crypto");
 const https = require("https");
 const logger = require("../utils/logger");
+const { getNowPaymentsIpnUrl } = require("../utils/url_utils");
 
 const NOWPAYMENTS_API_KEY = process.env.NOWPAYMENTS_API_KEY;
 const NOWPAYMENTS_IPN_SECRET = process.env.NOWPAYMENTS_IPN_SECRET;
@@ -35,7 +36,7 @@ exports.createNowPaymentsPayment = async (data) => {
       price_amount: data.amount,
       price_currency: data.currency.toLowerCase(),
       pay_currency: data.payCurrency || "btc",
-      ipn_callback_url: data.ipnCallbackUrl,
+      ipn_callback_url: getNowPaymentsIpnUrl(data.ipnCallbackUrl),
       order_id: data.orderId,
       order_description: data.orderDescription,
     };
@@ -161,8 +162,7 @@ exports.getOrCreateDepositAddress = async (
 
   // 2. No active address — request a new one from NOWPayments
   const orderId = `${userId}_${upAsset}_${upNetwork}_${Date.now()}`;
-  const ipnCallbackUrl = process.env.NOWPAYMENTS_WEBHOOK_URL ||
-    `${process.env.SERVER_URL}/api/webhooks/nowpayments`;
+  const ipnCallbackUrl = getNowPaymentsIpnUrl();
 
   const payment = await exports.createNowPaymentsPayment({
     amount: 100,

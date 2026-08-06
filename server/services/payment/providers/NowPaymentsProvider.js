@@ -1,6 +1,7 @@
 const BaseProvider = require("./BaseProvider");
 const nowpaymentsService = require("../../nowpaymentsService");
 const logger = require("../../../utils/logger");
+const { getNowPaymentsIpnUrl } = require("../../../utils/url_utils");
 
 class NowPaymentsProvider extends BaseProvider {
   constructor() {
@@ -38,7 +39,7 @@ class NowPaymentsProvider extends BaseProvider {
         currency,
         orderId: reference,
         orderDescription: `Digital Assets Purchase: ${currency} (${network})`,
-        ipnCallbackUrl: process.env.NOWPAYMENTS_WEBHOOK_URL || callbackUrl,
+        ipnCallbackUrl: getNowPaymentsIpnUrl(callbackUrl),
         payCurrency: payCurrency,
       });
 

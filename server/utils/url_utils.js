@@ -47,4 +47,37 @@ const getCallbackUrl = (path, params = {}, provider = null) => {
   return finalizedUrl;
 };
 
-module.exports = { getCallbackUrl };
+/**
+ * Generates a valid absolute HTTPS URI for NOWPayments IPN callbacks.
+ * Enforces NOWPayments requirements:
+ * - Must be a valid absolute URI (http:// or https://)
+ * - Uses NOWPAYMENTS_WEBHOOK_URL if provided
+ * - Falls back to SERVER_URL / BACKEND_URL / RENDER_EXTERNAL_URL / production domain
+ */
+const getNowPaymentsIpnUrl = (customUrl = null) => {
+  if (customUrl && typeof customUrl === "string" && customUrl.startsWith("http")) {
+    return customUrl;
+  }
+  if (process.env.NOWPAYMENTS_WEBHOOK_URL && process.env.NOWPAYMENTS_WEBHOOK_URL.startsWith("http")) {
+    return process.env.NOWPAYMENTS_WEBHOOK_URL;
+  }
+
+  const rawBase = process.env.SERVER_URL || 
+                  process.env.BACKEND_URL || 
+                  process.env.RENDER_EXTERNAL_URL || 
+                  env.SERVER_URL || 
+                  "https://note-standard-api.onrender.com";
+
+  let cleanBase = String(rawBase || "").trim().replace(/\/$/, "");
+  if (!cleanBase.startsWith("http")) {
+    cleanBase = `https://${cleanBase}`;
+  }
+  
+  if (cleanBase.includes("localhost") || cleanBase.includes("127.0.0.1") || cleanBase.includes("undefined")) {
+    cleanBase = "https://note-standard-api.onrender.com";
+  }
+
+  return `${cleanBase}/webhooks/nowpayments`;
+};
+
+module.exports = { getCallbackUrl, getNowPaymentsIpnUrl };

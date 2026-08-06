@@ -1,6 +1,7 @@
 const axios = require("axios");
 const env = require("../config/env");
 const logger = require("../utils/logger");
+const { getNowPaymentsIpnUrl } = require("../utils/url_utils");
 
 class NowPaymentsProvider {
   constructor() {
@@ -38,9 +39,7 @@ class NowPaymentsProvider {
               address: address,
               currency: this.getTicker(currency, network),
               amount: amount,
-              ipn_callback_url: `${
-                env.SERVER_URL || ""
-              }/api/webhooks/nowpayments`,
+              ipn_callback_url: getNowPaymentsIpnUrl(),
             },
           ],
         },

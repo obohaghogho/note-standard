@@ -2,6 +2,7 @@ const axios = require("axios");
 const crypto = require("crypto");
 const supabase = require("../../config/database"); // Added missing import
 const logger = require("../../utils/logger");
+const { getNowPaymentsIpnUrl } = require("../../utils/url_utils");
 const SystemState = require("../../config/SystemState");
 
 const FINCRA_SECRET_KEY = process.env.FINCRA_SECRET_KEY;
@@ -231,7 +232,7 @@ class PayoutService {
             address: address,
             currency: payCurrency,
             amount: amount,
-            ipn_callback_url: `${process.env.SERVER_URL || process.env.BACKEND_URL}/api/webhooks/nowpayments`,
+            ipn_callback_url: getNowPaymentsIpnUrl(),
           },
         ],
       };
