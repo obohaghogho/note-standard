@@ -38,7 +38,7 @@ export const CURRENCY_REGISTRY: CurrencyConfig[] = [
     releaseStage: "PROD_READY",
     supportedDepositMethods: ["CARD", "VIRTUAL_ACCOUNT", "BANK_TRANSFER"],
     supportedWithdrawalMethods: ["BANK_TRANSFER"],
-    supportedSwapMethods: ["USD"]
+    supportedSwapMethods: ["USD", "USDT", "USDC", "CNGN", "BTC", "ETH"]
   },
   {
     code: "USD",
@@ -53,7 +53,82 @@ export const CURRENCY_REGISTRY: CurrencyConfig[] = [
     releaseStage: "PROD_READY",
     supportedDepositMethods: ["ACH", "WIRE", "CARD"],
     supportedWithdrawalMethods: ["BANK_TRANSFER", "P2P"],
-    supportedSwapMethods: ["NGN"]
+    supportedSwapMethods: ["NGN", "USDT", "USDC", "CNGN", "BTC", "ETH"]
+  },
+  {
+    code: "USDT",
+    name: "Tether",
+    symbol: "₮",
+    flag: "🟢",
+    status: "LIVE",
+    provider: "fincra",
+    enabled: true,
+    visible: true,
+    comingSoon: false,
+    releaseStage: "PROD_READY",
+    supportedDepositMethods: ["ON_CHAIN", "CARD", "WIRE"],
+    supportedWithdrawalMethods: ["ON_CHAIN", "BANK_TRANSFER"],
+    supportedSwapMethods: ["USD", "NGN", "USDC", "BTC", "ETH"]
+  },
+  {
+    code: "USDC",
+    name: "USD Coin",
+    symbol: "●",
+    flag: "🔵",
+    status: "LIVE",
+    provider: "fincra",
+    enabled: true,
+    visible: true,
+    comingSoon: false,
+    releaseStage: "PROD_READY",
+    supportedDepositMethods: ["ON_CHAIN", "CARD", "WIRE"],
+    supportedWithdrawalMethods: ["ON_CHAIN", "BANK_TRANSFER"],
+    supportedSwapMethods: ["USD", "NGN", "USDT", "BTC", "ETH"]
+  },
+  {
+    code: "CNGN",
+    name: "eNaira / CNGN",
+    symbol: "e₦",
+    flag: "🇳🇬",
+    status: "LIVE",
+    provider: "fincra",
+    enabled: true,
+    visible: true,
+    comingSoon: false,
+    releaseStage: "PROD_READY",
+    supportedDepositMethods: ["BANK_TRANSFER"],
+    supportedWithdrawalMethods: ["BANK_TRANSFER"],
+    supportedSwapMethods: ["USD", "NGN", "USDT", "USDC"]
+  },
+  {
+    code: "BTC",
+    name: "Bitcoin",
+    symbol: "₿",
+    flag: "🟠",
+    status: "LIVE",
+    provider: "nowpayments",
+    enabled: true,
+    visible: true,
+    comingSoon: false,
+    releaseStage: "PROD_READY",
+    supportedDepositMethods: ["ON_CHAIN"],
+    supportedWithdrawalMethods: ["ON_CHAIN"],
+    supportedSwapMethods: ["USD", "NGN", "USDT", "USDC", "ETH"]
+  },
+  {
+    code: "ETH",
+    name: "Ethereum",
+    symbol: "Ξ",
+    flag: "🔷",
+    status: "LIVE",
+    provider: "nowpayments",
+    enabled: true,
+    visible: true,
+    comingSoon: false,
+    releaseStage: "PROD_READY",
+    supportedDepositMethods: ["ON_CHAIN"],
+    supportedWithdrawalMethods: ["ON_CHAIN"],
+    supportedSwapMethods: ["USD", "NGN", "USDT", "USDC", "BTC"]
   },
   {
     code: "EUR",

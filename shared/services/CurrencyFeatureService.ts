@@ -25,7 +25,7 @@ export class CurrencyFeatureService {
 
   /**
    * Get visible currencies for current environment & user role
-   * In Production: Returns ['NGN', 'USD'] (unless isAdmin)
+   * In Production: Returns LIVE currencies ['NGN', 'USD', 'USDT', 'USDC', 'CNGN', 'BTC', 'ETH'] (unless isAdmin)
    * In Development / Admin: Returns all registered currencies
    */
   public static getVisibleCurrencies(isAdmin: boolean = false, envOverride?: string): string[] {

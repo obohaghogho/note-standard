@@ -198,7 +198,7 @@ export const FIAT_CURRENCY_CATALOG: CurrencyConfig[] = [
     status: 'active', provider: 'Licensed Settlement Partner',
     features: ['Balance', 'Deposits', 'Withdrawals', 'FX Conversion'],
     deposit_enabled: true, withdraw_enabled: true, transfer_enabled: true,
-    buy_enabled: false, sell_enabled: false, convert_enabled: true, decimal_places: 2,
+    buy_enabled: true, sell_enabled: true, convert_enabled: true, decimal_places: 2,
     notice: 'Settlement stablecoin — separate from on-chain crypto custody.',
   },
   {
@@ -206,7 +206,7 @@ export const FIAT_CURRENCY_CATALOG: CurrencyConfig[] = [
     status: 'active', provider: 'Licensed Settlement Partner',
     features: ['Balance', 'Deposits', 'Withdrawals', 'FX Conversion'],
     deposit_enabled: true, withdraw_enabled: true, transfer_enabled: true,
-    buy_enabled: false, sell_enabled: false, convert_enabled: true, decimal_places: 2,
+    buy_enabled: true, sell_enabled: true, convert_enabled: true, decimal_places: 2,
     notice: 'Settlement stablecoin — separate from on-chain crypto custody.',
   },
 ];
