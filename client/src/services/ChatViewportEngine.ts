@@ -38,7 +38,6 @@ export class ChatViewportEngine {
   private resizeObserver: ResizeObserver | null = null;
   private intersectionObserver: IntersectionObserver | null = null;
   private broadcastChannel: BroadcastChannel | null = null;
-  private visualViewportTimer: number | null = null;
 
   private onNearBottomChange?: (isNearBottom: boolean) => void;
   private onUnreadIncrement?: () => void;
@@ -69,7 +68,6 @@ export class ChatViewportEngine {
     this.onStateChange = options.onStateChange;
 
     this.setupObservers();
-    this.setupVisualViewportListener();
     this.updateScrollState();
   }
 
@@ -81,10 +79,6 @@ export class ChatViewportEngine {
     if (this.intersectionObserver) {
       this.intersectionObserver.disconnect();
       this.intersectionObserver = null;
-    }
-    if (this.visualViewportTimer) {
-      window.clearTimeout(this.visualViewportTimer);
-      this.visualViewportTimer = null;
     }
     this.container = null;
     this.anchor = null;
@@ -153,23 +147,6 @@ export class ChatViewportEngine {
     this.resizeObserver.observe(this.container);
   }
 
-  private setupVisualViewportListener() {
-    if (typeof window === 'undefined' || !window.visualViewport) return;
-
-    const onVisualViewportResize = () => {
-      if (this.visualViewportTimer) {
-        window.clearTimeout(this.visualViewportTimer);
-      }
-      // Wait until visualViewport settles (50ms stabilization delay)
-      this.visualViewportTimer = window.setTimeout(() => {
-        if (this.container && (this.isNearBottom || document.activeElement?.id === 'chat-window-input')) {
-          this.scrollToBottom('instant');
-        }
-      }, 50);
-    };
-
-    window.visualViewport.addEventListener('resize', onVisualViewportResize);
-  }
 
   public updateScrollState(): boolean {
     if (!this.container) return true;

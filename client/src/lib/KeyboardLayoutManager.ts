@@ -99,6 +99,14 @@ function computeState(): KLMState {
 /** Apply computed state to CSS custom properties — SYNCHRONOUSLY (no rAF) */
 function applyState(state: KLMState): void {
   const root = document.documentElement;
+
+  // Prevent iOS Safari window offset drift on focus
+  if (state.isKeyboardOpen || state.vvTop > 0) {
+    if (window.scrollY > 0) {
+      window.scrollTo(0, 0);
+    }
+  }
+
   root.style.setProperty('--vv-top',    `${state.vvTop}px`);
   root.style.setProperty('--vv-height', `${state.vvHeight}px`);
   root.style.setProperty('--kb-height', `${state.kbHeight}px`);

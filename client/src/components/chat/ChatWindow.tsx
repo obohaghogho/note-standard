@@ -250,32 +250,11 @@ const ChatWindow: React.FC = () => {
         }
     }, [activeConversationId, handleConversationSwitch]);
 
-    // GUARANTEED SCROLL TO BOTTOM ON OPEN & INITIAL MESSAGE LOAD
+    // Clean container-internal scroll to bottom on room open or initial load (0 timers)
     useLayoutEffect(() => {
         if (!activeConversationId || !scrollContainerRef.current) return;
-
-        const scrollToBottomNow = () => {
-            if (scrollContainerRef.current) {
-                scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-            }
-            if (messagesEndRef.current) {
-                messagesEndRef.current.scrollIntoView({ block: 'end' });
-            }
-        };
-
-        // Pass 1: Synchronous DOM scroll
-        scrollToBottomNow();
-
-        // Pass 2: Next frame layout update
-        const timer1 = setTimeout(scrollToBottomNow, 50);
-        // Pass 3: Delayed layout update for slow image/font mounts
-        const timer2 = setTimeout(scrollToBottomNow, 150);
-
-        return () => {
-            clearTimeout(timer1);
-            clearTimeout(timer2);
-        };
-    }, [activeConversationId, currentMessages.length, messageIdsKey]);
+        scrollToBottom('instant');
+    }, [activeConversationId, currentMessages.length, scrollToBottom]);
 
     // Auto-scroll on new message if already at bottom
     const prevMessagesLengthRef = useRef(currentMessages.length);
