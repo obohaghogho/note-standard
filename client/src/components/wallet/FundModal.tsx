@@ -335,26 +335,46 @@ export const FundModal: React.FC<FundModalProps> = ({
         }
     };
 
+    const readFileAsDataUrl = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    };
+
     const handleProofUpload = async () => {
         if (!proofFile || !bankDetails) return;
 
         setUploadingProof(true);
         try {
-            const fileExt = proofFile.name.split('.').pop();
-            const fileName = `${bankDetails.bankDetails.reference}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-            const filePath = `deposit-proofs/${fileName}`;
+            let publicUrl = '';
 
-            const { error: uploadError } = await supabase.storage
-                .from('receipts')
-                .upload(filePath, proofFile);
+            try {
+                const fileExt = proofFile.name.split('.').pop();
+                const fileName = `${bankDetails.bankDetails.reference}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+                const filePath = `deposit-proofs/${fileName}`;
 
-            if (uploadError) throw uploadError;
+                const { error: uploadError } = await supabase.storage
+                    .from('receipts')
+                    .upload(filePath, proofFile);
 
-            const { data: { publicUrl } } = supabase.storage
-                .from('receipts')
-                .getPublicUrl(filePath);
+                if (!uploadError) {
+                    const { data } = supabase.storage
+                        .from('receipts')
+                        .getPublicUrl(filePath);
+                    publicUrl = data.publicUrl;
+                } else {
+                    console.warn("[FundModal] Supabase storage upload failed, falling back to base64 Data URL:", uploadError.message);
+                    publicUrl = await readFileAsDataUrl(proofFile);
+                }
+            } catch (storageErr) {
+                console.warn("[FundModal] Storage error, falling back to base64 Data URL:", storageErr);
+                publicUrl = await readFileAsDataUrl(proofFile);
+            }
 
-            await walletApi.submitDepositProof({
+            const res = await walletApi.submitDepositProof({
                 reference: bankDetails.bankDetails.reference,
                 proof_url: publicUrl,
                 amount: parseFloat(amount) || 0,
@@ -362,7 +382,7 @@ export const FundModal: React.FC<FundModalProps> = ({
             });
 
             setProofSubmitted(true);
-            toast.success("Proof of payment submitted successfully!");
+            toast.success(res.message || "Proof of payment submitted successfully!");
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : "Failed to upload proof");
         } finally {
