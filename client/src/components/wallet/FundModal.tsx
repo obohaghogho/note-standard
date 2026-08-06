@@ -156,7 +156,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                         clearInterval(interval);
                         setTimeout(() => {
                             onClose();
-                            _onSuccess();
+                            onSuccess();
                         }, 2000);
                     } else if (status.status === 'FAILED') {
                         setCryptoStatus('FAILED');
@@ -169,7 +169,7 @@ export const FundModal: React.FC<FundModalProps> = ({
             }, 10000); // Poll every 10s
         }
         return () => clearInterval(interval);
-    }, [cryptoAddress, cryptoStatus, onClose, _onSuccess]);
+    }, [cryptoAddress, cryptoStatus, onClose, onSuccess]);
 
     const handleCryptoDeposit = async () => {
         if (!amount || parseFloat(amount) <= 0) {
