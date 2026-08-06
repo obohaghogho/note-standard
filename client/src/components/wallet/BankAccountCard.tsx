@@ -24,6 +24,13 @@ const SUPPORTED_BANKS = [
     { currency: 'NGN', label: 'Nigeria (NGN)' }
 ];
 
+const isLocalhostOrSandbox = typeof window !== 'undefined' && (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1' ||
+    import.meta.env.DEV ||
+    import.meta.env.VITE_ENABLE_ANCHOR_SANDBOX === 'true'
+);
+
 export const BankAccountCard: React.FC = () => {
     const [selectedCurrency, setSelectedCurrency] = useState('USD');
     const [account, setAccount] = useState<BankAccount | null>(null);
@@ -207,7 +214,7 @@ export const BankAccountCard: React.FC = () => {
                         </Button>
                     </form>
                 </div>
-            ) : selectedCurrency === 'NGN' ? (
+            ) : (selectedCurrency === 'NGN' && isLocalhostOrSandbox) ? (
                 <AnchorAccountCard />
             ) : account ? (
                 <div className="bg-gradient-to-br from-gray-900 to-black border border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-hidden group">
