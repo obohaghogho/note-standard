@@ -50,11 +50,12 @@ async function checkDailyLimit(userId, userPlan = "FREE", requestedAmount = 0) {
 
     if (error) throw error;
 
-    const totalUsed = txs.reduce((sum, tx) => sum + parseFloat(tx.amount), 0);
+    const totalUsed = txs.reduce((sum, tx) => sum + (parseFloat(tx.amount) || 0), 0);
     const remaining = Math.max(0, userLimit - totalUsed);
+    const parsedRequestedAmount = parseFloat(requestedAmount) || 0;
 
     return {
-      allowed: requestedAmount <= remaining,
+      allowed: parsedRequestedAmount <= remaining,
       remaining,
       limit: userLimit,
       totalUsed,

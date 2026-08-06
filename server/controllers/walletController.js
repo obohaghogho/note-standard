@@ -50,7 +50,7 @@ exports.getBalances = async (req, res, next) => {
 
 exports.deposit = async (req, res, next) => {
   try {
-    const { amount, currency, provider } = req.body;
+    const { amount, currency, provider, network: reqNetwork, targetNetwork, idempotencyKey } = req.body;
 
     if (!amount || !currency) {
       return res.status(400).json({ error: "Amount and currency are required" });
@@ -59,11 +59,14 @@ exports.deposit = async (req, res, next) => {
     // Isolate crypto deposits
     const isCrypto = ["BTC", "ETH", "USDT", "USDC"].includes(String(currency).toUpperCase());
     if (isCrypto) {
+      const network = reqNetwork || targetNetwork || "native";
       const result = await CryptoWalletService.deposit(
         req.user.id,
         currency,
+        network,
         amount,
-        req.userProfile?.plan || "FREE"
+        req.userProfile?.plan || "FREE",
+        idempotencyKey
       );
       return res.json(result);
     } else {
@@ -85,6 +88,16 @@ exports.deposit = async (req, res, next) => {
       return res.json(result);
     }
   } catch (err) {
+    if (err.message && (
+      err.message.includes("limit") ||
+      err.message.includes("network") ||
+      err.message.includes("disabled") ||
+      err.message.includes("required") ||
+      err.message.includes("forbidden") ||
+      err.message.includes("exceeded")
+    )) {
+      return res.status(400).json({ error: err.message });
+    }
     next(err);
   }
 };
