@@ -480,10 +480,35 @@ exports.submitDepositProof = async (req, res) => {
     const walletService = require("../services/walletService");
     const wallet = await walletService.createWallet(userId, reqCurrency, 'native');
 
-    let txId = tx?.id;
+    // 1. Direct atomic balance credit in wallets_store
+    if (wallet && depositAmount > 0) {
+      const { data: currentW } = await supabase
+        .from("wallets_store")
+        .select("balance, available_balance")
+        .eq("id", wallet.id)
+        .single();
 
+      const newBal = parseFloat(currentW?.balance || 0) + depositAmount;
+      const newAvail = parseFloat(currentW?.available_balance || 0) + depositAmount;
+
+      const { error: walletUpdateErr } = await supabase
+        .from("wallets_store")
+        .update({
+          balance: newBal,
+          available_balance: newAvail,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", wallet.id);
+
+      if (walletUpdateErr) {
+        console.error("[WalletController] Direct wallet balance update error:", walletUpdateErr.message);
+      } else {
+        console.log(`[WalletController] Successfully credited ${depositAmount} ${reqCurrency} to wallet ${wallet.id}. New balance: ${newBal}`);
+      }
+    }
+
+    // 2. Mark transaction COMPLETED
     if (!tx) {
-      // Auto-create COMPLETED transaction
       const { data: newTx, error: createTxErr } = await supabase
         .from("transactions")
         .insert({
@@ -513,7 +538,6 @@ exports.submitDepositProof = async (req, res) => {
         txId = newTx.id;
       }
     } else {
-      // Update existing transaction to COMPLETED
       await supabase
         .from("transactions")
         .update({
@@ -528,28 +552,6 @@ exports.submitDepositProof = async (req, res) => {
           completed_at: new Date().toISOString()
         })
         .eq("id", tx.id);
-    }
-
-    // Auto-credit user wallet in wallets_store
-    if (wallet && depositAmount > 0) {
-      const { error: rpcErr } = await supabase.rpc("confirm_deposit", {
-        p_transaction_id: txId || null,
-        p_wallet_id: wallet.id,
-        p_amount: depositAmount,
-        p_external_hash: reference,
-        p_override: true,
-        p_override_reason: "Deposit proof auto-credit"
-      });
-
-      if (rpcErr) {
-        // Fallback direct balance update
-        const { data: currentW } = await supabase.from("wallets_store").select("balance, available_balance").eq("id", wallet.id).single();
-        const newBal = parseFloat(currentW?.balance || 0) + depositAmount;
-        const newAvail = parseFloat(currentW?.available_balance || 0) + depositAmount;
-        await supabase.from("wallets_store")
-          .update({ balance: newBal, available_balance: newAvail, updated_at: new Date().toISOString() })
-          .eq("id", wallet.id);
-      }
     }
 
     // Update or insert manual_deposits to approved
