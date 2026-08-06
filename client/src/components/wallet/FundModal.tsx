@@ -649,7 +649,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                                     {selectedRail.name} Rail Specification
                                 </span>
                                 <span className="text-[10px] text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded font-mono uppercase">
-                                    Provider: {selectedRail.provider}
+                                    Provider: {String(selectedRail.provider).toLowerCase() === 'nowpayments' ? 'NOWPAYMENTS (ON-CHAIN GATEWAY)' : selectedRail.provider}
                                 </span>
                             </div>
                             <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">

@@ -120,7 +120,7 @@ const BASELINE_CURRENCY_CAPABILITIES = {
     symbol: '₮',
     type: 'crypto',
     rails: [
-      { id: 'usdt_fx_dep', name: 'Crypto FX Settlement', type: 'fx_settlement', operations: ['deposit'], provider: 'nowpayments', priority: 1, availability: 'ONLINE', fee: { fixed: 0, percentage: 0, text: 'Network Fee Only' }, limits: { minimum: 10, maximum: 1000000 }, requiredTier: 'FREE', estimatedSettlement: 'Instant', icon: 'Bitcoin', recommendedScore: 5, recommendationBadge: 'Recommended' }
+      { id: 'usdt_fx_dep', name: 'Crypto FX Settlement', type: 'fx_settlement', operations: ['deposit'], provider: 'nowpayments', priority: 1, availability: 'ONLINE', fee: { fixed: 0, percentage: 0, text: 'Network Fee Only' }, limits: { minimum: 15, maximum: 1000000 }, requiredTier: 'FREE', estimatedSettlement: 'Instant', icon: 'Bitcoin', recommendedScore: 5, recommendationBadge: 'Recommended' }
     ]
   },
   USDC: {
@@ -129,7 +129,7 @@ const BASELINE_CURRENCY_CAPABILITIES = {
     symbol: '$',
     type: 'crypto',
     rails: [
-      { id: 'usdc_fx_dep', name: 'Crypto FX Settlement', type: 'fx_settlement', operations: ['deposit'], provider: 'nowpayments', priority: 1, availability: 'ONLINE', fee: { fixed: 0, percentage: 0, text: 'Network Fee Only' }, limits: { minimum: 10, maximum: 1000000 }, requiredTier: 'FREE', estimatedSettlement: 'Instant', icon: 'Bitcoin', recommendedScore: 5, recommendationBadge: 'Recommended' }
+      { id: 'usdc_fx_dep', name: 'Crypto FX Settlement', type: 'fx_settlement', operations: ['deposit'], provider: 'nowpayments', priority: 1, availability: 'ONLINE', fee: { fixed: 0, percentage: 0, text: 'Network Fee Only' }, limits: { minimum: 15, maximum: 1000000 }, requiredTier: 'FREE', estimatedSettlement: 'Instant', icon: 'Bitcoin', recommendedScore: 5, recommendationBadge: 'Recommended' }
     ]
   }
 };

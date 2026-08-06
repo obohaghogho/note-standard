@@ -17,7 +17,7 @@ const logger = require('../../utils/logger');
 const { BASELINE_CURRENCY_CAPABILITIES } = require('../../config/currencyCapabilities');
 const supabase = require('../../config/database');
 
-let _globalVersion = 26;
+let _globalVersion = 27;
 let _cachedCapabilities = null;
 let _lastFetchedAt = 0;
 const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes TTL
@@ -68,12 +68,16 @@ class ProviderCapabilityRegistry {
 
       const operations = row.operation === 'both' ? ['deposit', 'withdrawal'] : [row.operation];
 
+      const isCryptoFx = (curr === 'USDT' || curr === 'USDC');
+      const railProvider = isCryptoFx ? 'nowpayments' : row.provider;
+      const minLimit = isCryptoFx ? Math.max(15, Number(row.min_amount || 15)) : Number(row.min_amount || 1);
+
       map[curr].rails.push({
         id: row.id,
         name: row.name,
         type: row.rail_type,
         operations,
-        provider: row.provider,
+        provider: railProvider,
         priority: row.priority || 1,
         availability: row.availability || 'ONLINE',
         fee: {
@@ -82,7 +86,7 @@ class ProviderCapabilityRegistry {
           text: row.fee_percentage > 0 ? `${row.fee_percentage}%` : (row.fee_fixed > 0 ? `${row.fee_fixed}` : 'Free')
         },
         limits: {
-          minimum: Number(row.min_amount || 1),
+          minimum: minLimit,
           maximum: Number(row.max_amount || 500000)
         },
         requiredTier: row.required_tier || 'FREE',

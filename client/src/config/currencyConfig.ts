@@ -195,19 +195,19 @@ export const FIAT_CURRENCY_CATALOG: CurrencyConfig[] = [
   // =========================================================================
   {
     code: 'USDT', name: 'Tether', symbol: '₮', flag: '🟢', color: '#26a17b',
-    status: 'active', provider: 'Licensed Settlement Partner',
+    status: 'active', provider: 'NOWPayments (On-Chain Gateway)',
     features: ['Balance', 'Deposits', 'Withdrawals', 'FX Conversion'],
     deposit_enabled: true, withdraw_enabled: true, transfer_enabled: true,
-    buy_enabled: true, sell_enabled: true, convert_enabled: true, decimal_places: 2,
-    notice: 'Settlement stablecoin — separate from on-chain crypto custody.',
+    buy_enabled: true, sell_enabled: true, convert_enabled: true, decimal_places: 6,
+    notice: 'On-chain digital currency deposit via NOWPayments gateway ($15 min threshold).',
   },
   {
     code: 'USDC', name: 'USD Coin', symbol: '●', flag: '🔵', color: '#2775ca',
-    status: 'active', provider: 'Licensed Settlement Partner',
+    status: 'active', provider: 'NOWPayments (On-Chain Gateway)',
     features: ['Balance', 'Deposits', 'Withdrawals', 'FX Conversion'],
     deposit_enabled: true, withdraw_enabled: true, transfer_enabled: true,
-    buy_enabled: true, sell_enabled: true, convert_enabled: true, decimal_places: 2,
-    notice: 'Settlement stablecoin — separate from on-chain crypto custody.',
+    buy_enabled: true, sell_enabled: true, convert_enabled: true, decimal_places: 6,
+    notice: 'On-chain digital currency deposit via NOWPayments gateway ($15 min threshold).',
   },
 ];
 
