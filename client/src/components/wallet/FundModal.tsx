@@ -26,7 +26,7 @@ export const FundModal: React.FC<FundModalProps> = ({
     onClose, 
     selectedCurrency, 
     selectedNetwork = 'native',
-    onSuccess: _onSuccess,
+    onSuccess,
     initialIsPurchase = false
 }) => {
     const { subscription } = useAuth();
@@ -419,11 +419,19 @@ export const FundModal: React.FC<FundModalProps> = ({
 
             setProofSubmitted(true);
             toast.success(res.message || "Proof of payment submitted successfully!");
+            onSuccess?.();
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : "Failed to upload proof");
         } finally {
             setUploadingProof(false);
         }
+    };
+
+    const handleCloseModal = () => {
+        if (proofSubmitted) {
+            onSuccess?.();
+        }
+        onClose();
     };
 
     const copyToClipboard = (text: string) => {
@@ -443,7 +451,7 @@ export const FundModal: React.FC<FundModalProps> = ({
             >
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500" />
                 
-                <button className="modal-close" onClick={onClose}>
+                <button className="modal-close" onClick={handleCloseModal}>
                     <X size={20} />
                 </button>
                 
@@ -1152,7 +1160,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                                     )}
                                 </div>
 
-                                <Button onClick={onClose} variant="secondary" className="w-full">
+                                <Button onClick={handleCloseModal} variant="secondary" className="w-full">
                                     Done
                                 </Button>
                             </div>
