@@ -356,7 +356,9 @@ export const FundModal: React.FC<FundModalProps> = ({
 
             await walletApi.submitDepositProof({
                 reference: bankDetails.bankDetails.reference,
-                proof_url: publicUrl
+                proof_url: publicUrl,
+                amount: parseFloat(amount) || 0,
+                currency: selectedCurrency || 'NGN'
             });
 
             setProofSubmitted(true);

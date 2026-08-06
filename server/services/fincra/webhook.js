@@ -146,25 +146,58 @@ async function handleDepositSuccessful(payload) {
 
   logger.info(`[Fincra/webhook] Deposit received: ${amount} ${currency} (ref: ${fincraRef})`);
 
-  if (!fincraRef || !amount || !accountNumber) {
-    logger.warn("[Fincra/webhook] Deposit webhook missing required fields. Skipping.");
+  if (!fincraRef || !amount) {
+    logger.warn("[Fincra/webhook] Deposit webhook missing required fields (fincraRef/amount). Skipping.");
     return { handled: false, reason: "Missing required fields" };
   }
 
   // Find the user by their Fincra virtual account number
-  const { data: walletLink } = await supabase
-    .from("fincra_wallet_links")
-    .select("user_id, currency")
-    .eq("account_number", accountNumber)
-    .eq("currency", currency)
-    .maybeSingle();
+  let userId = null;
+  if (accountNumber) {
+    const { data: walletLink } = await supabase
+      .from("fincra_wallet_links")
+      .select("user_id, currency")
+      .eq("account_number", accountNumber)
+      .eq("currency", currency)
+      .maybeSingle();
 
-  if (!walletLink) {
-    logger.warn(`[Fincra/webhook] No wallet link found for account ${accountNumber} (${currency}).`);
-    return { handled: false, reason: `Unknown virtual account: ${accountNumber}` };
+    if (walletLink) {
+      userId = walletLink.user_id;
+    }
   }
 
-  const userId = walletLink.user_id;
+  // Fallback: Resolve user by customer/merchant reference or narration
+  if (!userId) {
+    const searchRef = data.customerReference || data.merchantReference || data.reference || data.narration;
+    if (searchRef) {
+      const { data: txMatch } = await supabase
+        .from("transactions")
+        .select("user_id")
+        .or(`reference_id.eq.${searchRef},metadata->>display_ref.eq.${searchRef}`)
+        .maybeSingle();
+
+      if (txMatch) {
+        userId = txMatch.user_id;
+        logger.info(`[Fincra/webhook] Resolved user ${userId} via transaction reference match (${searchRef}).`);
+      } else {
+        const { data: manualMatch } = await supabase
+          .from("manual_deposits")
+          .select("user_id")
+          .eq("reference", searchRef)
+          .maybeSingle();
+
+        if (manualMatch) {
+          userId = manualMatch.user_id;
+          logger.info(`[Fincra/webhook] Resolved user ${userId} via manual deposit reference match (${searchRef}).`);
+        }
+      }
+    }
+  }
+
+  if (!userId) {
+    logger.warn(`[Fincra/webhook] No wallet link or transaction reference found for account ${accountNumber || 'N/A'} (${currency}).`);
+    return { handled: false, reason: `Unknown virtual account or reference: ${accountNumber || fincraRef}` };
+  }
 
   // Idempotency: check if this fincra_reference was already processed
   const { data: existingTx } = await supabase

@@ -314,6 +314,63 @@ exports.depositTransfer = async (req, res, next) => {
         note: 'Transfer Nigerian Naira (NGN) only from a valid Nigerian bank account. Include your unique reference in transfer narration.'
       };
 
+      // Ensure a pending transaction and manual deposit record exist in DB so proof submissions & webhooks can match
+      try {
+        const walletService = require("../services/walletService");
+        const wallet = await walletService.createWallet(req.user.id, 'NGN', 'native');
+        if (wallet && wallet.id) {
+          const depositAmount = parseFloat(amount) || 0;
+          const refCode = instructions.reference.code;
+
+          // Check if pending transaction already exists
+          const { data: existingTx } = await supabase
+            .from("transactions")
+            .select("id")
+            .eq("reference_id", refCode)
+            .maybeSingle();
+
+          if (!existingTx) {
+            await supabase.from("transactions").insert({
+              user_id: req.user.id,
+              wallet_id: wallet.id,
+              amount: depositAmount,
+              currency: 'NGN',
+              type: 'DEPOSIT',
+              status: 'PENDING',
+              reference_id: refCode,
+              provider: 'fincra',
+              display_label: 'NGN Bank Transfer Deposit',
+              metadata: {
+                display_ref: refCode,
+                provider: 'fincra',
+                account_number: normalizedBankDetails.accountNumber,
+                bank_name: normalizedBankDetails.bankName,
+                created_via: 'depositTransfer'
+              }
+            }).catch(txErr => console.warn("[WalletController] Deposit tx pre-create warning:", txErr.message));
+          }
+
+          // Also record in manual_deposits if not exists
+          const { data: existingManual } = await supabase
+            .from("manual_deposits")
+            .select("id")
+            .eq("reference", refCode)
+            .maybeSingle();
+
+          if (!existingManual) {
+            await supabase.from("manual_deposits").insert({
+              user_id: req.user.id,
+              amount: depositAmount,
+              currency: 'NGN',
+              reference: refCode,
+              status: 'pending'
+            }).catch(mErr => console.warn("[WalletController] Manual deposit pre-create warning:", mErr.message));
+          }
+        }
+      } catch (prepErr) {
+        console.warn("[WalletController] Pre-creation of NGN deposit record warning:", prepErr.message);
+      }
+
       return res.json({
         success: true,
         provider: 'FINCRA',
@@ -401,37 +458,101 @@ exports.depositTransfer = async (req, res, next) => {
 
 exports.submitDepositProof = async (req, res) => {
   try {
-    const { reference, proof_url } = req.body;
+    const { reference, proof_url, amount, currency } = req.body;
 
     if (!reference || !proof_url) {
       return res.status(400).json({ error: "Reference and Proof URL are required" });
     }
 
-    const { data: tx, error: findError } = await supabase
-      .from("transactions")
-      .select("id, metadata")
-      .or(`reference_id.eq.${reference},metadata->>display_ref.eq.${reference}`)
-      .single();
+    const reqCurrency = (currency || "NGN").toUpperCase();
+    const reqAmount = parseFloat(amount || 0);
 
-    if (findError || !tx) {
-      return res.status(404).json({ error: "Transaction not found" });
+    let { data: tx, error: findError } = await supabase
+      .from("transactions")
+      .select("id, metadata, user_id, amount, currency")
+      .or(`reference_id.eq.${reference},metadata->>display_ref.eq.${reference}`)
+      .maybeSingle();
+
+    if (!tx) {
+      // Fail-safe auto-creation: If no transaction was pre-created, create it now!
+      const walletService = require("../services/walletService");
+      const wallet = await walletService.createWallet(req.user.id, reqCurrency, 'native');
+      
+      const { data: newTx, error: createTxErr } = await supabase
+        .from("transactions")
+        .insert({
+          user_id: req.user.id,
+          wallet_id: wallet.id,
+          amount: reqAmount,
+          currency: reqCurrency,
+          type: "DEPOSIT",
+          status: "PROCESSING",
+          reference_id: reference,
+          provider: "fincra",
+          display_label: `${reqCurrency} Bank Deposit`,
+          metadata: {
+            display_ref: reference,
+            proof_url,
+            proof_submitted_at: new Date().toISOString(),
+            status_note: "User submitted proof of payment"
+          }
+        })
+        .select()
+        .single();
+
+      if (createTxErr) {
+        console.error("[WalletController] Fail-safe tx creation failed:", createTxErr.message);
+      } else {
+        tx = newTx;
+      }
+    } else {
+      // Update existing transaction
+      const { error: updateError } = await supabase
+        .from("transactions")
+        .update({
+          metadata: {
+            ...(tx.metadata || {}),
+            proof_url,
+            proof_submitted_at: new Date().toISOString(),
+            status_note: "User submitted proof of payment"
+          },
+          status: "PROCESSING" // Move from PENDING to PROCESSING to signal admin review
+        })
+        .eq("id", tx.id);
+
+      if (updateError) {
+        throw updateError;
+      }
     }
 
-    const { error: updateError } = await supabase
-      .from("transactions")
-      .update({
-        metadata: {
-          ...tx.metadata,
-          proof_url,
-          proof_submitted_at: new Date().toISOString(),
-          status_note: "User submitted proof of payment"
-        },
-        status: "PROCESSING" // Move from PENDING to PROCESSING to signal admin review
-      })
-      .eq("id", tx.id);
+    // Ensure corresponding record in manual_deposits exists so it shows in Admin Pending Queue
+    try {
+      const { data: existingManual } = await supabase
+        .from("manual_deposits")
+        .select("id")
+        .eq("reference", reference)
+        .maybeSingle();
 
-    if (updateError) {
-      throw updateError;
+      if (!existingManual) {
+        await supabase.from("manual_deposits").insert({
+          user_id: req.user.id,
+          amount: reqAmount || tx?.amount || 0,
+          currency: reqCurrency || tx?.currency || "NGN",
+          reference,
+          proof_url,
+          status: "pending"
+        });
+      } else {
+        await supabase.from("manual_deposits")
+          .update({
+            proof_url,
+            status: "pending",
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", existingManual.id);
+      }
+    } catch (mErr) {
+      console.warn("[WalletController] Manual deposit sync warning:", mErr.message);
     }
 
     try {

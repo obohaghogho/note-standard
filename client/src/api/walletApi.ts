@@ -196,7 +196,9 @@ export const walletApi = {
   // Submit proof of payment for manual bank deposit
   async submitDepositProof(data: {
       reference: string,
-      proof_url: string
+      proof_url: string,
+      amount?: number,
+      currency?: string
   }): Promise<{ success: boolean; message: string }> {
       const response = await api.post('/wallet/deposit/submit-proof', data);
       return response.data;
