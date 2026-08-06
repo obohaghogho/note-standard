@@ -172,14 +172,20 @@ class CryptoWalletService {
         throw new Error("CryptoWalletService only supports crypto deposits.");
     }
 
+    const numericAmount = parseFloat(amount);
+    const minCryptoAmount = (upCurrency === "USDT" || upCurrency === "USDC") ? 15 : 10;
+    if (isNaN(numericAmount) || numericAmount < minCryptoAmount) {
+      throw new Error(`Minimum deposit amount for ${upCurrency} is $${minCryptoAmount}. Please enter $${minCryptoAmount} or higher.`);
+    }
+
     const { data: profile } = await supabase.from("profiles").select("email").eq("id", userId).single();
     if (!profile || !profile.email) { throw new Error("User profile not found"); }
 
-    const limit = await checkDailyLimit(userId, userPlan, amount);
+    const limit = await checkDailyLimit(userId, userPlan, numericAmount);
     if (!limit.allowed) { throw new Error("Daily limit exceeded."); }
 
     const PaymentService = require("./payment/paymentService");
-    return await PaymentService.initializePayment(userId, profile.email, amount, upCurrency, { type: "Digital Assets Purchase", userPlan, idempotencyKey }, { isCrypto: true });
+    return await PaymentService.initializePayment(userId, profile.email, numericAmount, upCurrency, { type: "Digital Assets Purchase", userPlan, idempotencyKey }, { isCrypto: true });
   }
 
   /**

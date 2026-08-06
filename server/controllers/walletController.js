@@ -95,9 +95,15 @@ exports.deposit = async (req, res, next) => {
       err.message.includes("disabled") ||
       err.message.includes("required") ||
       err.message.includes("forbidden") ||
-      err.message.includes("exceeded")
+      err.message.includes("exceeded") ||
+      err.message.includes("minimal") ||
+      err.message.includes("minimum") ||
+      err.message.includes("Minimum")
     )) {
-      return res.status(400).json({ error: err.message });
+      const friendlyMessage = err.message.includes("minimal")
+        ? `Minimum deposit amount for ${req.body.currency || 'crypto'} is $15. Please enter $15 or higher.`
+        : err.message;
+      return res.status(400).json({ error: friendlyMessage });
     }
     next(err);
   }

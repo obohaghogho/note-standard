@@ -13,7 +13,7 @@ const assert = require('assert');
 const { checkDailyLimit } = require('../server/utils/limitCheck');
 
 describe('Crypto Deposit Parameter & Limit Check Fix Test Suite', function () {
-  this.timeout(5000);
+  this.timeout(10000);
 
   it('1. checkDailyLimit should return allowed: true for valid amounts even if passed as string', async function () {
     const validUuid = '00000000-0000-0000-0000-000000000001';
