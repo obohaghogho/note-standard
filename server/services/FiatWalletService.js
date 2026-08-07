@@ -56,6 +56,18 @@ class FiatWalletService {
       throw new Error(`CURRENCY_NOT_AVAILABLE: ${upCurrency} will become available after provider approval. Deposits and withdrawals are not yet enabled.`);
     }
 
+    // Helper to ensure we only select personal user wallets (not system/settlement pools)
+    const isPersonalUserWallet = (w) => {
+      if (!w) return false;
+      const addr = String(w.address || "").toUpperCase();
+      const net = String(w.network || "").toUpperCase();
+      return !addr.startsWith("SYSTEM_") && 
+             !addr.startsWith("SETTLEMENT_") && 
+             !addr.startsWith("FX_POOL_") && 
+             net !== "INTERNAL" && 
+             net !== "SYSTEM";
+    };
+
     // Step 1: In-Memory Search across all user's wallets in wallets_store
     const { data: userWallets } = await supabase
       .from("wallets_store")
@@ -64,7 +76,7 @@ class FiatWalletService {
 
     if (userWallets && userWallets.length > 0) {
       const match = userWallets.find(
-        (w) => String(w.currency).trim().toUpperCase() === upCurrency
+        (w) => String(w.currency).trim().toUpperCase() === upCurrency && isPersonalUserWallet(w)
       );
       if (match) return match;
     }
@@ -108,7 +120,7 @@ class FiatWalletService {
 
     if (recheckWallets && recheckWallets.length > 0) {
       const recheckMatch = recheckWallets.find(
-        (w) => String(w.currency).trim().toUpperCase() === upCurrency
+        (w) => String(w.currency).trim().toUpperCase() === upCurrency && isPersonalUserWallet(w)
       );
       if (recheckMatch) return recheckMatch;
     }

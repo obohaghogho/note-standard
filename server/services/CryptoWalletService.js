@@ -101,6 +101,17 @@ class CryptoWalletService {
     }
     const upNetwork = normNetwork;
 
+    const isPersonalUserWallet = (w) => {
+      if (!w) return false;
+      const addr = String(w.address || "").toUpperCase();
+      const net = String(w.network || "").toUpperCase();
+      return !addr.startsWith("SYSTEM_") && 
+             !addr.startsWith("SETTLEMENT_") && 
+             !addr.startsWith("FX_POOL_") && 
+             net !== "INTERNAL" && 
+             net !== "SYSTEM";
+    };
+
     if (!forceNew) {
       const { data: userWallets } = await supabase
         .from("wallets_store")
@@ -109,7 +120,7 @@ class CryptoWalletService {
 
       if (userWallets && userWallets.length > 0) {
         const match = userWallets.find(
-          (w) => String(w.currency).trim().toUpperCase() === upCurrency
+          (w) => String(w.currency).trim().toUpperCase() === upCurrency && isPersonalUserWallet(w)
         );
         if (match) {
           return await this.upgradeIfMock(normUserId, match, upNetwork);
@@ -158,7 +169,7 @@ class CryptoWalletService {
 
     if (recheckWallets && recheckWallets.length > 0) {
       const recheckMatch = recheckWallets.find(
-        (w) => String(w.currency).trim().toUpperCase() === upCurrency
+        (w) => String(w.currency).trim().toUpperCase() === upCurrency && isPersonalUserWallet(w)
       );
       if (recheckMatch) return recheckMatch;
     }
