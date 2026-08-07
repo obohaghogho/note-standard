@@ -336,7 +336,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             setConversations([]);
             setMessages({});
             setActiveConversationId(null);
-            setUnreadCount(0);
+            setDrafts({});
+            setTypingUsers({});
             conversationsFetchRef.current = false;
         };
 
