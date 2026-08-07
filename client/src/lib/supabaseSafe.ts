@@ -321,7 +321,7 @@ export async function safeProfile(userId: string, switchId?: number): Promise<Pr
     async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, username, full_name, avatar_url, role, bio, website, is_verified")
+        .select("*")
         .eq("id", userId)
         .maybeSingle();
       if (error) throw error;

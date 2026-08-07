@@ -176,6 +176,20 @@ class VirtualAccountService {
       throw saveErr;
     }
 
+    // 6b. Sync User Profile KYC Level (Level 2 for local NGN banking, Level 3 for international FCY FX)
+    try {
+      const targetLevel = isFcy ? 3 : 2;
+      await supabase
+        .from('profiles')
+        .update({
+          kyc_level: targetLevel,
+          ...(phone ? { phone } : {})
+        })
+        .eq('id', userId);
+    } catch (kErr) {
+      logger.warn(`[VirtualAccountService] Profile kyc_level sync warning: ${kErr.message}`);
+    }
+
     // 7. Emit events & send push notifications
     try {
       const { createNotification } = require("./notificationService");

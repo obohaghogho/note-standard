@@ -13,12 +13,14 @@ import { AdManager } from '../../components/ads/AdManager';
 import { adService } from '../../services/ads';
 import { Toggle } from '../../components/common/Toggle';
 import { User, Camera, Save, Loader2, Megaphone, BadgeCheck, Shield, Lock, Download, Trash2, Activity as ActivityIcon, MessageSquare, Globe, Phone } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { UserBadge } from '../../components/common/UserBadge';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { KycStatusCard } from '../../components/profile/KycStatusCard';
 
 export default function Settings() {
-    const { user, profile: authProfile, isBusiness, signOut } = useAuth();
+    const { t, i18n } = useTranslation();
+    const { user, profile: authProfile, isBusiness, signOut, refreshProfile } = useAuth();
     const { permission, isSubscribed, subscribeUser, unsubscribeUser } = usePushNotifications();
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
@@ -238,10 +240,10 @@ export default function Settings() {
 
                     if (authError) console.error('Failed to sync auth session:', authError);
 
+                    // Refresh AuthContext profile so all app views reflect changes immediately
+                    await refreshProfile();
+
                     toast.success('Profile updated successfully!');
-                    // Note: AuthContext will pick up the 'USER_UPDATED' event 
-                    // or we can rely on the trigger. For immediate UI feedback, 
-                    // we've already updated the Auth session above.
                     return true;
                 },
                 { minDelay: 500 } // FIXED: safeCall 3rd argument is object
@@ -287,6 +289,11 @@ export default function Settings() {
         
         setSaving(true);
         try {
+            await supabase
+                .from('profiles')
+                .update({ preferred_language: preferredChatLanguage })
+                .eq('id', user.id);
+
             const session = await supabase.auth.getSession();
             const token = session.data.session?.access_token;
             
@@ -298,14 +305,15 @@ export default function Settings() {
                 },
                 body: JSON.stringify({ language: preferredChatLanguage })
             });
-            toast.success('Chat language updated');
-            
-            // Note: Central AuthContext will eventually refresh this via event 
-            // or we can manually trigger a small sync if needed, but the UI 
-            // is already showing the locally updated preferredChatLanguage.
-        } catch {
-            console.error('Failed to update chat language preference');
-            toast.error('Failed to update language');
+
+            await i18n.changeLanguage(preferredChatLanguage);
+            localStorage.setItem('i18nextLng', preferredChatLanguage);
+            await refreshProfile();
+
+            toast.success('Language updated successfully');
+        } catch (error: any) {
+            console.error('Failed to update chat language preference:', error);
+            toast.error(error.message || 'Failed to update language');
         } finally {
             setSaving(false);
         }
@@ -403,8 +411,8 @@ export default function Settings() {
         <div className="space-y-6 max-w-4xl w-full min-w-0">
             <div className="space-y-1 flex justify-between items-start">
                 <div>
-                    <h1 className="text-3xl font-bold">Settings</h1>
-                    <p className="text-gray-400">Manage your account settings and preferences</p>
+                    <h1 className="text-3xl font-bold">{t('settings.title', 'Settings')}</h1>
+                    <p className="text-gray-400">{t('settings.subtitle', 'Manage your account settings and preferences')}</p>
                 </div>
                 {isBusiness && (
                     <div className="bg-blue-500/10 border border-blue-500/20 rounded-full px-4 py-1 flex items-center gap-2">
@@ -419,42 +427,42 @@ export default function Settings() {
                     onClick={() => setActiveTab('profile')}
                     className={`pb-3 px-1 relative flex-shrink-0 ${activeTab === 'profile' ? 'text-primary font-medium' : 'text-gray-400 hover:text-white'}`}
                 >
-                    <span className="flex items-center gap-2 whitespace-nowrap"><User size={18} /> Profile</span>
+                    <span className="flex items-center gap-2 whitespace-nowrap"><User size={18} /> {t('settings.profile_tab', 'Profile')}</span>
                     {activeTab === 'profile' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
                 </button>
                 <button
                     onClick={() => setActiveTab('kyc')}
                     className={`pb-3 px-1 relative flex-shrink-0 ${activeTab === 'kyc' ? 'text-primary font-medium' : 'text-gray-400 hover:text-white'}`}
                 >
-                    <span className="flex items-center gap-2 whitespace-nowrap"><BadgeCheck size={18} /> Verification (KYC)</span>
+                    <span className="flex items-center gap-2 whitespace-nowrap"><BadgeCheck size={18} /> {t('settings.kyc_tab', 'Verification (KYC)')}</span>
                     {activeTab === 'kyc' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
                 </button>
                 <button
                     onClick={() => setActiveTab('ads')}
                     className={`pb-3 px-1 relative flex-shrink-0 ${activeTab === 'ads' ? 'text-primary font-medium' : 'text-gray-400 hover:text-white'}`}
                 >
-                    <span className="flex items-center gap-2 whitespace-nowrap"><Megaphone size={18} /> Advertisements</span>
+                    <span className="flex items-center gap-2 whitespace-nowrap"><Megaphone size={18} /> {t('settings.ads_tab', 'Advertisements')}</span>
                     {activeTab === 'ads' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
                 </button>
                 <button
                     onClick={() => setActiveTab('privacy')}
                     className={`pb-3 px-1 relative flex-shrink-0 ${activeTab === 'privacy' ? 'text-primary font-medium' : 'text-gray-400 hover:text-white'}`}
                 >
-                    <span className="flex items-center gap-2 whitespace-nowrap"><Shield size={18} /> Privacy & Data</span>
+                    <span className="flex items-center gap-2 whitespace-nowrap"><Shield size={18} /> {t('settings.privacy_tab', 'Privacy & Data')}</span>
                     {activeTab === 'privacy' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
                 </button>
                 <button
                     onClick={() => setActiveTab('chat')}
                     className={`pb-3 px-1 relative flex-shrink-0 ${activeTab === 'chat' ? 'text-primary font-medium' : 'text-gray-400 hover:text-white'}`}
                 >
-                    <span className="flex items-center gap-2 whitespace-nowrap"><MessageSquare size={18} /> Chat & Language</span>
+                    <span className="flex items-center gap-2 whitespace-nowrap"><MessageSquare size={18} /> {t('settings.chat_tab', 'Chat & Language')}</span>
                     {activeTab === 'chat' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
                 </button>
                 <button
                     onClick={() => setActiveTab('security')}
                     className={`pb-3 px-1 relative flex-shrink-0 ${activeTab === 'security' ? 'text-primary font-medium' : 'text-gray-400 hover:text-white'}`}
                 >
-                    <span className="flex items-center gap-2 whitespace-nowrap"><Shield size={18} /> Security</span>
+                    <span className="flex items-center gap-2 whitespace-nowrap"><Shield size={18} /> {t('settings.security_tab', 'Security')}</span>
                     {activeTab === 'security' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
                 </button>
             </div>
@@ -925,10 +933,14 @@ export default function Settings() {
                 activeTab === 'kyc' && (
                     <KycStatusCard 
                         userEmail={user?.email}
-                        phone={profile?.phone || ''}
+                        phone={phone || profile?.phone || authProfile?.phone || ''}
                         isVerified={authProfile?.is_verified}
-                        kycLevel={(authProfile as any)?.kyc_level || 1}
-                        onPhoneUpdated={(newPhone) => setProfile(prev => prev ? { ...prev, phone: newPhone } : null)}
+                        kycLevel={authProfile?.kyc_level ?? ((phone || profile?.phone || authProfile?.phone) ? 1 : 0)}
+                        onPhoneUpdated={(newPhone) => {
+                            setPhone(newPhone);
+                            setProfile(prev => prev ? { ...prev, phone: newPhone } : null);
+                            refreshProfile();
+                        }}
                     />
                 )
             }

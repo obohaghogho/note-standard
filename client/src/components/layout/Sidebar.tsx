@@ -63,10 +63,10 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
         { icon: Share2, label: t('nav.shared'), to: '/dashboard/shared' },
         { icon: Users, label: t('nav.teams'), to: '/dashboard/teams' },
         { icon: Wallet, label: t('nav.wallet'), to: '/dashboard/wallet' },
-        { icon: FileText, label: 'Transaction History', to: '/dashboard/history' },
-        { icon: TrendingUp, label: 'Affiliates', to: '/dashboard/affiliates' },
+        { icon: FileText, label: t('nav.history'), to: '/dashboard/history' },
+        { icon: TrendingUp, label: t('nav.affiliates'), to: '/dashboard/affiliates' },
         { icon: Bell, label: t('common.notifications'), to: '/dashboard/notifications' },
-        { icon: Smartphone, label: 'Download App', to: '/download' },
+        { icon: Smartphone, label: t('nav.download_app'), to: '/download' },
         { icon: Search, label: t('nav.search_item'), to: '/dashboard/search' },
     ];
 

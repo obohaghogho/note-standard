@@ -1,5 +1,6 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Sidebar } from './Sidebar';
 import { CreateNoteModal } from '../dashboard/CreateNoteModal';
 import { BroadcastBanner } from '../chat/BroadcastBanner';
@@ -16,6 +17,7 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { preloadCoreDashboardRoutes } from '../../utils/routePreloader';
 
 export function DashboardLayout() {
+    const { t } = useTranslation();
     const location = useLocation();
     const navigate = useNavigate();
     const [isCreateNoteModalOpen, setIsCreateNoteModalOpen] = useState(false);
@@ -74,7 +76,7 @@ export function DashboardLayout() {
                         className="ml-4 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-all shadow-lg shadow-primary/20 flex items-center gap-2"
                 >
                     <Plus size={18} />
-                    <span className="hidden sm:inline">Create Note</span>
+                    <span className="hidden sm:inline">{t('common.create_note')}</span>
                 </button>
 
                 <div className="flex-1" />
@@ -86,7 +88,7 @@ export function DashboardLayout() {
                     <button 
                         onClick={() => navigate('/dashboard/settings')}
                         className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs ring-1 ring-primary/20 hover:bg-primary/30 transition-colors"
-                        title="View Settings"
+                        title={t('common.settings')}
                     >
                         {user?.email?.[0]?.toUpperCase() || '?'}
                     </button>

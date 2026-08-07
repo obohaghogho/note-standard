@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import * as accountManager from "../utils/accountManager";
 import { updateSessionMeta } from "../utils/accountManager";
 import { refreshSessionIsolated } from "../utils/authUtils";
-import { getDeviceId } from "../utils/deviceId";
+import i18n from '../i18n';
 
 interface AuthContextValue {
   user: User | null;
@@ -104,6 +104,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (profileResult) {
           const prof = profileResult as Profile;
           setProfile(prof);
+
+          // Synchronize application active language with user preference
+          if (prof.preferred_language) {
+            const currentLang = (i18n.language || 'en').split('-')[0];
+            if (currentLang !== prof.preferred_language) {
+              i18n.changeLanguage(prof.preferred_language);
+              localStorage.setItem('i18nextLng', prof.preferred_language);
+            }
+          }
           
           // Atomic update to account manager
           const { data: { session: currentSession } } = await supabase.auth.getSession();

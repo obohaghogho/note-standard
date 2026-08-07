@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ShieldCheck, CheckCircle2, Lock, ArrowRight, Smartphone, Building2, Globe2, FileText, ChevronRight, AlertCircle } from 'lucide-react';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
@@ -21,6 +22,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
   kycLevel = 1,
   onPhoneUpdated
 }) => {
+  const { t } = useTranslation();
   const [phone, setPhone] = useState(initialPhone);
   const [phoneInput, setPhoneInput] = useState(initialPhone);
   const [bvnInput, setBvnInput] = useState('');
@@ -30,6 +32,12 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
   const [showTier3Modal, setShowTier3Modal] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Synchronize state when initialPhone prop updates asynchronously
+  useEffect(() => {
+    setPhone(initialPhone);
+    setPhoneInput(initialPhone);
+  }, [initialPhone]);
+
   // Tier 3 inputs
   const [idCardUrl, setIdCardUrl] = useState('');
   const [utilityBillUrl, setUtilityBillUrl] = useState('');
@@ -38,7 +46,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
 
   // Determine current active tier
   const hasPhone = Boolean(phone && phone.trim().length >= 8);
-  const currentTier = kycLevel >= 3 ? 3 : (kycLevel === 2 || Boolean(initialPhone && isVerified) ? 2 : 1);
+  const currentTier = kycLevel >= 3 ? 3 : (kycLevel === 2 || Boolean(initialPhone && isVerified) ? 2 : (hasPhone || kycLevel >= 1 ? 1 : 0));
 
   const handleTier1Submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,7 +62,10 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
 
       const { error } = await supabase
         .from('profiles')
-        .update({ phone: cleanedPhone })
+        .update({
+          phone: cleanedPhone,
+          kyc_level: Math.max(kycLevel || 0, 1)
+        })
         .eq('id', user.id);
 
       if (error) throw error;
@@ -90,6 +101,18 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
         dob: dobInput,
         phone: phone
       });
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase
+          .from('profiles')
+          .update({ kyc_level: Math.max(kycLevel || 0, 2) })
+          .eq('id', user.id);
+      }
+
+      if (onPhoneUpdated) {
+        onPhoneUpdated(phone);
+      }
       toast.success('Tier 2 Verification Submitted! Virtual Account Activated.');
       setShowTier2Modal(false);
     } catch (err: any) {
@@ -116,6 +139,22 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
           utilityBill: utilityBillUrl
         }
       });
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase
+          .from('profiles')
+          .update({
+            kyc_level: 3,
+            id_card_url: idCardUrl,
+            utility_bill_url: utilityBillUrl
+          })
+          .eq('id', user.id);
+      }
+
+      if (onPhoneUpdated) {
+        onPhoneUpdated(phone);
+      }
       toast.success('Tier 3 Verification Submitted! USD/EUR/GBP accounts unlocked.');
       setShowTier3Modal(false);
     } catch (err: any) {
@@ -134,16 +173,16 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <ShieldCheck className="text-blue-400" size={24} />
-              <h2 className="text-xl font-bold text-white tracking-tight">Identity Verification (KYC)</h2>
+              <h2 className="text-xl font-bold text-white tracking-tight">{t('kyc.title', 'Identity Verification (KYC)')}</h2>
             </div>
             <p className="text-sm text-gray-300">
-              Verify your identity to increase transaction limits and unlock multi-currency bank accounts.
+              {t('kyc.subtitle', 'Verify your identity to increase transaction limits and unlock multi-currency bank accounts.')}
             </p>
           </div>
           <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-400/30 px-3.5 py-1.5 rounded-full self-start sm:self-auto">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-xs font-semibold text-blue-300 uppercase tracking-wider">
-              Current: Tier {currentTier} Active
+              {t('kyc.current_status', 'Current Tier')}: Tier {currentTier} {t('kyc.active', 'ACTIVE')}
             </span>
           </div>
         </div>
@@ -162,21 +201,21 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                   <Smartphone size={20} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-white">Tier 1: Basic</h3>
-                  <p className="text-xs text-emerald-400 font-medium">Daily Limit: 50,000 NGN</p>
+                  <h3 className="font-bold text-white">{t('kyc.tier1_title', 'Tier 1: Basic')}</h3>
+                  <p className="text-xs text-emerald-400 font-medium">{t('kyc.tier1_limit', 'Daily Limit: 50,000 NGN')}</p>
                 </div>
               </div>
               <span className={`text-xs px-2.5 py-1 rounded-full font-bold border ${
                 hasPhone ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
               }`}>
-                {hasPhone ? 'ACTIVE' : 'INCOMPLETE'}
+                {hasPhone ? t('kyc.active', 'ACTIVE') : t('kyc.incomplete', 'INCOMPLETE')}
               </span>
             </div>
 
             <div className="space-y-2 pt-2 border-t border-white/5 text-xs text-gray-300">
               <div className="flex items-center gap-2">
                 <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
-                <span>Email: <strong className="text-white">{userEmail || 'Verified'}</strong></span>
+                <span>Email: <strong className="text-white">{userEmail || t('common.verified', 'Verified')}</strong></span>
               </div>
               <div className="flex items-center gap-2">
                 {hasPhone ? (
@@ -185,7 +224,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                   <AlertCircle size={14} className="text-amber-400 shrink-0" />
                 )}
                 <span>
-                  Phone: {hasPhone ? <strong className="text-white">{phone}</strong> : <span className="text-amber-400 font-medium">Phone number required</span>}
+                  Phone: {hasPhone ? <strong className="text-white">{phone}</strong> : <span className="text-amber-400 font-medium">{t('settings.phone', 'Phone number required')}</span>}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -205,7 +244,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                 setShowTier1Modal(true);
               }}
             >
-              {hasPhone ? 'Edit Phone Number' : 'Add Phone Number for Tier 1'} <ChevronRight size={14} className="ml-1" />
+              {hasPhone ? t('kyc.edit_phone', 'Edit Phone Number') : t('kyc.add_phone', 'Add Phone Number for Tier 1')} <ChevronRight size={14} className="ml-1" />
             </Button>
           </div>
         </div>
@@ -221,8 +260,8 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                   <Building2 size={20} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-white">Tier 2: Banking</h3>
-                  <p className="text-xs text-blue-400 font-medium">Daily Limit: 500,000 NGN</p>
+                  <h3 className="font-bold text-white">{t('kyc.tier2_title', 'Tier 2: Banking')}</h3>
+                  <p className="text-xs text-blue-400 font-medium">{t('kyc.tier2_limit', 'Daily Limit: 500,000 NGN')}</p>
                 </div>
               </div>
               <span className={`text-xs px-2.5 py-1 rounded-full font-bold border ${
@@ -230,7 +269,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                   ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' 
                   : 'bg-white/5 text-gray-400 border-white/10'
               }`}>
-                {currentTier >= 2 ? 'VERIFIED' : 'LOCKED'}
+                {currentTier >= 2 ? t('common.verified', 'VERIFIED') : 'LOCKED'}
               </span>
             </div>
 
@@ -253,7 +292,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
           <div className="pt-4">
             {currentTier >= 2 ? (
               <div className="text-xs text-blue-400 font-medium flex items-center gap-1">
-                <CheckCircle2 size={14} /> Tier 2 Active
+                <CheckCircle2 size={14} /> Tier 2 {t('kyc.active', 'Active')}
               </div>
             ) : (
               <Button
@@ -262,7 +301,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                 className="w-full text-xs font-semibold border-blue-500/30 hover:bg-blue-500/10 text-blue-300"
                 onClick={() => setShowTier2Modal(true)}
               >
-                Upgrade to Tier 2 <ChevronRight size={14} className="ml-1" />
+                {t('kyc.upgrade_tier2', 'Upgrade to Tier 2')} <ChevronRight size={14} className="ml-1" />
               </Button>
             )}
           </div>
@@ -279,8 +318,8 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                   <Globe2 size={20} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-white">Tier 3: Enterprise FX</h3>
-                  <p className="text-xs text-purple-400 font-medium">Daily Limit: Unlimited</p>
+                  <h3 className="font-bold text-white">{t('kyc.tier3_title', 'Tier 3: Enterprise FX')}</h3>
+                  <p className="text-xs text-purple-400 font-medium">{t('kyc.tier3_limit', 'Daily Limit: Unlimited')}</p>
                 </div>
               </div>
               <span className={`text-xs px-2.5 py-1 rounded-full font-bold border ${
@@ -288,7 +327,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                   ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' 
                   : 'bg-white/5 text-gray-400 border-white/10'
               }`}>
-                {currentTier >= 3 ? 'VERIFIED' : 'LOCKED'}
+                {currentTier >= 3 ? t('common.verified', 'VERIFIED') : 'LOCKED'}
               </span>
             </div>
 
@@ -311,7 +350,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
           <div className="pt-4">
             {currentTier >= 3 ? (
               <div className="text-xs text-purple-400 font-medium flex items-center gap-1">
-                <CheckCircle2 size={14} /> Tier 3 Active (Unlimited)
+                <CheckCircle2 size={14} /> Tier 3 {t('kyc.active', 'Active')}
               </div>
             ) : (
               <Button
@@ -320,7 +359,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                 className="w-full text-xs font-semibold border-purple-500/30 hover:bg-purple-500/10 text-purple-300"
                 onClick={() => setShowTier3Modal(true)}
               >
-                Upgrade to Tier 3 <ChevronRight size={14} className="ml-1" />
+                {t('kyc.upgrade_tier3', 'Upgrade to Tier 3')} <ChevronRight size={14} className="ml-1" />
               </Button>
             )}
           </div>
