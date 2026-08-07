@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { X, Check, Globe, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Variants } from 'framer-motion';
+import { supabase } from '../../lib/supabaseSafe';
 
 interface Language {
     code: string;
@@ -82,9 +83,14 @@ export const LanguageModal: React.FC<LanguageModalProps> = ({ isOpen, onClose })
         try {
             await i18n.changeLanguage(lng);
             localStorage.setItem('i18nextLng', lng);
+            localStorage.setItem('user_manual_lang', 'true');
+
+            // Persist preference to database if user is logged in
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user?.id) {
+                supabase.from('profiles').update({ preferred_language: lng }).eq('id', session.user.id).then();
+            }
             onClose();
-            // Optional: for some apps, a full reload ensures all translations are picked up
-            // window.location.reload(); 
         } catch (error) {
             console.error('Failed to change language:', error);
         }

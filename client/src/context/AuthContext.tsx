@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import * as accountManager from "../utils/accountManager";
 import { updateSessionMeta } from "../utils/accountManager";
 import { refreshSessionIsolated } from "../utils/authUtils";
-import i18n from '../i18n';
+import i18n, { SUPPORTED_LANGUAGES } from '../i18n';
 import { getDeviceId } from "../utils/deviceId";
 
 interface AuthContextValue {
@@ -107,7 +107,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setProfile(prof);
 
           // Synchronize application active language with user preference
-          if (prof.preferred_language) {
+          const localSavedLang = localStorage.getItem('i18nextLng');
+          const userManualPick = localStorage.getItem('user_manual_lang') === 'true';
+
+          if (userManualPick && localSavedLang && SUPPORTED_LANGUAGES.includes(localSavedLang)) {
+            // User explicitly chose a language on this device; sync it to profile if different
+            if (prof.preferred_language !== localSavedLang) {
+              supabase.from('profiles').update({ preferred_language: localSavedLang }).eq('id', userId).then();
+              prof.preferred_language = localSavedLang;
+            }
+          } else if (prof.preferred_language && SUPPORTED_LANGUAGES.includes(prof.preferred_language)) {
+            // Profile has valid saved preference from database
             const currentLang = (i18n.language || 'en').split('-')[0];
             if (currentLang !== prof.preferred_language) {
               i18n.changeLanguage(prof.preferred_language);

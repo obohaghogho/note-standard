@@ -15,7 +15,7 @@ import ko from './locales/ko.json';
 import ru from './locales/ru.json';
 import ar from './locales/ar.json';
 
-const SUPPORTED_LANGUAGES = ['en', 'es', 'fr', 'zh', 'ro', 'de', 'it', 'pt', 'ja', 'ko', 'ru', 'ar'];
+export const SUPPORTED_LANGUAGES = ['en', 'es', 'fr', 'zh', 'ro', 'de', 'it', 'pt', 'ja', 'ko', 'ru', 'ar'];
 
 // Country Code to Supported Language Mapping
 const COUNTRY_TO_LANG_MAP: Record<string, string> = {
@@ -54,8 +54,11 @@ const detectInitialLanguage = (): string => {
     
     // 1. If user previously manually picked a language, use that
     const saved = localStorage.getItem('i18nextLng');
-    if (saved && SUPPORTED_LANGUAGES.includes(saved.split('-')[0])) {
-        return saved.split('-')[0];
+    if (saved) {
+        const lang = saved.split('-')[0].toLowerCase();
+        if (SUPPORTED_LANGUAGES.includes(lang)) {
+            return lang;
+        }
     }
 
     // 2. Detect from browser geographic locale (e.g. fr-FR -> fr)
@@ -103,16 +106,20 @@ i18n
         },
     });
 
-// 3. Async Location (GeoIP) Detection for first-time access
-if (typeof window !== 'undefined' && !localStorage.getItem('i18nextLng')) {
+// 3. Async Location (GeoIP) Detection for first-time access (only if no manual preference)
+if (typeof window !== 'undefined' && !localStorage.getItem('i18nextLng') && !localStorage.getItem('user_manual_lang')) {
     fetch('https://ipapi.co/json/')
-        .then(res => res.json())
+        .then(res => {
+            if (!res.ok) throw new Error('GeoIP lookup error');
+            return res.json();
+        })
         .then(data => {
-            if (data && data.country_code) {
-                const countryCode = data.country_code.toUpperCase();
+            if (data && !data.error && data.country_code) {
+                const countryCode = String(data.country_code).toUpperCase();
                 const matchedLang = COUNTRY_TO_LANG_MAP[countryCode];
-                if (matchedLang && matchedLang !== i18n.language && !localStorage.getItem('i18nextLng')) {
+                if (matchedLang && SUPPORTED_LANGUAGES.includes(matchedLang) && !localStorage.getItem('i18nextLng')) {
                     i18n.changeLanguage(matchedLang);
+                    localStorage.setItem('i18nextLng', matchedLang);
                 }
             }
         })

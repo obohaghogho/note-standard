@@ -308,6 +308,7 @@ export default function Settings() {
 
             await i18n.changeLanguage(preferredChatLanguage);
             localStorage.setItem('i18nextLng', preferredChatLanguage);
+            localStorage.setItem('user_manual_lang', 'true');
             await refreshProfile();
 
             toast.success('Language updated successfully');
