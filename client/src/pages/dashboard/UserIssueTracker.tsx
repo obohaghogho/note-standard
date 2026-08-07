@@ -12,7 +12,7 @@ import {
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabaseSafe';
-import { FeedbackReport } from '../../types/feedback';
+import type { FeedbackReport } from '../../types/feedback';
 import { useFeedbackStore } from '../../stores/useFeedbackStore';
 
 export const UserIssueTracker: React.FC = () => {

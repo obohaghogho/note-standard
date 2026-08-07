@@ -22,24 +22,19 @@ function checkPort(port) {
 function killPort(port) {
     if (os.platform() === 'win32') {
         try {
-            // Find PIDs listening on the specified port
-            const findCmd = `powershell -Command "Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess"`;
-            const pidsRaw = execSync(findCmd, { stdio: 'pipe' }).toString().trim();
-            if (pidsRaw) {
-                const pids = pidsRaw.split(/\r?\n/).map(p => p.trim()).filter(p => /^\d+$/.test(p) && p !== '0');
-                for (const pid of pids) {
+            const stdout = execSync(`netstat -ano | findstr :${port}`, { stdio: 'pipe' }).toString();
+            const lines = stdout.split('\n');
+            for (const line of lines) {
+                const parts = line.trim().split(/\s+/);
+                const pid = parts[parts.length - 1];
+                if (pid && /^\d+$/.test(pid) && pid !== '0') {
                     log(`Killing process ${pid} on port ${port}...`);
                     try {
                         execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' });
                     } catch (e) { /* ignore */ }
                 }
             }
-        } catch (e) {
-            // Fallback to npx kill-port
-            try {
-                execSync(`npx --yes kill-port ${port}`, { stdio: 'ignore' });
-            } catch (err) { /* ignore */ }
-        }
+        } catch (e) { /* ignore */ }
     } else {
         try {
             execSync(`npx --yes kill-port ${port}`, { stdio: 'ignore' });

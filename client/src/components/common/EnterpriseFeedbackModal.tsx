@@ -33,7 +33,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useWallet } from '../../context/WalletContext';
 import { useChat } from '../../context/ChatContext';
 import { supabase } from '../../lib/supabaseSafe';
-import { 
+import type { 
   FeedbackCategoryType, 
   PriorityLevel, 
   GranularRatings, 
