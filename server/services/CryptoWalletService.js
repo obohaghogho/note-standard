@@ -144,7 +144,7 @@ class CryptoWalletService {
     }
 
     // Step 2: Try insert without onConflict
-    const { data: wallet, error } = await supabase
+    let { data: wallet, error } = await supabase
       .from("wallets_store")
       .insert({
         user_id: userId,
@@ -160,6 +160,26 @@ class CryptoWalletService {
       return wallet;
     }
 
+    if (error) {
+      logger.warn(`[CryptoWalletService] Crypto wallet insert warning for user ${userId} (${upCurrency}): ${error.message}`);
+      const fallbackAddress = `${upCurrency}_${userId.replace(/-/g, '')}_${Date.now()}`;
+      const { data: retryWallet } = await supabase
+        .from("wallets_store")
+        .insert({
+          user_id: userId,
+          currency: upCurrency,
+          network: upNetwork,
+          address: fallbackAddress,
+          provider: provider,
+        })
+        .select()
+        .maybeSingle();
+
+      if (retryWallet) {
+        return retryWallet;
+      }
+    }
+
     // Step 3: Fallback query if insert hit duplicate key or race condition
     const { data: retry } = await supabase
       .from("wallets_store")
@@ -172,11 +192,7 @@ class CryptoWalletService {
       return retry;
     }
 
-    if (error) {
-      logger.warn(`[CryptoWalletService] Crypto wallet insert warning for user ${userId} (${upCurrency}): ${error.message}`);
-    }
-
-    throw new Error(`Failed to initialize ${upCurrency} crypto wallet.`);
+    throw new Error(`Failed to initialize ${upCurrency} crypto wallet: ${error ? error.message : "Unknown DB Error"}`);
   }
 
   /**

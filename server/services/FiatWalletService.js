@@ -77,8 +77,8 @@ class FiatWalletService {
       return existingStore;
     }
 
-    // New Fiat Wallet Creation
-    let address = "";
+    // New Fiat Wallet Creation: Ensure address is unique per currency & user
+    let address = `${upCurrency}_${userId.replace(/-/g, '').substring(0, 12)}`;
     try {
       const { data: profile } = await supabase
         .from("profiles")
@@ -86,16 +86,15 @@ class FiatWalletService {
         .eq("id", userId)
         .single();
       if (profile) {
-        address = profile.email || profile.username || userId;
-      } else {
-        address = userId;
+        const identifier = profile.username || (profile.email ? profile.email.split('@')[0] : userId);
+        address = `${upCurrency}_${identifier}`;
       }
     } catch (e) {
-      address = userId;
+      address = `${upCurrency}_${userId}`;
     }
 
-    // Step 2: Try insert without onConflict
-    const { data: wallet, error } = await supabase
+    // Step 2: Try insert with unique per-currency address
+    let { data: wallet, error } = await supabase
       .from("wallets_store")
       .insert({
         user_id: userId,
@@ -111,7 +110,28 @@ class FiatWalletService {
       return wallet;
     }
 
-    // Step 3: Fallback query if insert hit duplicate key or race condition
+    // If first insert failed due to address collision or constraint, retry with timestamped address
+    if (error) {
+      logger.warn(`[FiatWalletService] First insert attempt warning for user ${userId} (${upCurrency}): ${error.message}`);
+      const fallbackAddress = `${upCurrency}_${userId.replace(/-/g, '')}_${Date.now()}`;
+      const { data: retryWallet } = await supabase
+        .from("wallets_store")
+        .insert({
+          user_id: userId,
+          currency: upCurrency,
+          network: "NATIVE",
+          address: fallbackAddress,
+          provider: "internal",
+        })
+        .select()
+        .maybeSingle();
+
+      if (retryWallet) {
+        return retryWallet;
+      }
+    }
+
+    // Step 3: Fallback query if insert hit duplicate key or concurrent creation
     const { data: retry } = await supabase
       .from("wallets_store")
       .select("*")
@@ -123,11 +143,7 @@ class FiatWalletService {
       return retry;
     }
 
-    if (error) {
-      logger.warn(`[FiatWalletService] Wallet creation insert warning for user ${userId} (${upCurrency}): ${error.message}`);
-    }
-
-    throw new Error(`Failed to initialize ${upCurrency} wallet for user.`);
+    throw new Error(`Failed to initialize ${upCurrency} wallet for user: ${error ? error.message : "Unknown DB Error"}`);
   }
 
   async getSystemTransitWallet(currency) {
