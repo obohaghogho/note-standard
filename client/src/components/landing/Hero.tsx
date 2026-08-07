@@ -1,9 +1,11 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ArrowRight, Shield, Zap, Globe, Diamond, Smartphone, Play } from 'lucide-react';
 import { usePWAInstall } from '../../context/PWAInstallContext';
 
 export const Hero = () => {
+    const { t } = useTranslation();
     const { installApp } = usePWAInstall();
 
     return (
@@ -39,22 +41,22 @@ export const Hero = () => {
                 >
                     <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/20 text-xs sm:text-sm mb-4 sm:mb-6 backdrop-blur-md shadow-[0_0_15px_rgba(255,255,255,0.1)]">
                         <Diamond className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-                        <span className="text-gray-200 font-medium tracking-wide">Crystal Theme 2.0 Live</span>
+                        <span className="text-gray-200 font-medium tracking-wide">{t('landing.hero_badge', 'Crystal Theme 2.0 Live')}</span>
                     </div>
 
                     <h1 className="text-2xl xs:text-3xl sm:text-4xl lg:text-5xl font-extrabold leading-tight sm:leading-tight mb-4 sm:mb-6 tracking-tight">
-                        Connect, Call & Transact <br className="hidden sm:inline" />
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400">Globally in Real-Time</span> <br />
+                        {t('landing.hero_title_1', 'Connect, Call & Transact')} <br className="hidden sm:inline" />
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400">{t('landing.hero_title_2', 'Globally in Real-Time')}</span> <br />
                         <span className="text-base sm:text-2xl text-gray-300 font-medium opacity-90">– Note Standard Platform</span>
                     </h1>
 
                     <p className="text-sm sm:text-lg text-gray-300/90 mb-6 sm:mb-8 max-w-lg leading-relaxed text-center sm:text-left">
-                        Experience the ultimate all-in-one platform featuring instant encrypted messaging, crystal-clear WebRTC voice and video calls, and a secure multi-currency digital wallet. Built for global collaboration.
+                        {t('landing.hero_subtitle', 'Experience the ultimate all-in-one platform featuring instant encrypted messaging, crystal-clear WebRTC voice and video calls, and a secure multi-currency digital wallet. Built for global collaboration.')}
                     </p>
 
                     <div className="flex flex-wrap sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto">
                         <Link to="/signup" className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 bg-primary hover:bg-primary/90 shadow-[0_0_20px_rgba(16,185,129,0.4)] text-white rounded-xl font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 group border border-white/10">
-                            Start for free
+                            {t('landing.start_free', 'Start for free')}
                             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                         </Link>
                         <button 

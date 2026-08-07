@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Menu, X, Globe, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import { LanguageSelector } from '../common/LanguageSelector';
 import { usePWAInstall } from '../../context/PWAInstallContext';
 
 export const Navbar = () => {
+    const { t } = useTranslation();
     const [isOpen, setIsOpen] = useState(false);
     const { installApp } = usePWAInstall();
 
@@ -30,16 +32,16 @@ export const Navbar = () => {
                 <div className="hidden md:flex items-center gap-8">
                     <a href="#demo" className="text-sm font-medium text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1.5 font-bold">
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                        Demo Video
+                        {t('landing.demo_video', 'Demo Video')}
                     </a>
-                    <a href="#features" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">Features</a>
-                    <a href="#pricing" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">Pricing</a>
-                    <a href="#security" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">Security</a>
-                    <button onClick={installApp} className="text-sm font-medium text-gray-400 hover:text-white transition-colors cursor-pointer">Install App</button>
+                    <a href="#features" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">{t('landing.features', 'Features')}</a>
+                    <a href="#pricing" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">{t('landing.pricing', 'Pricing')}</a>
+                    <a href="#security" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">{t('landing.security', 'Security')}</a>
+                    <button onClick={installApp} className="text-sm font-medium text-gray-400 hover:text-white transition-colors cursor-pointer">{t('landing.install_app', 'Install App')}</button>
                     <div className="h-6 w-[1px] bg-white/10 mx-2" />
                     <LanguageSelector />
-                    <Link to="/login" className="text-sm font-medium px-4 py-2 hover:bg-white/5 rounded-lg transition-colors">Login</Link>
-                    <Link to="/signup" className="text-sm font-medium px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition-colors">Get Started</Link>
+                    <Link to="/login" className="text-sm font-medium px-4 py-2 hover:bg-white/5 rounded-lg transition-colors">{t('auth.login', 'Login')}</Link>
+                    <Link to="/signup" className="text-sm font-medium px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition-colors">{t('auth.signup', 'Get Started')}</Link>
                 </div>
 
                 <div className="flex md:hidden items-center gap-2">

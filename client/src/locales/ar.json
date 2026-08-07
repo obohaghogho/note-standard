@@ -29,7 +29,8 @@
         "inactive": "غير نشط",
         "verified": "موثق",
         "unverified": "غير موثق",
-        "view_details": "عرض التفاصيل"
+        "view_details": "عرض التفاصيل",
+        "untitled": "بدون عنوان"
     },
     "nav": {
         "home": "الرئيسية",
@@ -47,6 +48,38 @@
         "affiliates": "التسويق بالعمالة",
         "download_app": "تنزيل التطبيق",
         "admin": "لوحة المسؤول"
+    },
+    "home": {
+        "good_morning": "صباح الخير",
+        "good_afternoon": "مساء الخير",
+        "good_evening": "مساء الخير",
+        "workspace_insight": "رؤية مساحة العمل",
+        "greeting_subtitle": "لديك {{count}} ملاحظات منتجة وكل شيء متزامن بشكل مثالي. ماذا سنبني اليوم؟",
+        "launch_new_note": "إنشاء ملاحظة جديدة",
+        "workspace_momentum": "زخم مساحة العمل",
+        "activity_trend": "اتجاه النشاط عبر الوحدات الخاصة بك",
+        "velocity": "السرعة",
+        "favorites_intensity": "شدة المفضلة",
+        "live_pulse": "النبض المباشر",
+        "history": "السجل",
+        "silence_workspace": "هدوء في مساحة العمل...",
+        "social_hub": "المركز الاجتماعي",
+        "view_chat": "عرض المحادثة",
+        "open_workspace": "فتح مساحة العمل",
+        "messenger": "المراسلة",
+        "secure_hub": "المركز الآمن"
+    },
+    "landing": {
+        "demo_video": "فيديو توضيحي",
+        "features": "المميزات",
+        "pricing": "الأسعار",
+        "security": "الأمان",
+        "install_app": "تثبيت التطبيق",
+        "hero_badge": "مظهر الكريستال 2.0 متاح الآن",
+        "hero_title_1": "تواصل، اتصل وحول الأموال",
+        "hero_title_2": "عالميًا في الوقت الفعلي",
+        "hero_subtitle": "تجربة المنصة الشاملة الأكثر تطورًا للمراسلة المشفرة، والمكالمات الصوتية والمرئية، والمحفظة الرقمية متعددة العملات.",
+        "start_free": "ابدأ مجانًا"
     },
     "auth": {
         "login": "تسجيل الدخول",

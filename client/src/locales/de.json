@@ -29,7 +29,8 @@
         "inactive": "Inaktiv",
         "verified": "Verifiziert",
         "unverified": "Nicht verifiziert",
-        "view_details": "Details anzeigen"
+        "view_details": "Details anzeigen",
+        "untitled": "Ohne Titel"
     },
     "nav": {
         "home": "Startseite",
@@ -47,6 +48,38 @@
         "affiliates": "Partnerprogramm",
         "download_app": "App herunterladen",
         "admin": "Admin-Steuerung"
+    },
+    "home": {
+        "good_morning": "Guten Morgen",
+        "good_afternoon": "Guten Tag",
+        "good_evening": "Guten Abend",
+        "workspace_insight": "Arbeitsbereich Einblick",
+        "greeting_subtitle": "Sie haben {{count}} produktive Notizen und alles ist perfekt synchronisiert. Was erstellen wir heute?",
+        "launch_new_note": "Neue Notiz erstellen",
+        "workspace_momentum": "Arbeitsbereich Schwung",
+        "activity_trend": "Aktivitätsverlauf über Ihre Module",
+        "velocity": "Geschwindigkeit",
+        "favorites_intensity": "Favoriten-Intensität",
+        "live_pulse": "Live Puls",
+        "history": "Verlauf",
+        "silence_workspace": "Stille im Arbeitsbereich...",
+        "social_hub": "Soziales Hub",
+        "view_chat": "Chat anzeigen",
+        "open_workspace": "Arbeitsbereich öffnen",
+        "messenger": "Messenger",
+        "secure_hub": "Sicheres Hub"
+    },
+    "landing": {
+        "demo_video": "Demo-Video",
+        "features": "Funktionen",
+        "pricing": "Preise",
+        "security": "Sicherheit",
+        "install_app": "App installieren",
+        "hero_badge": "Crystal Theme 2.0 Live",
+        "hero_title_1": "Verbinden, Anrufen & Überweisen",
+        "hero_title_2": "Weltweit in Echtzeit",
+        "hero_subtitle": "Erleben Sie die ultimative All-in-One-Plattform mit verschlüsselter Sofortnachrichtenübermittlung, kristallklaren WebRTC-Sprach- und Videoanrufen und einer sicheren digitalen Geldbörse.",
+        "start_free": "Kostenlos starten"
     },
     "auth": {
         "login": "Anmelden",

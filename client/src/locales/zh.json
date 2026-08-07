@@ -29,7 +29,8 @@
         "inactive": "未激活",
         "verified": "已验证",
         "unverified": "未验证",
-        "view_details": "查看详情"
+        "view_details": "查看详情",
+        "untitled": "无标题"
     },
     "nav": {
         "home": "首页",
@@ -47,6 +48,38 @@
         "affiliates": "推广计划",
         "download_app": "下载应用",
         "admin": "管理员控制"
+    },
+    "home": {
+        "good_morning": "早上好",
+        "good_afternoon": "下午好",
+        "good_evening": "晚上好",
+        "workspace_insight": "工作区洞察",
+        "greeting_subtitle": "您有 {{count}} 条高效笔记，一切同步完美。今天我们来构建什么？",
+        "launch_new_note": "新建笔记",
+        "workspace_momentum": "工作区动态",
+        "activity_trend": "各模块的活动趋势",
+        "velocity": "速率",
+        "favorites_intensity": "收藏热度",
+        "live_pulse": "实时脉搏",
+        "history": "历史",
+        "silence_workspace": "工作区一片宁静...",
+        "social_hub": "社交中心",
+        "view_chat": "查看聊天",
+        "open_workspace": "打开工作区",
+        "messenger": "消息",
+        "secure_hub": "安全中心"
+    },
+    "landing": {
+        "demo_video": "演示视频",
+        "features": "功能特性",
+        "pricing": "价格方案",
+        "security": "安全保障",
+        "install_app": "安装应用",
+        "hero_badge": "水晶主题 2.0 上线",
+        "hero_title_1": "连接、通话与交易",
+        "hero_title_2": "全球实时无界",
+        "hero_subtitle": "体验终极一体化平台，集即时加密消息、高清WebRTC语音视频通话和安全多币种数字钱包于一体。",
+        "start_free": "免费开始使用"
     },
     "auth": {
         "login": "登录",

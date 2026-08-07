@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Plus, FileText, Star, Activity, Sparkles, TrendingUp, Zap, ChevronRight, Users } from 'lucide-react';
@@ -53,6 +54,7 @@ const itemVariants = {
 };
 
 export default function DashboardHome() {
+    const { t } = useTranslation();
     const { user } = useAuth();
     const navigate = useNavigate();
     const { openCreateNoteModal } = useOutletContext<DashboardContext>();
@@ -69,22 +71,22 @@ export default function DashboardHome() {
     const recentNotes = useMemo(() => notes.slice(0, 5).map(n => ({
         id: n.id,
         type: 'NOTE',
-        title: n.title || 'Untitled',
+        title: n.title || t('common.untitled', 'Untitled'),
         date: new Date(n.updated_at || n.created_at),
         icon: <FileText size={16} />,
         color: 'text-emerald-400',
         content: n.content
-    })), [notes]);
+    })), [notes, t]);
 
-    const recentTxs = useMemo(() => transactions.slice(0, 5).map(t => ({
-        id: t.id,
+    const recentTxs = useMemo(() => transactions.slice(0, 5).map(tItem => ({
+        id: tItem.id,
         type: 'TX',
-        title: t.display_label || (t.type === 'DEPOSIT' ? 'Deposit' : 'Transfer'),
-        date: new Date(t.created_at),
-        icon: t.type === 'DEPOSIT' ? <TrendingUp size={16} /> : <Zap size={16} />,
-        color: t.status === 'COMPLETED' ? 'text-emerald-400' : 'text-amber-400',
-        amount: formatCurrency(t.amount, t.currency)
-    })), [transactions]);
+        title: tItem.display_label || (tItem.type === 'DEPOSIT' ? t('wallet.deposit', 'Deposit') : t('wallet.transfer', 'Transfer')),
+        date: new Date(tItem.created_at),
+        icon: tItem.type === 'DEPOSIT' ? <TrendingUp size={16} /> : <Zap size={16} />,
+        color: tItem.status === 'COMPLETED' ? 'text-emerald-400' : 'text-amber-400',
+        amount: formatCurrency(tItem.amount, tItem.currency)
+    })), [transactions, t]);
 
     const combinedActivity = useMemo(() => [...recentNotes, ...recentTxs]
         .sort((a, b) => b.date.getTime() - a.date.getTime())
@@ -94,15 +96,15 @@ export default function DashboardHome() {
     useEffect(() => {
         const updateGreeting = () => {
             const hour = new Date().getHours();
-            if (hour < 12) setGreeting('Good morning');
-            else if (hour < 18) setGreeting('Good afternoon');
-            else setGreeting('Good evening');
+            if (hour < 12) setGreeting(t('home.good_morning', 'Good morning'));
+            else if (hour < 18) setGreeting(t('home.good_afternoon', 'Good afternoon'));
+            else setGreeting(t('home.good_evening', 'Good evening'));
         };
 
         updateGreeting();
         const interval = setInterval(updateGreeting, 60000);
         return () => clearInterval(interval);
-    }, []);
+    }, [t]);
 
     // Fetch real trend data for the chart
     useEffect(() => {
@@ -203,14 +205,14 @@ export default function DashboardHome() {
                     <div className="space-y-4">
                         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-wider">
                             <Sparkles size={14} />
-                            Workspace Insight
+                            {t('home.workspace_insight', 'Workspace Insight')}
                         </div>
                         <div>
                             <h1 className="text-4xl md:text-5xl lg:text-6xl font-black mb-4 tracking-tight">
                                 {greeting}, <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-emerald-400 to-teal-500">{userName}</span>
                             </h1>
                             <p className="text-gray-400 text-lg max-w-xl leading-relaxed">
-                                You have <span className="text-white font-bold">{stats.totalBy || 0} productive notes</span> and everything is synchronized perfectly. What are we building today?
+                                {t('home.greeting_subtitle', 'You have {{count}} productive notes and everything is synchronized perfectly. What are we building today?', { count: stats.totalBy || 0 })}
                             </p>
                         </div>
                     </div>
@@ -218,7 +220,7 @@ export default function DashboardHome() {
                     <div className="flex items-center gap-3">
                         <Button onClick={openCreateNoteModal} className="h-14 px-8 rounded-2xl shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5)] transition-all">
                             <Plus className="w-5 h-5 mr-2" />
-                            Launch New Note
+                            {t('home.launch_new_note', 'Launch New Note')}
                         </Button>
                     </div>
                 </div>
@@ -234,13 +236,13 @@ export default function DashboardHome() {
                             <div>
                                 <h3 className="text-xl font-bold flex items-center gap-2">
                                     <Activity size={20} className="text-primary" />
-                                    Workspace Momentum
+                                    {t('home.workspace_momentum', 'Workspace Momentum')}
                                 </h3>
-                                <p className="text-gray-500 text-sm">Activity trend across your modules</p>
+                                <p className="text-gray-500 text-sm">{t('home.activity_trend', 'Activity trend across your modules')}</p>
                             </div>
                             <div className="text-right">
                                 <span className="text-primary font-bold text-lg">+24%</span>
-                                <p className="text-[10px] text-gray-500 uppercase font-black">Velocity</p>
+                                <p className="text-[10px] text-gray-500 uppercase font-black">{t('home.velocity', 'Velocity')}</p>
                             </div>
                         </div>
                         <div className="flex-1 mt-4 -mx-2">
@@ -256,7 +258,7 @@ export default function DashboardHome() {
                             <Zap size={24} />
                         </div>
                         <div>
-                            <p className="text-gray-500 text-sm font-semibold uppercase tracking-widest mb-1">Favorites Intensity</p>
+                            <p className="text-gray-500 text-sm font-semibold uppercase tracking-widest mb-1">{t('home.favorites_intensity', 'Favorites Intensity')}</p>
                             <h3 className="text-4xl font-black">{stats.favorites || 0}</h3>
                             <div className="w-full h-1 bg-white/5 rounded-full mt-4 overflow-hidden">
                                 <div 
@@ -274,9 +276,9 @@ export default function DashboardHome() {
                         <div className="p-8 pb-4 border-b border-white/5 flex items-center justify-between">
                             <h3 className="text-xl font-bold flex items-center gap-2 italic">
                                 <Activity size={20} className="text-primary" />
-                                Live Pulse
+                                {t('home.live_pulse', 'Live Pulse')}
                             </h3>
-                            <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/activity')} className="text-xs text-gray-500">History</Button>
+                            <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/activity')} className="text-xs text-gray-500">{t('home.history', 'History')}</Button>
                         </div>
                         <div className="flex-1 overflow-y-auto p-2 scrollbar-hide">
                             <div className="space-y-1 p-2">
@@ -301,7 +303,7 @@ export default function DashboardHome() {
                                         <ChevronRight size={14} className="text-gray-700 opacity-0 group-hover/item:opacity-100 transition-opacity" />
                                     </div>
                                 ))}
-                                {combinedActivity.length === 0 && <div className="p-8 text-center text-gray-500 text-sm">Silence in the workspace...</div>}
+                                {combinedActivity.length === 0 && <div className="p-8 text-center text-gray-500 text-sm">{t('home.silence_workspace', 'Silence in the workspace...')}</div>}
                             </div>
                         </div>
                     </Card>
@@ -314,9 +316,9 @@ export default function DashboardHome() {
                         <div className="p-6 border-b border-white/5 flex items-center justify-between bg-blue-500/5">
                             <h3 className="text-lg font-bold flex items-center gap-2">
                                 <Users size={18} className="text-blue-400" />
-                                Social Hub
+                                {t('home.social_hub', 'Social Hub')}
                             </h3>
-                            <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/chat')} className="text-[10px] text-gray-500 hover:text-blue-400">View Chat</Button>
+                            <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/chat')} className="text-[10px] text-gray-500 hover:text-blue-400">{t('home.view_chat', 'View Chat')}</Button>
                         </div>
                         <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
                             <FriendsList limit={5} />
@@ -339,8 +341,8 @@ export default function DashboardHome() {
                             <Star size={18} className="text-gray-700 hover:text-yellow-500 transition-colors" />
                         </div>
                         <div>
-                            <h4 className="text-base font-bold">Notes</h4>
-                            <p className="text-gray-500 text-[10px] uppercase tracking-widest font-black">Open Workspace</p>
+                            <h4 className="text-base font-bold">{t('nav.notes', 'Notes')}</h4>
+                            <p className="text-gray-500 text-[10px] uppercase tracking-widest font-black">{t('home.open_workspace', 'Open Workspace')}</p>
                         </div>
                     </Card>
 
@@ -358,8 +360,8 @@ export default function DashboardHome() {
                             </div>
                         </div>
                         <div>
-                            <h4 className="text-base font-bold">Messenger</h4>
-                            <p className="text-gray-500 text-[10px] uppercase tracking-widest font-black">Secure Hub</p>
+                            <h4 className="text-base font-bold">{t('home.messenger', 'Messenger')}</h4>
+                            <p className="text-gray-500 text-[10px] uppercase tracking-widest font-black">{t('home.secure_hub', 'Secure Hub')}</p>
                         </div>
                     </Card>
                 </motion.div>
