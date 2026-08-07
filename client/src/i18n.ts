@@ -15,6 +15,8 @@ import ko from './locales/ko.json';
 import ru from './locales/ru.json';
 import ar from './locales/ar.json';
 
+const savedLanguage = typeof window !== 'undefined' ? localStorage.getItem('i18nextLng') : null;
+
 i18n
     .use(LanguageDetector)
     .use(initReactI18next)
@@ -34,12 +36,14 @@ i18n
             ar: { translation: ar },
         },
         fallbackLng: 'en',
+        lng: savedLanguage || 'en', // Default to English for first-time access/downloads unless user explicitly changed it
         interpolation: {
             escapeValue: false,
         },
         detection: {
-            order: ['localStorage', 'navigator'],
+            order: ['localStorage'], // Check localStorage only; do not auto-override with browser navigator language
             caches: ['localStorage'],
+            lookupLocalStorage: 'i18nextLng',
         },
     });
 
