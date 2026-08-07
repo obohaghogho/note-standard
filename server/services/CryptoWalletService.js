@@ -131,15 +131,28 @@ class CryptoWalletService {
       logger.error("[CryptoWalletService] Failed to get real crypto address", e);
     }
 
+    // Step 1: Double check wallets_store table directly (case-insensitive)
+    const { data: existingStore } = await supabase
+      .from("wallets_store")
+      .select("*")
+      .eq("user_id", userId)
+      .ilike("currency", upCurrency)
+      .maybeSingle();
+
+    if (existingStore) {
+      return await this.upgradeIfMock(userId, existingStore, upNetwork);
+    }
+
+    // Step 2: Try insert without onConflict
     const { data: wallet, error } = await supabase
       .from("wallets_store")
-      .upsert({
+      .insert({
         user_id: userId,
         currency: upCurrency,
         network: upNetwork,
         address: address,
         provider: provider,
-      }, { onConflict: "user_id,currency" })
+      })
       .select()
       .maybeSingle();
 
@@ -147,24 +160,21 @@ class CryptoWalletService {
       return wallet;
     }
 
-    if (error) {
-      const { data: retry } = await supabase
-        .from("wallets_store")
-        .select("*")
-        .eq("user_id", userId)
-        .ilike("currency", upCurrency)
-        .maybeSingle();
-      if (retry) return retry;
-      throw error;
-    }
-
-    const { data: finalFetch } = await supabase
+    // Step 3: Fallback query if insert hit duplicate key or race condition
+    const { data: retry } = await supabase
       .from("wallets_store")
       .select("*")
       .eq("user_id", userId)
       .ilike("currency", upCurrency)
       .maybeSingle();
-    if (finalFetch) return finalFetch;
+
+    if (retry) {
+      return retry;
+    }
+
+    if (error) {
+      logger.warn(`[CryptoWalletService] Crypto wallet insert warning for user ${userId} (${upCurrency}): ${error.message}`);
+    }
 
     throw new Error(`Failed to initialize ${upCurrency} crypto wallet.`);
   }

@@ -65,12 +65,12 @@ class FiatWalletService {
       return existing;
     }
 
-    // Double check wallets_store table directly
+    // Step 1: Double check wallets_store table directly (case-insensitive)
     const { data: existingStore } = await supabase
       .from("wallets_store")
       .select("*")
       .eq("user_id", userId)
-      .eq("currency", upCurrency)
+      .ilike("currency", upCurrency)
       .maybeSingle();
 
     if (existingStore) {
@@ -94,15 +94,16 @@ class FiatWalletService {
       address = userId;
     }
 
+    // Step 2: Try insert without onConflict
     const { data: wallet, error } = await supabase
       .from("wallets_store")
-      .upsert({
+      .insert({
         user_id: userId,
         currency: upCurrency,
         network: "NATIVE",
         address: address,
         provider: "internal",
-      }, { onConflict: "user_id,currency" })
+      })
       .select()
       .maybeSingle();
 
@@ -110,25 +111,21 @@ class FiatWalletService {
       return wallet;
     }
 
-    if (error) {
-      const { data: retry } = await supabase
-        .from("wallets_store")
-        .select("*")
-        .eq("user_id", userId)
-        .ilike("currency", upCurrency)
-        .maybeSingle();
-      if (retry) return retry;
-      throw error;
-    }
-
-    // Final fallback query
-    const { data: finalFetch } = await supabase
+    // Step 3: Fallback query if insert hit duplicate key or race condition
+    const { data: retry } = await supabase
       .from("wallets_store")
       .select("*")
       .eq("user_id", userId)
       .ilike("currency", upCurrency)
       .maybeSingle();
-    if (finalFetch) return finalFetch;
+
+    if (retry) {
+      return retry;
+    }
+
+    if (error) {
+      logger.warn(`[FiatWalletService] Wallet creation insert warning for user ${userId} (${upCurrency}): ${error.message}`);
+    }
 
     throw new Error(`Failed to initialize ${upCurrency} wallet for user.`);
   }

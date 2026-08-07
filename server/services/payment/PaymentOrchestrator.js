@@ -362,7 +362,7 @@ class PaymentOrchestrator {
 
     let { data: targetWallet } = await supabase.from('wallets_store').select('id').eq('user_id', userId).ilike('currency', to).maybeSingle();
     if (!targetWallet) {
-      const { data: newW } = await supabase.from('wallets_store').upsert({ user_id: userId, currency: to, balance: 0, available: 0 }, { onConflict: 'user_id,currency' }).select().maybeSingle();
+      const { data: newW } = await supabase.from('wallets_store').insert({ user_id: userId, currency: to, balance: 0, available: 0 }).select().maybeSingle();
       targetWallet = newW || (await supabase.from('wallets_store').select('id').eq('user_id', userId).ilike('currency', to).maybeSingle());
     }
 

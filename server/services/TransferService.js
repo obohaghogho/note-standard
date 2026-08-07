@@ -29,8 +29,12 @@ class TransferService {
 
         const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(recipientId);
         if (recipientId && !isUUID) {
-            const { data: profile } = await supabase.from('profiles').select('id').eq('username', recipientId).maybeSingle();
-            if (!profile) throw new Error(`User with username "${recipientId}" not found.`);
+            let { data: profile } = await supabase.from('profiles').select('id').eq('username', recipientId).maybeSingle();
+            if (!profile) {
+                const { data: emailProf } = await supabase.from('profiles').select('id').eq('email', recipientId.toLowerCase()).maybeSingle();
+                if (emailProf) profile = emailProf;
+            }
+            if (!profile) throw new Error(`Recipient "${recipientId}" not found in our system.`);
             recipientId = profile.id;
         }
 

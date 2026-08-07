@@ -790,14 +790,14 @@ class PaymentService {
       .maybeSingle();
 
     if (!wallet) {
-      // Create or upsert wallet if missing
+      // Step 2: Try insert without onConflict
       const { data: newWallet } = await supabase
         .from("wallets_store")
-        .upsert({
+        .insert({
           user_id: userId,
           currency: (currency || "NGN").toUpperCase(),
           address: `${currency || "NGN"}_${userId.substring(0, 8)}`,
-        }, { onConflict: "user_id,currency" })
+        })
         .select("id")
         .maybeSingle();
       
