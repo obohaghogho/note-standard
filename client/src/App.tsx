@@ -101,6 +101,124 @@ const ChatRedirect = () => {
 // Phase 6.2: Replay Debugger UI
 const ReplayPage = lazyWithRetry(() => import('./debug/replay/ReplayPage'), 'ReplayPage');
 
+function AuthenticatedProviders() {
+  const { user } = useAuth();
+  const userKey = user?.id || 'guest';
+
+  return (
+    <PWAInstallProvider key={userKey}>
+      <VersionGuard>
+      <WallpaperProvider>
+      <SocketProvider>
+        <PresenceProvider>
+          <NotificationProvider>
+            <ChatProvider>
+              <ChatThemeProvider>
+                <WebRTCProvider>
+                  <WalletProvider>
+                    <NotesProvider>
+                      <NotesDashboardProvider>
+                        <WebNotificationRouter />
+                        <Routes>
+                      <Route path="/" element={<LandingPage />} />
+                      <Route path="/login" element={<Login />} />
+                      <Route path="/signup" element={<Signup />} />
+                      <Route path="/terms" element={<TermsPage />} />
+                      <Route path="/privacy" element={<PrivacyPage />} />
+                      <Route path="/refund" element={<RefundPage />} />
+                      <Route path="/about" element={<AboutPage />} />
+                      <Route path="/contact" element={<ContactPage />} />
+                      <Route path="/reset-password" element={<ResetPassword />} />
+                      <Route path="/download" element={<DownloadPage />} />
+                      
+                      <Route path="/chat/:id" element={<ChatRedirect />} />
+
+                      {/* Phase 6.2: Replay Debugger UI */}
+                      <Route path="/debug/replay" element={<ReplayPage />} />
+
+                      <Route path="/wallet/success" element={<ActivitySuccess />} />
+                      <Route path="/wallet/cancel" element={<ActivityCancel />} />
+                      <Route path="/payment/callback" element={<PaymentCallback />} />
+                      <Route path="/wallet" element={<Navigate to="/dashboard/wallet" replace />} />
+                      
+                      {/* High-priority Payment Redirects */}
+                      <Route path="/payment/success/*" element={<Navigate to="/wallet/success" replace />} />
+                      <Route path="/payment/cancel/*" element={<Navigate to="/wallet/cancel" replace />} />
+
+                      <Route element={<ProtectedRoute />}>
+                        <Route path="/dashboard" element={<DashboardLayout />}>
+                          <Route index element={<DashboardHome />} />
+                          <Route path="notes" element={<Notes />} />
+                          <Route path="chat" element={<Chat />} />
+                          <Route path="shared" element={<Shared />} />
+                          <Route path="feed" element={<Feed />} />
+                          <Route path="favorites" element={<Notes />} />
+                          <Route path="search" element={<Search />} />
+                          <Route path="billing" element={<Billing />} />
+                          <Route path="wallet" element={<WalletPage />} />
+                          <Route path="history" element={<Transactions />} />
+                          <Route path="affiliates" element={<Affiliates />} />
+                          <Route path="deposit" element={<DepositPage />} />
+                          <Route path="settings" element={<Settings />} />
+                          <Route path="notifications" element={<Notifications />} />
+                          <Route path="trends" element={<Trends />} />
+                          <Route path="teams" element={<TeamsPage />} />
+                          <Route path="feedback" element={<UserIssueTracker />} />
+                          <Route path="profile/:userId" element={<PublicProfilePage />} />
+                          <Route path="community/profile/:userId" element={<PublicProfilePage />} />
+                        </Route>
+                      </Route>
+
+                      <Route element={<ProtectedRoute allowedRoles={['admin', 'support']} />}>
+                        <Route path="/admin" element={<AdminLayout />}>
+                          <Route index element={<AdminDashboard />} />
+                          <Route path="users" element={<UserManagement />} />
+                          <Route path="chats" element={<AdminChat />} />
+                          <Route path="audit-logs" element={<AuditLogs />} />
+                          <Route path="broadcasts" element={<BroadcastManager />} />
+                          <Route path="auto-reply" element={<AutoReplySettings />} />
+                          <Route path="analytics" element={<Analytics />} />
+                          <Route path="reconciliation" element={<ReconciliationDashboard />} />
+                          <Route path="ads" element={<ManageAds />} />
+                          <Route path="deposits" element={<ManualDeposits />} />
+                          <Route path="withdrawals" element={<ManualWithdrawals />} />
+                          <Route path="limit-requests" element={<LimitRequestsPage />} />
+                          <Route path="settings" element={<AdminSettings />} />
+                          <Route path="push-health" element={<PushHealthDashboard />} />
+                          <Route path="communication-health" element={<CommunicationHealthDashboard />} />
+                          <Route path="fincra" element={<FincraAdminPanel />} />
+                          <Route path="crypto-treasury" element={<CryptoTreasuryDashboard />} />
+                          <Route path="payment-capabilities" element={<PaymentCapabilitiesPage />} />
+                          <Route path="collection-accounts" element={<CollectionAccountsPage />} />
+                          <Route path="deposit-monitoring" element={<DepositMonitoringPage />} />
+                          <Route path="treasury" element={<TreasuryDashboard />} />
+                          <Route path="banking" element={<GreyBankingPanel />} />
+                          <Route path="support-center" element={<SupportCenter />} />
+                          <Route path="beta-feedback" element={<BetaFeedbackDashboard />} />
+                        </Route>
+                      </Route>
+                    </Routes>
+                    {/* Global Chat Widget - visible on all authenticated pages */}
+                    <ChatWidget />
+                    {/* Global Beta Feedback Widget */}
+                    <BetaFeedbackModal />
+                    {/* iOS install prompt — shown after 8s to iOS Safari users not running as PWA */}
+                    <IOSInstallPrompt />
+                    </NotesDashboardProvider>
+                  </NotesProvider>
+                </WalletProvider>
+              </WebRTCProvider>
+            </ChatThemeProvider>
+          </ChatProvider>
+        </NotificationProvider>
+        </PresenceProvider>
+      </SocketProvider>
+      </WallpaperProvider>
+      </VersionGuard>
+    </PWAInstallProvider>
+  );
+}
+
 function App() {
   useEffect(() => {
     // Global error handler for uncaught errors
@@ -117,8 +235,6 @@ function App() {
         console.error('[Stack Trace]', e.reason.stack);
       }
     };
-
-    // Online/offline toasts removed — they were getting stuck on screen
 
     // Attach global error handlers
     window.addEventListener('error', handleError);
@@ -155,122 +271,7 @@ function App() {
           </div>
         }>
           <AuthProvider>
-            <PWAInstallProvider>
-            <VersionGuard>
-            <WallpaperProvider>
-            <SocketProvider>
-              <PresenceProvider>
-                <NotificationProvider>
-                  <ChatProvider>
-                    <ChatThemeProvider>
-                      <WebRTCProvider>
-                        <WalletProvider>
-                          <NotesProvider>
-                            <NotesDashboardProvider>
-                              <WebNotificationRouter />
-                              <Routes>
-                            <Route path="/" element={<LandingPage />} />
-                            <Route path="/login" element={<Login />} />
-                            <Route path="/signup" element={<Signup />} />
-                            <Route path="/terms" element={<TermsPage />} />
-                            <Route path="/privacy" element={<PrivacyPage />} />
-                            <Route path="/refund" element={<RefundPage />} />
-                            <Route path="/about" element={<AboutPage />} />
-                            <Route path="/contact" element={<ContactPage />} />
-                            <Route path="/reset-password" element={<ResetPassword />} />
-                            <Route path="/download" element={<DownloadPage />} />
-                            
-                            <Route path="/chat/:id" element={<ChatRedirect />} />
-
-                            {/* Phase 6.2: Replay Debugger UI */}
-                            <Route path="/debug/replay" element={<ReplayPage />} />
-
-                            <Route path="/wallet/success" element={<ActivitySuccess />} />
-                            <Route path="/wallet/cancel" element={<ActivityCancel />} />
-                            <Route path="/payment/callback" element={<PaymentCallback />} />
-                            <Route path="/wallet" element={<Navigate to="/dashboard/wallet" replace />} />
-                            
-                            <Route path="/" element={<LandingPage />} />
-                            
-                            {/* High-priority Payment Redirects (Move before catch-alls) */}
-                            <Route path="/payment/success/*" element={<Navigate to="/wallet/success" replace />} />
-                            <Route path="/payment/cancel/*" element={<Navigate to="/wallet/cancel" replace />} />
-                            
-                            <Route path="/login" element={<Login />} />
-
-                            <Route element={<ProtectedRoute />}>
-                              <Route path="/dashboard" element={<DashboardLayout />}>
-                                <Route index element={<DashboardHome />} />
-                                <Route path="notes" element={<Notes />} />
-                                <Route path="chat" element={<Chat />} />
-                                <Route path="shared" element={<Shared />} />
-                                <Route path="feed" element={<Feed />} />
-                                <Route path="favorites" element={<Notes />} />
-                                <Route path="search" element={<Search />} />
-                                <Route path="billing" element={<Billing />} />
-                                <Route path="wallet" element={<WalletPage />} />
-                                <Route path="history" element={<Transactions />} />
-                                <Route path="affiliates" element={<Affiliates />} />
-                                <Route path="deposit" element={<DepositPage />} />
-                                <Route path="settings" element={<Settings />} />
-                                <Route path="notifications" element={<Notifications />} />
-                                <Route path="trends" element={<Trends />} />
-                                <Route path="teams" element={<TeamsPage />} />
-                                <Route path="feedback" element={<UserIssueTracker />} />
-                                <Route path="profile/:userId" element={<PublicProfilePage />} />
-                                <Route path="community/profile/:userId" element={<PublicProfilePage />} />
-                                {/* Download page is now at /download */}
-                              </Route>
-                            </Route>
-
-                            <Route element={<ProtectedRoute allowedRoles={['admin', 'support']} />}>
-                              <Route path="/admin" element={<AdminLayout />}>
-                                <Route index element={<AdminDashboard />} />
-                                <Route path="users" element={<UserManagement />} />
-                                <Route path="chats" element={<AdminChat />} />
-                                <Route path="audit-logs" element={<AuditLogs />} />
-                                <Route path="broadcasts" element={<BroadcastManager />} />
-                                <Route path="auto-reply" element={<AutoReplySettings />} />
-                                <Route path="analytics" element={<Analytics />} />
-                                <Route path="reconciliation" element={<ReconciliationDashboard />} />
-                                <Route path="ads" element={<ManageAds />} />
-                                <Route path="deposits" element={<ManualDeposits />} />
-                                <Route path="withdrawals" element={<ManualWithdrawals />} />
-                                <Route path="limit-requests" element={<LimitRequestsPage />} />
-                                <Route path="settings" element={<AdminSettings />} />
-                                <Route path="push-health" element={<PushHealthDashboard />} />
-                                <Route path="communication-health" element={<CommunicationHealthDashboard />} />
-                                <Route path="fincra" element={<FincraAdminPanel />} />
-                                <Route path="crypto-treasury" element={<CryptoTreasuryDashboard />} />
-                                <Route path="payment-capabilities" element={<PaymentCapabilitiesPage />} />
-                                <Route path="collection-accounts" element={<CollectionAccountsPage />} />
-                                <Route path="deposit-monitoring" element={<DepositMonitoringPage />} />
-                                <Route path="treasury" element={<TreasuryDashboard />} />
-                                <Route path="banking" element={<GreyBankingPanel />} />
-                                <Route path="support-center" element={<SupportCenter />} />
-                                <Route path="beta-feedback" element={<BetaFeedbackDashboard />} />
-
-                              </Route>
-                            </Route>
-                          </Routes>
-                          {/* Global Chat Widget - visible on all authenticated pages */}
-                          <ChatWidget />
-                          {/* Global Beta Feedback Widget */}
-                          <BetaFeedbackModal />
-                          {/* iOS install prompt — shown after 8s to iOS Safari users not running as PWA */}
-                          <IOSInstallPrompt />
-                          </NotesDashboardProvider>
-                        </NotesProvider>
-                      </WalletProvider>
-                    </WebRTCProvider>
-                  </ChatThemeProvider>
-                </ChatProvider>
-              </NotificationProvider>
-              </PresenceProvider>
-            </SocketProvider>
-            </WallpaperProvider>
-            </VersionGuard>
-            </PWAInstallProvider>
+            <AuthenticatedProviders />
           </AuthProvider>
         </Suspense>
       </ErrorBoundary>
