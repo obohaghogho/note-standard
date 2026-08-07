@@ -1,5 +1,5 @@
 import React from 'react';
-import { CurrencyCapability } from '../../hooks/useWalletCapabilities';
+import type { CurrencyCapability } from '../../hooks/useWalletCapabilities';
 import { CheckCircle2, Shield, Clock, RefreshCw } from 'lucide-react';
 
 interface WalletRailSummaryProps {
