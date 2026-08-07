@@ -144,7 +144,14 @@ class CryptoWalletService {
       .single();
 
     if (error) {
-      if (error.code === "23505") {
+      const isUniqueViolation = error.code === "23505" || 
+        (error.message && (
+          error.message.includes("unique") || 
+          error.message.includes("duplicate") || 
+          error.message.includes("unique_personal_wallet")
+        ));
+
+      if (isUniqueViolation) {
         const { data: retry } = await supabase
           .from("wallets_store")
           .select("*")

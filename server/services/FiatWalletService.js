@@ -65,6 +65,18 @@ class FiatWalletService {
       return existing;
     }
 
+    // Double check wallets_store table directly
+    const { data: existingStore } = await supabase
+      .from("wallets_store")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("currency", upCurrency)
+      .maybeSingle();
+
+    if (existingStore) {
+      return existingStore;
+    }
+
     // New Fiat Wallet Creation
     let address = "";
     try {
@@ -95,7 +107,14 @@ class FiatWalletService {
       .single();
 
     if (error) {
-      if (error.code === "23505") {
+      const isUniqueViolation = error.code === "23505" || 
+        (error.message && (
+          error.message.includes("unique") || 
+          error.message.includes("duplicate") || 
+          error.message.includes("unique_personal_wallet")
+        ));
+
+      if (isUniqueViolation) {
         const { data: retry } = await supabase
           .from("wallets_store")
           .select("*")
