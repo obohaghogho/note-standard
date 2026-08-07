@@ -41,6 +41,8 @@ i18n
             order: ['localStorage', 'navigator'],
             caches: ['localStorage'],
         },
+    });
+
 // Automatically set document direction (RTL/LTR) and lang attribute when active language changes
 i18n.on('languageChanged', (lng: string) => {
     if (typeof document !== 'undefined') {
