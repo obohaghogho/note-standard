@@ -92,26 +92,13 @@ export const TransferModal: React.FC<TransferModalProps> = ({
         setIsSending(true);
         try {
             const isEmail = recipient.includes('@');
-            const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(recipient);
-            const isAddress = !isEmail && !isUUID && (recipient.startsWith('0x') || recipient.startsWith('bc1') || recipient.startsWith('T') || recipient.length > 30);
-
-            if (isAddress) {
-                await withdraw({
-                    currency: selectedCurrency,
-                    amount: parseFloat(amount),
-                    address: recipient,
-                    captchaToken: captchaToken || undefined
-                });
-            } else {
-                await sendFunds({
-                    currency: selectedCurrency,
-                    amount: parseFloat(amount),
-                    recipientEmail: isEmail ? recipient : undefined,
-                    recipientAddress: isAddress ? recipient : undefined,
-                    recipientId: (!isEmail && !isAddress) ? recipient : undefined,
-                    captchaToken: captchaToken || undefined
-                });
-            }
+            await sendFunds({
+                currency: selectedCurrency,
+                amount: parseFloat(amount),
+                recipientEmail: isEmail ? recipient : undefined,
+                recipientId: !isEmail ? recipient : undefined,
+                captchaToken: captchaToken || undefined
+            });
             onSuccess();
             onClose();
         } catch {
@@ -122,61 +109,9 @@ export const TransferModal: React.FC<TransferModalProps> = ({
         }
     };
 
-    const handleMax = async () => {
+    const handleMax = () => {
         const bal = parseFloat(String(availableBalance || 0));
-        if (bal <= 0) {
-            setAmount('0');
-            return;
-        }
-
-        const isEmail = recipient.includes('@');
-        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(recipient);
-        const isAddress = !isEmail && !isUUID && (recipient.startsWith('0x') || recipient.startsWith('bc1') || recipient.startsWith('T') || recipient.length > 30);
-        
-        // Internal transfers are free, external transfers (address) have withdrawal fees
-        if (!isAddress) {
-            setAmount(bal.toString());
-            return;
-        }
-
-        const SAFETY_BUFFER = 0.000001;
-        try {
-            const settings = await getCommissionRate('WITHDRAWAL', selectedCurrency);
-            let maxAmount = bal;
-            
-            if (settings && settings.length > 0) {
-                const s = settings[0];
-                const rateValue = s.commission_type === 'PERCENTAGE' ? s.value / 100 : s.value;
-
-                if (s.commission_type === 'PERCENTAGE') {
-                    // amount + amount * rate = balance => amount = balance / (1 + rate)
-                    maxAmount = bal / (1 + rateValue) - SAFETY_BUFFER;
-                } else {
-                    maxAmount = Math.max(0, bal - s.value - SAFETY_BUFFER);
-                }
-
-                // Check for min/max fee constraints
-                const estimatedFee = bal - maxAmount;
-                if (s.min_fee && estimatedFee < s.min_fee) {
-                    maxAmount = bal - s.min_fee - SAFETY_BUFFER;
-                } else if (s.max_fee && estimatedFee > s.max_fee) {
-                    maxAmount = bal - s.max_fee - SAFETY_BUFFER;
-                }
-            } else {
-                maxAmount = bal - SAFETY_BUFFER;
-            }
-
-            // Professional precision: 8 decimals for all crypto tokens
-            const isCrypto = ['BTC', 'ETH', 'USDT', 'USDC', 'TRC20', 'ERC20', 'BEP20', 'POLYGON'].some(c => selectedCurrency.includes(c));
-            const precision = isCrypto ? 8 : 2;
-            const factor = Math.pow(10, precision);
-            const flooredMax = Math.floor(maxAmount * factor) / factor;
-            
-            setAmount(flooredMax > 0 ? flooredMax.toFixed(precision).replace(/\.?0+$/, '') : '0');
-        } catch (err) {
-            console.error('Error calculating max transfer:', err);
-            setAmount(bal.toString());
-        }
+        setAmount(bal > 0 ? bal.toString() : '0');
     };
 
     if (!isOpen) return null;
@@ -209,13 +144,13 @@ export const TransferModal: React.FC<TransferModalProps> = ({
                                 value={recipient}
                                 onChange={(e) => setRecipient(e.target.value)}
                                 className="w-full bg-gray-800 border border-gray-700 rounded-xl p-3.5 pl-10 text-white focus:border-blue-500 outline-none transition-all"
-                                placeholder="Email, User ID, or Address"
+                                placeholder="Email or User ID"
                                 required
                                 autoComplete="off"
                             />
                             <User className="absolute left-3.5 top-3.5 text-gray-500" size={18} />
                         </div>
-                        <p className="text-xs text-gray-500 ml-1">Instant internal movements, zero fees for email/ID.</p>
+                        <p className="text-xs text-gray-500 ml-1">Instant internal movements with zero fees.</p>
                     </div>
                     
                     <div className="space-y-1">
