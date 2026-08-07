@@ -31,12 +31,14 @@ router.use((req, res, next) => {
 const standardLimiter = rateLimit({
   windowMs: 60 * 1000,  // 1 minute
   max: 30,
+  skip: (req) => process.env.NODE_ENV === 'development' || req.ip === '127.0.0.1' || req.ip === '::1',
   message: { error: "Too many Fincra requests. Please try again in a moment." },
 });
 
 const withdrawalLimiter = rateLimit({
   windowMs: 60 * 1000,  // 1 minute
   max: 5,   // Very restrictive for withdrawals
+  skip: (req) => process.env.NODE_ENV === 'development' || req.ip === '127.0.0.1' || req.ip === '::1',
   message: { error: "Too many withdrawal attempts. Please wait before trying again." },
 });
 

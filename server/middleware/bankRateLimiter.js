@@ -41,6 +41,14 @@ const escalateInRedis = async (compositeKey) => {
     }
 };
 
+const isDev = process.env.NODE_ENV === 'development' || process.env.DISABLE_RATE_LIMIT === 'true';
+
+const skipLocalhostOrDev = (req) => {
+    if (isDev) return true;
+    const ip = req.ip || req.connection?.remoteAddress || '';
+    return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1' || ip.includes('localhost');
+};
+
 /**
  * Bank READ rate limiter — relaxed, for GET requests.
  * Allows up to 60 reads per 15 min (e.g. switching USD/GBP/EUR tabs).
@@ -48,6 +56,7 @@ const escalateInRedis = async (compositeKey) => {
 const bankReadLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 60,
+    skip: skipLocalhostOrDev,
     keyGenerator: (req) => {
         const ip = ipKeyGenerator(req);
         const userId = req.user?.id || 'anon';
@@ -70,6 +79,7 @@ const bankReadLimiter = rateLimit({
 const bankSecurityLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 5, // Strict: 5 per window
+    skip: skipLocalhostOrDev,
 
     // Multi-dimensional key — IP is the anchor signal
     keyGenerator: (req) => {

@@ -5,9 +5,19 @@ const DEFAULT_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) ||
   15 * 60 * 1000; // 15 min
 const DEFAULT_MAX = parseInt(process.env.RATE_LIMIT_MAX, 10) || 100;
 
+const isDev = process.env.NODE_ENV === 'development' || process.env.DISABLE_RATE_LIMIT === 'true';
+
+/**
+ * Skip rate limiting on localhost or in development environment
+ */
+const skipLocalhostOrDev = (req) => {
+  if (isDev) return true;
+  const ip = req.ip || req.connection?.remoteAddress || '';
+  return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1' || ip.includes('localhost');
+};
+
 /**
  * Standard Auth Limiter
- * Uses env-configured window/max, defaults to 100 req / 15 min
  */
 exports.authLimiter = rateLimit({
   windowMs: DEFAULT_WINDOW_MS,
@@ -15,11 +25,11 @@ exports.authLimiter = rateLimit({
   message: { error: "Too many requests. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipLocalhostOrDev,
 });
 
 /**
  * Strict Transaction Limiter
- * Increased for development/production balance (50 requests per window)
  */
 exports.transactionLimiter = rateLimit({
   windowMs: DEFAULT_WINDOW_MS,
@@ -27,11 +37,11 @@ exports.transactionLimiter = rateLimit({
   message: { error: "Too many transaction attempts. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipLocalhostOrDev,
 });
 
 /**
  * Preview Limiter
- * Higher limit for previews (100 per window) as they are called frequently during UI interaction
  */
 exports.previewLimiter = rateLimit({
   windowMs: DEFAULT_WINDOW_MS,
@@ -39,11 +49,11 @@ exports.previewLimiter = rateLimit({
   message: { error: "Too many preview attempts. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipLocalhostOrDev,
 });
 
 /**
  * API General Limiter
- * 2x the default max per window
  */
 exports.apiLimiter = rateLimit({
   windowMs: DEFAULT_WINDOW_MS,
@@ -51,11 +61,11 @@ exports.apiLimiter = rateLimit({
   message: { error: "Too many API requests. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipLocalhostOrDev,
 });
 
 /**
  * Strict Withdrawal Limiter
- * 3 requests per 1 hour to prevent rapid fund draining
  */
 exports.withdrawalLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -63,11 +73,11 @@ exports.withdrawalLimiter = rateLimit({
   message: { error: "Withdrawal limit exceeded. Please wait an hour." },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipLocalhostOrDev,
 });
 
 /**
  * HD Address Generation Limiter
- * 10 requests per 1 hour
  */
 exports.hdAddressLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -77,11 +87,11 @@ exports.hdAddressLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipLocalhostOrDev,
 });
 
 /**
  * Strict Email Limiter
- * Prevents attackers from spamming reset/verification emails
  */
 const EMAIL_WINDOW_MIN = parseInt(process.env.EMAIL_RATE_WINDOW_MIN, 10) || 15;
 exports.emailLimiter = rateLimit({
@@ -90,6 +100,7 @@ exports.emailLimiter = rateLimit({
   message: { error: "Too many email requests. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipLocalhostOrDev,
 });
 
 // ── Profile & Community Rate Limiters ──────────────────
@@ -99,6 +110,7 @@ exports.reportLimiter = rateLimit({
   message: { error: "Too many reports submitted. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipLocalhostOrDev,
 });
 
 exports.blockLimiter = rateLimit({
@@ -107,6 +119,7 @@ exports.blockLimiter = rateLimit({
   message: { error: "Too many block actions. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipLocalhostOrDev,
 });
 
 exports.uploadLimiter = rateLimit({
@@ -115,6 +128,7 @@ exports.uploadLimiter = rateLimit({
   message: { error: "Too many upload attempts. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipLocalhostOrDev,
 });
 
 exports.followLimiter = rateLimit({
@@ -123,6 +137,7 @@ exports.followLimiter = rateLimit({
   message: { error: "Too many follow actions. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipLocalhostOrDev,
 });
 
 exports.profileViewLimiter = rateLimit({
@@ -131,4 +146,5 @@ exports.profileViewLimiter = rateLimit({
   message: { error: "Rate limit exceeded for profile views." },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipLocalhostOrDev,
 });

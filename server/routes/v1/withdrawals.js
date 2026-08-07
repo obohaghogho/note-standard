@@ -15,6 +15,7 @@ const logger           = require("../../utils/logger");
 const withdrawalLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 10,
+  skip: (req) => process.env.NODE_ENV === 'development' || req.ip === '127.0.0.1' || req.ip === '::1',
   message: { error: "Too many withdrawal requests. Please wait a moment." },
 });
 
