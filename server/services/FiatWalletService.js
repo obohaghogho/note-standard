@@ -27,8 +27,19 @@ class FiatWalletService {
 
     if (error) throw error;
     
+    // Filter out system, settlement, and liquidity pool accounts from user-facing balance view
+    const personalWallets = (wallets || []).filter((w) => {
+      const addr = String(w.address || "").toUpperCase();
+      const net = String(w.network || "").toUpperCase();
+      return !addr.startsWith("SYSTEM_") && 
+             !addr.startsWith("SETTLEMENT_") && 
+             !addr.startsWith("FX_POOL_") && 
+             net !== "INTERNAL" && 
+             net !== "SYSTEM";
+    });
+
     // Format balances to distinguish Available, Pending, Locked
-    return (wallets || []).map(wallet => ({
+    return personalWallets.map(wallet => ({
       ...wallet,
       balances: {
         available: parseFloat(wallet.balance) || 0,

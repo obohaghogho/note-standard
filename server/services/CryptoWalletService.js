@@ -22,8 +22,18 @@ class CryptoWalletService {
 
     if (error) throw error;
 
+    const personalWallets = (wallets || []).filter((w) => {
+      const addr = String(w.address || "").toUpperCase();
+      const net = String(w.network || "").toUpperCase();
+      return !addr.startsWith("SYSTEM_") && 
+             !addr.startsWith("SETTLEMENT_") && 
+             !addr.startsWith("FX_POOL_") && 
+             net !== "INTERNAL" && 
+             net !== "SYSTEM";
+    });
+
     return Promise.all(
-      (wallets || []).map(async (wallet) => {
+      personalWallets.map(async (wallet) => {
         return await this.upgradeIfMock(userId, wallet);
       })
     );
