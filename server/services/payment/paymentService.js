@@ -790,23 +790,18 @@ class PaymentService {
       .maybeSingle();
 
     if (!wallet) {
-      // Create wallet if missing
-      const { data: newWallet, error: walletErr } = await supabase
-        .from("wallets_store")  // ←← CRITICAL FIX: must insert into wallets_store
-        .insert({
+      // Create or upsert wallet if missing
+      const { data: newWallet } = await supabase
+        .from("wallets_store")
+        .upsert({
           user_id: userId,
-          currency: currency || "NGN",
+          currency: (currency || "NGN").toUpperCase(),
           address: `${currency || "NGN"}_${userId.substring(0, 8)}`,
-        })
+        }, { onConflict: "user_id,currency" })
         .select("id")
-        .single();
+        .maybeSingle();
       
-      if (walletErr) {
-          const errMsg = `[Reconciliation] Failed to create wallet in wallets_store for user ${userId}: ${walletErr.message}`;
-          logger.error(errMsg);
-          throw new Error(errMsg);
-      }
-      wallet = newWallet;
+      wallet = newWallet || (await supabase.from("wallets_store").select("id").eq("user_id", userId).ilike("currency", currency || "NGN").maybeSingle());
     }
 
     // 4. Create Transaction Record

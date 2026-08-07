@@ -133,36 +133,40 @@ class CryptoWalletService {
 
     const { data: wallet, error } = await supabase
       .from("wallets_store")
-      .insert({
+      .upsert({
         user_id: userId,
         currency: upCurrency,
         network: upNetwork,
         address: address,
         provider: provider,
-      })
+      }, { onConflict: "user_id,currency" })
       .select()
-      .single();
+      .maybeSingle();
+
+    if (wallet) {
+      return wallet;
+    }
 
     if (error) {
-      const isUniqueViolation = error.code === "23505" || 
-        (error.message && (
-          error.message.includes("unique") || 
-          error.message.includes("duplicate") || 
-          error.message.includes("unique_personal_wallet")
-        ));
-
-      if (isUniqueViolation) {
-        const { data: retry } = await supabase
-          .from("wallets_store")
-          .select("*")
-          .eq("user_id", userId)
-          .eq("currency", upCurrency)
-          .maybeSingle();
-        if (retry) return retry;
-      }
+      const { data: retry } = await supabase
+        .from("wallets_store")
+        .select("*")
+        .eq("user_id", userId)
+        .ilike("currency", upCurrency)
+        .maybeSingle();
+      if (retry) return retry;
       throw error;
     }
-    return wallet;
+
+    const { data: finalFetch } = await supabase
+      .from("wallets_store")
+      .select("*")
+      .eq("user_id", userId)
+      .ilike("currency", upCurrency)
+      .maybeSingle();
+    if (finalFetch) return finalFetch;
+
+    throw new Error(`Failed to initialize ${upCurrency} crypto wallet.`);
   }
 
   /**

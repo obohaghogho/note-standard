@@ -360,10 +360,10 @@ class PaymentOrchestrator {
       throw new Error(`Insufficient funds in ${from} wallet.`);
     }
 
-    let { data: targetWallet } = await supabase.from('wallets_store').select('id').eq('user_id', userId).eq('currency', to).maybeSingle();
+    let { data: targetWallet } = await supabase.from('wallets_store').select('id').eq('user_id', userId).ilike('currency', to).maybeSingle();
     if (!targetWallet) {
-      const { data: newW } = await supabase.from('wallets_store').insert({ user_id: userId, currency: to, balance: 0, available: 0 }).select().single();
-      targetWallet = newW;
+      const { data: newW } = await supabase.from('wallets_store').upsert({ user_id: userId, currency: to, balance: 0, available: 0 }, { onConflict: 'user_id,currency' }).select().maybeSingle();
+      targetWallet = newW || (await supabase.from('wallets_store').select('id').eq('user_id', userId).ilike('currency', to).maybeSingle());
     }
 
     const reference = `swap_${uuidv4().replace(/-/g, '')}`;

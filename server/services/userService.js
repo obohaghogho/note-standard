@@ -96,14 +96,14 @@ async function ensureProfile(userId, fallbackData = null) {
 
     // 4. Proactively ensure default wallets exist in wallets_store
     try {
-      await supabase.from('wallets_store').insert([
+      await supabase.from('wallets_store').upsert([
         { user_id: userId, currency: 'USD', network: 'native', balance: 0, available_balance: 0, address: `${userId}_usd` },
         { user_id: userId, currency: 'BTC', network: 'bitcoin', balance: 0, available_balance: 0, address: `${userId}_btc` },
         { user_id: userId, currency: 'ETH', network: 'ethereum', balance: 0, available_balance: 0, address: `${userId}_eth` },
         { user_id: userId, currency: 'USDT', network: 'TRC20', balance: 0, available_balance: 0, address: `${userId}_usdt` },
         { user_id: userId, currency: 'USDC', network: 'ERC20', balance: 0, available_balance: 0, address: `${userId}_usdc` },
         { user_id: userId, currency: 'NGN', network: 'native', balance: 0, available_balance: 0, address: `${userId}_ngn` },
-      ]).select().catch(() => {}); // Ignore duplicate wallet errors
+      ], { onConflict: 'user_id,currency' }).select().catch(() => {});
     } catch (wErr) {
       console.warn(`[UserService] Wallet auto-creation warning for ${userId}:`, wErr.message);
     }
