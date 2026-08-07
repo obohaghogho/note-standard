@@ -7,6 +7,7 @@ import * as accountManager from "../utils/accountManager";
 import { updateSessionMeta } from "../utils/accountManager";
 import { refreshSessionIsolated } from "../utils/authUtils";
 import i18n from '../i18n';
+import { getDeviceId } from "../utils/deviceId";
 
 interface AuthContextValue {
   user: User | null;
