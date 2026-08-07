@@ -5,7 +5,7 @@ import { useEffect, Suspense } from 'react';
 // Layout & structural components (eagerly loaded — needed immediately)
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { AdminLayout } from './components/layout/AdminLayout';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { PWAInstallProvider } from './context/PWAInstallContext';
 import { SocketProvider } from './context/SocketContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
