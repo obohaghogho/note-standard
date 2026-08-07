@@ -47,3 +47,9 @@ next-env.d.ts
 
 # chaos reports
 acc_chaos_report.json
+
+# temporary scratch & text dumps
+user_pasted_agreement.txt
+temp_user_agreement.txt
+*.txt
+

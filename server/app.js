@@ -109,11 +109,15 @@ if (process.env.NODE_ENV === "production") {
 }
 app.use(logger.requestLogger);
 
-// ─── Middleware ──────────────────────────────────────────────
 const { requireAuth, requireAdmin } = require("./middleware/authMiddleware");
 const ApiError = require("./utils/apiError");
 const paymentController = require("./controllers/payment/paymentController");
+const botProtection = require("./middleware/botProtection");
+const { apiLimiter } = require("./middleware/rateLimiter");
 
+// Apply Bot Defense and Global API Rate Limiting
+app.use("/api", botProtection);
+app.use("/api", apiLimiter);
 
 // ─── Deterministic Boot Architecture Gate ──────────────────
 // SINGLE admission authority for ALL HTTP traffic.
@@ -151,8 +155,8 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-// TEST 1 & 2: Gateway Reachability Diagnostics
-app.get("/api/diagnose-gateway", async (req, res) => {
+// TEST 1 & 2: Gateway Reachability Diagnostics (Admin Protected)
+app.get("/api/diagnose-gateway", requireAuth, requireAdmin, async (req, res) => {
   const gatewayUrl = process.env.REALTIME_GATEWAY_URL;
   const result = {
     env_REALTIME_GATEWAY_URL: gatewayUrl,
@@ -283,9 +287,9 @@ app.use("/api/dashboard", dashboardNotesRoutes);
 const replayRoutes = require("./tools/replayDebugger/replayRoutes");
 app.use(replayRoutes);
 
-// Phase 6.2 Step 3: Chaos Simulator
+// Phase 6.2 Step 3: Chaos Simulator (Admin Protected)
 const { runChaosScenario } = require("./tools/chaosSimulator/index.js");
-app.post("/api/debug/chaos/run", async (req, res) => {
+app.post("/api/debug/chaos/run", requireAuth, requireAdmin, async (req, res) => {
   const { conversation_id, level } = req.body;
   const result = await runChaosScenario({
     conversationId: conversation_id,

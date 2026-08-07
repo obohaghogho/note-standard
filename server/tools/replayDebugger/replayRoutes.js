@@ -1,9 +1,9 @@
 const express = require("express");
 const router = express.Router();
-
+const { requireAuth, requireAdmin } = require("../../middleware/authMiddleware");
 const { runReplay } = require("./replayEngine");
 
-router.get("/api/debug/replay/:conversationId", async (req, res) => {
+router.get("/api/debug/replay/:conversationId", requireAuth, requireAdmin, async (req, res) => {
     try {
         const { conversationId } = req.params;
 
