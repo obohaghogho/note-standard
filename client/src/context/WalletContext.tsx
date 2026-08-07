@@ -263,10 +263,9 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             await walletApi.internalTransfer({ ...data, idempotencyKey });
             toast.success(`Successfully sent ${data.amount} ${data.currency}`);
             
-            // Background processing lag: Wait 2.5 seconds before refreshing to allow causal worker to settle
-            setTimeout(async () => {
-                await fetchData();
-            }, 2500);
+            // Immediate balance synchronization: Reset fetching guard and re-fetch core balances
+            fetchingRef.current = false;
+            await fetchData();
         } catch (err: unknown) {
             console.error('Send funds error:', err);
             const message = err instanceof Error ? err.message : 'Failed to send funds';
@@ -283,6 +282,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             if (!res?.otpRequired && res?.status !== 'OTP_REQUIRED') {
                 toast.success(`Withdrawal request submitted for ${data.amount} ${data.currency}`);
             }
+            fetchingRef.current = false;
             await fetchData();
             return res;
         } catch (err: unknown) {
