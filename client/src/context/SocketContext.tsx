@@ -92,10 +92,17 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             return;
         }
 
-        // 2. Token Refresh Guard
-        // If already connected, just dynamically update the auth token for the next reconnect.
-        // Requirement 1, 4, 5, 10
+        // 2. Token Refresh Guard or Account Switch Teardown
         if (globalSocket) {
+            if (initializedUserId.current && user && initializedUserId.current !== user.id) {
+                console.log(`[Socket Forensic] Account Switch Detected (${initializedUserId.current} -> ${user.id}). Teardown stale socket session.`);
+                globalSocket.removeAllListeners();
+                globalSocket.disconnect();
+                globalSocket = null;
+                setConnected(false);
+                initializedUserId.current = null;
+                return;
+            }
             const socketWithAuth = globalSocket as Socket & { auth?: { token?: string } };
             if (socketWithAuth.auth?.token !== token) {
                 console.log(`[Socket Forensic] Auth Refresh Detected at ${Date.now()}. Updating internal socket auth token without tearing down transport.`);

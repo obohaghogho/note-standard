@@ -88,11 +88,22 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
      * Listens for changes to the 'notes' table for the current user.
      */
     useEffect(() => {
-        if (!user) {
+        const handleAccountSwitch = () => {
+            console.log('[NotesContext] Account switch event detected — immediately resetting notes state');
             setNotes([]);
             setStats({ totalBy: 0, favorites: 0 });
+            setLoading(true);
+        };
+
+        window.addEventListener('account-switched', handleAccountSwitch);
+
+        // Immediately clear state on user ID change
+        setNotes([]);
+        setStats({ totalBy: 0, favorites: 0 });
+
+        if (!user) {
             setLoading(false);
-            return;
+            return () => window.removeEventListener('account-switched', handleAccountSwitch);
         }
 
         // Fetch whenever the user changes
@@ -177,6 +188,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             });
 
         return () => {
+            window.removeEventListener('account-switched', handleAccountSwitch);
             supabase.removeChannel(channel);
         };
     }, [user, fetchNotes]);

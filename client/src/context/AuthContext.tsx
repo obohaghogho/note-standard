@@ -293,6 +293,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Update active account ID
       accountManager.setActiveAccountId(userId);
+      resetRateLimiters();
+      window.dispatchEvent(new CustomEvent('account-switched', { 
+        detail: { userId, previousUserId } 
+      }));
       console.log(`[ACCOUNT_FORENSIC] ACCOUNT_SWITCH_COMPLETED successfully for ${target.email}`);
       toast.success(`Switched to ${target.email}`, { id: toastId });
 

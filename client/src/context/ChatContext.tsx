@@ -327,6 +327,27 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }, 10000);
         return () => clearInterval(interval);
     }, [user, session, connected]);
+    // Immediate State Isolation on User Identity Change
+    const prevUserIdRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        const handleAccountSwitch = () => {
+            console.log('[ChatContext] Account switch detected — immediately clearing all chat state');
+            setConversations([]);
+            setMessages({});
+            setActiveConversationId(null);
+            setUnreadCount(0);
+            conversationsFetchRef.current = false;
+        };
+
+        if (user?.id && prevUserIdRef.current && prevUserIdRef.current !== user.id) {
+            handleAccountSwitch();
+        }
+        prevUserIdRef.current = user?.id || null;
+
+        window.addEventListener('account-switched', handleAccountSwitch);
+        return () => window.removeEventListener('account-switched', handleAccountSwitch);
+    }, [user?.id]);
 
     // Chat Boot Kernel: Deterministic State Machine Orchestrator
     useEffect(() => {
@@ -608,7 +629,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 
                 // Requirement 9: Prevent conversation overwrite race. Merge-by-id logic.
                 setConversations(prev => {
-                    const existingMap = new Map(prev.map(c => [c.id, c]));
+                    // Filter out any stale conversations belonging to a previous account
+                    const currentUserId = user?.id;
+                    const validPrev = prev.filter(c => !c.members || c.members.some(m => m.user_id === currentUserId));
+                    const existingMap = new Map(validPrev.map(c => [c.id, c]));
                     mappedData.forEach((incoming: Conversation) => {
                         const existing = existingMap.get(incoming.id);
                         if (!existing) {

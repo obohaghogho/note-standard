@@ -127,18 +127,31 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // Initial Load & Financial Data Isolation on Account Switch
     useEffect(() => {
+        const handleAccountSwitch = () => {
+            console.log('[WalletContext] Account switch event detected — immediately resetting wallet state');
+            setWallets([]);
+            setTransactions([]);
+            setLoading(true);
+            fetchingRef.current = false;
+        };
+
+        window.addEventListener('account-switched', handleAccountSwitch);
+
         if (authReady && user && profile) {
             // Financial Data Isolation: Immediately flush state before fetching
             // to ensure no brief flash of previous account's financial data on switch
             setWallets([]);
             setTransactions([]);
             setLoading(true);
+            fetchingRef.current = false;
             fetchData();
         } else if (authReady && (!user || !profile)) {
             setWallets([]);
             setTransactions([]);
             setLoading(false);
         }
+
+        return () => window.removeEventListener('account-switched', handleAccountSwitch);
     }, [user?.id, profile?.id, authReady, fetchData]);
 
     // Real-time Updates (Listen to ledger and transaction changes)
