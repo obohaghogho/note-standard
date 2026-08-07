@@ -42,7 +42,9 @@ class FiatWalletService {
    * Create or fetch a fiat wallet
    */
   async createWallet(userId, currency) {
-    const upCurrency = currency.toUpperCase();
+    if (!userId) throw new Error("User ID is required for wallet creation.");
+    const normUserId = String(userId).trim().toLowerCase();
+    const upCurrency = String(currency).trim().toUpperCase();
 
     // Block on-chain crypto-only currencies — these use CryptoWalletService (NowPayments)
     if (HARD_CRYPTO_CURRENCIES.has(upCurrency)) {
@@ -54,50 +56,40 @@ class FiatWalletService {
       throw new Error(`CURRENCY_NOT_AVAILABLE: ${upCurrency} will become available after provider approval. Deposits and withdrawals are not yet enabled.`);
     }
 
-    const { data: existing } = await supabase
-      .from("wallets_v6")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("currency", upCurrency)
-      .maybeSingle();
-
-    if (existing) {
-      return existing;
-    }
-
-    // Step 1: Double check wallets_store table directly (case-insensitive)
-    const { data: existingStore } = await supabase
+    // Step 1: In-Memory Search across all user's wallets in wallets_store
+    const { data: userWallets } = await supabase
       .from("wallets_store")
       .select("*")
-      .eq("user_id", userId)
-      .ilike("currency", upCurrency)
-      .maybeSingle();
+      .eq("user_id", normUserId);
 
-    if (existingStore) {
-      return existingStore;
+    if (userWallets && userWallets.length > 0) {
+      const match = userWallets.find(
+        (w) => String(w.currency).trim().toUpperCase() === upCurrency
+      );
+      if (match) return match;
     }
 
-    // New Fiat Wallet Creation: Ensure address is unique per currency & user
-    let address = `${upCurrency}_${userId.replace(/-/g, '').substring(0, 12)}`;
+    // Step 2: Build unique per-currency address
+    let address = `${upCurrency}_${normUserId.replace(/-/g, '').substring(0, 12)}`;
     try {
       const { data: profile } = await supabase
         .from("profiles")
         .select("email, username")
-        .eq("id", userId)
-        .single();
+        .eq("id", normUserId)
+        .maybeSingle();
       if (profile) {
-        const identifier = profile.username || (profile.email ? profile.email.split('@')[0] : userId);
+        const identifier = profile.username || (profile.email ? profile.email.split('@')[0] : normUserId);
         address = `${upCurrency}_${identifier}`;
       }
     } catch (e) {
-      address = `${upCurrency}_${userId}`;
+      address = `${upCurrency}_${normUserId}`;
     }
 
-    // Step 2: Try insert with unique per-currency address
-    let { data: wallet, error } = await supabase
+    // Step 3: Attempt insert into wallets_store
+    const { data: wallet, error } = await supabase
       .from("wallets_store")
       .insert({
-        user_id: userId,
+        user_id: normUserId,
         currency: upCurrency,
         network: "NATIVE",
         address: address,
@@ -106,42 +98,50 @@ class FiatWalletService {
       .select()
       .maybeSingle();
 
-    if (wallet) {
-      return wallet;
-    }
+    if (wallet) return wallet;
 
-    // If first insert failed due to address collision or constraint, retry with timestamped address
-    if (error) {
-      logger.warn(`[FiatWalletService] First insert attempt warning for user ${userId} (${upCurrency}): ${error.message}`);
-      const fallbackAddress = `${upCurrency}_${userId.replace(/-/g, '')}_${Date.now()}`;
-      const { data: retryWallet } = await supabase
-        .from("wallets_store")
-        .insert({
-          user_id: userId,
-          currency: upCurrency,
-          network: "NATIVE",
-          address: fallbackAddress,
-          provider: "internal",
-        })
-        .select()
-        .maybeSingle();
-
-      if (retryWallet) {
-        return retryWallet;
-      }
-    }
-
-    // Step 3: Fallback query if insert hit duplicate key or concurrent creation
-    const { data: retry } = await supabase
+    // Step 4: Fallback if insert errored (e.g. duplicate key or race condition)
+    const { data: recheckWallets } = await supabase
       .from("wallets_store")
       .select("*")
-      .eq("user_id", userId)
-      .ilike("currency", upCurrency)
+      .eq("user_id", normUserId);
+
+    if (recheckWallets && recheckWallets.length > 0) {
+      const recheckMatch = recheckWallets.find(
+        (w) => String(w.currency).trim().toUpperCase() === upCurrency
+      );
+      if (recheckMatch) return recheckMatch;
+    }
+
+    // Retry with timestamped fallback address if address collided
+    if (error) {
+      logger.warn(`[FiatWalletService] First insert attempt warning for user ${normUserId} (${upCurrency}): ${error.message}`);
+    }
+    const fallbackAddress = `${upCurrency}_${normUserId.replace(/-/g, '')}_${Date.now()}`;
+    const { data: retryWallet } = await supabase
+      .from("wallets_store")
+      .insert({
+        user_id: normUserId,
+        currency: upCurrency,
+        network: "NATIVE",
+        address: fallbackAddress,
+        provider: "internal",
+      })
+      .select()
       .maybeSingle();
 
-    if (retry) {
-      return retry;
-    }
+    if (retryWallet) return retryWallet;
+
+    // Final fetch attempt
+    const { data: finalWallets } = await supabase
+      .from("wallets_store")
+      .select("*")
+      .eq("user_id", normUserId);
+
+    const finalMatch = (finalWallets || []).find(
+      (w) => String(w.currency).trim().toUpperCase() === upCurrency
+    );
+    if (finalMatch) return finalMatch;
 
     throw new Error(`Failed to initialize ${upCurrency} wallet for user: ${error ? error.message : "Unknown DB Error"}`);
   }

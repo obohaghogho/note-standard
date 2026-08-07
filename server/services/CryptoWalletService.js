@@ -87,7 +87,9 @@ class CryptoWalletService {
    */
   async createWallet(userId, currency, network, forceNew = false) {
     if (!network) throw new Error("Explicit network selection is required.");
-    const upCurrency = currency.toUpperCase();
+    if (!userId) throw new Error("User ID is required for wallet creation.");
+    const normUserId = String(userId).trim().toLowerCase();
+    const upCurrency = String(currency).trim().toUpperCase();
 
     if (!["BTC", "ETH", "USDT", "USDC"].includes(upCurrency)) {
       throw new Error("Fiat currencies are strictly forbidden in CryptoWalletService.");
@@ -100,16 +102,18 @@ class CryptoWalletService {
     const upNetwork = normNetwork;
 
     if (!forceNew) {
-      const { data: existing } = await supabase
-        .from("wallets_v6")
+      const { data: userWallets } = await supabase
+        .from("wallets_store")
         .select("*")
-        .eq("user_id", userId)
-        .eq("currency", upCurrency)
-        .ilike("network", upNetwork)
-        .maybeSingle();
+        .eq("user_id", normUserId);
 
-      if (existing) {
-        return await this.upgradeIfMock(userId, existing, upNetwork);
+      if (userWallets && userWallets.length > 0) {
+        const match = userWallets.find(
+          (w) => String(w.currency).trim().toUpperCase() === upCurrency
+        );
+        if (match) {
+          return await this.upgradeIfMock(normUserId, match, upNetwork);
+        }
       }
     }
 
@@ -119,7 +123,7 @@ class CryptoWalletService {
 
     try {
       const real = await nowpaymentsService.getOrCreateDepositAddress(
-        userId,
+        normUserId,
         upCurrency,
         upNetwork,
         supabase,
@@ -131,23 +135,11 @@ class CryptoWalletService {
       logger.error("[CryptoWalletService] Failed to get real crypto address", e);
     }
 
-    // Step 1: Double check wallets_store table directly (case-insensitive)
-    const { data: existingStore } = await supabase
-      .from("wallets_store")
-      .select("*")
-      .eq("user_id", userId)
-      .ilike("currency", upCurrency)
-      .maybeSingle();
-
-    if (existingStore) {
-      return await this.upgradeIfMock(userId, existingStore, upNetwork);
-    }
-
-    // Step 2: Try insert without onConflict
+    // Attempt insert without onConflict
     let { data: wallet, error } = await supabase
       .from("wallets_store")
       .insert({
-        user_id: userId,
+        user_id: normUserId,
         currency: upCurrency,
         network: upNetwork,
         address: address,
@@ -156,41 +148,50 @@ class CryptoWalletService {
       .select()
       .maybeSingle();
 
-    if (wallet) {
-      return wallet;
+    if (wallet) return wallet;
+
+    // Fallback if insert errored (e.g. duplicate key or race condition)
+    const { data: recheckWallets } = await supabase
+      .from("wallets_store")
+      .select("*")
+      .eq("user_id", normUserId);
+
+    if (recheckWallets && recheckWallets.length > 0) {
+      const recheckMatch = recheckWallets.find(
+        (w) => String(w.currency).trim().toUpperCase() === upCurrency
+      );
+      if (recheckMatch) return recheckMatch;
     }
 
     if (error) {
-      logger.warn(`[CryptoWalletService] Crypto wallet insert warning for user ${userId} (${upCurrency}): ${error.message}`);
-      const fallbackAddress = `${upCurrency}_${userId.replace(/-/g, '')}_${Date.now()}`;
-      const { data: retryWallet } = await supabase
-        .from("wallets_store")
-        .insert({
-          user_id: userId,
-          currency: upCurrency,
-          network: upNetwork,
-          address: fallbackAddress,
-          provider: provider,
-        })
-        .select()
-        .maybeSingle();
-
-      if (retryWallet) {
-        return retryWallet;
-      }
+      logger.warn(`[CryptoWalletService] Crypto wallet insert warning for user ${normUserId} (${upCurrency}): ${error.message}`);
     }
 
-    // Step 3: Fallback query if insert hit duplicate key or race condition
-    const { data: retry } = await supabase
+    const fallbackAddress = `${upCurrency}_${normUserId.replace(/-/g, '')}_${Date.now()}`;
+    const { data: retryWallet } = await supabase
       .from("wallets_store")
-      .select("*")
-      .eq("user_id", userId)
-      .ilike("currency", upCurrency)
+      .insert({
+        user_id: normUserId,
+        currency: upCurrency,
+        network: upNetwork,
+        address: fallbackAddress,
+        provider: provider,
+      })
+      .select()
       .maybeSingle();
 
-    if (retry) {
-      return retry;
-    }
+    if (retryWallet) return retryWallet;
+
+    // Final fetch attempt
+    const { data: finalWallets } = await supabase
+      .from("wallets_store")
+      .select("*")
+      .eq("user_id", normUserId);
+
+    const finalMatch = (finalWallets || []).find(
+      (w) => String(w.currency).trim().toUpperCase() === upCurrency
+    );
+    if (finalMatch) return finalMatch;
 
     throw new Error(`Failed to initialize ${upCurrency} crypto wallet: ${error ? error.message : "Unknown DB Error"}`);
   }
