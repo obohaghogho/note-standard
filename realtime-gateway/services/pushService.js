@@ -337,11 +337,6 @@ async function computeV2Routing(params) {
         decision = 'NO_ENDPOINT';
         suppressionReason = 'NO_VALID_ENDPOINTS';
         pushSent = false;
-      } else if (pushTargets.length === 0) {
-        // All valid endpoints belong to active devices — suppress entirely
-        decision = 'SUPPRESSED';
-        suppressionReason = 'ACTIVE_SOCKET_PRESENT_ON_ALL_DEVICES';
-        pushSent = false;
       } else {
         decision = 'PUSH';
         pushSent = true;
@@ -915,7 +910,8 @@ async function sendGenericPush(params) {
       const { data: webSubs, error: webErr } = await supabase
         .from('push_subscriptions')
         .select('endpoint, p256dh, auth, vapid_key_version')
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .neq('status', 'invalid');
 
       if (!webErr && webSubs && webSubs.length > 0) {
         if (payload?.trace) { payload.trace.pushProviderStartTs = Date.now(); }

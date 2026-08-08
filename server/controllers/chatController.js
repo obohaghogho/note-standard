@@ -1726,9 +1726,12 @@ exports.sendMessage = async (req, res) => {
         conversationId,
       ).then();
 
-      // --- 3a. Fast Push Notification ---
-      // Trigger native push notifications via Gateway for offline recipients
-      if (members && members.length > 0) {
+      // --- 3a. Fast Push Notification (LEGACY ONLY) ---
+      // When v2 pipeline is active, the deliveryEngine handles push via pg_notify
+      // with proper socket-presence checking and ACK timeout fallback.
+      // Firing dispatchFastPush here would create a competing push path that
+      // races with the deliveryEngine, causing suppression or duplication.
+      if (PIPELINE_VERSION !== 'v2' && members && members.length > 0) {
         const recipientIds = members.map(m => m.user_id).filter(id => id !== userId);
         const senderName = safePayload.sender?.full_name || safePayload.sender?.username || 'Someone';
         let pushText = safePayload.content || '';
@@ -1857,28 +1860,34 @@ exports.sendMessage = async (req, res) => {
           });
         });
 
-        const fastPushPromises = otherMembers.map(async (member) => {
-          if (member.is_muted) {
-            console.log(`[Chat Notify] Skipping muted user fast-push: ${member.user_id}`);
-            return;
-          }
-          await dispatchFastPush({
-            receiverId: member.user_id,
-            type: "chat_message",
-            title: senderName,
-            message: previewContent,
-            link: `/dashboard/chat?id=${conversationId}`,
-            messageId: createdMessageId,
-            conversationId: conversationId,
-            trace: {
-              clientSendTs,
-              apiReceiveTs: t1_ApiReceived,
-              dbStartTs: t2_DbInsertStart,
-              dbDoneTs: t3_DbInsertDone,
+        // Fast push via /internal/push is LEGACY ONLY.
+        // When v2 pipeline is active, the deliveryEngine already dispatches push
+        // notifications via chatPush → DeviceRegistry → PushDispatcher.
+        // Firing dispatchFastPush here would create a second competing push.
+        if (PIPELINE_VERSION !== 'v2') {
+          const fastPushPromises = otherMembers.map(async (member) => {
+            if (member.is_muted) {
+              console.log(`[Chat Notify] Skipping muted user fast-push: ${member.user_id}`);
+              return;
             }
+            await dispatchFastPush({
+              receiverId: member.user_id,
+              type: "chat_message",
+              title: senderName,
+              message: previewContent,
+              link: `/dashboard/chat?id=${conversationId}`,
+              messageId: createdMessageId,
+              conversationId: conversationId,
+              trace: {
+                clientSendTs,
+                apiReceiveTs: t1_ApiReceived,
+                dbStartTs: t2_DbInsertStart,
+                dbDoneTs: t3_DbInsertDone,
+              }
+            });
           });
-        });
-        Promise.allSettled(fastPushPromises).then();
+          Promise.allSettled(fastPushPromises).then();
+        }
         Promise.allSettled(dbNotificationPromises).then();
       }
 

@@ -99,12 +99,19 @@ class PushDispatcher {
   }
 
   /**
-   * Android FCM Dispatch: High-Priority DATA-ONLY Payload (wakes JS thread for ACK & notification banner).
+   * Android FCM Dispatch: High-Priority DUAL-PAYLOAD (notification + data).
+   * The notification block ensures Android OS renders a system tray notification
+   * even when the app process is killed/closed. The data block wakes the JS thread
+   * for delivery ACK and in-app handling when the app is open.
    */
   static async sendAndroidFcm(fbApp, supabase, device, payload) {
     try {
       const message = {
         token: device.endpoint,
+        notification: {
+          title: String(payload.title || 'New Message'),
+          body: String(payload.body || 'You have a new message'),
+        },
         data: {
           type: 'chat_message',
           title: String(payload.title),
@@ -118,7 +125,15 @@ class PushDispatcher {
         },
         android: {
           priority: 'high',
-          ttl: 86400
+          ttl: 86400,
+          notification: {
+            channelId: 'default',
+            sound: 'default',
+            priority: 'high',
+            visibility: 'public',
+            defaultSound: true,
+            defaultVibrateTimings: true,
+          },
         }
       };
 
