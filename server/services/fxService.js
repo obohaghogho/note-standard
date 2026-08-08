@@ -59,6 +59,7 @@ class FXService {
           // Force overwrite seeds with actual DB truth if it's valid
           cache.set(key, price, 86400 * 7);
           cache.set(timestampKey, new Date(snapshot.created_at).getTime(), 86400 * 7);
+          cache.set(`lkg_source_${sym.toUpperCase()}`, 'LIVE', 86400 * 7); // DB snapshots are live-validated
           logger.info(`[FXService] Recovered persistent LKG for ${sym}: $${price} (Age: ${Math.round((Date.now() - new Date(snapshot.created_at).getTime())/3600000)}h)`);
         }
       }
@@ -69,16 +70,16 @@ class FXService {
 
   _bootstrapFallbackRates() {
     // IMPORTANT: Keep seed prices close to current market values.
-    // The sanity check quarantines any live price that deviates >15% from
-    // the stored LKG (or >35% on initial-seed-sync). 
+    // These seeds are ONLY used when no live data or DB snapshot is available.
+    // Updated: August 2026 market values.
     const FALLBACK_SEEDS = {
-      BTC: 65000, // Updated to be closer to recent market
-      ETH: 3500,  // Updated to be closer to recent market
+      BTC: 65000,
+      ETH: 1920,
       USDT: 1.0,
       USDC: 1.0,
       "USD-COIN": 1.0,
       TETHER: 1.0,
-      NGN: 0.00066, // ~1500 NGN per USD fallback
+      NGN: 0.000732, // ~1366 NGN per USD
       JPY: 0.0067,  
       EUR: 1.08,    
       GBP: 1.27,    
@@ -93,7 +94,9 @@ class FXService {
         cache.set(key, price, 86400 * 7);
         // Stamp seeds as current time so they are within the 2h STALE window
         cache.set(`lkg_time_${sym}`, Date.now(), 86400 * 7);
-        logger.info(`[FXService] Seeded fallback LKG for ${sym}: $${price} (STALE, fresh timestamp)`);
+        // Mark as SEED (not live-validated) — first live sync will bypass sanity cap
+        cache.set(`lkg_source_${sym}`, 'SEED', 86400 * 7);
+        logger.info(`[FXService] Seeded fallback LKG for ${sym}: $${price} (SEED)`);
       }
     }
   }
@@ -104,18 +107,26 @@ class FXService {
   async _handleLKG(symbol, newPrice = null) {
     const key = `lkg_price_${symbol.toUpperCase()}`;
     const timestampKey = `lkg_time_${symbol.toUpperCase()}`;
+    const sourceKey = `lkg_source_${symbol.toUpperCase()}`;
     
     if (newPrice !== null && !isNaN(newPrice) && newPrice > 0) {
       const currentLKG = cache.get(key);
       const lkgTime = cache.get(timestampKey) || 0;
+      const lkgSource = cache.get(sourceKey) || 'SEED';
       const age = (Date.now() - lkgTime) / 1000;
       
       if (currentLKG) {
-        // Dynamic Sanity Check: If the data is very old, allow larger deviation
-        // This prevents the "quarantine deadlock" when the market moves while the server was down.
+        // Dynamic Sanity Check: protect against flash crashes and price manipulation.
+        // BUT: Seeds are emergency fallbacks, not validated market data.
+        // Quarantining live prices against stale seeds creates a permanent deadlock.
         let syncCap = this.SANITY_DEVIATION_CAP; // Default 15%
         
-        if (age > 3600) { // Older than 1 hour
+        if (lkgSource === 'SEED') {
+          // First live sync from bootstrap seed — allow ANY price to sync.
+          // Seeds are just "reasonable guesses" — the live feed is always more authoritative.
+          syncCap = Infinity;
+          logger.info(`[FXService] First live sync for ${symbol} (replacing SEED). Bypassing sanity cap.`);
+        } else if (age > 3600) { // Older than 1 hour
            syncCap = 0.50; // Allow up to 50% jump to "catch up"
            logger.info(`[FXService] Relaxing sanity cap to 50% for ${symbol} due to stale LKG age: ${(age/3600).toFixed(1)}h`);
         }
@@ -132,6 +143,7 @@ class FXService {
 
       cache.set(key, newPrice, 86400 * 7); // Persistent for 1 week
       cache.set(timestampKey, Date.now(), 86400 * 7);
+      cache.set(sourceKey, 'LIVE', 86400 * 7); // Mark as live-validated
       return { price: newPrice, mode: 'FRESH', stale: false };
     }
 
