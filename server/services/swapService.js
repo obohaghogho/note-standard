@@ -174,25 +174,31 @@ class SwapService {
       logger.error(`[SwapService] Failed to check FX pool balance for ${targetCurrency}:`, fxPoolError.message);
     }
 
-    const currentBalance = fxPool ? Number(fxPool.balance) : 0;
-
     const BLOCK_ON_LOW_FX_LIQUIDITY = process.env.BLOCK_ON_LOW_FX_LIQUIDITY !== 'false';
     const ALLOW_TREASURY_FX_BACKSTOP = process.env.ALLOW_TREASURY_FX_BACKSTOP !== 'false';
 
-    if (currentBalance < requiredAmount) {
-      if (BLOCK_ON_LOW_FX_LIQUIDITY) {
-        if (ALLOW_TREASURY_FX_BACKSTOP) {
-          logger.warn(`[FX_Liquidity_Safeguard] Low liquidity in FX_POOL_${targetCurrency} (${currentBalance} < ${requiredAmount}). Triggering Treasury Backstop...`);
-          const backstopSuccess = await this.triggerTreasuryBackstop(targetCurrency, requiredAmount - currentBalance);
-          if (!backstopSuccess) {
-            throw new Error(`Insufficient liquidity in exchange pool for ${targetCurrency}. Treasury backstop failed or reserves depleted.`);
+    // If the FX pool wallet doesn't exist, this is an internal ledger system —
+    // the atomic RPC (execute_swap_v6) is the source of truth for balance validation.
+    // Skip the pre-flight check and let the RPC handle it.
+    if (!fxPool) {
+      logger.warn(`[FX_Liquidity_Safeguard] FX_POOL_${targetCurrency} wallet not found. Skipping pre-flight liquidity check — delegating to atomic RPC.`);
+    } else {
+      const currentBalance = Number(fxPool.balance) || 0;
+
+      if (currentBalance < requiredAmount) {
+        if (BLOCK_ON_LOW_FX_LIQUIDITY) {
+          if (ALLOW_TREASURY_FX_BACKSTOP) {
+            logger.warn(`[FX_Liquidity_Safeguard] Low liquidity in FX_POOL_${targetCurrency} (${currentBalance} < ${requiredAmount}). Triggering Treasury Backstop...`);
+            const backstopSuccess = await this.triggerTreasuryBackstop(targetCurrency, requiredAmount - currentBalance);
+            if (!backstopSuccess) {
+              logger.warn(`[FX_Liquidity_Safeguard] Treasury backstop failed for FX_POOL_${targetCurrency}. Proceeding to RPC — it will enforce balance constraints atomically.`);
+            }
+          } else {
+            logger.warn(`[FX_Liquidity_Safeguard] Low liquidity in FX_POOL_${targetCurrency} (${currentBalance} < ${requiredAmount}) and backstop disabled. Proceeding to RPC.`);
           }
         } else {
-          logger.error(`[FX_Liquidity_Safeguard] Blocked swap: FX_POOL_${targetCurrency} has insufficient balance (${currentBalance} < ${requiredAmount}) and backstop is disabled.`);
-          throw new Error(`Insufficient liquidity in exchange pool for ${targetCurrency}. Swap rejected.`);
+          logger.warn(`[FX_Liquidity_Safeguard] Low liquidity in FX_POOL_${targetCurrency} (${currentBalance} < ${requiredAmount}), but block is disabled. Proceeding.`);
         }
-      } else {
-        logger.warn(`[FX_Liquidity_Safeguard] Low liquidity in FX_POOL_${targetCurrency} (${currentBalance} < ${requiredAmount}), but block is disabled. Proceeding.`);
       }
     }
 
@@ -282,15 +288,15 @@ class SwapService {
           wallet_id: treasuryWallet.id,
           user_id: adminId,
           currency: currency,
-          amount: neededAmount,
-          side: 'CREDIT'
+          amount: -neededAmount,
+          side: 'DEBIT'
         },
         {
           wallet_id: fxPoolWallet.id,
           user_id: adminId,
           currency: currency,
-          amount: -neededAmount,
-          side: 'DEBIT'
+          amount: neededAmount,
+          side: 'CREDIT'
         }
       ];
 
