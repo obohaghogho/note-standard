@@ -1160,9 +1160,14 @@ export const FundModal: React.FC<FundModalProps> = ({
                                     )}
                                 </div>
 
-                                <Button onClick={handleCloseModal} variant="secondary" className="w-full">
-                                    Done
-                                </Button>
+                                <div className="space-y-2">
+                                    <Button onClick={handleCloseModal} variant="primary" className="w-full h-10 font-bold bg-purple-600 hover:bg-purple-500">
+                                        Continue to Wallet
+                                    </Button>
+                                    <p className="text-[10.5px] text-center text-gray-400">
+                                        Receipt upload is optional. Your wallet will credit automatically once provider confirms the transfer.
+                                    </p>
+                                </div>
                             </div>
                         )}
 

@@ -357,6 +357,10 @@ exports.depositTransfer = async (req, res, next) => {
               currency: 'NGN',
               type: 'DEPOSIT',
               status: 'PENDING',
+              payment_status: 'PAYMENT_PENDING',
+              receipt_status: 'NOT_PROVIDED',
+              wallet_credit_status: 'WALLET_CREDIT_PENDING',
+              idempotency_key: refCode,
               reference_id: refCode,
               provider: 'fincra',
               display_label: 'NGN Bank Transfer Deposit',
@@ -490,46 +494,18 @@ exports.submitDepositProof = async (req, res) => {
 
     let { data: tx } = await supabase
       .from("transactions")
-      .select("id, metadata, user_id, amount, currency, wallet_id")
+      .select("*")
       .or(`reference_id.eq.${reference},metadata->>display_ref.eq.${reference}`)
       .maybeSingle();
 
     const depositAmount = reqAmount || parseFloat(tx?.amount || 0);
 
-    // Get or create user wallet
     const walletService = require("../services/walletService");
     const wallet = await walletService.createWallet(userId, reqCurrency, 'native');
 
-    // 1. Direct atomic balance credit in wallets_store
-    if (wallet && depositAmount > 0) {
-      const { data: currentW } = await supabase
-        .from("wallets_store")
-        .select("balance, available_balance")
-        .eq("id", wallet.id)
-        .single();
-
-      const newBal = parseFloat(currentW?.balance || 0) + depositAmount;
-      const newAvail = parseFloat(currentW?.available_balance || 0) + depositAmount;
-
-      const { error: walletUpdateErr } = await supabase
-        .from("wallets_store")
-        .update({
-          balance: newBal,
-          available_balance: newAvail,
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", wallet.id);
-
-      if (walletUpdateErr) {
-        console.error("[WalletController] Direct wallet balance update error:", walletUpdateErr.message);
-      } else {
-        console.log(`[WalletController] Successfully credited ${depositAmount} ${reqCurrency} to wallet ${wallet.id}. New balance: ${newBal}`);
-      }
-    }
-
-    // 2. Mark transaction COMPLETED
+    // 1. Update transaction record with UPLOADED receipt status (independent of wallet credit)
     if (!tx) {
-      const { data: newTx, error: createTxErr } = await supabase
+      const { data: newTx } = await supabase
         .from("transactions")
         .insert({
           user_id: userId,
@@ -537,8 +513,11 @@ exports.submitDepositProof = async (req, res) => {
           amount: depositAmount,
           currency: reqCurrency,
           type: "DEPOSIT",
-          status: "COMPLETED",
-          completed_at: new Date().toISOString(),
+          status: "PENDING",
+          payment_status: "PAYMENT_PENDING",
+          receipt_status: "UPLOADED",
+          wallet_credit_status: "WALLET_CREDIT_PENDING",
+          receipt_url: proof_url,
           reference_id: reference,
           provider: "fincra",
           display_label: `${reqCurrency} Bank Deposit`,
@@ -546,35 +525,28 @@ exports.submitDepositProof = async (req, res) => {
             display_ref: reference,
             proof_url,
             proof_submitted_at: new Date().toISOString(),
-            status_note: "User submitted proof of payment - Auto credited"
           }
         })
         .select()
         .single();
-
-      if (createTxErr) {
-        console.error("[WalletController] Fail-safe tx creation failed:", createTxErr.message);
-      } else {
-        txId = newTx.id;
-      }
+      tx = newTx;
     } else {
       await supabase
         .from("transactions")
         .update({
-          amount: depositAmount > 0 ? depositAmount : tx.amount,
+          receipt_status: "UPLOADED",
+          receipt_url: proof_url,
           metadata: {
             ...(tx.metadata || {}),
             proof_url,
             proof_submitted_at: new Date().toISOString(),
-            status_note: "User submitted proof of payment - Auto credited"
           },
-          status: "COMPLETED",
-          completed_at: new Date().toISOString()
+          updated_at: new Date().toISOString()
         })
         .eq("id", tx.id);
     }
 
-    // Update or insert manual_deposits to approved
+    // 2. Sync to manual_deposits table
     try {
       const { data: existingManual } = await supabase
         .from("manual_deposits")
@@ -589,15 +561,13 @@ exports.submitDepositProof = async (req, res) => {
           currency: reqCurrency,
           reference,
           proof_url,
-          status: "approved",
-          admin_notes: "Auto-approved via proof submission"
+          status: "pending",
+          admin_notes: "Proof attached by user"
         });
       } else {
         await supabase.from("manual_deposits")
           .update({
             proof_url,
-            status: "approved",
-            admin_notes: "Auto-approved via proof submission",
             updated_at: new Date().toISOString()
           })
           .eq("id", existingManual.id);
@@ -606,24 +576,69 @@ exports.submitDepositProof = async (req, res) => {
       console.warn("[WalletController] Manual deposit sync warning:", mErr.message);
     }
 
-    // Send Realtime & In-App Notification to User
-    try {
-      const { createNotification } = require("../services/notificationService");
-      await createNotification({
-        receiverId: userId,
-        type: "deposit_approved",
-        title: "Deposit Credited Successfully",
-        message: `Your deposit of ${reqCurrency} ${depositAmount} has been verified and credited to your wallet balance.`,
-        link: `/dashboard/wallet`
-      });
+    // 3. IF provider payment was already confirmed, trigger idempotent credit
+    const IdempotentLedgerCreditService = require("../services/payment/IdempotentLedgerCreditService");
+    let creditResult = null;
 
-      const realtime = require("../services/realtimeService");
-      if (realtime && realtime.notifyUser) {
-        await realtime.notifyUser(userId, "deposit_credited", { amount: depositAmount, currency: reqCurrency, reference });
-      }
-    } catch (nErr) {
-      console.warn("User deposit notification warning:", nErr.message);
+    if (tx?.payment_status === "PAYMENT_CONFIRMED" || tx?.status === "SUCCESS") {
+      creditResult = await IdempotentLedgerCreditService.creditWallet({
+        transactionId: tx.id,
+        reference,
+        amount: depositAmount,
+        currency: reqCurrency,
+        userId,
+        source: "USER_RECEIPT_UPLOAD"
+      });
     }
+
+    res.json({
+      success: true,
+      message: "Proof of payment submitted successfully!",
+      receipt_status: "UPLOADED",
+      wallet_credited: creditResult?.credited || false
+    });
+  } catch (error) {
+    console.error("[WalletController] Submit proof error:", error);
+    res.status(500).json({ error: error.message || "Failed to submit proof" });
+  }
+};
+
+exports.getPendingDeposits = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { data: deposits, error } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("type", "DEPOSIT")
+      .neq("wallet_credit_status", "WALLET_CREDITED")
+      .neq("status", "COMPLETED")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      deposits: (deposits || []).map(d => ({
+        id: d.id,
+        reference: d.reference_id || d.provider_reference || d.metadata?.display_ref,
+        amount: d.amount,
+        currency: d.currency,
+        provider: d.provider,
+        paymentStatus: d.payment_status || (d.status === 'COMPLETED' ? 'WALLET_CREDITED' : 'PAYMENT_PENDING'),
+        receiptStatus: d.receipt_status || (d.metadata?.proof_url ? 'UPLOADED' : 'NOT_PROVIDED'),
+        walletCreditStatus: d.wallet_credit_status || (d.status === 'COMPLETED' ? 'WALLET_CREDITED' : 'WALLET_CREDIT_PENDING'),
+        reconciliationStatus: d.reconciliation_status || 'NONE',
+        receiptUrl: d.receipt_url || d.metadata?.proof_url || null,
+        createdAt: d.created_at,
+        updatedAt: d.updated_at
+      }))
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 
     res.json({ success: true, message: `Proof verified! ${reqCurrency} ${depositAmount} has been credited to your wallet.` });
   } catch (err) {

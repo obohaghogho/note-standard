@@ -68,9 +68,11 @@ router.get("/financial-overview", adminController.getFinancialOverview);
 router.get("/settlement/overview", adminController.getSettlementOverview);
 router.post("/settlements/sweep", adminController.sweepSettlements);
 
-// Bank Payment Management
+// Bank Payment & NGN Deposit Reconciliation Management
 router.get("/unmatched-payments", adminController.getUnmatchedPayments);
 router.post("/resolve-unmatched", adminController.resolveUnmatchedPayment);
+router.get("/reconciliation/unmatched-deposits", adminController.getUnmatchedDeposits);
+router.post("/reconciliation/reconcile-deposit", adminController.reconcileDeposit);
 
 // Broadcasts
 router.get("/broadcasts", adminController.getBroadcasts);
@@ -106,10 +108,12 @@ router.post("/debug/force-confirm", adminController.debugForceConfirm);
 router.post("/debug/simulate-swap", adminController.debugSimulateSwap);
 router.post("/debug/simulate-webhook", adminController.debugSimulateWebhook);
 
-// Manual Withdrawals
+// Manual Withdrawals & Universal Reconciliation Queue
 router.get("/withdrawals/pending", adminController.getPendingWithdrawals);
 router.put("/withdrawals/:id/approve", adminController.approveWithdrawal);
 router.put("/withdrawals/:id/reject", adminController.rejectWithdrawal);
+router.get("/reconciliation/unmatched-withdrawals", adminController.getUnmatchedWithdrawals);
+router.post("/reconciliation/reconcile-withdrawal", adminController.reconcileWithdrawal);
 
 // Fincra Admin Sub-Router (isolated, feature-flagged internally)
 if (process.env.ENABLE_FINCRA === "true") {

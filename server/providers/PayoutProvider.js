@@ -23,6 +23,14 @@ class PayoutProvider {
   }
 
   /**
+   * Submit outbound bank transfer (Standard Adapter Method).
+   * @abstract
+   */
+  async submitPayout(params) {
+    return await this.initiatePayout(params);
+  }
+
+  /**
    * Initiate outbound bank transfer.
    * @abstract
    */
@@ -31,11 +39,52 @@ class PayoutProvider {
   }
 
   /**
+   * Get payout status (Standard Adapter Method).
+   * @abstract
+   */
+  async getPayoutStatus(reference) {
+    return await this.verifyPayout(reference);
+  }
+
+  /**
    * Verify status of a payout by external reference.
    * @abstract
    */
   async verifyPayout(reference) {
     throw new Error("Method 'verifyPayout()' must be implemented.");
+  }
+
+  /**
+   * Verify transaction amount matches expected.
+   */
+  async verifyAmount(reference, expectedAmount) {
+    const res = await this.verifyPayout(reference);
+    const amount = res.rawResponse?.data?.amount || res.rawResponse?.amount;
+    if (amount === undefined || amount === null) return true; // Fail safe if provider doesn't return amount in query
+    return Math.abs(parseFloat(amount) - parseFloat(expectedAmount)) < 0.01;
+  }
+
+  /**
+   * Verify transaction currency matches expected.
+   */
+  async verifyCurrency(reference, expectedCurrency) {
+    const res = await this.verifyPayout(reference);
+    const currency = res.rawResponse?.data?.destinationCurrency || res.rawResponse?.data?.currency || res.rawResponse?.currency;
+    if (!currency) return true;
+    return String(currency).toUpperCase() === String(expectedCurrency).toUpperCase();
+  }
+
+  /**
+   * Verify beneficiary details match expected.
+   */
+  async verifyBeneficiary(reference, expectedBeneficiary) {
+    const res = await this.verifyPayout(reference);
+    const ben = res.rawResponse?.data?.beneficiary || res.rawResponse?.beneficiary;
+    if (!ben) return true;
+    if (expectedBeneficiary.accountNumber && ben.accountNumber && ben.accountNumber !== expectedBeneficiary.accountNumber) {
+      return false;
+    }
+    return true;
   }
 
   /**
@@ -88,7 +137,16 @@ class ProviderRegistry {
   }
 
   get(name) {
-    const provider = this.providers.get(name.toLowerCase());
+    const key = name.toLowerCase();
+    if (!this.providers.has(key)) {
+      if (key === "fincra") {
+        try {
+          const FincraProvider = require("./fincraProvider");
+          this.register(new FincraProvider());
+        } catch (e) {}
+      }
+    }
+    const provider = this.providers.get(key);
     if (!provider) {
       throw new Error(`Payout provider '${name}' is not registered.`);
     }

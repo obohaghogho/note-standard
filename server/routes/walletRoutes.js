@@ -44,6 +44,7 @@ router.post(
   transactionLimiter,
   walletController.submitDepositProof,
 );
+router.get("/deposit/pending", walletController.getPendingDeposits);
 router.post("/deposit", transactionLimiter, walletController.deposit);
 router.get("/deposit/status", walletController.getDepositStatus);
 router.get("/transactions", transactionController.getHistory);

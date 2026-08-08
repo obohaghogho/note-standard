@@ -248,23 +248,44 @@ async function handleDepositSuccessful(payload) {
 
   let isSettled = policy.deposit_settles_instantly || data.settlement_status === 'settled';
 
-  if (isSettled) {
-    // Credit available balance directly via RPC
-    const { error: rpcErr } = await supabase.rpc('credit_available_balance', {
-      p_wallet_id: wallet.id,
-      p_amount: amount,
+  // ── INTEGRATE IDEMPOTENT LEDGER CREDIT SERVICE ────────────────────────────
+  const IdempotentLedgerCreditService = require("../payment/IdempotentLedgerCreditService");
+  const searchRef = data.customerReference || data.merchantReference || data.reference || data.narration || fincraRef;
+
+  // First, find primary transaction record to update payment_status
+  let { data: primaryTx } = await supabase
+    .from("transactions")
+    .select("id, reference_id, payment_status, wallet_credit_status")
+    .or(`reference_id.eq.${searchRef},provider_reference.eq.${fincraRef},metadata->>display_ref.eq.${searchRef}`)
+    .maybeSingle();
+
+  if (primaryTx) {
+    await supabase.from("transactions")
+      .update({
+        payment_status: "PAYMENT_CONFIRMED",
+        provider_transaction_id: fincraRef,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", primaryTx.id);
+  }
+
+  // Idempotently credit wallet via authoritative credit engine
+  try {
+    const creditRes = await IdempotentLedgerCreditService.creditWallet({
+      transactionId: primaryTx?.id || null,
+      reference: searchRef,
+      providerTransactionId: fincraRef,
+      amount,
+      currency,
+      userId,
+      source: "FINCRA_WEBHOOK"
     });
+    logger.info(`[Fincra/webhook] IdempotentLedgerCreditService result: ${JSON.stringify(creditRes)}`);
+  } catch (creditErr) {
+    logger.error(`[Fincra/webhook] IdempotentLedgerCreditService error: ${creditErr.message}`);
+  }
 
-    if (rpcErr) {
-      logger.error(`[Fincra/webhook] RPC credit_available_balance failed: ${rpcErr.message}`);
-      // Fallback
-      const newBal = parseFloat(wallet.balance || 0) + amount;
-      const newAvail = parseFloat(wallet.available_balance || 0) + amount;
-      await supabase.from("wallets_store")
-        .update({ balance: newBal, available_balance: newAvail, updated_at: new Date().toISOString() })
-        .eq("id", wallet.id);
-    }
-
+  if (isSettled) {
     await supabase.from("fincra_transactions")
       .update({ status: FINCRA_TX_STATUS.SUCCESSFUL })
       .eq("fincra_reference", fincraRef);
@@ -367,26 +388,26 @@ async function handlePayoutSuccessful(payload) {
   logger.info(`[Fincra/webhook] Payout successful: ${fincraRef}`);
 
   const ref = customerRef || fincraRef;
+  const IdempotentWithdrawalSettlementService = require("../payment/IdempotentWithdrawalSettlementService");
 
-  await supabase.from("fincra_transactions")
-    .update({ status: FINCRA_TX_STATUS.SUCCESSFUL, fincra_reference: fincraRef })
-    .or(`reference.eq.${ref},fincra_reference.eq.${fincraRef}`);
-
-  const { completePayoutDebit } = require("./payout");
-  await completePayoutDebit(ref);
+  const settleRes = await IdempotentWithdrawalSettlementService.finalizeSettlement({
+    reference: ref,
+    providerTransactionId: fincraRef,
+    source: "FINCRA_PAYOUT_WEBHOOK",
+  });
 
   await recordFincraAudit({
     action: "PAYOUT_SUCCESSFUL",
     userId: null,
-    details: { fincraRef, customerRef: ref },
+    details: { fincraRef, customerRef: ref, result: settleRes },
   });
 
-  return { handled: true, fincraRef };
+  return { handled: true, fincraRef, settleRes };
 }
 
 /**
  * Handle Fincra payout.failed.
- * Automatically reverses the fund reservation.
+ * Automatically reverses the fund reservation idempotently.
  */
 async function handlePayoutFailed(payload) {
   const data      = payload.data || payload;
@@ -397,13 +418,18 @@ async function handlePayoutFailed(payload) {
   logger.warn(`[Fincra/webhook] Payout failed: ${fincraRef}. Reversing reservation.`);
 
   const ref = customerRef || fincraRef;
-  const reversed = await reversePayoutReservation(ref, reason);
+  const IdempotentWithdrawalSettlementService = require("../payment/IdempotentWithdrawalSettlementService");
 
-  if (reversed) {
-    logger.info(`[Fincra/webhook] ✅ Reservation reversed for failed payout: ${ref}`);
-  }
+  const reverseRes = await IdempotentWithdrawalSettlementService.reverseReservation({
+    reference: ref,
+    reason,
+    errorCode: "PROVIDER_PAYOUT_FAILED",
+    source: "FINCRA_PAYOUT_WEBHOOK",
+  });
 
-  return { handled: true, fincraRef, reversed };
+  logger.info(`[Fincra/webhook] ✅ Reservation reversal completed for failed payout: ${ref}`);
+
+  return { handled: true, fincraRef, reverseRes };
 }
 
 /**

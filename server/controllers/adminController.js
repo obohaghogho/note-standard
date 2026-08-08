@@ -1622,36 +1622,20 @@ exports.getSystemStatus = async (req, res) => {
 };
 
 /**
- * GET /api/admin/withdrawals/pending - Get MANUAL_PENDING withdrawals
+ * GET /api/admin/withdrawals/pending - Get pending review & exception withdrawals
  */
 exports.getPendingWithdrawals = async (req, res) => {
   try {
     const serviceSupabase = getServiceSupabase();
     
     const { data, error } = await serviceSupabase
-      .from("payout_requests")
-      .select("*")
-      .eq("status", "MANUAL_PENDING")
+      .from("fincra_transactions")
+      .select("*, profile:profiles(email, full_name)")
+      .or("manual_review_status.eq.PENDING,reconciliation_status.in.(WITHDRAWAL_STUCK,PROVIDER_PAYOUT_FAILED,PROVIDER_SUCCESS_INTERNAL_SETTLEMENT_MISSING,MANUAL_REVIEW_REQUIRED),status.in.(MANUAL_REVIEW,MANUAL_PENDING)")
       .order("created_at", { ascending: false });
 
-    // Fetch profiles manually
-    if (data && data.length > 0) {
-      const userIds = [...new Set(data.map(d => d.user_id))];
-      const { data: profiles } = await serviceSupabase
-        .from("profiles")
-        .select("id, email, full_name, username")
-        .in("id", userIds);
-        
-      const profilesMap = {};
-      (profiles || []).forEach(p => profilesMap[p.id] = p);
-      
-      data.forEach(d => {
-        d.profile = profilesMap[d.user_id] || null;
-      });
-    }
-
     if (error) throw error;
-    res.json(data);
+    res.json(data || []);
   } catch (err) {
     logger.error("[Admin] Error fetching pending withdrawals:", err.message);
     res.status(500).json({ error: "Failed to fetch pending withdrawals" });
@@ -1659,43 +1643,77 @@ exports.getPendingWithdrawals = async (req, res) => {
 };
 
 /**
- * PUT /api/admin/withdrawals/:id/approve - Approve a manual withdrawal
+ * PUT /api/admin/withdrawals/:id/approve - Approve a manual withdrawal with concurrency mutex lock
  */
 exports.approveWithdrawal = async (req, res) => {
+  const LockService = require("../services/payment/LockService");
+  const { id } = req.params;
+  const { adminNotes } = req.body;
+
   try {
-    const { id } = req.params;
-    const { adminNotes } = req.body;
-    const payoutService = require("../services/payment/payoutService");
-    
-    const serviceSupabase = getServiceSupabase();
-    const { data: request, error: reqErr } = await serviceSupabase
-      .from("payout_requests")
-      .select("status")
-      .eq("id", id)
-      .single();
+    const result = await LockService.withLock(`withdrawal:approve:${id}`, async () => {
+      const serviceSupabase = getServiceSupabase();
+      
+      const { data: tx, error: fetchErr } = await serviceSupabase
+        .from("fincra_transactions")
+        .select("*")
+        .eq("id", id)
+        .single();
 
-    if (reqErr || !request) {
-      return res.status(404).json({ error: "Withdrawal not found" });
-    }
+      if (fetchErr || !tx) {
+        return { status: 404, error: "Withdrawal transaction not found" };
+      }
 
-    if (request.status !== "MANUAL_PENDING") {
-      return res.status(400).json({ error: `Withdrawal is not pending manual fulfillment (Current Status: ${request.status})` });
-    }
+      if (tx.withdrawal_status === "COMPLETED" || tx.funds_status === "DEBITED") {
+        return { status: 400, error: "Withdrawal is already completed/debited." };
+      }
 
-    const updated = await payoutService.updatePayoutState(id, "COMPLETED", {
-      metadata: { admin_approved: true, approved_at: new Date().toISOString(), approved_by: req.user.id, admin_notes: adminNotes }
+      if (tx.manual_review_status === "APPROVED" || tx.withdrawal_status === "PROCESSING") {
+        return { status: 400, error: "Withdrawal has already been approved and submitted." };
+      }
+
+      // Submit to provider via registry
+      const { registry } = require("../providers/PayoutProvider");
+      const provider = registry.getPrimary();
+
+      const providerRes = await provider.initiatePayout({
+        amount:        tx.amount,
+        currency:      tx.currency,
+        bankCode:      tx.bank_code,
+        accountNumber: tx.metadata?.accountNumber || tx.account_number_masked,
+        accountName:   tx.account_name,
+        narration:     tx.narration || "Admin Approved Withdrawal",
+        reference:     tx.reference,
+      });
+
+      // Update state
+      await serviceSupabase
+        .from("fincra_transactions")
+        .update({
+          status: "PROCESSING",
+          withdrawal_status: "PROCESSING",
+          provider_status: "PROCESSING",
+          manual_review_status: "APPROVED",
+          reconciliation_status: "NONE",
+          fincra_reference: providerRes.fincraReference,
+          metadata: { ...(tx.metadata || {}), approved_by: req.user.id, approved_at: new Date().toISOString(), admin_notes: adminNotes },
+        })
+        .eq("id", id);
+
+      await logAdminAction(req, "APPROVE_MANUAL_WITHDRAWAL", "fincra_transactions", id, { adminNotes });
+      return { status: 200, payload: { success: true, message: "Withdrawal approved and submitted to provider.", fincraReference: providerRes.fincraReference } };
     });
 
-    await logAdminAction(req, "APPROVE_MANUAL_WITHDRAWAL", "payout_requests", id);
-    res.json({ success: true, message: "Withdrawal marked as completed", request: updated });
+    if (result.error) return res.status(result.status).json({ error: result.error });
+    return res.status(result.status).json(result.payload);
   } catch (err) {
     logger.error("[Admin] Error approving withdrawal:", err.message);
-    res.status(500).json({ error: "Failed to approve withdrawal" });
+    res.status(500).json({ error: err.message || "Failed to approve withdrawal" });
   }
 };
 
 /**
- * PUT /api/admin/withdrawals/:id/reject - Reject manual withdrawal and refund wallet
+ * PUT /api/admin/withdrawals/:id/reject - Reject manual withdrawal and refund reserved balance
  */
 exports.rejectWithdrawal = async (req, res) => {
   try {
@@ -1704,93 +1722,94 @@ exports.rejectWithdrawal = async (req, res) => {
     
     if (!adminNotes) return res.status(400).json({ error: "Rejection reason is required" });
 
-    const serviceSupabase = getServiceSupabase();
-    
-    // 1. Fetch withdrawal details
-    const { data: request, error: reqErr } = await serviceSupabase
-      .from("payout_requests")
-      .select("*")
-      .eq("id", id)
-      .single();
+    const IdempotentWithdrawalSettlementService = require("../services/payment/IdempotentWithdrawalSettlementService");
 
-    if (request) {
-      const { data: pData } = await serviceSupabase.from("profiles").select("email").eq("id", request.user_id).single();
-      request.profile = pData || { email: "" };
-    }
-
-    if (reqErr || !request) {
-      return res.status(404).json({ error: "Withdrawal not found" });
-    }
-
-    if (request.status !== "MANUAL_PENDING") {
-      return res.status(400).json({ error: `Cannot reject. Withdrawal status is ${request.status}` });
-    }
-
-    // 2. Fetch or create Wallet for Refund
-    const walletService = require("../services/walletService");
-    const wallet = await walletService.createWallet(request.user_id, request.currency, "native");
-    if (!wallet) throw new Error("Could not find user wallet for refund");
-
-    // 3. Create Refund Transaction Record
-    const { data: tx, error: txError } = await serviceSupabase
-      .from("transactions")
-      .insert([{
-        wallet_id: wallet.id,
-        user_id: request.user_id,
-        type: "DEPOSIT", // A refund acts as a deposit back to the wallet
-        display_label: "Withdrawal Refund",
-        category: "refund",
-        description: `Refund for rejected withdrawal. Reason: ${adminNotes}`,
-        amount: request.amount, // Total amount initially requested
-        currency: request.currency,
-        status: "COMPLETED",
-        reference_id: `refnd-${id.substring(0,8)}`,
-        metadata: {
-            original_payout_id: id,
-            reason: adminNotes,
-            rejected_by: req.user.id
-        },
-        completed_at: new Date().toISOString()
-      }])
-      .select()
-      .single();
-
-    if (txError) throw txError;
-
-    // 4. Update Wallet Balance (Refund)
-    const { error: balError } = await serviceSupabase.rpc("confirm_deposit", {
-      p_transaction_id: tx.id,
-      p_wallet_id: wallet.id,
-      p_amount: request.amount,
-      p_external_hash: null,
-      p_override: false,
-      p_override_reason: null
+    const result = await IdempotentWithdrawalSettlementService.reverseReservation({
+      transactionId: id,
+      reason: adminNotes,
+      errorCode: "ADMIN_REJECTED",
+      source: `ADMIN_${req.user.id}`,
+      adminId: req.user.id,
     });
 
-    if (balError) throw balError;
-
-    // 5. Mark payout as FAILED_FINAL
-    const payoutService = require("../services/payment/payoutService");
-    const updated = await payoutService.updatePayoutState(id, "FAILED_FINAL", {
-      error: adminNotes,
-      metadata: { admin_rejected: true, rejected_at: new Date().toISOString(), rejected_by: req.user.id, reason: adminNotes }
-    });
-
-    // 6. Notify user
-    await createNotification({
-        receiverId: request.user_id,
-        type: "withdrawal_rejected",
-        title: "Withdrawal Rejected",
-        message: `Your withdrawal of ${request.currency} ${request.amount} was rejected. Funds have been returned to your wallet. Reason: ${adminNotes}`,
-        link: "/dashboard/activity",
-    });
-
-    await logAdminAction(req, "REJECT_MANUAL_WITHDRAWAL", "payout_requests", id, { reason: adminNotes });
-    
-    res.json({ success: true, message: "Withdrawal rejected and funds refunded", request: updated });
+    await logAdminAction(req, "REJECT_MANUAL_WITHDRAWAL", "fincra_transactions", id, { reason: adminNotes });
+    res.json({ success: true, message: "Withdrawal rejected and reserved funds released back to available balance", result });
   } catch (err) {
     logger.error("[Admin] Error rejecting withdrawal:", err.message);
     res.status(500).json({ error: err.message || "Failed to reject withdrawal" });
+  }
+};
+
+/**
+ * GET /api/admin/reconciliation/unmatched-withdrawals - Get Admin Exception Queue
+ */
+exports.getUnmatchedWithdrawals = async (req, res) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+
+    const { data, error } = await serviceSupabase
+      .from("fincra_transactions")
+      .select("*, profile:profiles(email, full_name)")
+      .eq("type", "WITHDRAWAL")
+      .neq("reconciliation_status", "NONE")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    res.json({ success: true, unmatched: data || [] });
+  } catch (err) {
+    logger.error("[Admin] Error fetching unmatched withdrawals:", err.message);
+    res.status(500).json({ error: "Failed to fetch unmatched withdrawals" });
+  }
+};
+
+/**
+ * POST /api/admin/reconciliation/reconcile-withdrawal - Admin Reconcile Withdrawal
+ */
+exports.reconcileWithdrawal = async (req, res) => {
+  try {
+    const { reference, targetAction, reason } = req.body; // targetAction: 'SETTLE' | 'REVERSE'
+
+    if (!reference || !targetAction) {
+      return res.status(400).json({ error: "Reference and targetAction ('SETTLE' | 'REVERSE') are required" });
+    }
+
+    const { registry } = require("../providers/PayoutProvider");
+    const provider = registry.getPrimary();
+    const verifyRes = await provider.verifyPayout(reference);
+
+    const providerStatus = String(verifyRes?.status || verifyRes?.rawResponse?.data?.status || "UNKNOWN").toUpperCase();
+
+    const IdempotentWithdrawalSettlementService = require("../services/payment/IdempotentWithdrawalSettlementService");
+    let result;
+
+    if (targetAction === "SETTLE") {
+      if (!["SUCCESSFUL", "SUCCESS", "SETTLED", "COMPLETED"].includes(providerStatus)) {
+        return res.status(400).json({
+          error: `CANNOT_SETTLE: Provider has not confirmed SUCCESS (Current Provider Status: ${providerStatus}). Safe reconciliation requires provider verification.`,
+        });
+      }
+
+      result = await IdempotentWithdrawalSettlementService.finalizeSettlement({
+        reference,
+        providerTransactionId: verifyRes?.rawResponse?.data?.reference || null,
+        source: `ADMIN_RECONCILIATION_${req.user.id}`,
+        adminId: req.user.id,
+      });
+    } else {
+      result = await IdempotentWithdrawalSettlementService.reverseReservation({
+        reference,
+        reason: reason || `Admin Reversal (Provider Status: ${providerStatus})`,
+        errorCode: "ADMIN_RECONCILED_REVERSAL",
+        source: `ADMIN_RECONCILIATION_${req.user.id}`,
+        adminId: req.user.id,
+      });
+    }
+
+    await logAdminAction(req, "RECONCILE_WITHDRAWAL", "fincra_transactions", reference, { targetAction, reason, providerStatus, result });
+    res.json({ success: true, message: `Withdrawal ${targetAction} completed successfully`, providerStatus, result });
+  } catch (err) {
+    logger.error("[Admin] Error reconciling withdrawal:", err.message);
+    res.status(400).json({ error: err.message || "Reconciliation failed" });
   }
 };
 
@@ -2272,3 +2291,180 @@ exports.getSettlementOverview = async (req, res, next) => {
     next(err);
   }
 };
+
+/**
+ * GET /api/admin/reconciliation/unmatched-deposits
+ * Returns NGN bank deposit transactions flagged as UNMATCHED_SUCCESSFUL_DEPOSIT or pending credit.
+ */
+exports.getUnmatchedDeposits = async (req, res) => {
+  try {
+    const { page = 1, limit = 50 } = req.query;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    const { data: deposits, error, count } = await supabase
+      .from("transactions")
+      .select("*", { count: "exact" })
+      .eq("currency", "NGN")
+      .eq("type", "DEPOSIT")
+      .or("reconciliation_status.eq.UNMATCHED_SUCCESSFUL_DEPOSIT,payment_status.eq.PAYMENT_CONFIRMED")
+      .neq("wallet_credit_status", "WALLET_CREDITED")
+      .order("created_at", { ascending: false })
+      .range(from, to);
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      deposits: deposits || [],
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: count || 0,
+        totalPages: Math.ceil((count || 0) / limit),
+      },
+    });
+  } catch (err) {
+    console.error("[AdminController] getUnmatchedDeposits error:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+/**
+ * POST /api/admin/reconciliation/reconcile-deposit
+ * Performs secure admin reconciliation of an unmatched successful deposit.
+ */
+exports.reconcileDeposit = async (req, res) => {
+  try {
+    const { transactionId, reference, providerTransactionId, reason } = req.body;
+    const adminId = req.user.id;
+
+    if (!transactionId && !reference) {
+      return res.status(400).json({ success: false, error: "Transaction ID or reference is required" });
+    }
+
+    const searchRef = reference || transactionId;
+
+    let query = supabase.from("transactions").select("*");
+    if (transactionId) query = query.eq("id", transactionId);
+    else query = query.or(`reference_id.eq.${reference},provider_reference.eq.${reference}`);
+
+    const { data: tx, error: fetchErr } = await query.maybeSingle();
+
+    if (fetchErr || !tx) {
+      return res.status(404).json({ success: false, error: "Transaction record not found" });
+    }
+
+    if (tx.wallet_credit_status === "WALLET_CREDITED" || tx.status === "COMPLETED") {
+      return res.status(400).json({
+        success: false,
+        error: "TRANSACTION_ALREADY_CREDITED",
+        message: "Transaction has already been credited to recipient wallet.",
+      });
+    }
+
+    const providerRef = providerTransactionId || tx.provider_transaction_id || tx.reference_id;
+    const paymentService = require("../services/payment/paymentService");
+    let providerVerified = false;
+
+    try {
+      const verifyRes = await paymentService.verifyPaymentStatus(providerRef);
+      if (["COMPLETED", "SUCCESS", "SUCCESSFUL"].includes(verifyRes.status?.toUpperCase())) {
+        providerVerified = true;
+      }
+    } catch (vErr) {
+      console.warn("[AdminController] Active provider verify warning:", vErr.message);
+    }
+
+    if (!providerVerified) {
+      const { data: fincraTx } = await supabase
+        .from("fincra_transactions")
+        .select("status")
+        .or(`reference.eq.${providerRef},fincra_reference.eq.${providerRef}`)
+        .maybeSingle();
+
+      if (fincraTx && fincraTx.status === "SUCCESSFUL") {
+        providerVerified = true;
+      }
+    }
+
+    if (!providerVerified) {
+      return res.status(400).json({
+        success: false,
+        error: "PROVIDER_VERIFICATION_FAILED",
+        message: "Provider transaction status could not be verified as SUCCESSFUL.",
+      });
+    }
+
+    const recipientUserId = tx.user_id;
+    const currency = (tx.currency || "NGN").toUpperCase();
+    const amount = parseFloat(tx.amount || 0);
+
+    if (!recipientUserId || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: "INVALID_TRANSACTION_METADATA",
+        message: "Invalid recipient user ID or transaction amount",
+      });
+    }
+
+    const IdempotentLedgerCreditService = require("../services/payment/IdempotentLedgerCreditService");
+
+    const creditResult = await IdempotentLedgerCreditService.creditWallet({
+      transactionId: tx.id,
+      reference: tx.reference_id || searchRef,
+      providerTransactionId: providerRef,
+      amount,
+      currency,
+      userId: recipientUserId,
+      source: "ADMIN_MANUAL_RECONCILIATION",
+      adminId,
+      correlationId: `ADMIN_RECON_${tx.id}_${Date.now()}`,
+    });
+
+    if (!creditResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: creditResult.error || "CREDIT_FAILED",
+        message: creditResult.message || "Failed to post ledger credit",
+      });
+    }
+
+    await supabase.from("banking_audit_logs").insert({
+      user_id: recipientUserId,
+      admin_id: adminId,
+      action: "ADMIN_RECONCILED_UNMATCHED_DEPOSIT",
+      provider: tx.provider || "fincra",
+      previous_values: {
+        payment_status: tx.payment_status,
+        reconciliation_status: tx.reconciliation_status,
+        wallet_credit_status: tx.wallet_credit_status,
+      },
+      new_values: {
+        payment_status: "WALLET_CREDITED",
+        reconciliation_status: "RECONCILED",
+        wallet_credit_status: "WALLET_CREDITED",
+        reconciled_by: adminId,
+        reason: reason || "Manual admin reconciliation of verified deposit",
+      },
+      reason: reason || "Admin confirmed provider payment and posted ledger credit",
+      correlation_id: `RECON_${tx.id}_${Date.now()}`,
+    });
+
+    res.json({
+      success: true,
+      message: "Transaction reconciled successfully and wallet credited.",
+      transactionId: tx.id,
+      paymentStatus: "WALLET_CREDITED",
+      walletCreditStatus: "WALLET_CREDITED",
+      reconciliationStatus: "RECONCILED",
+      amount,
+      currency,
+      recipientUserId,
+    });
+  } catch (err) {
+    console.error("[AdminController] reconcileDeposit error:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+

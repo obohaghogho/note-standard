@@ -418,6 +418,80 @@ export const walletApi = {
     const response = await api.post(`/wallet/virtual-account/${encodeURIComponent(currency)}/refresh`);
     return response.data;
   },
+
+  /** GET /wallet/deposit/pending — fetch user's pending deposits */
+  async getPendingDeposits(): Promise<{
+    success: boolean;
+    deposits: Array<{
+      id: string;
+      reference: string;
+      amount: number;
+      currency: string;
+      provider: string;
+      paymentStatus: string;
+      receiptStatus: string;
+      walletCreditStatus: string;
+      reconciliationStatus: string;
+      receiptUrl: string | null;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+  }> {
+    const response = await api.get('/wallet/deposit/pending');
+    return response.data;
+  },
+
+  /** GET /api/admin/reconciliation/unmatched-deposits — fetch unmatched deposits for admin */
+  async getUnmatchedDepositsAdmin(): Promise<{
+    success: boolean;
+    deposits: any[];
+    pagination: any;
+  }> {
+    const response = await api.get('/admin/reconciliation/unmatched-deposits');
+    return response.data;
+  },
+
+  /** POST /api/admin/reconciliation/reconcile-deposit — execute manual admin reconciliation */
+  async reconcileDepositAdmin(data: {
+    transactionId?: string;
+    reference?: string;
+    providerTransactionId?: string;
+    reason?: string;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    transactionId: string;
+    paymentStatus: string;
+    walletCreditStatus: string;
+    reconciliationStatus: string;
+  }> {
+    const response = await api.post('/admin/reconciliation/reconcile-deposit', data);
+    return response.data;
+  },
+
+  /** GET /api/admin/reconciliation/unmatched-withdrawals — fetch unmatched withdrawals for admin */
+  async getUnmatchedWithdrawalsAdmin(): Promise<{
+    success: boolean;
+    unmatched: any[];
+  }> {
+    const response = await api.get('/admin/reconciliation/unmatched-withdrawals');
+    return response.data;
+  },
+
+  /** POST /api/admin/reconciliation/reconcile-withdrawal — execute manual admin withdrawal reconciliation */
+  async reconcileWithdrawalAdmin(data: {
+    reference: string;
+    targetAction: 'SETTLE' | 'REVERSE';
+    reason?: string;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    providerStatus: string;
+    result: any;
+  }> {
+    const response = await api.post('/admin/reconciliation/reconcile-withdrawal', data);
+    return response.data;
+  },
 };
 
 export default walletApi;

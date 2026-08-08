@@ -3,6 +3,9 @@ const logger = require('../utils/logger');
 const CausalWorker = require('./CausalWorker');
 const crypto = require('crypto');
 
+const DepositReconciliationWorker = require('./DepositReconciliationWorker');
+const WithdrawalReconciliationWorker = require('./WithdrawalReconciliationWorker');
+
 /**
  * Worker Manager
  * Orchestrates N sharded CausalWorkers and handles failover/rebalancing.
@@ -17,6 +20,8 @@ class WorkerManager {
 
     start() {
         logger.info(`[WorkerManager] Initializing Global Worker ${this.workerId} (Total Shards: ${this.SHARD_COUNT})...`);
+        DepositReconciliationWorker.start();
+        WithdrawalReconciliationWorker.start();
         this.rebalanceAndSpawn();
         setInterval(() => this.rebalanceAndSpawn(), this.CHECK_INTERVAL);
     }

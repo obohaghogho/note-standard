@@ -253,16 +253,20 @@ class PayoutEngine {
           trace_id,
         };
       } catch (providerErr) {
-        // ── STEP 5 FAILURE: Revert funds via finalize_enterprise_withdrawal ─
+        // ── STEP 5 FAILURE: Revert fund reservation idempotently ─
         logger.error(`[PayoutEngine] [${correlation_id}] Provider call error. Triggering auto-reversal: ${providerErr.message}`);
 
-        await supabase.rpc("finalize_enterprise_withdrawal", {
-          p_withdrawal_ref: withdrawal_ref,
-          p_fincra_ref:     null,
-          p_status:         "REVERSED",
-          p_error_code:     "PROVIDER_ERROR",
-          p_error_message:  providerErr.message,
-        });
+        const IdempotentWithdrawalSettlementService = require("../services/payment/IdempotentWithdrawalSettlementService");
+        await IdempotentWithdrawalSettlementService.reverseReservation({
+          reference: withdrawal_ref,
+          userId,
+          currency,
+          amount,
+          fee,
+          reason: providerErr.message,
+          errorCode: "PROVIDER_ERROR",
+          source: "PAYOUT_ENGINE_AUTO_REVERSAL",
+        }).catch(revErr => logger.error(`[PayoutEngine] Reversal error: ${revErr.message}`));
 
         throw providerErr;
       }
