@@ -3,36 +3,62 @@
     <!-- Home Page -->
     <url>
         <loc>https://notestandard.com/</loc>
-        <lastmod>2024-05-15</lastmod>
-        <changefreq>weekly</changefreq>
+        <lastmod>2026-08-08</lastmod>
+        <changefreq>daily</changefreq>
         <priority>1.0</priority>
     </url>
     
     <!-- Core Public Pages -->
     <url>
         <loc>https://notestandard.com/about</loc>
-        <lastmod>2024-05-15</lastmod>
+        <lastmod>2026-08-08</lastmod>
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
     </url>
     <url>
         <loc>https://notestandard.com/contact</loc>
-        <lastmod>2024-05-15</lastmod>
+        <lastmod>2026-08-08</lastmod>
         <changefreq>monthly</changefreq>
         <priority>0.8</priority>
+    </url>
+    <url>
+        <loc>https://notestandard.com/download</loc>
+        <lastmod>2026-08-08</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.8</priority>
+    </url>
+
+    <!-- Authentication Pages -->
+    <url>
+        <loc>https://notestandard.com/login</loc>
+        <lastmod>2026-08-08</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.5</priority>
+    </url>
+    <url>
+        <loc>https://notestandard.com/signup</loc>
+        <lastmod>2026-08-08</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.6</priority>
     </url>
     
     <!-- Legal Pages -->
     <url>
         <loc>https://notestandard.com/privacy</loc>
-        <lastmod>2024-05-15</lastmod>
-        <changefreq>yearly</changefreq>
-        <priority>0.3</priority>
+        <lastmod>2026-08-08</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.4</priority>
     </url>
     <url>
         <loc>https://notestandard.com/terms</loc>
-        <lastmod>2024-05-15</lastmod>
-        <changefreq>yearly</changefreq>
-        <priority>0.3</priority>
+        <lastmod>2026-08-08</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.4</priority>
+    </url>
+    <url>
+        <loc>https://notestandard.com/refund</loc>
+        <lastmod>2026-08-08</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.4</priority>
     </url>
 </urlset>

@@ -60,6 +60,7 @@ const ResetPassword = lazyWithRetry(() => import('./pages/ResetPassword'), 'Rese
 const ActivitySuccess = lazyWithRetry(() => import('./pages/ActivitySuccess'), 'ActivitySuccess');
 const ActivityCancel = lazyWithRetry(() => import('./pages/ActivityCancel'), 'ActivityCancel');
 const PaymentCallback = lazyWithRetry(() => import('./pages/PaymentCallback'), 'PaymentCallback');
+const NotFoundPage = lazyWithRetry(() => import('./pages/NotFoundPage'), 'NotFoundPage');
 
 const PublicProfilePage = lazyWithRetry(() => import('./pages/dashboard/PublicProfilePage'), 'PublicProfilePage');
 
@@ -197,6 +198,9 @@ function AuthenticatedProviders() {
                           <Route path="beta-feedback" element={<BetaFeedbackDashboard />} />
                         </Route>
                       </Route>
+
+                      {/* Catch-all 404 Route */}
+                      <Route path="*" element={<NotFoundPage />} />
                     </Routes>
                     {/* Global Chat Widget - visible on all authenticated pages */}
                     <ChatWidget />
