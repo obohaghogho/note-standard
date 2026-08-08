@@ -48,7 +48,7 @@ exports.executeSwap = async (req, res, next) => {
 
 exports.preview = async (req, res) => {
   try {
-    const { from, to, amount, slippage } = req.body;
+    const { from, to, amount, slippage, fromNetwork, toNetwork } = req.body;
     const CurrencyFeatureService = require("../services/payment/CurrencyFeatureService");
     const isAdmin = req.user?.role === 'admin' || req.user?.is_admin === true;
 
@@ -62,6 +62,8 @@ exports.preview = async (req, res) => {
       to,
       amount,
       slippage,
+      fromNetwork,
+      toNetwork,
     );
     res.json(quote);
   } catch (err) {

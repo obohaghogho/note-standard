@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   RefreshCw, ShoppingCart, DollarSign, ArrowRightLeft,
@@ -125,9 +125,14 @@ export function ExchangeHub({
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [executing, setExecuting] = useState(false);
   const [error, setError] = useState('');
+  const skipDefaultsRef = useRef(false);
 
-  // Set smart defaults per mode
+  // Set smart defaults per mode (skipped when handleQuickPair already set currencies)
   useEffect(() => {
+    if (skipDefaultsRef.current) {
+      skipDefaultsRef.current = false;
+      return;
+    }
     setQuote(null);
     setError('');
     setAmount('');
@@ -213,10 +218,13 @@ export function ExchangeHub({
       FIAT_SYMBOLS[pair.from] && CRYPTO_SYMBOLS[pair.to] ? 'buy' :
       CRYPTO_SYMBOLS[pair.from] && FIAT_SYMBOLS[pair.to] ? 'sell' :
       CRYPTO_SYMBOLS[pair.from] && CRYPTO_SYMBOLS[pair.to] ? 'swap' : 'convert';
+    // Skip the useEffect defaults — we're setting currencies explicitly
+    skipDefaultsRef.current = true;
     setMode(newMode);
     setFromCurrency(pair.from);
     setToCurrency(pair.to);
     setQuote(null);
+    setError('');
     setAmount('');
   };
 

@@ -376,12 +376,16 @@ export const walletApi = {
     toCurrency: string;
     amount: number;
     slippage?: number;
+    fromNetwork?: string;
+    toNetwork?: string;
   }): Promise<any> {
     const response = await api.post('/wallet/swap/preview', {
       from: data.fromCurrency,
       to: data.toCurrency,
       amount: data.amount,
       slippage: data.slippage ?? 0.005,
+      fromNetwork: data.fromNetwork ?? 'native',
+      toNetwork: data.toNetwork ?? 'native',
     });
     return response.data;
   },

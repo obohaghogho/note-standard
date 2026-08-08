@@ -34,7 +34,7 @@ class SwapService {
    * Calculate a time-locked swap quote.
    * Validates rate freshness BEFORE writing to DB.
    */
-  async calculateSwap(userId, fromCurrency, toCurrency, amount, slippage = 0.005) {
+  async calculateSwap(userId, fromCurrency, toCurrency, amount, slippage = 0.005, fromNetwork = 'native', toNetwork = 'native') {
     // 1. Validate rate BEFORE writing anything
     const rateMeta = await fxService.getValidatedRate(fromCurrency, toCurrency);
 
@@ -65,11 +65,11 @@ class SwapService {
     const isCrypto = (curr) => ["BTC", "ETH", "USDT", "USDC", "TRX", "POLYGON"].includes(String(curr).toUpperCase());
     
     const fromWallet = isCrypto(fromCurrency) 
-        ? await CryptoWalletService.createWallet(userId, fromCurrency)
+        ? await CryptoWalletService.createWallet(userId, fromCurrency, fromNetwork || 'native')
         : await FiatWalletService.createWallet(userId, fromCurrency);
         
     const toWallet = isCrypto(toCurrency)
-        ? await CryptoWalletService.createWallet(userId, toCurrency)
+        ? await CryptoWalletService.createWallet(userId, toCurrency, toNetwork || 'native')
         : await FiatWalletService.createWallet(userId, toCurrency);
 
     // 4. Write quote as PENDING with expiry
