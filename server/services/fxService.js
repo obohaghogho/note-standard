@@ -7,9 +7,10 @@ const cache = require("../utils/cache");
 const supabase = require("../config/database");
 const coingeckoProvider = require("../providers/coingeckoProvider");
 const pLimit = require("p-limit");
-const limit = pLimit(5); // Increased to 5 to prevent serialization bottlenecks during dashboard load
+const limit = pLimit(5);
 const nowpaymentsProvider = require("../providers/nowpaymentsProvider");
 const exchangeRateProvider = require("../providers/exchangeRateProvider");
+const fincraRateProvider = require("../providers/fincraRateProvider");
 
 /**
  * FX Service (Strict v6.0 Shadow Integrated)
@@ -184,53 +185,80 @@ class FXService {
 
     const fetcher = async () => {
       // ── High-Availability Stablecoin Short-Circuit ────────────────
-      // USDT and USDC are pegged to USD. Returning 1.0 immediately 
-      // preserves API quota and prevents 429 locks.
+      // USDT and USDC are pegged to USD. $1.00 reference price.
+      // Actual settlement amounts remain provider-authoritative.
       if (sym === "USDT" || sym === "USDC") {
-        return { price: 1.0, mode: "FRESH", stale: false };
+        return { price: 1.0, mode: "FRESH", stale: false, provider: 'reference', source: 'stablecoin_peg' };
       }
 
-      // ── Task 4.j: Circuit Breaker Check ──────────────────────────
-      // If the breaker is tripped, we return LKG immediately without 
-      // touching the network. This preserves rate limits and prevents hangs.
+      // ── Circuit Breaker Check ──────────────────────────────────────
       if (Date.now() < this.breakerTrippedUntil) {
         logger.warn(`[FXService] Circuit Breaker ACTIVE for ${sym}. Serving LKG.`);
-        return await this._handleLKG(sym);
+        const lkg = await this._handleLKG(sym);
+        return { ...lkg, provider: 'lkg', source: 'circuit_breaker' };
       }
 
-      // ── Task 4.a: Single-Flight Locking ───────────────────────────
-      // If a fetch is already in flight for this symbol, share the promise
+      // ── Single-Flight Locking ──────────────────────────────────────
       const inflight = this.pendingRequests.get(sym);
       if (inflight) return inflight;
 
       const fetchPromise = (async () => {
         try {
-          const coinId = this.coinMapping[sym];
           let rawPrice = null;
+          let usedProvider = null;
           
-          if (coinId) {
-            const prices = await coingeckoProvider.getPrices([coinId]);
-            rawPrice = prices[coinId] || null;
-          }
-
-          if (!rawPrice) {
+          // ── EXECUTION AUTHORITY: NOWPayments (primary) ────────────
+          try {
             rawPrice = await nowpaymentsProvider.getRate(sym, "USD");
+            if (rawPrice && rawPrice > 0) {
+              usedProvider = 'nowpayments';
+            }
+          } catch (npErr) {
+            logger.warn(`[FXService] NOWPayments rate failed for ${sym}: ${npErr.message}`);
+            if (npErr.status === 429 || npErr.message?.includes('RATE_LIMIT')) {
+              logger.error(`[FXService] NOWPayments 429 for ${sym}. TRIPPING CIRCUIT BREAKER for 15m.`);
+              this.breakerTrippedUntil = Date.now() + this.BREAKER_COOLDOWN;
+              cache.set("breaker_tripped_until", this.breakerTrippedUntil, 1800);
+            }
           }
 
-          return await this._handleLKG(sym, rawPrice);
+          // ── FALLBACK: CoinGecko (secondary, only if NOWPayments failed) ──
+          if (!rawPrice) {
+            try {
+              const coinId = this.coinMapping[sym];
+              if (coinId) {
+                const prices = await coingeckoProvider.getPrices([coinId]);
+                rawPrice = prices[coinId] || null;
+                if (rawPrice && rawPrice > 0) usedProvider = 'coingecko';
+              }
+            } catch (cgErr) {
+              logger.warn(`[FXService] CoinGecko fallback failed for ${sym}: ${cgErr.message}`);
+              if (cgErr.status === 429 || cgErr.message?.includes('429')) {
+                this.breakerTrippedUntil = Date.now() + this.BREAKER_COOLDOWN;
+                cache.set("breaker_tripped_until", this.breakerTrippedUntil, 1800);
+              }
+            }
+          }
+
+          const result = await this._handleLKG(sym, rawPrice);
+          result.provider = usedProvider || 'lkg';
+          result.source = rawPrice ? 'live' : 'last_known_good';
+          result.fetchedAt = new Date().toISOString();
+
+          // ── MONITORING ORACLE: Async anomaly check ────────────────
+          // CoinGecko is used ONLY for cross-validation, never for execution.
+          // Non-blocking — fire and forget.
+          if (usedProvider === 'nowpayments' && rawPrice > 0) {
+            this._asyncAnomalyCheck(sym, rawPrice, usedProvider).catch(() => {});
+          }
+
+          return result;
         } catch (err) {
-          logger.error(`[FXService] Fetch failed for ${sym}: ${err.message}. Using LKG.`);
-          
-          // Trip Circuit Breaker on 429 (Rate Limit)
-          if (err.message?.includes("429") || err.status === 429 || err.message?.includes("RATE_LIMIT")) {
-            logger.error(`[FXService] Critical Rate Limit detected for ${sym}. TRIPPING CIRCUIT BREAKER for 15m.`);
-            this.breakerTrippedUntil = Date.now() + this.BREAKER_COOLDOWN;
-            cache.set("breaker_tripped_until", this.breakerTrippedUntil, 1800); // Expose to global cache for SnapshotService
-          }
-
-          return await this._handleLKG(sym);
+          logger.error(`[FXService] All providers failed for ${sym}: ${err.message}. Using LKG.`);
+          const lkg = await this._handleLKG(sym);
+          return { ...lkg, provider: 'lkg', source: 'all_providers_failed' };
         } finally {
-          this.pendingRequests.delete(sym); // Release lock
+          this.pendingRequests.delete(sym);
         }
       })();
 
@@ -240,6 +268,31 @@ class FXService {
 
     if (!useCache) return await limit(() => fetcher());
     return cache.wrap(cacheKey, this.FRESH_TTL, () => limit(() => fetcher()));
+  }
+
+  /**
+   * Async Anomaly Detector — CoinGecko as independent oracle.
+   * Compares the execution-authority price against CoinGecko.
+   * Logs warnings if deviation exceeds threshold. Never blocks execution.
+   */
+  async _asyncAnomalyCheck(symbol, executionPrice, executionProvider) {
+    try {
+      const coinId = this.coinMapping[symbol];
+      if (!coinId) return;
+
+      const prices = await coingeckoProvider.getPrices([coinId]);
+      const oraclePrice = prices[coinId];
+      if (!oraclePrice || oraclePrice <= 0) return;
+
+      const deviation = Math.abs(executionPrice - oraclePrice) / oraclePrice;
+      const ANOMALY_THRESHOLD = 0.10; // 10% — flag, don't block
+
+      if (deviation > ANOMALY_THRESHOLD) {
+        logger.warn(`[FX_ANOMALY] ${symbol}: ${executionProvider}=$${executionPrice} vs CoinGecko=$${oraclePrice} (${(deviation * 100).toFixed(2)}% deviation)`);
+      }
+    } catch {
+      // Monitoring oracle failures are silently ignored
+    }
   }
 
   /**
@@ -268,25 +321,51 @@ class FXService {
         // rate = (Price of fromSym in USD) / (Price of toSym in USD)
 
         const getPriceInUsd = async (sym) => {
-          if (sym === 'USD') return { price: 1.0, mode: 'FRESH' };
+          if (sym === 'USD') return { price: 1.0, mode: 'FRESH', provider: 'identity', source: 'usd_base' };
           
           if (this.coinMapping[sym]) {
+            // Crypto: NOWPayments → CoinGecko → LKG
             return await this.getPriceMetadata(sym, useCache);
           } else {
-            // For fiat: we need "price of sym in USD" (e.g. USD_per_NGN = 0.000667).
-            // getAllRates('USD')[sym] gives sym_per_USD (e.g. NGN_per_USD = 1500).
-            // We invert that to get USD_per_sym (0.000667) for consistent LKG storage.
+            // Fiat: Fincra → Frankfurter/open.er-api → LKG
+            // We need "price of sym in USD" (e.g. USD_per_NGN = 0.000732)
+            let usedProvider = null;
+
+            // ── EXECUTION AUTHORITY: Fincra (primary for fiat) ──────
+            try {
+              const fincraResult = await fincraRateProvider.getRate('USD', sym);
+              if (fincraResult && fincraResult.rate > 0) {
+                // Fincra returns USD→NGN rate (e.g., 1366). We need NGN→USD = 1/1366
+                const usdPerSym = 1 / fincraResult.rate;
+                const result = await this._handleLKG(sym, usdPerSym);
+                result.provider = 'fincra';
+                result.source = 'live';
+                result.fetchedAt = fincraResult.fetchedAt;
+                return result;
+              }
+            } catch (fErr) {
+              logger.warn(`[FXService] Fincra rate failed for ${sym}: ${fErr.message}`);
+            }
+
+            // ── FALLBACK: Frankfurter / open.er-api ─────────────────
             try {
               const allUsdRates = await exchangeRateProvider.getAllRates('USD');
               const symPerUsd = allUsdRates ? allUsdRates[sym] : null;
               if (symPerUsd && symPerUsd > 0) {
-                const usdPerSym = 1 / symPerUsd; // e.g. 1/1500 = 0.000667
-                return await this._handleLKG(sym, usdPerSym);
+                const usdPerSym = 1 / symPerUsd;
+                const result = await this._handleLKG(sym, usdPerSym);
+                result.provider = 'frankfurter';
+                result.source = 'fallback';
+                result.fetchedAt = new Date().toISOString();
+                return result;
               }
-              return await this._handleLKG(sym);
             } catch {
-              return await this._handleLKG(sym);
+              // Fall through to LKG
             }
+
+            // ── LAST RESORT: LKG cache ──────────────────────────────
+            const lkg = await this._handleLKG(sym);
+            return { ...lkg, provider: 'lkg', source: 'last_known_good' };
           }
         };
 
@@ -314,7 +393,11 @@ class FXService {
           rate: parseFloat(rate),
           mode: combinedMode,
           canExecute,
-          attribution: { from: fromMeta.mode, to: toMeta.mode }
+          attribution: { from: fromMeta.mode, to: toMeta.mode },
+          providerInfo: {
+            from: { provider: fromMeta.provider, source: fromMeta.source, fetchedAt: fromMeta.fetchedAt },
+            to: { provider: toMeta.provider, source: toMeta.source, fetchedAt: toMeta.fetchedAt }
+          }
         };
       } catch (err) {
         logger.error(`[FXService] Critical Rate Failure ${from}/${to}: ${err.message}`);
