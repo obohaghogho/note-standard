@@ -97,7 +97,11 @@ self.addEventListener('push', (event) => {
             trace: data.data?.trace || null,
         },
         // Note: actions array omitted on desktop web push to prevent Chromium Windows Action Center notification suppression
-        tag: notifConversationId ? `chat-${notifConversationId}` : (data.tag || `ns-${Date.now()}`),
+        // Each message gets a unique tag (conversation + messageId) so rapid messages
+        // stack as separate notifications instead of silently replacing each other.
+        tag: notifConversationId
+            ? `chat-${notifConversationId}-${data.data?.messageId || Date.now()}`
+            : (data.tag || `ns-${Date.now()}`),
         renotify: true,  // Always alert even when updating an existing tag
     };
 

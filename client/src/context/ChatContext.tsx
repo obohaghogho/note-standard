@@ -1263,8 +1263,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 return { ...prev, [msg.conversation_id]: boundedMerged };
             });
 
-            // Only update conversations if something materially changed (new message, or sequence update)
-            if (newlyAddedCount > 0 || msg.sequence_number !== undefined) {
+            // Only update conversations if something materially changed (new message, sequence update,
+            // or canonical server echo replacing an optimistic temp message via event_id match)
+            if (newlyAddedCount > 0 || msg.sequence_number !== undefined || msg.event_id) {
                 const isCurrentlyOpen = activeConversationIdRef.current === msg.conversation_id;
 
                 console.log(`[CLIENT_TRACE] [${Date.now()}] setConversations called: PASS`);
