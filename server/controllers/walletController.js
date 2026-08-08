@@ -639,14 +639,6 @@ exports.getPendingDeposits = async (req, res, next) => {
   }
 };
 
-
-    res.json({ success: true, message: `Proof verified! ${reqCurrency} ${depositAmount} has been credited to your wallet.` });
-  } catch (err) {
-    console.error("[WalletController] Submit Proof Error:", err);
-    res.status(500).json({ error: err.message });
-  }
-};
-
 exports.withdraw = async (req, res) => {
   try {
     const {
