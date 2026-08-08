@@ -93,8 +93,6 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
         if (isOpen) {
             setAddress('');
             setAmount('');
-            setAddress('');
-            setAmount('');
             setWithdrawFee(null);
             setSelectedBank(null);
             setAccountNumber('');

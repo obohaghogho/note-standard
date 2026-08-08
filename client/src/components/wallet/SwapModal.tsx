@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, ArrowRightLeft, Loader2, RefreshCcw } from 'lucide-react';
 import { Button } from '../common/Button';
 import walletApi from '../../api/walletApi';
@@ -38,8 +38,8 @@ export const SwapModal: React.FC<SwapModalProps> = ({ isOpen, onClose, initialFr
         lockId: string;
     } | null>(null);
 
-    const fromWallet = wallets.find(w => w.currency === fromCurrency);
-    const availableBalance = fromWallet ? (fromWallet.available_balance ?? fromWallet.balance) : 0;
+    const fromWallet = wallets.find(w => w.asset === fromCurrency);
+    const availableBalance = fromWallet ? (fromWallet.available ?? fromWallet.balance) : 0;
 
     useEffect(() => {
         if (isOpen && initialFromCurrency) {
