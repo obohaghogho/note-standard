@@ -410,9 +410,9 @@ class FXService {
     // Stablecoins are pegged at 1.0 USD; fiat rates are conservative approximations.
     // These are LAST RESORT fallbacks only; LKG cache is preferred.
     const SEEDS = {
-      BTC: 65000, ETH: 3500,
+      BTC: 65000, ETH: 1920,
       USDT: 1.0, USDC: 1.0,            // stablecoin pegs
-      USD: 1.0,  NGN: 0.00066,          // NGN ≈ 1/1500 USD
+      USD: 1.0,  NGN: 0.000732,         // NGN ≈ 1/1366 USD
       EUR: 1.08, GBP: 1.27,             // conservative EUR/GBP vs USD
     };
     for (const [ticker, seedPrice] of Object.entries(SEEDS)) {
