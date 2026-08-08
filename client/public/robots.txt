@@ -1,0 +1,22 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+Allow: /about
+Allow: /contact
+Allow: /privacy
+Allow: /terms
+Allow: /refund
+Allow: /download
+Allow: /login
+Allow: /signup
+
+# Protect private application & administrative areas
+Disallow: /dashboard/
+Disallow: /admin/
+Disallow: /api/
+Disallow: /debug/
+Disallow: /wallet/
+Disallow: /payment/
+
+# XML Sitemap Location
+Sitemap: https://notestandard.com/sitemap.xml
