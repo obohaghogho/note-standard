@@ -136,7 +136,15 @@ export class ChatViewportEngine {
     this.resizeObserver = new ResizeObserver(() => {
       requestAnimationFrame(() => {
         if (!this.container) return;
+        const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
         const isFocused = document.activeElement?.id === 'chat-window-input';
+
+        // On mobile touch devices, calling scrollToBottom during soft keyboard expansion
+        // causes mobile browsers to cancel focus and collapse the keyboard (fallback glitch).
+        if (isTouchDevice && isFocused) {
+          return;
+        }
+
         if (this.isInitializingRoom || this.isNearBottom || isFocused || this.state === ViewportState.FOLLOWING_BOTTOM) {
           this.scrollToBottom('instant');
         }

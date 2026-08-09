@@ -122,8 +122,18 @@ self.addEventListener('push', (event) => {
         // the delivery receipt is processed and the double tick appears.
         // deliveryWebhookUrl points directly to /deliver/:messageId on the gateway.
         // Fall back to the old API path for backwards compatibility.
-        const deliveryUrl = options.data.deliveryWebhookUrl
-            || `${targetApiUrl}/api/chat/messages/${options.data.messageId}/webhook-deliver`;
+        let deliveryUrl = options.data.deliveryWebhookUrl;
+
+        // If client is running locally on localhost, map remote production gateway URL to local gateway
+        if (typeof location !== 'undefined' && location.hostname === 'localhost') {
+            if (deliveryUrl && deliveryUrl.includes('realtime-gateway-gsb5.onrender.com')) {
+                deliveryUrl = deliveryUrl.replace('https://realtime-gateway-gsb5.onrender.com', 'http://localhost:3001');
+            }
+        }
+
+        if (!deliveryUrl) {
+            deliveryUrl = `${targetApiUrl}/api/chat/messages/${options.data.messageId}/webhook-deliver`;
+        }
 
         // iOS CRITICAL FIX:
         // iOS 16.4+ Web Push has a strict "silent push" policy. If the Service Worker
