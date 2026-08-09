@@ -192,12 +192,24 @@ server.listen(PORT, "0.0.0.0", async () => {
   });
 
   // 4. Recurring Jobs
+  // ── Consolidated Market Data Cycle (60s) ────────────────────────────────
+  // Previously: snapshot at 60s + rates broadcast at 30s = two independent
+  // loops both hitting NOWPayments, causing 429 rate limits.
+  // Now: single 60s tick — snapshot first, then rates broadcast.
   setInterval(async () => {
     try {
       const SnapshotService = require("./services/SnapshotService");
       await SnapshotService.generateMarketSnapshot();
     } catch (err) {
       logger.error(`[SnapshotWorker] Generation Failed: ${err.message}`);
+    }
+
+    // Rates broadcast immediately after snapshot (uses warm cache from snapshot)
+    try {
+      const rates = await fxService.getAllRates();
+      await realtime.broadcast("rates_updated", rates);
+    } catch (err) {
+      logger.error(`[Rates Broadcast] Error: ${err.message}`);
     }
   }, 60000);
 
@@ -218,15 +230,6 @@ server.listen(PORT, "0.0.0.0", async () => {
       console.error("[Trends] Scheduled persistence failed:", err.message);
     }
   }, 6 * 1000 * 60 * 60);
-
-  setInterval(async () => {
-    try {
-      const rates = await fxService.getAllRates();
-      await realtime.broadcast("rates_updated", rates);
-    } catch (err) {
-      logger.error(`[Rates Broadcast] Error: ${err.message}`);
-    }
-  }, 30000);
 
   // Unread Message Email Fallback (runs every 5 minutes)
   setInterval(async () => {

@@ -33,10 +33,15 @@ class FXService {
     };
     this.DRIFT_WINDOW = 5; // Rolling snapshots for velocity
 
-    // ── Task 4.i: Circuit Breaker State ──────────────────────────
+    // ── Circuit Breaker State (with Exponential Backoff) ───────────
     // Tracks provider health to prevent 429 feedback loops.
+    // Consecutive trips escalate: 15m → 30m → 60m (max).
+    // Resets to base cooldown after a successful live fetch.
     this.breakerTrippedUntil = 0; // Timestamp
-    this.BREAKER_COOLDOWN = 15 * 60 * 1000; // 15 Minutes
+    this.BREAKER_COOLDOWN_BASE = 15 * 60 * 1000; // 15 minutes (base)
+    this.BREAKER_COOLDOWN_MAX  = 60 * 60 * 1000; // 60 minutes (cap)
+    this.BREAKER_COOLDOWN = this.BREAKER_COOLDOWN_BASE;
+    this.breakerConsecutiveTrips = 0;
     
     // Seed LKG cache with safe fallback rates on startup.
     this._bootstrapFallbackRates();
@@ -207,35 +212,34 @@ class FXService {
           let rawPrice = null;
           let usedProvider = null;
           
-          // ── EXECUTION AUTHORITY: NOWPayments (primary) ────────────
+          // ── DISPLAY AUTHORITY: CoinGecko (primary for valuation) ────
+          // CoinGecko supports batch queries and has generous rate limits.
+          // NOWPayments is reserved as fallback / execution-time oracle.
           try {
-            rawPrice = await nowpaymentsProvider.getRate(sym, "USD");
-            if (rawPrice && rawPrice > 0) {
-              usedProvider = 'nowpayments';
+            const coinId = this.coinMapping[sym];
+            if (coinId) {
+              const prices = await coingeckoProvider.getPrices([coinId]);
+              rawPrice = prices[coinId] || null;
+              if (rawPrice && rawPrice > 0) usedProvider = 'coingecko';
             }
-          } catch (npErr) {
-            logger.warn(`[FXService] NOWPayments rate failed for ${sym}: ${npErr.message}`);
-            if (npErr.status === 429 || npErr.message?.includes('RATE_LIMIT')) {
-              logger.error(`[FXService] NOWPayments 429 for ${sym}. TRIPPING CIRCUIT BREAKER for 15m.`);
-              this.breakerTrippedUntil = Date.now() + this.BREAKER_COOLDOWN;
-              cache.set("breaker_tripped_until", this.breakerTrippedUntil, 1800);
+          } catch (cgErr) {
+            logger.warn(`[FXService] CoinGecko rate failed for ${sym}: ${cgErr.message}`);
+            if (cgErr.status === 429 || cgErr.message?.includes('429')) {
+              this._tripBreaker(`CoinGecko 429 for ${sym}`);
             }
           }
 
-          // ── FALLBACK: CoinGecko (secondary, only if NOWPayments failed) ──
+          // ── FALLBACK: NOWPayments (only if CoinGecko failed) ────────
           if (!rawPrice) {
             try {
-              const coinId = this.coinMapping[sym];
-              if (coinId) {
-                const prices = await coingeckoProvider.getPrices([coinId]);
-                rawPrice = prices[coinId] || null;
-                if (rawPrice && rawPrice > 0) usedProvider = 'coingecko';
+              rawPrice = await nowpaymentsProvider.getRate(sym, "USD");
+              if (rawPrice && rawPrice > 0) {
+                usedProvider = 'nowpayments';
               }
-            } catch (cgErr) {
-              logger.warn(`[FXService] CoinGecko fallback failed for ${sym}: ${cgErr.message}`);
-              if (cgErr.status === 429 || cgErr.message?.includes('429')) {
-                this.breakerTrippedUntil = Date.now() + this.BREAKER_COOLDOWN;
-                cache.set("breaker_tripped_until", this.breakerTrippedUntil, 1800);
+            } catch (npErr) {
+              logger.warn(`[FXService] NOWPayments fallback failed for ${sym}: ${npErr.message}`);
+              if (npErr.status === 429 || npErr.message?.includes('RATE_LIMIT')) {
+                this._tripBreaker(`NOWPayments 429 for ${sym}`);
               }
             }
           }
@@ -245,10 +249,17 @@ class FXService {
           result.source = rawPrice ? 'live' : 'last_known_good';
           result.fetchedAt = new Date().toISOString();
 
-          // ── MONITORING ORACLE: Async anomaly check ────────────────
-          // CoinGecko is used ONLY for cross-validation, never for execution.
+          // ── Breaker Reset: successful live fetch resets escalation ──
+          if (rawPrice && rawPrice > 0 && this.breakerConsecutiveTrips > 0) {
+            this.breakerConsecutiveTrips = 0;
+            this.BREAKER_COOLDOWN = this.BREAKER_COOLDOWN_BASE;
+            logger.info(`[FXService] Circuit breaker reset to base cooldown after successful ${sym} fetch.`);
+          }
+
+          // ── MONITORING ORACLE: Async anomaly cross-check ────────────
+          // When CoinGecko is primary, use NOWPayments as independent oracle.
           // Non-blocking — fire and forget.
-          if (usedProvider === 'nowpayments' && rawPrice > 0) {
+          if (usedProvider === 'coingecko' && rawPrice > 0) {
             this._asyncAnomalyCheck(sym, rawPrice, usedProvider).catch(() => {});
           }
 
@@ -293,6 +304,23 @@ class FXService {
     } catch {
       // Monitoring oracle failures are silently ignored
     }
+  }
+
+  /**
+   * Trip the circuit breaker with exponential backoff.
+   * Consecutive trips escalate: 15m → 30m → 60m (max).
+   * @param {string} reason - Human-readable reason for the trip
+   */
+  _tripBreaker(reason) {
+    this.breakerConsecutiveTrips++;
+    // Exponential: base * 2^(trips-1), capped at max
+    this.BREAKER_COOLDOWN = Math.min(
+      this.BREAKER_COOLDOWN_BASE * Math.pow(2, this.breakerConsecutiveTrips - 1),
+      this.BREAKER_COOLDOWN_MAX
+    );
+    this.breakerTrippedUntil = Date.now() + this.BREAKER_COOLDOWN;
+    cache.set("breaker_tripped_until", this.breakerTrippedUntil, Math.ceil(this.BREAKER_COOLDOWN / 1000) + 60);
+    logger.error(`[FXService] CIRCUIT BREAKER TRIPPED (trip #${this.breakerConsecutiveTrips}): ${reason}. Cooldown: ${Math.round(this.BREAKER_COOLDOWN / 60000)}m.`);
   }
 
   /**

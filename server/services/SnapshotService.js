@@ -311,10 +311,26 @@ class SnapshotService {
         exchangeRateProvider.getAllRates("USD") 
       ]);
 
-      const nowRates = await Promise.all(symbols.map(s => 
-        // NowPayments respects the fetchTimeout (e.g. 2.5s for DISPLAY)
-        nowpaymentsProvider.getRate(s, "USD", 1, fetchTimeout).catch(() => null)
-      ));
+      // ── Fix 2+3: CoinGecko-first, NOWPayments fallback only ────────
+      // Stablecoins (USDT, USDC) are pegged at $1.00 — never call providers.
+      // For BTC/ETH: use CoinGecko price if available, only fall back to
+      // NOWPayments if CoinGecko failed for that specific symbol.
+      const STABLECOIN_SET = new Set(['USDT', 'USDC']);
+      const nowRates = await Promise.all(symbols.map(async (s) => {
+        // Stablecoin short-circuit: always $1.00, no API call
+        if (STABLECOIN_SET.has(s)) return 1.0;
+
+        // CoinGecko already returned a price? Use it, skip NOWPayments.
+        const coinId = this.coinMapping[s];
+        if (coinId && cgPrices[coinId] && cgPrices[coinId] > 0) return null; // CG handled it
+
+        // CoinGecko missed this symbol — fall back to NOWPayments
+        try {
+          return await nowpaymentsProvider.getRate(s, "USD", 1, fetchTimeout);
+        } catch {
+          return null;
+        }
+      }));
 
       // ── Task 429: Check for systemic rate limiting signals ─────────
       const has429 = !cgPrices || Object.keys(cgPrices).length === 0;
