@@ -49,6 +49,9 @@ const ChatWindow: React.FC = () => {
     const { startCall } = useWebRTC();
     const { setIsSettingsOpen, setIsGalleryOpen } = useChatTheme();
 
+    const currentMessages = useMemo(() => activeConversationId ? messages[activeConversationId] || [] : [], [messages, activeConversationId]);
+    const activeConversation = useMemo(() => conversations.find(c => c.id === activeConversationId), [conversations, activeConversationId]);
+
     // ── WhatsApp-Style Selection System ──────────────────────
     const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
     const isSelectionMode = selectedMessages.size > 0;
@@ -201,8 +204,6 @@ const ChatWindow: React.FC = () => {
 
     const preferredLanguage = profile?.preferred_language || 'en';
 
-    const currentMessages = useMemo(() => activeConversationId ? messages[activeConversationId] || [] : [], [messages, activeConversationId]);
-    const activeConversation = useMemo(() => conversations.find(c => c.id === activeConversationId), [conversations, activeConversationId]);
 
     // Stable message count ref — avoids recreating scrollToBottom and layout effects on every tick update.
     // scrollToBottom only needs to know WHEN the length changes, not the full array.
