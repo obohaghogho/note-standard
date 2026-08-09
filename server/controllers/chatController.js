@@ -1222,10 +1222,15 @@ exports.markMessagesDeliveredBatch = async (req, res) => {
 exports.webhookDeliver = async (req, res) => {
   try {
     const { messageId } = req.params;
+    const now = new Date().toISOString();
+
+    if (!messageId) {
+      return res.status(400).json({ error: "Missing messageId" });
+    }
 
     const { data: updatedData } = await supabase
       .from("messages")
-      .update({ delivered_at: new Date().toISOString() })
+      .update({ delivered_at: now })
       .eq("id", messageId)
       .is("delivered_at", null)
       .select()
@@ -1246,14 +1251,23 @@ exports.webhookDeliver = async (req, res) => {
         messageId: targetMessage.id,
         conversationId: targetMessage.conversation_id,
         userId: targetMessage.sender_id,
-        delivered_at: targetMessage.delivered_at || new Date().toISOString()
+        senderId: targetMessage.sender_id,
+        delivered_at: targetMessage.delivered_at || now,
+        deliveredAt: targetMessage.delivered_at || now
       };
 
       console.log('[FORENSIC][API] webhookDeliver | messageId:' + targetMessage.id + ' | senderId:' + targetMessage.sender_id + ' | conversationId:' + targetMessage.conversation_id + ' | ts:' + Date.now());
 
-      // Emit to conversation room & sender user room (always)
+      const { data: members } = await supabase
+        .from("conversation_members")
+        .select("user_id")
+        .eq("conversation_id", targetMessage.conversation_id);
+
+      const memberIds = (members && members.length > 0) ? members.map(m => m.user_id) : [targetMessage.sender_id];
+
+      await realtime.emitToUsers(memberIds, 'chat:message_delivered', receiptPayload);
+      await realtime.emitToUsers(memberIds, 'chat:delivery_receipt', receiptPayload);
       await realtime.emitToConversation(targetMessage.conversation_id, 'chat:message_delivered', receiptPayload);
-      await realtime.emitToUser(targetMessage.sender_id, 'chat:message_delivered', receiptPayload);
     }
 
     res.json({ success: true });
@@ -2645,69 +2659,7 @@ exports.emitLedgerEvent = async (req, res) => {
   }
 };
 
-// ==========================================
-// BACKGROUND PUSH WEBHOOKS
-// ==========================================
 
-exports.webhookDeliver = async (req, res) => {
-  try {
-    const { messageId } = req.params;
-    const now = new Date().toISOString();
-
-    if (!messageId) {
-      return res.status(400).json({ error: "Missing messageId" });
-    }
-
-    // 1. Fetch message to ensure it exists and get conversation context
-    const { data: message, error: fetchError } = await supabase
-      .from("messages")
-      .select("id, conversation_id, delivered_at, sender_id")
-      .eq("id", messageId)
-      .single();
-
-    if (fetchError || !message) {
-      return res.status(404).json({ error: "Message not found" });
-    }
-
-    // If already delivered, just return success
-    if (message.delivered_at) {
-      return res.json({ success: true, note: "Already delivered" });
-    }
-
-    // 2. Mark as delivered in the database
-    const { error: updateError } = await supabase
-      .from("messages")
-      .update({ delivered_at: now })
-      .eq("id", messageId);
-
-    if (updateError) throw updateError;
-
-    // 3. Globally emit the double tick to all conversation members (specifically the sender)
-    const { data: members } = await supabase
-      .from("conversation_members")
-      .select("user_id")
-      .eq("conversation_id", message.conversation_id);
-
-    if (members && members.length > 0) {
-      const memberIds = members.map((m) => m.user_id);
-      
-      const payload = {
-        conversationId: message.conversation_id,
-        messageId: message.id,
-        deliveredAt: now,
-        senderId: message.sender_id // Helps the gateway route to the exact sender immediately
-      };
-
-      // emitToUsers broadcasts to global user channels (user:{id}) so the sender gets the tick anywhere
-      await realtime.emitToUsers(memberIds, "chat:delivery_receipt", payload);
-    }
-
-    res.json({ success: true });
-  } catch (err) {
-    console.error("Error in webhookDeliver:", err.message);
-    res.status(500).json({ error: "Server Error" });
-  }
-};
 
 // GET /api/chat/support — Dedicated User Support Payload Fetch
 exports.getSupportChat = async (req, res) => {
