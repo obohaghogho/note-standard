@@ -169,8 +169,8 @@ export function usePushNotifications() {
         if (sub) {
           const { data: { session } } = await supabase.auth.getSession();
           if (session) {
-            const cacheKey = `push_synced_${session.user.id}_${sub.endpoint.slice(-30)}`;
-            if (!localStorage.getItem(cacheKey)) {
+            const activeBoundUser = localStorage.getItem('push_active_bound_user');
+            if (activeBoundUser !== session.user.id) {
               try {
                 // Background sync: map this browser's existing push endpoint to the newly logged-in account.
                 // This resolves the bug where account switching causes pushes to route to the old account.
@@ -195,7 +195,7 @@ export function usePushNotifications() {
                   })
                 });
 
-                localStorage.setItem(cacheKey, 'true');
+                localStorage.setItem('push_active_bound_user', session.user.id);
                 console.log('[PUSH] Background sync: existing push subscription bound to active account.');
               } catch (e) {
                 console.warn('[PUSH] Background sync of push subscription failed:', e);

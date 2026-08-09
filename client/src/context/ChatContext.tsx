@@ -885,6 +885,38 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     return { ...prev, [conversationId]: boundedMerged as Message[] };
                 });
 
+                // Update conversations list so sidebar & lastMessage preview reflect new messages loaded via REST
+                if (filtered.length > 0) {
+                    const lastMsg = filtered[filtered.length - 1];
+                    setConversations(prev => {
+                        const exists = prev.some(c => c.id === conversationId);
+                        if (!exists) {
+                            loadConversationsRef.current().catch(() => {});
+                            return prev;
+                        }
+                        return prev.map(c => {
+                            if (c.id === conversationId) {
+                                return {
+                                    ...c,
+                                    updated_at: lastMsg.created_at || c.updated_at,
+                                    lastMessage: {
+                                        id: lastMsg.id,
+                                        content: lastMsg.content,
+                                        sender_id: lastMsg.sender_id,
+                                        created_at: lastMsg.created_at,
+                                        type: lastMsg.type,
+                                        event_id: lastMsg.event_id,
+                                        delivered_at: lastMsg.delivered_at,
+                                        read_at: lastMsg.read_at,
+                                        status: (lastMsg.status ?? 'sent') as any
+                                    }
+                                };
+                            }
+                            return c;
+                        }).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+                    });
+                }
+
                 // ── Hydrate pending offline-queue intents ──────────────────────────
                 // After merging server messages, layer in any intents that are still
                 // queued for THIS conversation. This guarantees that messages the user
@@ -1149,16 +1181,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }
 
             // ── SAFEGUARD 2: Message Ownership & Participant Validation ───────
-            // Prevent accidental cross-conversation rendering or foreign message injection.
-            // Verify message.conversation_id belongs to a known conversation or active conversation.
             const isKnownConversation = conversationsRef.current.some(c => c.id === msg.conversation_id) || activeConversationIdRef.current === msg.conversation_id;
             if (!isKnownConversation) {
-                console.warn('[SECURITY_FORENSICS] Message Ownership Validation Failed: incoming message does not belong to any valid user conversation', {
-                    messageId: msg.id,
-                    conversationId: msg.conversation_id,
-                    currentUserId: user.id
-                });
-                return;
+                console.log('[SECURITY_FORENSICS] Incoming message for new/un-cached conversation. Triggering automatic background conversation fetch:', msg.conversation_id);
+                loadConversationsRef.current().catch(() => {});
             }
 
             // ── Own-message echo handler ──────────────────────────────────────
