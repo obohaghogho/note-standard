@@ -31,6 +31,7 @@ export class ChatViewportEngine {
 
   private state: ViewportState = ViewportState.IDLE;
   private isNearBottom = true;
+  private isInitializingRoom = true;
   private unreadCount = 0;
   private prevScrollHeight = 0;
   private heightCache = new Map<string, number>();
@@ -136,7 +137,7 @@ export class ChatViewportEngine {
       requestAnimationFrame(() => {
         if (!this.container) return;
         const isFocused = document.activeElement?.id === 'chat-window-input';
-        if (this.isNearBottom || isFocused || this.state === ViewportState.FOLLOWING_BOTTOM) {
+        if (this.isInitializingRoom || this.isNearBottom || isFocused || this.state === ViewportState.FOLLOWING_BOTTOM) {
           this.scrollToBottom('instant');
         }
       });
@@ -162,6 +163,10 @@ export class ChatViewportEngine {
       this.unreadCount = 0;
     } else if (this.state === ViewportState.FOLLOWING_BOTTOM) {
       this.setState(ViewportState.READING_HISTORY);
+    }
+
+    if (!nearBottom && distanceToBottom > 200) {
+      this.isInitializingRoom = false;
     }
 
     if (this.onNearBottomChange) {
@@ -192,11 +197,20 @@ export class ChatViewportEngine {
   }
 
   public handleConversationSwitch() {
+    this.isInitializingRoom = true;
     this.setState(ViewportState.IDLE);
+    const forceScroll = () => {
+      if (this.container) {
+        this.container.scrollTop = this.container.scrollHeight;
+      }
+      this.scrollToBottom('instant');
+    };
+    forceScroll();
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        this.scrollToBottom('instant');
-      });
+      forceScroll();
+      setTimeout(forceScroll, 50);
+      setTimeout(forceScroll, 150);
+      setTimeout(forceScroll, 350);
     });
   }
 

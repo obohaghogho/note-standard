@@ -285,20 +285,26 @@ const ChatWindow: React.FC = () => {
                 initialScrollDoneRef.current[activeConversationId] = true;
                 lastScrolledMsgIdRef.current[activeConversationId] = lastMsgId;
                 
-                scrollToBottom('instant');
+                const forceBottom = () => {
+                    if (scrollContainerRef.current) {
+                        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+                    }
+                    scrollToBottom('instant');
+                };
 
-                const t1 = setTimeout(() => scrollToBottom('instant'), 50);
-                const t2 = setTimeout(() => scrollToBottom('instant'), 150);
+                forceBottom();
+                const t1 = setTimeout(forceBottom, 50);
+                const t2 = setTimeout(forceBottom, 150);
+                const t3 = setTimeout(forceBottom, 350);
 
                 requestAnimationFrame(() => {
-                    requestAnimationFrame(() => {
-                        scrollToBottom('instant');
-                    });
+                    requestAnimationFrame(forceBottom);
                 });
 
                 return () => {
                     clearTimeout(t1);
                     clearTimeout(t2);
+                    clearTimeout(t3);
                 };
             }
         }
