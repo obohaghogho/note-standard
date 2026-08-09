@@ -1348,6 +1348,42 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     console.log(`[CLIENT_TRACE] [${Date.now()}] conversations state updated: PASS | next state size: ${nextConvs.length}`);
                     return nextConvs;
                 });
+
+                // Show in-app toast notification if the user is not actively viewing this chat
+                if (!isCurrentlyOpen && !isOwnMessage && newlyAddedCount > 0) {
+                    const senderName = msg.sender?.name || 'Someone';
+                    const previewText = msg.content || (msg.attachment ? 'Media message' : 'New message');
+                    toast((t) => (
+                        <div 
+                            className="flex items-center gap-3 cursor-pointer w-full"
+                            onClick={() => {
+                                toast.dismiss(t.id);
+                                // Optional: navigate to the chat if we had a router here, but ChatContext might not have useNavigate.
+                                // It will at least show the notification.
+                            }}
+                        >
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-gray-900 truncate">
+                                    {senderName}
+                                </p>
+                                <p className="text-sm text-gray-500 truncate">
+                                    {previewText}
+                                </p>
+                            </div>
+                        </div>
+                    ), { 
+                        position: 'top-center',
+                        duration: 4000,
+                        style: {
+                            background: '#fff',
+                            color: '#363636',
+                            padding: '12px',
+                            borderRadius: '12px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                            border: '1px solid rgba(0,0,0,0.05)',
+                        }
+                    });
+                }
             } else {
                 console.log(`[CLIENT_TRACE] [${Date.now()}] duplicate message filtering: PASS (newlyAddedCount=0, seq=undefined)`);
             }

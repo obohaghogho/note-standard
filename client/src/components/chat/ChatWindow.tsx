@@ -1240,6 +1240,26 @@ const ChatWindow: React.FC = () => {
                                                 - Enter sends, Shift+Enter = newline
                                                 - onInput auto-resizes height
                                             */}
+                                            {/* Hidden mirror div for zero-reflow auto-sizing */}
+                                            <div
+                                                aria-hidden="true"
+                                                className={`w-full py-2.5 md:py-3 px-1 md:px-2 text-[16px] md:text-sm font-medium leading-[1.4] font-theme-${fontTheme}`}
+                                                style={{
+                                                    position: 'absolute', visibility: 'hidden', height: 0, minHeight: 0, overflow: 'hidden',
+                                                    whiteSpace: 'pre-wrap', wordBreak: 'break-word', pointerEvents: 'none'
+                                                }}
+                                                ref={(el) => {
+                                                    if (el) {
+                                                        const targetHeight = Math.min(Math.max(el.scrollHeight, 24), 130) + 'px';
+                                                        const ta = document.getElementById('chat-window-input');
+                                                        if (ta && ta.style.height !== targetHeight) {
+                                                            ta.style.height = targetHeight;
+                                                        }
+                                                    }
+                                                }}
+                                            >
+                                                {inputValue + ' '}
+                                            </div>
                                             <textarea
                                                 id="chat-window-input"
                                                 name="message"
@@ -1264,21 +1284,6 @@ const ChatWindow: React.FC = () => {
                                                 }}
                                                 onFocus={() => {
                                                     scrollToBottom('instant');
-                                                }}
-                                                onInput={(e) => {
-                                                    // Auto-grow: calculate scrollHeight without layout collapse to prevent blinking
-                                                    const el = e.currentTarget;
-                                                    // By resetting to 0px, we avoid height: auto but still measure scrollHeight accurately.
-                                                    // To prevent layout jump, we ONLY change height if the scrollHeight has meaningfully changed.
-                                                    // A hidden clone is the most robust way, but for performance, we temporarily force it
-                                                    const currentHeight = el.style.height;
-                                                    el.style.height = '0px'; 
-                                                    const newHeight = Math.min(el.scrollHeight, 130) + 'px';
-                                                    if (currentHeight !== newHeight) {
-                                                        el.style.height = newHeight;
-                                                    } else {
-                                                        el.style.height = currentHeight;
-                                                    }
                                                 }}
                                                 placeholder="Type a message..."
                                                 autoComplete="off"
