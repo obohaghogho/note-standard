@@ -204,7 +204,10 @@ self.addEventListener('push', (event) => {
                         const isActivelyViewingThisChat = !!(notifConversationId && windowClients.find(client => {
                             try {
                                 const clientUrl = new URL(client.url);
-                                return client.visibilityState === 'visible' && clientUrl.searchParams.get('id') === notifConversationId;
+                                // STRICT CHECK: client must be visible AND focused.
+                                // If the phone screen locks while the app is open, visibilityState might 
+                                // still be 'visible' in some mobile browsers, but focused will be false.
+                                return client.visibilityState === 'visible' && client.focused && clientUrl.searchParams.get('id') === notifConversationId;
                             } catch (_) {
                                 return false;
                             }
