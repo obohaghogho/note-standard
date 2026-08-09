@@ -242,21 +242,47 @@ const ChatWindow: React.FC = () => {
         restoreScrollAfterHistoryLoad(prevH);
     };
 
-    // Auto-scroll lock when chat changes or initial load
-    useLayoutEffect(() => {
+    // ── SCROLL ENGINE INTEGRATION ──────────────────────────────
+    // Tracks whether initial scroll-to-bottom has completed for a conversation room
+    const initialScrollDoneRef = useRef<Record<string, boolean>>({});
+
+    // Reset scroll flag when switching active conversations
+    useEffect(() => {
         if (activeConversationId) {
-            prevConvIdRef.current = activeConversationId;
-            handleConversationSwitch();
+            setInputValue(drafts[activeConversationId] || '');
+            setSelectedMessages(new Set());
+            setTranslations({});
+            setShowOriginal({});
+            setReplyTo(null);
+            setEditingMessageId(null);
+            setShowMoreMenu(false);
+            setIsSearchOpen(false);
+            setSearchQuery('');
+            setSearchResults([]);
+            setShowEmojiPicker(false);
         }
-    }, [activeConversationId, handleConversationSwitch]);
+    }, [activeConversationId, drafts]);
 
-    // Clean container-internal scroll to bottom on room open or initial load (0 timers)
+    // GUARANTEED INITIAL SCROLL TO BOTTOM (Fixes Account Switch & Room Open starting at top)
+    // Runs as soon as activeConversation & scrollContainerRef are mounted into DOM with messages.
     useLayoutEffect(() => {
-        if (!activeConversationId || !scrollContainerRef.current) return;
-        scrollToBottom('instant');
-    }, [activeConversationId, currentMessages.length, scrollToBottom]);
+        if (!activeConversationId || !scrollContainerRef.current || !activeConversation) return;
 
-    // Auto-scroll on new message if already at bottom
+        const isScrollDone = initialScrollDoneRef.current[activeConversationId];
+        if (!isScrollDone && currentMessages.length > 0) {
+            initialScrollDoneRef.current[activeConversationId] = true;
+            scrollToBottom('instant');
+            // Double rAF ensures layout calculations and media/wallpaper bounding boxes settle
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    scrollToBottom('instant');
+                });
+            });
+        }
+    }, [activeConversationId, activeConversation, currentMessages.length, scrollToBottom]);
+
+    // AUTO-SCROLL ON NEW INCOMING MESSAGES (Fixes Double-Click / Flicker)
+    // Uses handleNewIncomingMessage which checks isNearBottom internally before smooth scrolling.
     const prevMessagesLengthRef = useRef(currentMessages.length);
     useLayoutEffect(() => {
         if (currentMessages.length > prevMessagesLengthRef.current) {
@@ -264,29 +290,6 @@ const ChatWindow: React.FC = () => {
         }
         prevMessagesLengthRef.current = currentMessages.length;
     }, [currentMessages.length, handleNewIncomingMessage]);
-
-    // Initialize input from draft
-    useEffect(() => {
-        if (activeConversationId) {
-            setInputValue(drafts[activeConversationId] || '');
-        }
-    }, [activeConversationId, drafts]);
-
-    // Reset all per-room ephemeral state when switching conversations.
-    // This prevents stale selections, translations, and reply context from
-    // leaking across different chat rooms (WhatsApp/Telegram-grade isolation).
-    useEffect(() => {
-        setSelectedMessages(new Set());
-        setTranslations({});
-        setShowOriginal({});
-        setReplyTo(null);
-        setEditingMessageId(null);
-        setShowMoreMenu(false);
-        setIsSearchOpen(false);
-        setSearchQuery('');
-        setSearchResults([]);
-        setShowEmojiPicker(false);
-    }, [activeConversationId]);
 
     const translationsRef = useRef(translations);
     useEffect(() => {
@@ -1045,7 +1048,7 @@ const ChatWindow: React.FC = () => {
                                         const showDateSep = index === 0 || !isSameDay(msg.created_at, array[index - 1].created_at);
                                         if (showDateSep && msg.created_at) {
                                             items.push(
-                                                <div key={`date-${msg.id}`} className="flex items-center gap-3 my-3 px-2">
+                                                <div key={`date-${msg.event_id || msg.id}`} className="flex items-center gap-3 my-3 px-2">
                                                     <div className="flex-1 h-px bg-white/10" />
                                                     <span className="text-[10px] font-semibold text-gray-400 bg-gray-800/70 backdrop-blur px-3 py-1 rounded-full border border-white/10 flex-shrink-0 select-none">
                                                         {getDateLabel(msg.created_at)}
@@ -1056,7 +1059,7 @@ const ChatWindow: React.FC = () => {
                                         }
                                         items.push(
                                             <MessageBubble
-                                                key={msg.id}
+                                                key={msg.event_id || msg.id}
                                                 msg={msg}
                                                 isGrouped={isGrouped}
                                                 isSelected={isSelected}
