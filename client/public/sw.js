@@ -143,16 +143,38 @@ self.addEventListener('push', (event) => {
             deliveryUrl = `${targetApiUrl}/api/chat/messages/${options.data.messageId}/webhook-deliver`;
         }
 
+        const sendDeliveryReceipt = async () => {
+            if (!options.data?.messageId) return;
+
+            // 1. Try Primary Delivery Endpoint (Gateway)
+            try {
+                const res = await fetch(deliveryUrl, { method: 'POST' });
+                if (res && res.ok) {
+                    console.log('[SW] ✅ Delivery ACK sent successfully via primary gateway URL.');
+                    return;
+                }
+            } catch (e) {
+                console.warn('[SW] Primary delivery ACK failed, trying fallback API endpoint...', e);
+            }
+
+            // 2. Fallback to API server delivery webhook
+            const fallbackUrl = `${targetApiUrl}/api/chat/messages/${options.data.messageId}/webhook-deliver`;
+            try {
+                const fallbackRes = await fetch(fallbackUrl, { method: 'POST' });
+                if (fallbackRes && fallbackRes.ok) {
+                    console.log('[SW] ✅ Delivery ACK sent successfully via fallback API endpoint.');
+                }
+            } catch (err) {
+                console.error('[SW] ❌ Both primary and fallback delivery ACK attempts failed:', err);
+            }
+        };
+
         // iOS CRITICAL FIX:
         // iOS 16.4+ Web Push has a strict "silent push" policy. If the Service Worker
         // does not call showNotification() within a very short window, iOS treats the
         // push as a silent/background notification. After too many silent pushes,
         // iOS silently REVOKES push permission for the PWA — causing notifications to
         // completely stop working until the user re-installs.
-        //
-        // ROOT CAUSE OF THE BUG: The old code awaited the webhook fetch() BEFORE
-        // calling showNotification(). If the server was slow, the SW would time out
-        // before the notification was shown, accumulating silent push penalties.
         //
         // THE FIX: We now run showNotification() and the webhook fetch() in PARALLEL
         // using Promise.all(). This guarantees the notification shows immediately while
@@ -166,8 +188,7 @@ self.addEventListener('push', (event) => {
                         console.log('[FORENSIC][SW] No window clients found (app is closed). Showing notification immediately.');
                         return Promise.all([
                             self.registration.showNotification(title, options),
-                            fetch(deliveryUrl, { method: 'POST' })
-                                .catch(err => console.error('[SW] Delivery receipt failed (background/no-window):', err))
+                            sendDeliveryReceipt()
                         ]);
                     }
 
@@ -223,8 +244,6 @@ self.addEventListener('push', (event) => {
                             try {
                                 const clientUrl = new URL(client.url);
                                 // STRICT CHECK: client must be visible AND focused.
-                                // If the phone screen locks while the app is open, visibilityState might 
-                                // still be 'visible' in some mobile browsers, but focused will be false.
                                 return client.visibilityState === 'visible' && client.focused && clientUrl.searchParams.get('id') === notifConversationId;
                             } catch (_) {
                                 return false;
@@ -255,8 +274,7 @@ self.addEventListener('push', (event) => {
                                 });
                             }
 
-                            return fetch(deliveryUrl, { method: 'POST' })
-                                .catch(err => console.error('[SW] Delivery receipt failed (foreground):', err));
+                            return sendDeliveryReceipt();
                         }
 
                         // ── User is in another room, dashboard, or backgrounded: SHOW OS DESKTOP PUSH ──────────────
@@ -275,8 +293,7 @@ self.addEventListener('push', (event) => {
 
                         return Promise.all([
                             self.registration.showNotification(title, options),
-                            fetch(deliveryUrl, { method: 'POST' })
-                                .catch(err => console.error('[SW] Delivery receipt failed (background):', err))
+                            sendDeliveryReceipt()
                         ]);
                     });
                 })

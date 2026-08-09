@@ -1279,24 +1279,9 @@ const ChatWindow: React.FC = () => {
                                                 rows={1}
                                                 value={inputValue}
                                                 onChange={handleInputChange}
-                                                onTouchStart={(e) => {
-                                                    if (document.activeElement !== e.currentTarget) {
-                                                        e.preventDefault();
-                                                        e.currentTarget.focus({ preventScroll: true });
-                                                    }
-                                                }}
-                                                onMouseDown={(e) => {
-                                                    if (document.activeElement !== e.currentTarget) {
-                                                        e.preventDefault();
-                                                        e.currentTarget.focus({ preventScroll: true });
-                                                    }
-                                                }}
                                                 onKeyDown={() => {
                                                     // By product requirement, Enter inserts a newline instead of sending.
                                                     // Sending is done exclusively via the explicit Send button.
-                                                }}
-                                                onFocus={() => {
-                                                    scrollToBottom('instant');
                                                 }}
                                                 placeholder="Type a message..."
                                                 autoComplete="off"

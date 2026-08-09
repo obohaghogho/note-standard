@@ -1223,32 +1223,37 @@ exports.webhookDeliver = async (req, res) => {
   try {
     const { messageId } = req.params;
 
-    const { data, error } = await supabase
+    const { data: updatedData } = await supabase
       .from("messages")
       .update({ delivered_at: new Date().toISOString() })
       .eq("id", messageId)
       .is("delivered_at", null)
       .select()
-      .single();
+      .maybeSingle();
 
-    if (!error && data) {
+    let targetMessage = updatedData;
+    if (!targetMessage) {
+      const { data: existingData } = await supabase
+        .from("messages")
+        .select("*")
+        .eq("id", messageId)
+        .maybeSingle();
+      targetMessage = existingData;
+    }
+
+    if (targetMessage) {
       const receiptPayload = {
-        messageId,
-        conversationId: data.conversation_id,
-        userId: data.sender_id,
-        delivered_at: data.delivered_at
+        messageId: targetMessage.id,
+        conversationId: targetMessage.conversation_id,
+        userId: targetMessage.sender_id,
+        delivered_at: targetMessage.delivered_at || new Date().toISOString()
       };
 
-      console.log('[FORENSIC][API] webhookDeliver | messageId:' + messageId + ' | senderId:' + data.sender_id + ' | conversationId:' + data.conversation_id + ' | ts:' + Date.now());
+      console.log('[FORENSIC][API] webhookDeliver | messageId:' + targetMessage.id + ' | senderId:' + targetMessage.sender_id + ' | conversationId:' + targetMessage.conversation_id + ' | ts:' + Date.now());
 
-      // Emit to the conversation room (covers active participants in the chat)
-      await realtime.emitToConversation(data.conversation_id, 'chat:message_delivered', receiptPayload);
-
-      // CRITICAL FIX: Also emit directly to the sender user room.
-      // The sender may not be in the conversation socket room (e.g., on the home screen).
-      // Without this the push-triggered webhook delivery never reaches the sender,
-      // so the single tick stays permanently until they navigate back into the chat.
-      await realtime.emitToUser(data.sender_id, 'chat:message_delivered', receiptPayload);
+      // Emit to conversation room & sender user room (always)
+      await realtime.emitToConversation(targetMessage.conversation_id, 'chat:message_delivered', receiptPayload);
+      await realtime.emitToUser(targetMessage.sender_id, 'chat:message_delivered', receiptPayload);
     }
 
     res.json({ success: true });
