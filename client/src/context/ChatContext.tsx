@@ -1537,17 +1537,37 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             setMessages(prev => {
                 const current = prev[conversationId] || [];
                 const hasMatch = current.some(m => targetMatchKeys.includes(m.id) || (m.event_id && targetMatchKeys.includes(m.event_id)));
-                if (!hasMatch) return prev;
-
-                const updatedMsgs = current.map(m => {
-                    const isMatch = targetMatchKeys.includes(m.id) || (m.event_id && targetMatchKeys.includes(m.event_id));
-                    if (!isMatch) return m;
-                    return {
-                        ...m,
-                        delivered_at: m.delivered_at || nowStr,
-                        status: (m.status === 'read' || m.read_at) ? 'read' : 'delivered'
-                    };
-                });
+                
+                let updatedMsgs: Message[];
+                if (!hasMatch) {
+                    // Fallback: If no exact ID match is found (e.g. optimistic message is still tempId),
+                    // upgrade the latest un-delivered sent message from the active user in this conversation.
+                    let updatedAny = false;
+                    updatedMsgs = [...current];
+                    for (let i = updatedMsgs.length - 1; i >= 0; i--) {
+                        const m = updatedMsgs[i];
+                        if (m.sender_id === user?.id && !m.delivered_at && !m.read_at) {
+                            updatedMsgs[i] = {
+                                ...m,
+                                delivered_at: nowStr,
+                                status: (m.status === 'read' || m.read_at) ? 'read' : 'delivered'
+                            };
+                            updatedAny = true;
+                            break;
+                        }
+                    }
+                    if (!updatedAny) return prev;
+                } else {
+                    updatedMsgs = current.map(m => {
+                        const isMatch = targetMatchKeys.includes(m.id) || (m.event_id && targetMatchKeys.includes(m.event_id));
+                        if (!isMatch) return m;
+                        return {
+                            ...m,
+                            delivered_at: m.delivered_at || nowStr,
+                            status: (m.status === 'read' || m.read_at) ? 'read' : 'delivered'
+                        };
+                    });
+                }
 
                 const nextState = { ...prev, [conversationId]: updatedMsgs };
                 messagesRef.current = nextState;
@@ -1559,7 +1579,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const nextConvs = prev.map(c => {
                     if (c.id !== conversationId || !c.lastMessage) return c;
                     const lm = c.lastMessage;
-                    const isMatch = targetMatchKeys.includes(lm.id) || ('event_id' in lm && lm.event_id ? targetMatchKeys.includes(lm.event_id as string) : false);
+                    const isMatch = targetMatchKeys.includes(lm.id) || 
+                                    ('event_id' in lm && lm.event_id ? targetMatchKeys.includes(lm.event_id as string) : false) ||
+                                    (lm.sender_id === user?.id && !lm.delivered_at && !lm.read_at);
                     if (!isMatch) return c;
                     return {
                         ...c,
