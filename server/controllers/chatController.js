@@ -831,7 +831,7 @@ exports.acceptConversation = async (req, res) => {
 exports.getMessages = async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const { limit = 50, before } = req.query;
+    const { limit = 50, before, after, after_id, after_created_at } = req.query;
     const userId = req.user.id;
 
     let clearedAt = null;
@@ -855,9 +855,23 @@ exports.getMessages = async (req, res) => {
       .from("messages")
       .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url)")
       .eq("conversation_id", conversationId)
-      .eq("is_deleted", false)
-      .order("created_at", { ascending: false })
-      .limit(parseInt(limit));
+      .eq("is_deleted", false);
+
+      const cursorCreatedAt = after_created_at || after;
+      const cursorMessageId = after_id;
+
+      if (cursorCreatedAt) {
+        if (cursorMessageId) {
+          // Gate 1: Deterministic 2-tuple cursor (created_at > cursor) OR (created_at = cursor AND id > cursor_id)
+          query = query.or(`created_at.gt.${cursorCreatedAt},and(created_at.eq.${cursorCreatedAt},id.gt.${cursorMessageId})`).order("created_at", { ascending: true });
+        } else {
+          query = query.gt("created_at", cursorCreatedAt).order("created_at", { ascending: true });
+        }
+      } else {
+        query = query.order("created_at", { ascending: false });
+      }
+
+      query = query.limit(parseInt(limit));
 
       if (before) {
         query = query.lt("created_at", before);
