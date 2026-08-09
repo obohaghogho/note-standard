@@ -181,7 +181,10 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         }
 
         if (!registration) {
-            console.error(`[PushRecovery][${reason}] ❌ Service Worker never became ready after all retries. Aborting.`);
+            console.warn(`[PushRecovery][${reason}] ⚠️ Service Worker not ready immediately — scheduling async callback on ready.`);
+            navigator.serviceWorker.ready.then(() => {
+                _doSubscribe(`${reason}_SW_ASYNC`);
+            }).catch(() => {});
             return;
         }
 

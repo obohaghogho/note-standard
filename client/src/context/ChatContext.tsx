@@ -1145,6 +1145,34 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 });
             }
 
+            // ── BACKGROUND TAB SYSTEM NOTIFICATION ───────────────────────────
+            // When socket delivers a message while the tab is hidden/backgrounded,
+            // server-side push is suppressed because socket ACKed delivery.
+            // Trigger local system notification so the recipient gets a desktop banner.
+            if (!isOwnMessage && document.hidden) {
+                const senderName = msg.sender?.full_name || msg.sender?.username || 'Someone';
+                let previewText = msg.content || '';
+                if (msg.type === 'image') previewText = '📸 Sent an image';
+                else if (msg.type === 'audio') previewText = '🎤 Sent a voice message';
+                else if (!previewText && msg.attachment_id) previewText = '📎 Sent an attachment';
+
+                if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+                    if ('serviceWorker' in navigator) {
+                        navigator.serviceWorker.ready.then(reg => {
+                            if (reg && reg.showNotification) {
+                                reg.showNotification(senderName, {
+                                    body: previewText,
+                                    icon: '/logo192.png',
+                                    badge: '/logo192.png',
+                                    tag: `chat-${msg.conversation_id}`,
+                                    data: { url: `/dashboard/chat?id=${msg.conversation_id}` }
+                                } as NotificationOptions);
+                            }
+                        }).catch(() => {});
+                    }
+                }
+            }
+
             // ── Phase 3: Type-safe sequence & version gap deduplication ───────
             const seq = normalizeSequenceNumber(msg.sequence_number);
 
