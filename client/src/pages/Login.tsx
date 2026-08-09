@@ -16,7 +16,13 @@ export const Login = () => {
     const navigate = useNavigate();
     const { user, authReady } = useAuth();
     const [loading, setLoading] = React.useState(false);
-    const [isAddingAccount, setIsAddingAccount] = React.useState(false);
+    const [isAddingAccount, setIsAddingAccount] = React.useState(() => {
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('add_account') === 'true' || sessionStorage.getItem('notestandard_is_switching') === 'true';
+        }
+        return false;
+    });
     const [email, setEmail] = React.useState('');
     const [password, setPassword] = React.useState('');
     const [error, setError] = React.useState('');
@@ -28,7 +34,11 @@ export const Login = () => {
     const mountedRef = React.useRef(true);
 
     React.useEffect(() => {
-        if (authReady && user && !isAddingAccount) {
+        const params = new URLSearchParams(window.location.search);
+        const addAccountParam = params.get('add_account') === 'true';
+        const isSwitchingSession = sessionStorage.getItem('notestandard_is_switching') === 'true';
+
+        if (authReady && user && !isAddingAccount && !addAccountParam && !isSwitchingSession) {
             navigate('/dashboard', { replace: true });
         }
     }, [authReady, user, isAddingAccount, navigate]);
