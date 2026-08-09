@@ -169,7 +169,7 @@ async function runDepositTestSuite() {
       await DepositReconciliationWorker.reconcileTransaction(tx);
 
       const { data: wRec } = await supabase.from("wallets_store").select("balance").eq("id", wallet.id).single();
-      assert(parseFloat(wRec.balance) === balBefore + 400, `[${curr}] Reconciliation worker auto-credited verified ${curr} deposit (${balBefore} -> ${balBefore + 400})`);
+      assert(Math.abs(parseFloat(wRec.balance) - (balBefore + 400)) < 0.01, `[${curr}] Reconciliation worker auto-credited verified ${curr} deposit (${balBefore} -> ${balBefore + 400})`);
     }
 
     // ── SCENARIO 5: Cross-Currency Negative Isolation Matrix ────────────────

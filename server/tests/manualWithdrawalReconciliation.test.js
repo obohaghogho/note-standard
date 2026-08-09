@@ -226,7 +226,7 @@ async function runTestSuite() {
     assert(res3Second.alreadyReleased === true && res3Second.released === false, "Duplicate reversal request returned alreadyReleased = true without double refunding");
 
     const { data: w3Check } = await supabase.from("wallets_store").select("*").eq("id", wallet3.id).single();
-    assert(w3Check.available_balance === 50000, "Balance remains exactly 50,000 (0 double refunds)");
+    assert(parseFloat(w3Check.available_balance) === 50000, "Balance remains exactly 50,000 (0 double refunds)");
 
     // ── SCENARIO 4: User Closes App After Withdrawal Request ─────────────────
     console.log("\n--- Scenario 4: User Closes App After Request ---");
