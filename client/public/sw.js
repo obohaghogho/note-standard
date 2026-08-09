@@ -124,10 +124,18 @@ self.addEventListener('push', (event) => {
         // Fall back to the old API path for backwards compatibility.
         let deliveryUrl = options.data.deliveryWebhookUrl;
 
-        // If client is running locally on localhost, map remote production gateway URL to local gateway
-        if (typeof location !== 'undefined' && location.hostname === 'localhost') {
-            if (deliveryUrl && deliveryUrl.includes('realtime-gateway-gsb5.onrender.com')) {
-                deliveryUrl = deliveryUrl.replace('https://realtime-gateway-gsb5.onrender.com', 'http://localhost:3001');
+        // Dynamic origin detection for Service Worker delivery ACK
+        if (typeof self !== 'undefined' && self.location && self.location.hostname) {
+            const swHost = self.location.hostname;
+            const isLocalOrPrivateIP = swHost === 'localhost' ||
+                                       swHost === '127.0.0.1' ||
+                                       swHost.startsWith('192.168.') ||
+                                       swHost.startsWith('10.') ||
+                                       /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(swHost);
+
+            if (isLocalOrPrivateIP && options.data?.messageId) {
+                // Map deliveryUrl to the active local gateway running on port 3001 of the current host
+                deliveryUrl = `${self.location.protocol}//${swHost}:3001/deliver/${options.data.messageId}`;
             }
         }
 
