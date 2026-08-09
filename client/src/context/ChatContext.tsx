@@ -17,6 +17,7 @@ import { generateCorrelationId, trackCorrelation, completeCorrelation } from '..
 import { logger } from '../lib/logger';
 import { ChatBootKernel } from './ChatBootKernel';
 import { getDeviceId } from '../utils/deviceId';
+import { mergeMessageMonotonic, correlationRegistry, deriveStatusFromTimestamps, STATUS_RANK } from '../utils/messageStatusEngine';
 
 export interface Message {
     id: string;
@@ -1512,61 +1513,38 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }) => {
             if (!isMounted.current || (!messageId && !eventId) || !conversationId) return;
 
-            // 1. RECORD CACHE (Race condition fix)
-            const tickSet = messageId ? appliedTicksRef.current.get(messageId) : undefined;
-            const eventTickSet = eventId ? appliedTicksRef.current.get(eventId) : undefined;
-                
-            const nextSet = tickSet || eventTickSet || new Set<string>();
-            nextSet.add('delivered');
-            if (messageId) appliedTicksRef.current.set(messageId, nextSet);
-            if (eventId) appliedTicksRef.current.set(eventId, nextSet);
-            
-            // Bound map size to prevent memory leak in long-lived sessions
-            if (appliedTicksRef.current.size > 5000) {
-                const firstKey = appliedTicksRef.current.keys().next().value;
-                if (firstKey !== undefined) appliedTicksRef.current.delete(firstKey);
-            }
-
-            // 2. NOW TRY TO UPDATE UI
-            const currentMsgs = messagesRef.current[conversationId] || [];
-            const targetMsg = currentMsgs.find(m => (messageId && m.id === messageId) || (eventId && m.event_id === eventId));
-            const trackId = targetMsg?.id ?? messageId; // FIX 2: fall back to messageId if msg not yet in state
             const nowStr = delivered_at || deliveredAt || new Date().toISOString();
-            const targetMatchKeys = [messageId, eventId, trackId].filter(Boolean);
+
+            // Record ACK in correlation registry for early ACKs
+            if (messageId) correlationRegistry.recordEarlyAck(messageId, 'delivered', nowStr);
+            if (eventId) correlationRegistry.recordEarlyAck(eventId, 'delivered', nowStr);
+
+            const resolvedTempId = (messageId ? correlationRegistry.resolveTempId(messageId) : undefined) ||
+                                 (eventId ? correlationRegistry.resolveTempId(eventId) : undefined);
+
+            const targetMatchKeys = [messageId, eventId, resolvedTempId].filter(Boolean) as string[];
 
             setMessages(prev => {
                 const current = prev[conversationId] || [];
-                const hasMatch = current.some(m => targetMatchKeys.includes(m.id) || (m.event_id && targetMatchKeys.includes(m.event_id)));
-                
-                let updatedMsgs: Message[];
+                let hasMatch = false;
+
+                const updatedMsgs = current.map(m => {
+                    const isMatch = targetMatchKeys.includes(m.id) || (m.event_id && targetMatchKeys.includes(m.event_id));
+                    if (!isMatch) return m;
+                    hasMatch = true;
+                    return mergeMessageMonotonic(m, { delivered_at: nowStr, status: 'delivered' }, 'socket').merged;
+                });
+
                 if (!hasMatch) {
-                    // Fallback: If no exact ID match is found (e.g. optimistic message is still tempId),
-                    // upgrade the latest un-delivered sent message from the active user in this conversation.
-                    let updatedAny = false;
-                    updatedMsgs = [...current];
+                    // Fallback: If HTTP response has not arrived yet to map tempId -> messageId,
+                    // apply delivery status to the latest un-delivered message sent by active user.
                     for (let i = updatedMsgs.length - 1; i >= 0; i--) {
                         const m = updatedMsgs[i];
-                        if (m.sender_id === user?.id && !m.delivered_at && !m.read_at) {
-                            updatedMsgs[i] = {
-                                ...m,
-                                delivered_at: nowStr,
-                                status: (m.status === 'read' || m.read_at) ? 'read' : 'delivered'
-                            };
-                            updatedAny = true;
+                        if (m.sender_id === user?.id && (!m.delivered_at || m.status === 'sending' || m.status === 'sent') && !m.read_at) {
+                            updatedMsgs[i] = mergeMessageMonotonic(m, { delivered_at: nowStr, status: 'delivered' }, 'early_ack_reconciliation').merged;
                             break;
                         }
                     }
-                    if (!updatedAny) return prev;
-                } else {
-                    updatedMsgs = current.map(m => {
-                        const isMatch = targetMatchKeys.includes(m.id) || (m.event_id && targetMatchKeys.includes(m.event_id));
-                        if (!isMatch) return m;
-                        return {
-                            ...m,
-                            delivered_at: m.delivered_at || nowStr,
-                            status: (m.status === 'read' || m.read_at) ? 'read' : 'delivered'
-                        };
-                    });
                 }
 
                 const nextState = { ...prev, [conversationId]: updatedMsgs };
@@ -1578,18 +1556,14 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             setConversations(prev => {
                 const nextConvs = prev.map(c => {
                     if (c.id !== conversationId || !c.lastMessage) return c;
-                    const lm = c.lastMessage;
+                    const lm = c.lastMessage as Message;
                     const isMatch = targetMatchKeys.includes(lm.id) || 
                                     ('event_id' in lm && lm.event_id ? targetMatchKeys.includes(lm.event_id as string) : false) ||
                                     (lm.sender_id === user?.id && !lm.delivered_at && !lm.read_at);
                     if (!isMatch) return c;
                     return {
                         ...c,
-                        lastMessage: {
-                            ...lm,
-                            delivered_at: lm.delivered_at || nowStr,
-                            status: (lm.status === 'read' || lm.read_at) ? 'read' : 'delivered'
-                        }
+                        lastMessage: mergeMessageMonotonic(lm, { delivered_at: nowStr, status: 'delivered' }, 'socket').merged as Conversation['lastMessage']
                     };
                 });
                 conversationsRef.current = nextConvs;
