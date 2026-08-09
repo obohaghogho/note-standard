@@ -1583,18 +1583,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             if (mIds.length === 0 && eIds.length === 0) return;
 
             const nowStr = delivered_at || new Date().toISOString();
+            const processIds = [...mIds, ...eIds].filter(Boolean);
 
-            // Filter to IDs not yet upgraded
-            const processIds = [...mIds, ...eIds].filter(id => {
-                if (!id) return false;
-                const tickSet = appliedTicksRef.current.get(id);
-                if (tickSet?.has('delivered') || tickSet?.has('read')) return false;
-                const nextSet = tickSet || new Set<string>();
-                nextSet.add('delivered');
-                appliedTicksRef.current.set(id, nextSet);
-                return true;
-            });
-            if (processIds.length === 0) return;
+            processIds.forEach(id => correlationRegistry.recordEarlyAck(id, 'delivered', nowStr));
 
             setMessages(prev => {
                 const current = prev[conversationId] || [];
@@ -1602,17 +1593,16 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 return {
                     ...prev,
                     [conversationId]: current.map(m =>
-                        (processIds.includes(m.id) || (m.event_id && processIds.includes(m.event_id))) ? mergeMessageStatus(m, { delivered_at: nowStr, status: 'delivered' }) : m
+                        (processIds.includes(m.id) || (m.event_id && processIds.includes(m.event_id))) ? mergeMessageMonotonic(m, { delivered_at: nowStr, status: 'delivered' }, 'socket').merged : m
                     )
                 };
             });
-            // FIX 2 also applies here — update lastMessage unconditionally if it is in the batch
             setConversations(prev => prev.map(c => {
                 if (c.id !== conversationId || !c.lastMessage) return c;
-                const lm = c.lastMessage;
+                const lm = c.lastMessage as Message;
                 const isMatch = processIds.includes(lm.id) || ('event_id' in lm && lm.event_id ? processIds.includes(lm.event_id as string) : false);
                 if (!isMatch) return c;
-                return { ...c, lastMessage: mergeMessageStatus(c.lastMessage as Message, { delivered_at: nowStr, status: 'delivered' }) as Conversation['lastMessage'] };
+                return { ...c, lastMessage: mergeMessageMonotonic(lm, { delivered_at: nowStr, status: 'delivered' }, 'socket').merged as Conversation['lastMessage'] };
             }));
         };
 
@@ -1620,37 +1610,29 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         const onReadEvent = ({ messageId, conversationId }: { messageId: string; conversationId: string }) => {
             if (!isMounted.current || !messageId || !conversationId) return;
 
-            // Dedup gate: skip if already marked read
-            const tickSet = appliedTicksRef.current.get(messageId);
-            if (tickSet?.has('read')) return;
-            const nextSet = tickSet || new Set<string>();
-            nextSet.add('read');
-            nextSet.add('delivered'); // read implies delivered
-            appliedTicksRef.current.set(messageId, nextSet);
-            
-            // Also register against eventId if available in the existing message
-            const currentMsgs = messagesRef.current[conversationId] || [];
-            const targetMsg = currentMsgs.find(m => m.id === messageId);
-            if (targetMsg?.event_id) {
-                appliedTicksRef.current.set(targetMsg.event_id, nextSet);
-            }
-
             const nowStr = new Date().toISOString();
+            correlationRegistry.recordEarlyAck(messageId, 'read', nowStr, nowStr);
+
+            const resolvedTempId = correlationRegistry.resolveTempId(messageId);
+            const targetKeys = [messageId, resolvedTempId].filter(Boolean) as string[];
+
             setMessages(prev => {
                 const current = prev[conversationId] || [];
-                if (!current.some(m => m.id === messageId)) return prev;
-                return {
-                    ...prev,
-                    [conversationId]: current.map(m =>
-                        m.id === messageId ? mergeMessageStatus(m, { read_at: nowStr, delivered_at: nowStr, status: 'read' }) : m
-                    )
-                };
+                const updated = current.map(m => {
+                    const isMatch = targetKeys.includes(m.id) || (m.event_id && targetKeys.includes(m.event_id));
+                    if (!isMatch) return m;
+                    return mergeMessageMonotonic(m, { read_at: nowStr, delivered_at: nowStr, status: 'read' }, 'read').merged;
+                });
+                const nextState = { ...prev, [conversationId]: updated };
+                messagesRef.current = nextState;
+                return nextState;
             });
-            // FIX 2: Remove strict lastMessage.id gate — upgrade unconditionally if it's a match
             setConversations(prev => prev.map(c => {
                 if (c.id !== conversationId || !c.lastMessage) return c;
-                if (c.lastMessage.id !== messageId) return c;
-                return { ...c, lastMessage: mergeMessageStatus(c.lastMessage as Message, { read_at: nowStr, delivered_at: nowStr, status: 'read' }) as Conversation['lastMessage'] };
+                const lm = c.lastMessage as Message;
+                const isMatch = targetKeys.includes(lm.id) || ('event_id' in lm && lm.event_id ? targetKeys.includes(lm.event_id as string) : false);
+                if (!isMatch) return c;
+                return { ...c, lastMessage: mergeMessageMonotonic(lm, { read_at: nowStr, delivered_at: nowStr, status: 'read' }, 'read').merged as Conversation['lastMessage'] };
             }));
         };
 
@@ -1658,33 +1640,23 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         const onBatchReadEvent = ({ conversationId, messageIds }: { conversationId: string; messageIds: string[] }) => {
             if (!isMounted.current || !Array.isArray(messageIds) || messageIds.length === 0) return;
 
-            // Dedup gate: filter to only IDs not yet marked read
-            const newIds = messageIds.filter(id => {
-                const tickSet = appliedTicksRef.current.get(id);
-                if (tickSet?.has('read')) return false;
-                const nextSet = tickSet || new Set<string>();
-                nextSet.add('read');
-                nextSet.add('delivered');
-                appliedTicksRef.current.set(id, nextSet);
-                return true;
-            });
-            if (newIds.length === 0) return; // all already applied — skip entire state update
-
             const nowStr = new Date().toISOString();
+            messageIds.forEach(id => correlationRegistry.recordEarlyAck(id, 'read', nowStr, nowStr));
+
             setMessages(prev => {
                 const current = prev[conversationId] || [];
-                const hasAny = current.some(m => newIds.includes(m.id));
+                const hasAny = current.some(m => messageIds.includes(m.id));
                 if (!hasAny) return prev;
                 return {
                     ...prev,
                     [conversationId]: current.map(m =>
-                        newIds.includes(m.id) ? mergeMessageStatus(m, { read_at: nowStr, delivered_at: nowStr, status: 'read' }) : m
+                        messageIds.includes(m.id) ? mergeMessageMonotonic(m, { read_at: nowStr, delivered_at: nowStr, status: 'read' }, 'read').merged : m
                     )
                 };
             });
             setConversations(prev => prev.map(c => {
-                if (c.id === conversationId && c.lastMessage && newIds.includes(c.lastMessage.id)) {
-                    return { ...c, lastMessage: mergeMessageStatus(c.lastMessage as Message, { read_at: nowStr, delivered_at: nowStr, status: 'read' }) as Conversation['lastMessage'] };
+                if (c.id === conversationId && c.lastMessage && messageIds.includes(c.lastMessage.id)) {
+                    return { ...c, lastMessage: mergeMessageMonotonic(c.lastMessage as Message, { read_at: nowStr, delivered_at: nowStr, status: 'read' }, 'read').merged as Conversation['lastMessage'] };
                 }
                 return c;
             }));
@@ -1701,22 +1673,14 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 let changed = false;
                 const updated = current.map(m => {
                     if (m.sender_id !== user?.id) return m;
-                    if (m.read_at) return m; // already at higher state — skip
-                    // Dedup gate per-message
-                    const tickSet = appliedTicksRef.current.get(m.id);
-                    if (tickSet?.has('delivered') || tickSet?.has('read')) return m;
-                    const nextSet = tickSet || new Set<string>();
-                    nextSet.add('delivered');
-                    appliedTicksRef.current.set(m.id, nextSet);
                     changed = true;
-                    return mergeMessageStatus(m, { delivered_at: nowStr, status: 'delivered' });
+                    return mergeMessageMonotonic(m, { delivered_at: nowStr, status: 'delivered' }, 'socket').merged;
                 });
                 return changed ? { ...prev, [conversationId]: updated } : prev;
             });
-            // Also update lastMessage summary
             setConversations(prev => prev.map(c => {
-                if (c.id === conversationId && c.lastMessage?.sender_id === user?.id && !c.lastMessage?.read_at) {
-                    return { ...c, lastMessage: mergeMessageStatus(c.lastMessage as Message, { delivered_at: nowStr, status: 'delivered' }) as Conversation['lastMessage'] };
+                if (c.id === conversationId && c.lastMessage?.sender_id === user?.id) {
+                    return { ...c, lastMessage: mergeMessageMonotonic(c.lastMessage as Message, { delivered_at: nowStr, status: 'delivered' }, 'socket').merged as Conversation['lastMessage'] };
                 }
                 return c;
             }));
@@ -1727,41 +1691,31 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             if (!isMounted.current) return;
             if (readerId !== user?.id) {
                 const nowStr = readAt || new Date().toISOString();
-                // Update all of the current user's sent messages to 'read' via gate
                 setMessages(prev => {
                     const current = prev[conversationId] || [];
                     if (current.length === 0) return prev;
                     let changed = false;
                     const updated = current.map(m => {
                         if (m.sender_id !== user?.id) return m;
-                        // Dedup gate — skip if already at 'read'
-                        const tickSet = appliedTicksRef.current.get(m.id);
-                        if (tickSet?.has('read')) return m;
-                        const nextSet = tickSet || new Set<string>();
-                        nextSet.add('read');
-                        nextSet.add('delivered');
-                        appliedTicksRef.current.set(m.id, nextSet);
                         changed = true;
-                        return mergeMessageStatus(m, { read_at: nowStr, delivered_at: nowStr, status: 'read' });
+                        return mergeMessageMonotonic(m, { read_at: nowStr, delivered_at: nowStr, status: 'read' }, 'read').merged;
                     });
                     return changed ? { ...prev, [conversationId]: updated } : prev;
                 });
-                // Update lastMessage summary
                 setConversations(prev => prev.map(c => {
                     if (c.id === conversationId && c.lastMessage?.sender_id === user?.id) {
-                        return { ...c, lastMessage: mergeMessageStatus(c.lastMessage as Message, { read_at: readAt, delivered_at: readAt, status: 'read' }) as Conversation['lastMessage'] };
+                        return { ...c, lastMessage: mergeMessageMonotonic(c.lastMessage as Message, { read_at: readAt, delivered_at: readAt, status: 'read' }, 'read').merged as Conversation['lastMessage'] };
                     }
                     return c;
                 }));
             } else {
-                // Current user read from another device — clear unread count only
                 setConversations(prev => prev.map(c => {
                     if (c.id === conversationId) {
                         return {
                             ...c,
                             unreadCount: 0,
                             lastMessage: c.lastMessage && c.lastMessage.sender_id !== user?.id
-                                ? { ...c.lastMessage, read_at: readAt }
+                                ? mergeMessageMonotonic(c.lastMessage as Message, { read_at: readAt }, 'read').merged as Conversation['lastMessage']
                                 : c.lastMessage
                         };
                     }
