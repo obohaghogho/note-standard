@@ -1,5 +1,6 @@
 const supabase = require('../config/database');
 const logger = require('../utils/logger');
+const aiSupportEngine = require('./aiSupportEngine');
 
 class FeedbackService {
   /**
@@ -101,6 +102,31 @@ class FeedbackService {
           new_priority: report.priority,
           change_reason: 'Report submitted by user'
         }]);
+
+      // 5. Fire AI auto-reply asynchronously (non-blocking)
+      setImmediate(async () => {
+        try {
+          const aiReply = aiSupportEngine.generateAutoReply(report);
+          const { error: commentErr } = await supabase
+            .from('feedback_comments')
+            .insert([{
+              report_id: report.id,
+              author_id: null,      // null = AI / system agent
+              content: aiReply.content,
+              is_internal: false,
+              is_ai_reply: true,
+              ai_metadata: aiReply.metadata,
+              mentioned_user_ids: []
+            }]);
+          if (commentErr) {
+            logger.warn(`[FeedbackService] AI auto-reply insert failed: ${commentErr.message}`);
+          } else {
+            logger.info(`[FeedbackService] AI auto-reply posted for report ${report.id}`);
+          }
+        } catch (aiErr) {
+          logger.warn(`[FeedbackService] AI auto-reply generation error: ${aiErr.message}`);
+        }
+      });
 
       return report;
     } catch (err) {
@@ -249,6 +275,43 @@ class FeedbackService {
       .single();
 
     if (error) throw error;
+
+    // Fire AI follow-up reply asynchronously (only for user messages, not AI replies)
+    setImmediate(async () => {
+      try {
+        // Fetch the parent report for context
+        const { data: parentReport } = await supabase
+          .from('feedback_reports')
+          .select('id, category_id, title, description, priority')
+          .eq('id', reportId)
+          .single();
+
+        if (parentReport) {
+          const aiReply = aiSupportEngine.generateFollowUpReply(content, parentReport);
+          if (aiReply) {
+            const { error: aiErr } = await supabase
+              .from('feedback_comments')
+              .insert([{
+                report_id: reportId,
+                author_id: null,
+                content: aiReply.content,
+                is_internal: false,
+                is_ai_reply: true,
+                ai_metadata: aiReply.metadata,
+                mentioned_user_ids: []
+              }]);
+            if (aiErr) {
+              logger.warn(`[FeedbackService] AI follow-up insert failed: ${aiErr.message}`);
+            } else {
+              logger.info(`[FeedbackService] AI follow-up posted for report ${reportId}`);
+            }
+          }
+        }
+      } catch (aiErr) {
+        logger.warn(`[FeedbackService] AI follow-up error: ${aiErr.message}`);
+      }
+    });
+
     return comment;
   }
 

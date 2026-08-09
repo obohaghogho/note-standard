@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Sparkles, 
   CheckCircle2, 
@@ -7,13 +7,25 @@ import {
   RefreshCw, 
   Send,
   Loader2,
-  MessageSquare
+  MessageSquare,
+  Bot
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabaseSafe';
 import type { FeedbackReport } from '../../types/feedback';
 import { useFeedbackStore } from '../../stores/useFeedbackStore';
+
+interface FeedbackComment {
+  id: string;
+  report_id: string;
+  author_id: string | null;
+  content: string;
+  is_internal: boolean;
+  is_ai_reply: boolean;
+  ai_metadata?: Record<string, unknown>;
+  created_at: string;
+}
 
 export const UserIssueTracker: React.FC = () => {
   const { user } = useAuth();
@@ -25,6 +37,11 @@ export const UserIssueTracker: React.FC = () => {
   const [selectedReport, setSelectedReport] = useState<FeedbackReport | null>(null);
   const [replyInput, setReplyInput] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
+
+  // Comments state
+  const [comments, setComments] = useState<FeedbackComment[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const commentsEndRef = useRef<HTMLDivElement>(null);
 
   const fetchUserReports = useCallback(async () => {
     setLoading(true);
@@ -58,6 +75,7 @@ export const UserIssueTracker: React.FC = () => {
           fixed_in_version?: string;
           resolution_notes?: string;
           admin_notes?: string;
+          ai_response?: string;
           created_at: string;
         }) => ({
           id: item.id,
@@ -86,9 +104,76 @@ export const UserIssueTracker: React.FC = () => {
     }
   }, [user, setUserReports]);
 
+  // Fetch comments for a specific report
+  const fetchComments = useCallback(async (reportId: string) => {
+    setLoadingComments(true);
+    try {
+      // Try feedback_comments table (for reports submitted via API)
+      const { data: commentsData } = await supabase
+        .from('feedback_comments')
+        .select('*')
+        .eq('report_id', reportId)
+        .eq('is_internal', false)
+        .order('created_at', { ascending: true });
+
+      setComments(commentsData || []);
+    } catch (err) {
+      console.warn('[UserIssueTracker] Comments fetch error:', err);
+      setComments([]);
+    } finally {
+      setLoadingComments(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchUserReports();
   }, [fetchUserReports]);
+
+  // Fetch comments when a report is selected
+  useEffect(() => {
+    if (selectedReport) {
+      fetchComments(selectedReport.id);
+    } else {
+      setComments([]);
+    }
+  }, [selectedReport, fetchComments]);
+
+  // Scroll to bottom of comments on new message
+  useEffect(() => {
+    commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [comments]);
+
+  // Realtime subscription to new comments for the selected report
+  useEffect(() => {
+    if (!selectedReport) return;
+
+    const channel = supabase
+      .channel(`feedback_comments_${selectedReport.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'feedback_comments',
+          filter: `report_id=eq.${selectedReport.id}`,
+        },
+        (payload) => {
+          const newComment = payload.new as FeedbackComment;
+          if (!newComment.is_internal) {
+            setComments(prev => {
+              // Avoid duplicates
+              if (prev.find(c => c.id === newComment.id)) return prev;
+              return [...prev, newComment];
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedReport]);
 
   const handleVote = async (reportId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -106,18 +191,35 @@ export const UserIssueTracker: React.FC = () => {
     if (!replyInput.trim() || !selectedReport) return;
     setIsSubmittingReply(true);
 
+    const optimisticComment: FeedbackComment = {
+      id: `optimistic-${Date.now()}`,
+      report_id: selectedReport.id,
+      author_id: user?.id || null,
+      content: replyInput.trim(),
+      is_internal: false,
+      is_ai_reply: false,
+      created_at: new Date().toISOString(),
+    };
+
+    // Optimistically add user's comment to UI immediately
+    setComments(prev => [...prev, optimisticComment]);
+    const inputSnapshot = replyInput.trim();
+    setReplyInput('');
+
     try {
       const { error } = await supabase.from('feedback_comments').insert([{
         report_id: selectedReport.id,
         author_id: user?.id,
-        content: replyInput.trim(),
+        content: inputSnapshot,
         is_internal: false
       }]);
 
       if (error) throw error;
-      toast.success('Reply sent to support & developer team');
-      setReplyInput('');
+      toast.success('Reply sent — AI support will respond shortly');
     } catch (err: unknown) {
+      // Remove optimistic comment on error
+      setComments(prev => prev.filter(c => c.id !== optimisticComment.id));
+      setReplyInput(inputSnapshot);
       const msg = err instanceof Error ? err.message : String(err);
       toast.error('Failed to send reply: ' + msg);
     } finally {
@@ -308,11 +410,66 @@ export const UserIssueTracker: React.FC = () => {
                 </div>
               )}
 
-              {/* Developer - User Communication Thread */}
+              {/* Developer & AI Support Comment Thread */}
               <div>
-                <span className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold block mb-2">
-                  Developer & Support Replies
+                <span className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold block mb-3">
+                  Support Conversation
                 </span>
+
+                {/* Comments List */}
+                <div className="space-y-3 max-h-64 overflow-y-auto pr-1 mb-3">
+                  {loadingComments ? (
+                    <div className="flex items-center justify-center py-6">
+                      <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+                      <span className="ml-2 text-xs text-slate-400">Loading conversation...</span>
+                    </div>
+                  ) : comments.length === 0 ? (
+                    <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/50 text-center">
+                      <Bot className="w-5 h-5 mx-auto text-teal-400 mb-1.5" />
+                      <p className="text-xs text-slate-400">AI Support is processing your report...</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">A response will appear here shortly.</p>
+                    </div>
+                  ) : (
+                    comments.map((comment) => (
+                      <div key={comment.id} className={`flex gap-2.5 ${
+                        comment.is_ai_reply ? 'flex-row' : 'flex-row-reverse'
+                      }`}>
+                        {/* Avatar */}
+                        <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                          comment.is_ai_reply
+                            ? 'bg-teal-500/20 border border-teal-500/40 text-teal-300'
+                            : 'bg-amber-500/20 border border-amber-500/40 text-amber-300'
+                        }`}>
+                          {comment.is_ai_reply ? <Bot className="w-3.5 h-3.5" /> : 'YOU'}
+                        </div>
+
+                        {/* Bubble */}
+                        <div className={`flex flex-col gap-1 max-w-[85%] ${
+                          comment.is_ai_reply ? 'items-start' : 'items-end'
+                        }`}>
+                          <div className="flex items-center gap-1.5">
+                            {comment.is_ai_reply && (
+                              <span className="text-[10px] font-semibold text-teal-400">NoteStandard AI</span>
+                            )}
+                            <span className="text-[10px] text-slate-500">
+                              {new Date(comment.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <div className={`px-3 py-2.5 rounded-2xl text-xs leading-relaxed whitespace-pre-wrap ${
+                            comment.is_ai_reply
+                              ? 'bg-teal-500/10 border border-teal-500/20 text-teal-100 rounded-tl-none'
+                              : 'bg-amber-500/10 border border-amber-500/20 text-amber-100 rounded-tr-none'
+                          }`}>
+                            {comment.content}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  <div ref={commentsEndRef} />
+                </div>
+
+                {/* Reply Input */}
                 <form onSubmit={handleSendReply} className="flex gap-2">
                   <input
                     type="text"
