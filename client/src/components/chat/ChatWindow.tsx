@@ -245,6 +245,7 @@ const ChatWindow: React.FC = () => {
     // ── SCROLL ENGINE INTEGRATION ──────────────────────────────
     // Tracks whether initial scroll-to-bottom has completed for a conversation room
     const initialScrollDoneRef = useRef<Record<string, boolean>>({});
+    const lastScrolledMsgIdRef = useRef<Record<string, string>>({});
 
     // Reset scroll flag when switching active conversations
     useEffect(() => {
@@ -260,26 +261,45 @@ const ChatWindow: React.FC = () => {
             setSearchQuery('');
             setSearchResults([]);
             setShowEmojiPicker(false);
+            initialScrollDoneRef.current[activeConversationId] = false;
+            handleConversationSwitch();
         }
-    }, [activeConversationId, drafts]);
+    }, [activeConversationId, drafts, handleConversationSwitch]);
 
-    // GUARANTEED INITIAL SCROLL TO BOTTOM (Fixes Account Switch & Room Open starting at top)
-    // Runs as soon as activeConversation & scrollContainerRef are mounted into DOM with messages.
+    // GUARANTEED INITIAL SCROLL TO BOTTOM ON ROOM OPEN & MESSAGE LOAD (WhatsApp style)
+    // Ensures that when opening a room or when the full message batch finishes loading,
+    // the chat container scrolls all the way down so the last message is right above the input bar.
     useLayoutEffect(() => {
         if (!activeConversationId || !scrollContainerRef.current || !activeConversation) return;
 
-        const isScrollDone = initialScrollDoneRef.current[activeConversationId];
-        if (!isScrollDone && currentMessages.length > 0) {
-            initialScrollDoneRef.current[activeConversationId] = true;
-            scrollToBottom('instant');
-            // Double rAF ensures layout calculations and media/wallpaper bounding boxes settle
-            requestAnimationFrame(() => {
+        if (currentMessages.length > 0) {
+            const lastMsg = currentMessages[currentMessages.length - 1];
+            const lastMsgId = lastMsg?.event_id || lastMsg?.id || '';
+            const isScrollDone = initialScrollDoneRef.current[activeConversationId];
+            const prevLastMsgId = lastScrolledMsgIdRef.current[activeConversationId];
+
+            if (!isScrollDone || (lastMsgId && prevLastMsgId !== lastMsgId)) {
+                initialScrollDoneRef.current[activeConversationId] = true;
+                lastScrolledMsgIdRef.current[activeConversationId] = lastMsgId;
+                
+                scrollToBottom('instant');
+
+                const t1 = setTimeout(() => scrollToBottom('instant'), 50);
+                const t2 = setTimeout(() => scrollToBottom('instant'), 150);
+
                 requestAnimationFrame(() => {
-                    scrollToBottom('instant');
+                    requestAnimationFrame(() => {
+                        scrollToBottom('instant');
+                    });
                 });
-            });
+
+                return () => {
+                    clearTimeout(t1);
+                    clearTimeout(t2);
+                };
+            }
         }
-    }, [activeConversationId, activeConversation, currentMessages.length, scrollToBottom]);
+    }, [activeConversationId, activeConversation, currentMessages, scrollToBottom]);
 
     // AUTO-SCROLL ON NEW INCOMING MESSAGES (Fixes Double-Click / Flicker)
     // Uses handleNewIncomingMessage which checks isNearBottom internally before smooth scrolling.
