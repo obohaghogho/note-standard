@@ -1031,7 +1031,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     useEffect(() => {
         const handleSWMessage = (event: MessageEvent) => {
             if (event.data?.type === 'CHAT_MESSAGE_RECEIVED' || event.data?.type === 'BACKGROUND_PREFETCH') {
-                const { conversationId } = event.data;
+                const { conversationId, message } = event.data;
                 if (conversationId) {
                     console.log(`[SW→Chat] ${event.data.type} | conv:${conversationId} → refreshing messages`);
                     // iOS FIX: When iOS suspends the WebSocket, push notifications can arrive
@@ -1043,6 +1043,41 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     
                     if (event.data.type === 'CHAT_MESSAGE_RECEIVED') {
                         markConversationReadRef.current(conversationId);
+                    }
+
+                    // Fallback Toast for BACKGROUND_PREFETCH if the OS notification is suppressed by Chrome
+                    if (event.data.type === 'BACKGROUND_PREFETCH' && message) {
+                        const isCurrentlyOpen = document.visibilityState === 'visible' && activeConversationIdRef.current === conversationId;
+                        if (!isCurrentlyOpen) {
+                            toast((t) => (
+                                <div 
+                                    className="flex items-center gap-3 cursor-pointer w-full"
+                                    onClick={() => {
+                                        toast.dismiss(t.id);
+                                    }}
+                                >
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-semibold text-gray-900 truncate">
+                                            {message.senderName || 'Someone'}
+                                        </p>
+                                        <p className="text-sm text-gray-500 truncate">
+                                            {message.content || 'New message'}
+                                        </p>
+                                    </div>
+                                </div>
+                            ), { 
+                                position: 'top-center',
+                                duration: 4000,
+                                style: {
+                                    background: '#fff',
+                                    color: '#363636',
+                                    padding: '12px',
+                                    borderRadius: '12px',
+                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                                    border: '1px solid rgba(0,0,0,0.05)',
+                                }
+                            });
+                        }
                     }
                 }
             }

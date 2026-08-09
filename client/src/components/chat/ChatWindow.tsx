@@ -63,21 +63,21 @@ const ChatWindow: React.FC = () => {
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
     const [replyTo, setReplyTo] = useState<{ id: string; content: string; sender_id: string; type?: string; attachment?: { id: string; file_name: string; file_type: string; file_size: number; storage_path: string; metadata: Record<string, unknown> } } | null>(null);
 
-    const toggleMessageSelection = (msgId: string) => {
+    const toggleMessageSelection = useCallback((msgId: string) => {
         setSelectedMessages(prev => {
             const next = new Set(prev);
             if (next.has(msgId)) next.delete(msgId);
             else next.add(msgId);
             return next;
         });
-    };
+    }, []);
 
-    const clearSelection = () => setSelectedMessages(new Set());
+    const clearSelection = useCallback(() => setSelectedMessages(new Set()), []);
 
     // Gesture hook — scroll wins, long-press only after 480ms of no movement
-    const gesture = useChatGesture({
-        onLongPress: (id) => toggleMessageSelection(id),
-        onSwipeRight: (id) => {
+    const gestureOptions = useMemo(() => ({
+        onLongPress: (id: string) => toggleMessageSelection(id),
+        onSwipeRight: (id: string) => {
             const msg = currentMessages.find(m => m.id === id);
             if (msg) {
                 setReplyTo({
@@ -92,7 +92,9 @@ const ChatWindow: React.FC = () => {
         moveThreshold: 8,
         delay: 480,
         enabled: true,
-    });
+    }), [currentMessages, toggleMessageSelection]);
+    
+    const gesture = useChatGesture(gestureOptions);
 
     // Copy to clipboard
     const handleCopy = async () => {
@@ -374,7 +376,7 @@ const ChatWindow: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [messageIdsKey, activeConversationId, preferredLanguage, user?.id, session?.access_token]);
 
-    const handleManualTranslate = async (msgId: string, content: string, sourceLang?: string) => {
+    const handleManualTranslate = useCallback(async (msgId: string, content: string, sourceLang?: string) => {
         if (!preferredLanguage || !session?.access_token) return;
         
         try {
@@ -402,9 +404,9 @@ const ChatWindow: React.FC = () => {
         } catch {
             setTranslations(prev => ({ ...prev, [msgId]: '[Translation Error]' }));
         }
-    };
+    }, [preferredLanguage, session?.access_token]);
 
-    const handleReport = async (msgId: string, original: string, translated?: string) => {
+    const handleReport = useCallback(async (msgId: string, original: string, translated?: string) => {
         try {
             await fetch(`${API_URL}/api/chat/report-translation`, {
                 method: 'POST',
@@ -424,7 +426,7 @@ const ChatWindow: React.FC = () => {
         } catch {
             toast.error('Failed to send report');
         }
-    };
+    }, [preferredLanguage, session?.access_token]);
 
     useEffect(() => {
         if (!searchQuery.trim() || !isSearchOpen) {
@@ -593,6 +595,10 @@ const ChatWindow: React.FC = () => {
         }
     };
 
+    const handlePreviewMedia = useCallback((data: { url: string; type: 'image' | 'video'; fileName?: string; isSender?: boolean }) => {
+        setPreviewMedia({ ...data, isOpen: true });
+    }, [setPreviewMedia]);
+
     const otherUserTitle = activeConversation?.type === 'direct' && otherMember 
         ? (otherMember.profile?.full_name || otherMember.profile?.username || 'User')
         : 'Chat';
@@ -697,11 +703,11 @@ const ChatWindow: React.FC = () => {
 
     // isSameSender is inlined into Virtuoso itemContent for chronological array
 
-    const getSenderName = (senderId: string) => {
+    const getSenderName = useCallback((senderId: string) => {
         if (senderId === user?.id) return 'You';
         const member = activeConversation?.members.find(m => m.user_id === senderId);
         return member?.profile?.username || member?.profile?.full_name || 'Member';
-    };
+    }, [user?.id, activeConversation?.members]);
 
     if (!activeConversationId) {
         return (
@@ -1094,7 +1100,7 @@ const ChatWindow: React.FC = () => {
                                                 handleReport={handleReport}
                                                 handleManualTranslate={handleManualTranslate}
                                                 fetchSignedUrl={fetchSignedUrl}
-                                                setPreviewMedia={(data) => setPreviewMedia({ ...data, isOpen: true })}
+                                                setPreviewMedia={handlePreviewMedia}
                                                 onMediaLoad={handleMediaLoad}
                                             />
                                         );

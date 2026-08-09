@@ -246,7 +246,12 @@ self.addEventListener('push', (event) => {
                         windowClients.forEach(client => {
                             client.postMessage({
                                 type: 'BACKGROUND_PREFETCH',
-                                conversationId: notifConversationId
+                                conversationId: notifConversationId,
+                                message: {
+                                    id: options.data?.messageId,
+                                    content: body,
+                                    senderName: title
+                                }
                             });
                         });
 
