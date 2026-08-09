@@ -1921,186 +1921,228 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, []);
 
     const flushQueue = useCallback(async () => {
-        // ── CRITICAL FIX: Decouple message persistence from WebSocket connectivity ──
-        // The HTTP POST to /messages must NOT wait for the realtime socket to connect.
-        // The socket is only needed for live push notifications to OTHER users.
-        // If we gate delivery on `connected`, messages never reach the server when
-        // the gateway is sleeping (Render free tier), causing silent data loss.
-        if (!session || !user) return;
-        // Use refs so we always have the latest IDs without stale closures
-        const currentDeviceId = deviceIdRef.current;
-        const currentSessionId = sessionIdRef.current;
-        if (!currentDeviceId || !currentSessionId) return;
-        
-        const rawIntents = await offlineQueue.getPendingIntents();
-        if (rawIntents.length === 0) return;
-        // FIFO guarantee: always flush oldest intent first to preserve message ordering
-        const intents = [...rawIntents].sort((a, b) => a.created_at - b.created_at);
+        return offlineQueue.runSingleFlight(async () => {
+            if (!session || !user) return;
+            const currentDeviceId = deviceIdRef.current;
+            const currentSessionId = sessionIdRef.current;
+            if (!currentDeviceId || !currentSessionId) return;
+            
+            const rawIntents = await offlineQueue.getPendingIntents();
+            if (rawIntents.length === 0) return;
+            const intents = [...rawIntents].sort((a, b) => a.created_at - b.created_at);
 
-        for (const intent of intents) {
-            if (intent.status === 'sending' || intent.attempts >= 3) continue;
+            for (const intent of intents) {
+                // Check backoff delay
+                const now = Date.now();
+                if (intent.next_retry_at && intent.next_retry_at > now) continue;
 
-            await offlineQueue.updateIntentStatus(intent.event_id, 'sending');
+                await offlineQueue.updateIntentStatus(intent.event_id, 'sending');
 
-            try {
-                // Phase 5.5: Lease Barrier
-                await ensureLeaseOwnership(
-                    intent.conversation_id, 
-                    currentSessionId, 
-                    currentDeviceId, 
-                    api, 
-                    (cid: string) => leases[cid], 
-                    markLeaseClaimEnd // Optional UI sync
-                );
+                try {
+                    await ensureLeaseOwnership(
+                        intent.conversation_id, 
+                        currentSessionId, 
+                        currentDeviceId, 
+                        api, 
+                        (cid: string) => leases[cid], 
+                        markLeaseClaimEnd
+                    );
 
-                if (intent.payload.correlationId) {
-                    logger.debug('API', 'Flushing message intent', { correlationId: intent.payload.correlationId, eventId: intent.event_id });
-                }
-                const res = await api.post(`/chat/conversations/${intent.conversation_id}/messages`, {
-                    content: intent.payload.content,
-                    type: intent.payload.type,
-                    attachmentId: intent.payload.attachmentId,
-                    replyToId: intent.payload.replyTo?.id,
-                    eventId: intent.event_id,
-                    deviceId: currentDeviceId,
-                    sessionId: currentSessionId,
-                    clientSendTs: intent.payload.clientSendTs || intent.created_at
-                }, {
-                    headers: intent.payload.correlationId ? { 'X-Correlation-ID': intent.payload.correlationId } : undefined
-                });
-                
-                if (intent.payload.correlationId) {
-                    completeCorrelation(intent.payload.correlationId);
-                }
-
-                // Canonical backend collapse
-                const backendMsg = res.data.message || res.data;
-                let canonicalMessage: Message = { ...backendMsg, isOwn: true, status: 'sent' };
-
-                // HIERARCHICAL STATUS VALIDATION (Fixes the status downgrade race condition)
-                // If a lightning-fast delivery ACK arrived via Socket while the HTTP POST was in-flight,
-                // do not let this HTTP 'sent' response downgrade the state.
-                const tickSetById = appliedTicksRef.current.get(canonicalMessage.id);
-                const tickSetByEventId = appliedTicksRef.current.get(intent.event_id);
-                if (tickSetById?.has('read') || tickSetByEventId?.has('read')) {
-                    canonicalMessage.status = 'read';
-                    canonicalMessage.read_at = canonicalMessage.read_at || new Date().toISOString();
-                    canonicalMessage.delivered_at = canonicalMessage.delivered_at || canonicalMessage.read_at;
-                } else if (tickSetById?.has('delivered') || tickSetByEventId?.has('delivered')) {
-                    canonicalMessage.status = 'delivered';
-                    canonicalMessage.delivered_at = canonicalMessage.delivered_at || new Date().toISOString();
-                }
-
-                // Guard: if the server didn't return a populated reply_to (FK join failed,
-                // schema cache miss, or non-transactional path) but this intent had a
-                // replyTo snapshot, fall back to the reply_to we already stored.
-                // This prevents the reply bubble from disappearing on confirmation.
-                if (intent.payload.replyTo && !canonicalMessage.reply_to) {
-                    canonicalMessage = { ...canonicalMessage, reply_to: { 
-                        id: intent.payload.replyTo.id,
-                        content: intent.payload.replyTo.content ?? '',
-                        sender_id: intent.payload.replyTo.sender_id ?? '',
-                        type: intent.payload.replyTo.type ?? 'text'
-                    } };
-                }
-
-                // Pre-register in dedup buffer BEFORE setMessages so that when the
-                // gateway echo of this message arrives it is dropped cleanly.
-                // We register both the canonical server id and the event_id so any
-                // variation of the echo key is covered.
-                if (canonicalMessage.id && !canonicalMessage.id.startsWith('temp-')) {
-                    processedEventIdsRef.current.add(`id:${canonicalMessage.id}`);
-                }
-                if (canonicalMessage.event_id) {
-                    processedEventIdsRef.current.add(`evt:${canonicalMessage.event_id}`);
-                }
-                // Also register the intent's client event_id for composite coverage
-                processedEventIdsRef.current.add(`evt:${intent.event_id}`);
-
-                if (import.meta.env.DEV) {
-                    console.log('[SYNC_FORENSICS]', {
-                        stage: 'flushQueue',
-                        event: 'offline_queue_sync',
-                        messageId: canonicalMessage.id,
-                        eventId: intent.event_id,
-                        incomingReplyTo: canonicalMessage.reply_to,
-                        intentReplyTo: intent.payload.replyTo,
-                        payload: canonicalMessage,
-                    });
-                }
-
-                setMessages(prev => {
-                    const current = prev[intent.conversation_id] || [];
-                    const merged = stableMerge(current, [canonicalMessage]);
-                    return { ...prev, [intent.conversation_id]: merged as Message[] };
-                });
-
-                // Phase 4: Explicit Local Sync
-                // Since the gateway purposefully excludes the sender from the broadcast
-                // to prevent echo duplication, we must manually update the chat preview here.
-                setConversations(cPrev => cPrev.map(conv => {
-                    if (conv.id !== intent.conversation_id) return conv;
-                    
-                    const existingLastMsgTime = new Date(conv.lastMessage?.created_at ?? 0).getTime();
-                    const newMsgTime = new Date(canonicalMessage.created_at).getTime();
-                    
-                    if (newMsgTime >= (existingLastMsgTime - 300000)) {
-                        return {
-                            ...conv,
-                            updated_at: canonicalMessage.created_at,
-                            last_message: { 
-                                id: canonicalMessage.id, 
-                                content: canonicalMessage.content, 
-                                sender_id: canonicalMessage.sender_id, 
-                                created_at: canonicalMessage.created_at,
-                                type: canonicalMessage.type,
-                                status: canonicalMessage.status,
-                                delivered_at: canonicalMessage.delivered_at,
-                                read_at: canonicalMessage.read_at
-                            },
-                            lastMessage: { 
-                                id: canonicalMessage.id, 
-                                event_id: intent.event_id,
-                                content: canonicalMessage.content, 
-                                sender_id: canonicalMessage.sender_id, 
-                                created_at: canonicalMessage.created_at,
-                                type: canonicalMessage.type,
-                                status: canonicalMessage.status,
-                                delivered_at: canonicalMessage.delivered_at,
-                                read_at: canonicalMessage.read_at
-                            } as NonNullable<Conversation['lastMessage']>
-                        };
+                    if (intent.payload.correlationId) {
+                        logger.debug('API', 'Flushing message intent', { correlationId: intent.payload.correlationId, eventId: intent.event_id });
                     }
-                    return conv;
-                }).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()));
+                    const res = await api.post(`/chat/conversations/${intent.conversation_id}/messages`, {
+                        content: intent.payload.content,
+                        type: intent.payload.type,
+                        attachmentId: intent.payload.attachmentId,
+                        replyToId: intent.payload.replyTo?.id,
+                        eventId: intent.event_id,
+                        deviceId: currentDeviceId,
+                        sessionId: currentSessionId,
+                        clientSendTs: intent.payload.clientSendTs || intent.created_at
+                    }, {
+                        headers: intent.payload.correlationId ? { 'X-Correlation-ID': intent.payload.correlationId } : undefined
+                    });
+                    
+                    if (intent.payload.correlationId) {
+                        completeCorrelation(intent.payload.correlationId);
+                    }
 
-                await offlineQueue.removeIntent(intent.event_id);
-            } catch (err) {
-                console.error('[ChatContext] Failed to flush intent', intent.event_id, err);
-                await offlineQueue.updateIntentStatus(intent.event_id, 'failed');
-                // Revert optimistic UI status to failed
-                setMessages(prev => {
-                    const current = prev[intent.conversation_id] || [];
-                    return {
-                        ...prev,
-                        [intent.conversation_id]: current.map(m => m.id === intent.event_id || m.event_id === intent.event_id ? { ...m, status: 'failed' } : m)
-                    };
+                    const backendMsg = res.data.message || res.data;
+                    let canonicalMessage: Message = { ...backendMsg, isOwn: true, status: 'sent' };
+
+                    const tickSetById = appliedTicksRef.current.get(canonicalMessage.id);
+                    const tickSetByEventId = appliedTicksRef.current.get(intent.event_id);
+                    if (tickSetById?.has('read') || tickSetByEventId?.has('read')) {
+                        canonicalMessage.status = 'read';
+                        canonicalMessage.read_at = canonicalMessage.read_at || new Date().toISOString();
+                        canonicalMessage.delivered_at = canonicalMessage.delivered_at || canonicalMessage.read_at;
+                    } else if (tickSetById?.has('delivered') || tickSetByEventId?.has('delivered')) {
+                        canonicalMessage.status = 'delivered';
+                        canonicalMessage.delivered_at = canonicalMessage.delivered_at || new Date().toISOString();
+                    }
+
+                    if (intent.payload.replyTo && !canonicalMessage.reply_to) {
+                        canonicalMessage = { ...canonicalMessage, reply_to: { 
+                            id: intent.payload.replyTo.id,
+                            content: intent.payload.replyTo.content ?? '',
+                            sender_id: intent.payload.replyTo.sender_id ?? '',
+                            type: intent.payload.replyTo.type ?? 'text'
+                        } };
+                    }
+
+                    if (canonicalMessage.id && !canonicalMessage.id.startsWith('temp-')) {
+                        processedEventIdsRef.current.add(`id:${canonicalMessage.id}`);
+                    }
+                    if (canonicalMessage.event_id) {
+                        processedEventIdsRef.current.add(`evt:${canonicalMessage.event_id}`);
+                    }
+                    processedEventIdsRef.current.add(`evt:${intent.event_id}`);
+
+                    setMessages(prev => {
+                        const current = prev[intent.conversation_id] || [];
+                        const { merged } = mergeMessages(current, [canonicalMessage]);
+                        return { ...prev, [intent.conversation_id]: merged as Message[] };
+                    });
+
+                    setConversations(cPrev => cPrev.map(conv => {
+                        if (conv.id !== intent.conversation_id) return conv;
+                        const existingLastMsgTime = new Date(conv.lastMessage?.created_at ?? 0).getTime();
+                        const newMsgTime = new Date(canonicalMessage.created_at).getTime();
+                        if (newMsgTime >= (existingLastMsgTime - 300000)) {
+                            return {
+                                ...conv,
+                                updated_at: canonicalMessage.created_at,
+                                last_message: { 
+                                    id: canonicalMessage.id, 
+                                    content: canonicalMessage.content, 
+                                    sender_id: canonicalMessage.sender_id, 
+                                    created_at: canonicalMessage.created_at,
+                                    type: canonicalMessage.type,
+                                    status: canonicalMessage.status,
+                                    delivered_at: canonicalMessage.delivered_at,
+                                    read_at: canonicalMessage.read_at
+                                },
+                                lastMessage: { 
+                                    id: canonicalMessage.id, 
+                                    event_id: intent.event_id,
+                                    content: canonicalMessage.content, 
+                                    sender_id: canonicalMessage.sender_id, 
+                                    created_at: canonicalMessage.created_at,
+                                    type: canonicalMessage.type,
+                                    status: canonicalMessage.status,
+                                    delivered_at: canonicalMessage.delivered_at,
+                                    read_at: canonicalMessage.read_at
+                                } as NonNullable<Conversation['lastMessage']>
+                            };
+                        }
+                        return conv;
+                    }).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()));
+
+                    await offlineQueue.updateIntentStatus(intent.event_id, 'synced', canonicalMessage.id);
+                    await offlineQueue.removeIntent(intent.event_id);
+                } catch (err: any) {
+                    const isNetworkErr = !err.response || err.message === 'Network Error' || err.code === 'ECONNABORTED';
+                    if (isNetworkErr || (err.response && err.response.status >= 500)) {
+                        console.warn('[ChatContext] Transient network/server error during flush, placing intent in retry_wait', intent.event_id);
+                        await offlineQueue.updateIntentStatus(intent.event_id, 'retry_wait');
+                    } else {
+                        console.error('[ChatContext] Terminal error flushing intent', intent.event_id, err);
+                        await offlineQueue.updateIntentStatus(intent.event_id, 'failed');
+                        setMessages(prev => {
+                            const current = prev[intent.conversation_id] || [];
+                            return {
+                                ...prev,
+                                [intent.conversation_id]: current.map(m => (m.id === intent.event_id || m.event_id === intent.event_id || m.id === intent.client_message_id) ? { ...m, status: 'failed' } : m)
+                            };
+                        });
+                    }
+                }
+            }
+        });
+    }, [session, user, offlineQueue, leases, markLeaseClaimEnd]);
+
+    // Boot Hydration & Outbox Processing
+    useEffect(() => {
+        if (!session || !user) return;
+        
+        // Boot Hydration: Load persisted offline queue intents into optimistic UI state
+        offlineQueue.getAllIntents().then(intents => {
+            if (intents.length === 0) return;
+            setMessages(prev => {
+                let next = { ...prev };
+                intents.forEach(intent => {
+                    const cid = intent.conversation_id;
+                    const current = next[cid] || [];
+                    const tempId = intent.client_message_id || intent.event_id;
+                    if (!current.some(m => m.id === tempId || m.event_id === intent.event_id)) {
+                        const optMsg: Message = {
+                            id: tempId,
+                            event_id: intent.event_id,
+                            conversation_id: cid,
+                            sender_id: user.id,
+                            content: intent.payload.content,
+                            created_at: new Date(intent.created_at).toISOString(),
+                            type: (intent.payload.type || 'text') as Message['type'],
+                            isOwn: true,
+                            status: intent.status === 'failed' ? 'failed' : 'sending',
+                            reply_to: intent.payload.replyTo ? { ...intent.payload.replyTo, type: intent.payload.replyTo.type ?? 'text' } : undefined
+                        };
+                        const { merged } = mergeMessages(current, [optMsg]);
+                        next[cid] = merged as Message[];
+                    }
+                });
+                return next;
+            });
+        });
+
+        flushQueue();
+    }, [session, user, flushQueue]);
+
+    // Socket Connect & Window Online Listeners
+    useEffect(() => {
+        if (!connected) return;
+
+        // Socket Reconnect Delta Sync using deterministic 2-tuple cursor (after_created_at, after_id)
+        const activeConvId = activeConversationIdRef.current;
+        if (activeConvId) {
+            const currentMsgs = messagesRef.current[activeConvId] || [];
+            const validServerMsgs = currentMsgs.filter(m => !m.id.startsWith('temp-'));
+            const latestMsg = validServerMsgs.length > 0 ? validServerMsgs[validServerMsgs.length - 1] : null;
+
+            if (latestMsg) {
+                api.get(`/chat/conversations/${activeConvId}/messages`, {
+                    params: {
+                        after_created_at: latestMsg.created_at,
+                        after_id: latestMsg.id,
+                        limit: 50
+                    }
+                }).then(res => {
+                    const missedMsgs = res.data;
+                    if (Array.isArray(missedMsgs) && missedMsgs.length > 0) {
+                        setMessages(prev => {
+                            const current = prev[activeConvId] || [];
+                            const { merged } = mergeMessages(current, missedMsgs);
+                            return { ...prev, [activeConvId]: merged as Message[] };
+                        });
+                    }
+                }).catch(err => {
+                    console.warn('[ChatContext] Reconnect delta sync error:', err);
                 });
             }
         }
-    }, [session, user, offlineQueue, leases, markLeaseClaimEnd]);
 
-    // Process Outbox:
-    // 1. Immediately when the user session becomes ready (catches the case where
-    //    the gateway is sleeping — messages still fire via HTTP POST).
-    // 2. Again whenever the socket connects/reconnects (fast-path for online users).
-    useEffect(() => {
-        if (session && user) flushQueue();
-    }, [session, user, flushQueue]);
-
-    useEffect(() => {
-        if (connected) flushQueue();
+        flushQueue();
     }, [connected, flushQueue]);
+
+    useEffect(() => {
+        const handleOnline = () => {
+            console.log('[ChatContext] Window online event — triggering queue flush');
+            flushQueue();
+        };
+        window.addEventListener('online', handleOnline);
+        return () => window.removeEventListener('online', handleOnline);
+    }, [flushQueue]);
 
     const sendMessageToConversation = async (payload: { conversationId: string; content: string; type?: string; attachmentId?: string; replyTo?: { id: string; content: string; sender_id: string; type?: string } }) => {
         const { conversationId, content, type = 'text', attachmentId, replyTo } = payload;
