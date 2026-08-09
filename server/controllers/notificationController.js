@@ -105,16 +105,8 @@ const subscribeToNotifications = async (req, res, next) => {
       return res.status(400).json({ error: "Subscription keys missing" });
     }
 
-    // 1. Strictly enforce 1-to-1 endpoint-to-active-user mapping.
-    // If this browser endpoint was previously used by another account on this device,
-    // we MUST delete it to prevent cross-account push notification leakage.
-    if (endpoint) {
-      await supabase
-        .from("push_subscriptions")
-        .delete()
-        .eq("endpoint", endpoint)
-        .neq("user_id", userId);
-    }
+    // 1. Multi-account device support: do not aggressively delete endpoints for other accounts on the same device.
+    // The Service Worker (sw.js) handles targetAccountId vs activeAccountId routing on the client.
 
     // 2-step safe upsert: check for existing subscription by (user_id, endpoint)
     const { data: existing } = await supabase
@@ -423,13 +415,14 @@ const registerInstallation = async (req, res, next) => {
         throw accError;
       }
 
-      // 3. Mark all OTHER accounts on this installation as LOGGED_OUT
-      // This prevents cross-account push leakage when switching accounts on the same device
+      // 3. Mark other accounts on this installation as INACTIVE (not LOGGED_OUT)
+      // This preserves valid push notification delivery for saved accounts on the same device.
       await supabase
         .from("installation_accounts")
-        .update({ session_state: 'LOGGED_OUT', updated_at: new Date().toISOString() })
+        .update({ session_state: 'INACTIVE', updated_at: new Date().toISOString() })
         .eq("installation_id", installation.installation_id)
-        .neq("user_id", userId);
+        .neq("user_id", userId)
+        .neq("session_state", "LOGGED_OUT");
 
       console.log(`[FORENSIC] installation_accounts upsert SUCCESS`);
       return res.json({ success: true, message: "Installation registered successfully", installation_id: installation.installation_id });
