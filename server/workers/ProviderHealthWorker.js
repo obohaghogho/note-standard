@@ -36,25 +36,19 @@ function buildProbes() {
   const probes = [];
 
   // Fincra
-  const fincraKey = process.env.FINCRA_SECRET_KEY;
-  const fincraEnv = (process.env.FINCRA_ENV || 'sandbox').toLowerCase();
-  const fincraBase = (fincraEnv === 'live' || fincraEnv === 'production')
-    ? 'https://api.fincra.com' : 'https://sandboxapi.fincra.com';
-
-  if (fincraKey) {
-    probes.push({
-      name: 'fincra', probeType: 'PING',
-      fn: async () => {
-        const t = Date.now();
-        const r = await axios.get(`${fincraBase}/core/businesses/${process.env.FINCRA_BUSINESS_ID}`, {
-          timeout: PROBE_TIMEOUT_MS,
-          headers: { 'api-key': fincraKey },
-          validateStatus: s => s < 500,
-        });
-        return { httpStatus: r.status, latencyMs: Date.now() - t };
-      },
-    });
-  }
+  const { getFincraClient } = require('../services/fincra/client');
+  probes.push({
+    name: 'fincra', probeType: 'PING',
+    fn: async () => {
+      const t = Date.now();
+      const { instance, businessId } = getFincraClient();
+      const r = await instance.get(`/wallets?businessId=${businessId}`, {
+        timeout: PROBE_TIMEOUT_MS,
+        validateStatus: s => s < 500,
+      });
+      return { httpStatus: r.status, latencyMs: Date.now() - t };
+    },
+  });
 
   // Paystack
   const psKey = process.env.PAYSTACK_SECRET_KEY;
