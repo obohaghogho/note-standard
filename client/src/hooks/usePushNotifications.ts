@@ -165,6 +165,44 @@ export function usePushNotifications() {
         const sub = await registration.pushManager.getSubscription();
         setIsSubscribed(!!sub);
         setSubscription(sub);
+        
+        if (sub) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            const cacheKey = `push_synced_${session.user.id}_${sub.endpoint.slice(-30)}`;
+            if (!localStorage.getItem(cacheKey)) {
+              try {
+                // Background sync: map this browser's existing push endpoint to the newly logged-in account.
+                // This resolves the bug where account switching causes pushes to route to the old account.
+                await fetch(`${API_URL}/api/notifications/subscribe`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+                  body: JSON.stringify({ subscription: sub, vapidKeyVersion: VAPID_PUBLIC_KEY })
+                });
+
+                // Dual-write to V2 Installation architecture
+                const { getDeviceId } = await import('../utils/deviceId');
+                const deviceId = await getDeviceId();
+                await fetch(`${API_URL}/api/notifications/register-installation`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+                  body: JSON.stringify({
+                    deviceId, pushEndpoint: sub.endpoint,
+                    pushP256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(sub.getKey('p256dh')!))),
+                    pushAuth: btoa(String.fromCharCode.apply(null, new Uint8Array(sub.getKey('auth')!))),
+                    platform: 'web', type: 'vapid', reason: 'AUTO_SYNC',
+                    capabilities: { supports_web_push: true, supports_fcm: false, supports_apns: false, supports_background_sync: 'serviceWorker' in navigator }
+                  })
+                });
+
+                localStorage.setItem(cacheKey, 'true');
+                console.log('[PUSH] Background sync: existing push subscription bound to active account.');
+              } catch (e) {
+                console.warn('[PUSH] Background sync of push subscription failed:', e);
+              }
+            }
+          }
+        }
       }
     };
     checkSubscription();

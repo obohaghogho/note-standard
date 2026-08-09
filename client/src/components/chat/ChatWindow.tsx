@@ -1266,12 +1266,19 @@ const ChatWindow: React.FC = () => {
                                                     scrollToBottom('instant');
                                                 }}
                                                 onInput={(e) => {
-                                                    // Auto-grow: reset height then expand to scrollHeight
-                                                    // This is the correct grow-then-scroll technique
+                                                    // Auto-grow: calculate scrollHeight without layout collapse to prevent blinking
                                                     const el = e.currentTarget;
-                                                    el.style.height = 'auto';
-                                                    // Cap at 5 lines (~130px), then scroll internally
-                                                    el.style.height = Math.min(el.scrollHeight, 130) + 'px';
+                                                    // By resetting to 0px, we avoid height: auto but still measure scrollHeight accurately.
+                                                    // To prevent layout jump, we ONLY change height if the scrollHeight has meaningfully changed.
+                                                    // A hidden clone is the most robust way, but for performance, we temporarily force it
+                                                    const currentHeight = el.style.height;
+                                                    el.style.height = '0px'; 
+                                                    const newHeight = Math.min(el.scrollHeight, 130) + 'px';
+                                                    if (currentHeight !== newHeight) {
+                                                        el.style.height = newHeight;
+                                                    } else {
+                                                        el.style.height = currentHeight;
+                                                    }
                                                 }}
                                                 placeholder="Type a message..."
                                                 autoComplete="off"
