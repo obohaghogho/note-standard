@@ -16,6 +16,15 @@ CREATE TABLE IF NOT EXISTS feedback_comments (
   created_at   timestamptz DEFAULT now()
 );
 
+-- ─── 1b. Backfill columns if table already existed without them ──────────────
+-- CREATE TABLE IF NOT EXISTS skips entirely if the table exists, so these
+-- ALTER statements ensure all columns are present regardless.
+ALTER TABLE feedback_comments ADD COLUMN IF NOT EXISTS is_internal boolean DEFAULT false;
+ALTER TABLE feedback_comments ADD COLUMN IF NOT EXISTS is_ai_reply boolean DEFAULT false;
+ALTER TABLE feedback_comments ADD COLUMN IF NOT EXISTS ai_metadata jsonb DEFAULT '{}'::jsonb;
+ALTER TABLE feedback_comments ADD COLUMN IF NOT EXISTS mentioned_user_ids uuid[] DEFAULT '{}';
+ALTER TABLE feedback_comments ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now();
+
 -- ─── 2. Indexes ───────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_feedback_comments_report_id
   ON feedback_comments(report_id);

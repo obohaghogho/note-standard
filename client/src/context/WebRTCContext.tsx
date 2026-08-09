@@ -147,6 +147,8 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const iceCandidateQueue = useRef<RTCIceCandidateInit[]>([]);
     const isCleaningUp      = useRef(false);
     const fetchedIceServers = useRef<RTCIceServer[] | null>(null);
+    const iceServersFetchedAt = useRef<number>(0);  // BUG 2 FIX: track fetch time for TTL
+    const iceServersTTL     = useRef<number>(86400); // default 24h, updated from server response
     const dialToneRef       = useRef<HTMLAudioElement | null>(null);
     const ringtoneRef       = useRef<HTMLAudioElement | null>(null);
 
@@ -194,7 +196,19 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // NOT by the Node.js API server (VITE_API_URL). Using the wrong endpoint caused
     // silent 404s and fallback to Google STUN-only, breaking calls on LTE and NAT.
     const ensureIceServers = useCallback(async (): Promise<RTCIceServer[]> => {
-        if (fetchedIceServers.current) return fetchedIceServers.current;
+        // BUG 2 FIX: Re-fetch if TTL has elapsed (TURN credentials expire)
+        const now = Date.now();
+        const elapsed = (now - iceServersFetchedAt.current) / 1000;
+        const isExpired = elapsed > iceServersTTL.current;
+
+        if (fetchedIceServers.current && !isExpired) {
+            return fetchedIceServers.current;
+        }
+
+        if (isExpired && fetchedIceServers.current) {
+            callTrace('ICE servers expired — re-fetching', { elapsedSec: Math.round(elapsed), ttl: iceServersTTL.current });
+        }
+
         try {
             callTrace('Fetching ICE servers from gateway', { url: `${GATEWAY_URL}/webrtc/ice-servers` });
             const authHeader = api.defaults.headers.common?.['Authorization'];
@@ -205,8 +219,10 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 const data = await res.json();
                 if (data?.iceServers) {
                     const hasTurn = (data.iceServers as RTCIceServer[]).some(s => String(s.urls).startsWith('turn'));
-                    callTrace('ICE servers ready', { count: data.iceServers.length, hasTurn });
+                    callTrace('ICE servers ready', { count: data.iceServers.length, hasTurn, ttl: data.ttl });
                     fetchedIceServers.current = data.iceServers;
+                    iceServersFetchedAt.current = Date.now();
+                    if (data.ttl) iceServersTTL.current = data.ttl;
                     return data.iceServers;
                 }
             }
@@ -216,6 +232,8 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
         callTrace('ICE server fetch failed — falling back to Google STUN only');
         fetchedIceServers.current = FALLBACK_ICE;
+        iceServersFetchedAt.current = Date.now();
+        iceServersTTL.current = 3600; // retry sooner with fallback
         return FALLBACK_ICE;
     }, []);
 
@@ -521,10 +539,51 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setIsMuted(next);
     }, [isMuted]);
 
-    const toggleVideo = useCallback(() => {
+    // BUG 3 FIX: When re-enabling video, detect dead/black tracks and replace
+    // with a fresh camera capture via RTCRtpSender.replaceTrack().
+    const toggleVideo = useCallback(async () => {
         if (!localStreamRef.current) return;
         const next = !isVideoEnabled;
-        localStreamRef.current.getVideoTracks().forEach(t => { t.enabled = next; });
+
+        if (next) {
+            // Re-enabling camera — check if existing track is still viable
+            const existingTrack = localStreamRef.current.getVideoTracks()[0];
+            const isTrackDead = !existingTrack || existingTrack.readyState === 'ended';
+
+            if (isTrackDead && pcRef.current) {
+                // Track is dead — acquire fresh camera and hot-swap
+                try {
+                    callTrace('Video track dead — acquiring fresh camera');
+                    const freshStream = await navigator.mediaDevices.getUserMedia({
+                        video: getVideoConstraints(),
+                    });
+                    const newTrack = freshStream.getVideoTracks()[0];
+                    if (newTrack) {
+                        // Replace in RTCPeerConnection sender
+                        const sender = pcRef.current.getSenders().find(s => s.track?.kind === 'video' || (!s.track && existingTrack));
+                        if (sender) {
+                            await sender.replaceTrack(newTrack);
+                        }
+                        // Replace in local stream
+                        if (existingTrack) localStreamRef.current.removeTrack(existingTrack);
+                        localStreamRef.current.addTrack(newTrack);
+                        // Update local preview
+                        setLocalStream(localStreamRef.current);
+                        callTrace('Fresh video track replaced successfully');
+                    }
+                } catch (err) {
+                    console.error('[WebRTC] Failed to re-acquire camera:', err);
+                    toast.error('Could not restart camera. Check permissions.');
+                    return; // Don't toggle state if we failed
+                }
+            } else if (existingTrack) {
+                existingTrack.enabled = true;
+            }
+        } else {
+            // Disabling camera — just disable the track (don't stop it)
+            localStreamRef.current.getVideoTracks().forEach(t => { t.enabled = false; });
+        }
+
         setIsVideoEnabled(next);
     }, [isVideoEnabled]);
 
@@ -709,24 +768,42 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             cleanup();
         };
 
-        socket.on('call:incoming',      onCallIncoming);
-        socket.on('call:ringing',       onCallRinging);
-        socket.on('call:answered',      onCallAnswered);
-        socket.on('call:signal',        onCallSignal);
-        socket.on('call:ice-candidate', onIceCandidate);
-        socket.on('call:rejected',      cleanup);
-        socket.on('call:ended',         onCallEnded);
-        socket.on('call:timeout',       onCallEnded);
+        // BUG 6 FIX: Acknowledge the callee's answer was relayed
+        const onCallAccepted = (data: { from: string; sessionId?: string }) => {
+            callTrace('call:accepted received (answer acknowledged by gateway)', { from: data.from });
+        };
+
+        // BUG 4 FIX: Immediate disconnect notification from gateway
+        const onPeerDisconnected = (data: { from: string; sessionId?: string }) => {
+            callTrace('call:peer-disconnected received', { from: data.from });
+            if (currentStatus.current === 'connected' || currentStatus.current === 'connecting') {
+                currentStatus.current = 'reconnecting';
+                setCallState(p => ({ ...p, status: 'reconnecting' }));
+            }
+        };
+
+        socket.on('call:incoming',           onCallIncoming);
+        socket.on('call:ringing',            onCallRinging);
+        socket.on('call:answered',           onCallAnswered);
+        socket.on('call:signal',             onCallSignal);
+        socket.on('call:ice-candidate',      onIceCandidate);
+        socket.on('call:rejected',           cleanup);
+        socket.on('call:ended',              onCallEnded);
+        socket.on('call:timeout',            onCallEnded);
+        socket.on('call:accepted',           onCallAccepted);
+        socket.on('call:peer-disconnected',  onPeerDisconnected);
 
         return () => {
-            socket.off('call:incoming',      onCallIncoming);
-            socket.off('call:ringing',       onCallRinging);
-            socket.off('call:answered',      onCallAnswered);
-            socket.off('call:signal',        onCallSignal);
-            socket.off('call:ice-candidate', onIceCandidate);
-            socket.off('call:rejected',      cleanup);
-            socket.off('call:ended',         onCallEnded);
-            socket.off('call:timeout',       onCallEnded);
+            socket.off('call:incoming',          onCallIncoming);
+            socket.off('call:ringing',           onCallRinging);
+            socket.off('call:answered',          onCallAnswered);
+            socket.off('call:signal',            onCallSignal);
+            socket.off('call:ice-candidate',     onIceCandidate);
+            socket.off('call:rejected',          cleanup);
+            socket.off('call:ended',             onCallEnded);
+            socket.off('call:timeout',           onCallEnded);
+            socket.off('call:accepted',          onCallAccepted);
+            socket.off('call:peer-disconnected', onPeerDisconnected);
         };
     }, [socket, socketConnected, cleanup, createPeerConnection, drainIceQueue]);
 

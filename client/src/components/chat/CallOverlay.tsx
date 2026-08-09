@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useReducer } from 'react';
 import { Phone, Video, Mic, MicOff, VideoOff, Volume2, PhoneMissed } from 'lucide-react';
 import SecureImage from '../common/SecureImage';
 
@@ -29,6 +29,11 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
     const [timer, setTimer] = useState('00:00');
     const remoteVideoRef = useRef<HTMLVideoElement>(null);
     const localVideoRef  = useRef<HTMLVideoElement>(null);
+
+    // BUG 1 FIX: Force re-render when remote tracks change.
+    // Adding a track to an existing MediaStream doesn't change the React state
+    // reference, so showRemoteVideo would stay false even after video track arrives.
+    const [trackRevision, bumpTrackRevision] = useReducer((x: number) => x + 1, 0);
 
     // ── Call timer ────────────────────────────────────────────────────────────
     useEffect(() => {
@@ -71,11 +76,28 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
 
     useEffect(() => {
         applyRemoteStream();
-        // FIX: Listen for late-arriving tracks (e.g. video arrives after audio)
-        if (remoteStream) {
-            remoteStream.onaddtrack = applyRemoteStream;
-            return () => { remoteStream.onaddtrack = null; };
-        }
+        if (!remoteStream) return;
+
+        // BUG 1 FIX: Listen for track lifecycle events and bump revision counter
+        // so React re-renders and showRemoteVideo re-evaluates.
+        const onTrackChange = () => {
+            applyRemoteStream();
+            bumpTrackRevision();
+        };
+
+        // Listen for late-arriving tracks (e.g. video arrives after audio)
+        remoteStream.addEventListener('addtrack', onTrackChange);
+        remoteStream.addEventListener('removetrack', onTrackChange);
+
+        // Also listen for individual track 'ended' events
+        const tracks = remoteStream.getTracks();
+        tracks.forEach(t => t.addEventListener('ended', onTrackChange));
+
+        return () => {
+            remoteStream.removeEventListener('addtrack', onTrackChange);
+            remoteStream.removeEventListener('removetrack', onTrackChange);
+            tracks.forEach(t => t.removeEventListener('ended', onTrackChange));
+        };
     }, [remoteStream, applyRemoteStream]);
 
     // ── Local video preview ───────────────────────────────────────────────────
@@ -98,7 +120,12 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
         }
     };
 
-    const showRemoteVideo = isVideoCall && !!remoteStream && remoteStream.getVideoTracks().length > 0;
+    // BUG 1 FIX: Check for ACTIVE video tracks (readyState==='live' && enabled),
+    // not just any video track. Prevents showing black frame from ended/disabled tracks.
+    // trackRevision dependency ensures this re-evaluates when tracks change.
+    const _rev = trackRevision; // eslint-disable-line @typescript-eslint/no-unused-vars
+    const showRemoteVideo = isVideoCall && !!remoteStream &&
+        remoteStream.getVideoTracks().some(t => t.readyState === 'live' && t.enabled);
     const avatarLetter    = otherUserName?.charAt(0).toUpperCase() || '?';
     const isIncoming      = callState.status === 'incoming';
     const isWaiting       = ['calling', 'ringing', 'connecting'].includes(callState.status);
@@ -121,7 +148,9 @@ export const CallOverlay: React.FC<CallOverlayProps> = ({
                     playsInline
                     className={showRemoteVideo 
                         ? "absolute inset-0 w-full h-full object-cover transition-opacity duration-500 opacity-100" 
-                        : "absolute -left-[9999px] w-px h-px opacity-100"}
+                        : "absolute w-px h-px opacity-0 overflow-hidden"}
+                    // BUG 5 FIX: Use opacity-0 instead of -left-[9999px] so iOS Safari
+                    // treats the element as 'visible' and doesn't deprioritize audio playback.
                 />
 
                 {/* Overlay gradient on top of remote video */}

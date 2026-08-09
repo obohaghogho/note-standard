@@ -481,6 +481,12 @@ module.exports = (io, socket) => {
       console.log(`[Call] 🧹 Disconnect cleanup: caller ${userId} → ${session.targetId}`);
       activeCalls.delete(session.targetId);
 
+      // BUG 4 FIX: Emit immediate peer-disconnected so callee sees "Reconnecting..." right away
+      io.to(`user:${session.targetId}`).emit('call:peer-disconnected', {
+        from:      userId,
+        sessionId: session.sessionId,
+      });
+
       // Give 15s grace period for caller to reconnect before marking as ended
       setTimeout(async () => {
         const still = activeCalls.get(session.targetId);
@@ -497,6 +503,39 @@ module.exports = (io, socket) => {
           });
         }
       }, 15_000);
+    }
+
+    // Also check if this user was the CALLEE in any active session
+    // (callee disconnect should also notify the caller immediately)
+    for (const [sessionId, sessionInfo] of sessionMap.entries()) {
+      if (String(sessionInfo.calleeId) === String(userId)) {
+        console.log(`[Call] 🧹 Disconnect cleanup: callee ${userId} (session ${sessionId})`);
+
+        // Notify caller immediately
+        io.to(`user:${sessionInfo.callerId}`).emit('call:peer-disconnected', {
+          from:      userId,
+          sessionId,
+        });
+
+        // Grace period before final cleanup
+        setTimeout(async () => {
+          // Check if callee reconnected
+          const calleeSockets = await io.in(`user:${userId}`).fetchSockets();
+          if (calleeSockets.length === 0) {
+            await updateCallSession(sessionId, {
+              status:     'ended',
+              end_reason: 'network_error',
+              ended_at:   new Date().toISOString(),
+            });
+            io.to(`user:${sessionInfo.callerId}`).emit('call:ended', {
+              from:      userId,
+              sessionId,
+              reason:    'callee_disconnected',
+            });
+            sessionMap.delete(sessionId);
+          }
+        }, 15_000);
+      }
     }
   });
 };
