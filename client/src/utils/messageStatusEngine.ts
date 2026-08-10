@@ -92,7 +92,7 @@ export function mergeMessageMonotonic<T extends {
     } : null;
 
     if (telemetry) {
-        console.log(`[STATUS_TELEMETRY] ${telemetry.source} | msg:${telemetry.messageId} | evt:${telemetry.eventId} | ${telemetry.previousStatus} -> ${telemetry.appliedStatus}`);
+        console.log(`[STATUS_TELEMETRY] ${telemetry.source} | msg:${telemetry.messageId} | evt:${telemetry.eventId || 'N/A'} | ${telemetry.previousStatus} -> ${telemetry.appliedStatus}`);
     }
 
     return { merged, telemetry };

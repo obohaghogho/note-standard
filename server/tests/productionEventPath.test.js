@@ -146,6 +146,7 @@ async function main() {
 
         let senderMsg = {
             id: messageId,
+            event_id: 'evt-msg-303',
             conversation_id: convId,
             sender_id: senderId,
             status: 'delivered',
@@ -161,7 +162,7 @@ async function main() {
 
         // Sender receives chat:conversation_read (readerId != senderId)
         if (readEvent.readerId !== senderId) {
-            senderMsg = mergeMessageMonotonic(senderMsg, { read_at: readEvent.readAt, status: 'read' }, 'read').merged;
+            senderMsg = mergeMessageMonotonic(senderMsg, { event_id: 'evt-msg-303', read_at: readEvent.readAt, status: 'read' }, 'read').merged;
         }
 
         assertEqual(senderMsg.status, 'read', 'Sender message MUST transition to READ (blue double ticks)');
@@ -175,6 +176,7 @@ async function main() {
     await runTest('TEST 4 — DB Read Mark Sets Both read_at and delivered_at', async () => {
         const row = {
             id: 'uuid-msg-404',
+            event_id: 'evt-msg-404',
             sender_id: 'user-sender-4',
             delivered_at: null,
             read_at: null
@@ -185,7 +187,7 @@ async function main() {
         row.read_at = now;
         row.delivered_at = row.delivered_at || now;
 
-        const derivedStatus = mergeMessageMonotonic({ id: row.id }, { read_at: row.read_at, delivered_at: row.delivered_at }, 'http').merged;
+        const derivedStatus = mergeMessageMonotonic({ id: row.id, event_id: row.event_id }, { event_id: row.event_id, read_at: row.read_at, delivered_at: row.delivered_at }, 'http').merged;
         assertEqual(derivedStatus.status, 'read', 'DB row with both read_at and delivered_at derives READ status');
         assertEqual(derivedStatus.delivered_at, now, 'delivered_at automatically backfilled');
     });
