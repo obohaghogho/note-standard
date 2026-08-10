@@ -2459,7 +2459,7 @@ exports.markConversationRead = async (req, res) => {
             console.warn('[Chat] rpc_mark_read not available — using legacy UPDATE');
             const { error } = await supabase
               .from("messages")
-              .update({ read_at: now })
+              .update({ read_at: now, delivered_at: now })
               .eq("conversation_id", conversationId)
               .neq("sender_id", userId)
               .is("read_at", null);

@@ -147,9 +147,18 @@ module.exports = (io, socket) => {
     const { conversationId, messageId, eventId, deliveredAt, senderId } = data || {};
     if (!conversationId || (!messageId && !eventId)) return;
 
-    console.log(`[FORENSIC][GW] Delivery ACK Received | userId:${userId} | conversationId:${conversationId} | messageId:${messageId} | eventId:${eventId} | ts:${Date.now()}`);
+    console.log(`[DELIVERY_TRACE] gateway_received=true | userId:${userId} | conversationId:${conversationId} | messageId:${messageId} | eventId:${eventId} | senderId:${senderId || 'N/A'}`);
 
-    // FAST-PATH: Emit socket event to sender IMMEDIATELY (<2ms) before database network write
+    let targetSenderId = senderId;
+    if (!targetSenderId && messageId && supabase) {
+      try {
+        const { data: msg } = await supabase.from('messages').select('sender_id').eq('id', messageId).maybeSingle();
+        if (msg?.sender_id) targetSenderId = msg.sender_id;
+      } catch (e) {
+        console.warn('[Gateway] Could not lookup sender_id for delivery receipt:', e.message);
+      }
+    }
+
     const payload = {
       userId,
       conversationId,
@@ -159,8 +168,9 @@ module.exports = (io, socket) => {
       deliveredAt: deliveredAt || new Date().toISOString(),
     };
 
-    if (senderId) {
-      io.to(`user:${senderId}`).emit('chat:message_delivered', payload);
+    if (targetSenderId) {
+      io.to(`user:${targetSenderId}`).emit('chat:message_delivered', payload);
+      console.log(`[DELIVERY_TRACE] sender_routed=true | room:user:${targetSenderId} | messageId:${messageId}`);
     }
     io.to(conversationId).emit('chat:message_delivered', payload);
 

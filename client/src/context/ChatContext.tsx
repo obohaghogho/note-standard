@@ -538,19 +538,21 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     }, [session, deviceId]);
 
-    const markMessageDelivered = useCallback(async (messageId: string, conversationId: string) => {
+    const markMessageDelivered = useCallback(async (messageId: string, conversationId: string, senderId?: string, eventId?: string) => {
         if (!session || !deviceId) return;
         const now = new Date().toISOString();
         if (socketRef.current?.connected) {
-            console.log(`[FORENSIC][CLIENT] Delivery ACK Sent | messageId: ${messageId} | conversationId: ${conversationId} | timestamp: ${now}`);
-            socketRef.current.emit('chat:delivered', { conversationId, messageId, deliveredAt: now, deviceId });
+            console.log(`[DELIVERY_TRACE] ack_emitted=true | messageId: ${messageId} | conversationId: ${conversationId} | senderId: ${senderId || 'N/A'}`);
+            socketRef.current.emit('chat:delivered', { conversationId, messageId, eventId, senderId, deliveredAt: now, deviceId });
         }
         try {
+            const gatewayBase = import.meta.env.VITE_GATEWAY_URL || import.meta.env.VITE_SOCKET_URL || 'https://realtime-gateway-gsb5.onrender.com';
+            fetch(`${gatewayBase}/deliver/${messageId}?recipientId=${user?.id}&senderId=${senderId || ''}`, { method: 'POST' }).catch(() => {});
             await api.put(`/chat/messages/${messageId}/deliver`, { deviceId });
         } catch (err) {
             console.error('[Chat] Failed to mark delivered:', err);
         }
-    }, [session, deviceId]);
+    }, [session, deviceId, user?.id]);
 
     const markConversationDelivered = useCallback(async (conversationId: string, msgIds?: string[]) => {
         if (!session || !user?.id) return;
@@ -856,12 +858,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 // emit a delivery ACK so sender's double-tick upgrades automatically.
                 const unACKedMessages = filtered.filter(m => m.sender_id !== user?.id && !m.delivered_at && m.id);
                 if (unACKedMessages.length > 0 && socketRef.current?.connected) {
-                    console.log(`[FORENSIC][CLIENT] Bulk Delivery Sweep: Sending ACK for ${unACKedMessages.length} un-ACKed message(s) in conv ${conversationId}`);
+                    console.log(`[DELIVERY_TRACE] Bulk Delivery Sweep: ack_emitted=true for ${unACKedMessages.length} un-ACKed message(s) in conv ${conversationId}`);
                     unACKedMessages.forEach(m => {
                         socketRef.current?.emit('chat:delivered', {
                             conversationId,
                             messageId: m.id,
                             eventId: m.event_id,
+                            senderId: m.sender_id,
                             deliveredAt: new Date().toISOString(),
                             deviceId
                         });
