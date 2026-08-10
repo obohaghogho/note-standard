@@ -1322,9 +1322,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ messageIds: [msg.id], userId: user?.id })
                     }).catch(() => {});
-
-                    // 3. Debounced read mark — fallback sync
-                    debouncedMarkReadRef.current(msg.conversation_id);
                 }
             }
 
