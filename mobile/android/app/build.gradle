@@ -96,7 +96,7 @@ android {
 
     defaultConfig {
         applicationId 'com.notestandard.app'
-        minSdkVersion ((findProperty('android.minSdkVersion') ?: (rootProject.ext.has('minSdkVersion') ? rootProject.ext.minSdkVersion : 23)) as Integer)
+        minSdkVersion ((findProperty('android.minSdkVersion') ?: (rootProject.ext.has('minSdkVersion') ? rootProject.ext.minSdkVersion : 24)) as Integer)
         targetSdkVersion ((findProperty('android.targetSdkVersion') ?: (rootProject.ext.has('targetSdkVersion') ? rootProject.ext.targetSdkVersion : 34)) as Integer)
         versionCode Integer.parseInt((findProperty('versionCode') ?: '106').toString())
         versionName (findProperty('versionName') ?: "1.6.6").toString()
