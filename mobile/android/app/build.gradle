@@ -81,11 +81,19 @@ def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBu
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
-android {
-    ndkVersion rootProject.ext.ndkVersion
+def safeExt(String prop, defaultValue) {
+    return (rootProject.ext.has(prop) && rootProject.ext.get(prop) != null) ? rootProject.ext.get(prop) : defaultValue
+}
 
-    buildToolsVersion rootProject.ext.buildToolsVersion
-    compileSdk rootProject.ext.compileSdkVersion
+def safeExtInt(String prop, int defaultValue) {
+    return (rootProject.ext.has(prop) && rootProject.ext.get(prop) != null) ? Integer.parseInt(rootProject.ext.get(prop).toString()) : defaultValue
+}
+
+android {
+    ndkVersion safeExt("ndkVersion", "26.1.10909125")
+
+    buildToolsVersion safeExt("buildToolsVersion", "35.0.0")
+    compileSdk safeExtInt("compileSdkVersion", 35)
 
     namespace 'com.notestandard.app'
     
@@ -96,8 +104,8 @@ android {
 
     defaultConfig {
         applicationId 'com.notestandard.app'
-        minSdkVersion rootProject.ext.minSdkVersion
-        targetSdkVersion rootProject.ext.targetSdkVersion
+        minSdkVersion safeExtInt("minSdkVersion", 23)
+        targetSdkVersion safeExtInt("targetSdkVersion", 34)
         versionCode (findProperty('versionCode') ?: '106').toInteger()
         versionName (findProperty('versionName') ?: "1.6.6")
         multiDexEnabled true
