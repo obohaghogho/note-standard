@@ -246,13 +246,13 @@ const MessageBubble = memo(({
                                 </span>
                             )}
                             {isSender && (
-                                <div className="scale-75 origin-right relative flex items-center justify-center">
+                                <div className="relative flex items-center justify-center ml-0.5">
                                     {msg.read_at || msg.status === 'read' ? (
-                                        <CheckCheck size={14} className="text-cyan-400 drop-shadow-[0_0_3px_rgba(34,211,238,0.8)] animate-in zoom-in-50 duration-300 transition-all font-extrabold" />
+                                        <CheckCheck size={15} strokeWidth={2.5} className="text-cyan-400 drop-shadow-[0_0_3px_rgba(34,211,238,0.9)] animate-in zoom-in-50 duration-300 transition-all font-extrabold" />
                                     ) : msg.delivered_at || msg.status === 'delivered' ? (
-                                        <CheckCheck size={14} className="text-gray-300 animate-in fade-in duration-300 opacity-80" />
+                                        <CheckCheck size={15} strokeWidth={2.5} className="text-slate-200 opacity-90 animate-in fade-in duration-300 drop-shadow-[0_0_1px_rgba(255,255,255,0.4)]" />
                                     ) : (
-                                        <Check size={14} className="animate-in fade-in duration-300 opacity-60" />
+                                        <Check size={14} strokeWidth={2.5} className="text-slate-300 animate-in fade-in duration-300 opacity-60" />
                                     )}
                                 </div>
                             )}
@@ -306,13 +306,13 @@ const MessageBubble = memo(({
                                 </span>
                             )}
                             {isSender && (
-                                <div className="scale-75 origin-right relative flex items-center justify-center">
+                                <div className="relative flex items-center justify-center ml-0.5">
                                     {msg.read_at || msg.status === 'read' ? (
-                                        <CheckCheck size={14} className="text-cyan-400 drop-shadow-[0_0_3px_rgba(34,211,238,0.8)] animate-in zoom-in-50 duration-300 transition-all font-extrabold" />
+                                        <CheckCheck size={15} strokeWidth={2.5} className="text-cyan-400 drop-shadow-[0_0_3px_rgba(34,211,238,0.9)] animate-in zoom-in-50 duration-300 transition-all font-extrabold" />
                                     ) : msg.delivered_at || msg.status === 'delivered' ? (
-                                        <CheckCheck size={14} className="text-gray-300 animate-in fade-in duration-300 opacity-80" />
+                                        <CheckCheck size={15} strokeWidth={2.5} className="text-slate-200 opacity-90 animate-in fade-in duration-300 drop-shadow-[0_0_1px_rgba(255,255,255,0.4)]" />
                                     ) : (
-                                        <Check size={14} className="animate-in fade-in duration-300 opacity-60" />
+                                        <Check size={14} strokeWidth={2.5} className="text-slate-300 animate-in fade-in duration-300 opacity-60" />
                                     )}
                                 </div>
                             )}
