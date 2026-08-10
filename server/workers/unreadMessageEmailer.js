@@ -33,7 +33,8 @@ class UnreadMessageEmailer {
         `)
         .is('delivered_at', null)
         .eq('email_sent', false)
-        .lt('created_at', twoMinsAgo);
+        .lt('created_at', twoMinsAgo)
+        .limit(50);
 
       if (error) {
         throw new Error(`DB Error fetching undelivered messages: ${error.message}`);

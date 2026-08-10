@@ -36,6 +36,16 @@ async function runPushCleanup() {
       console.log(`[PushCleanup] Marked ${stale.length} subscriptions as stale.`);
     }
 
+    // 3. Prune old telemetry (>7 days) to preserve Supabase Disk I/O budget
+    try {
+      const { data: pruned, error: pruneErr } = await supabaseAdmin.rpc("rpc_prune_old_telemetry");
+      if (!pruneErr && pruned !== null) {
+        console.log(`[PushCleanup] Pruned ${pruned} stale telemetry rows (>7 days).`);
+      }
+    } catch (e) {
+      console.warn("[PushCleanup] Telemetry pruning skipped:", e.message);
+    }
+
   } catch (err) {
     console.error("[PushCleanup] Unhandled error during cleanup:", err);
   }
