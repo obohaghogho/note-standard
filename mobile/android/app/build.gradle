@@ -82,11 +82,11 @@ def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBu
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
 def safeExt(String prop, defaultValue) {
-    return (rootProject.ext.has(prop) && rootProject.ext.get(prop) != null) ? rootProject.ext.get(prop) : defaultValue
+    return rootProject.hasProperty(prop) ? rootProject.property(prop) : defaultValue
 }
 
 def safeExtInt(String prop, int defaultValue) {
-    return (rootProject.ext.has(prop) && rootProject.ext.get(prop) != null) ? Integer.parseInt(rootProject.ext.get(prop).toString()) : defaultValue
+    return rootProject.hasProperty(prop) ? Integer.parseInt(rootProject.property(prop).toString()) : defaultValue
 }
 
 android {
