@@ -6,7 +6,8 @@
   "workspaces": [
     "client",
     "server",
-    "realtime-gateway"
+    "realtime-gateway",
+    "mobile"
   ],
   "engines": {
     "node": "22.x",
