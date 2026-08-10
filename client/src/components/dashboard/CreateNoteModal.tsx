@@ -22,6 +22,7 @@ export const CreateNoteModal = ({ isOpen, onClose, onSuccess }: CreateNoteModalP
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [tags, setTags] = useState('');
+    const [isPrivate, setIsPrivate] = useState(true);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -51,7 +52,7 @@ export const CreateNoteModal = ({ isOpen, onClose, onSuccess }: CreateNoteModalP
                     content,
                     tags: tagArray,
                     owner_id: user.id, // Kept user.id as per original, but user?.id was in snippet. Sticking to original for minimal change.
-                    is_private: true // Notes are now private by default
+                    is_private: isPrivate // Notes are now private by default
                 });
 
             if (error) throw error; // Used new error variable
