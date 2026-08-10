@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card } from '../../components/common/Card';
 import { Input } from '../../components/common/Input';
-import { Search as SearchIcon, User, FileText, Loader2 } from 'lucide-react';
+import { Search as SearchIcon, User, FileText, Loader2, MessageSquare } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import SecureImage from '../../components/common/SecureImage';
@@ -222,15 +222,27 @@ export const Search = () => {
                                             </div>
                                         </div>
                                         </div>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setSelectedUserId(u.id);
-                                            }}
-                                            className="px-4 py-2 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-xl text-sm font-semibold transition-all flex-shrink-0"
-                                        >
-                                            View Profile
-                                        </button>
+                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    navigate(`/dashboard/chat?user=${encodeURIComponent(u.id)}`);
+                                                }}
+                                                className="px-3.5 py-2 bg-blue-600/10 text-blue-400 hover:bg-blue-600 hover:text-white rounded-xl text-sm font-semibold transition-all flex items-center gap-1.5"
+                                            >
+                                                <MessageSquare size={16} />
+                                                Message
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedUserId(u.id);
+                                                }}
+                                                className="px-4 py-2 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-xl text-sm font-semibold transition-all"
+                                            >
+                                                View Profile
+                                            </button>
+                                        </div>
                                     </Card>
                                 ))}
                             </div>

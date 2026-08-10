@@ -39,7 +39,7 @@ function ChatContent() {
 
     useEffect(() => {
         const id = searchParams.get('id');
-        const username = searchParams.get('username');
+        const username = searchParams.get('username') || searchParams.get('user') || searchParams.get('userId');
         const targetAccountId = searchParams.get('targetAccountId');
 
         const isSameAcc = (a?: string | null, b?: string | null) =>

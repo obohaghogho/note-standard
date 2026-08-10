@@ -476,7 +476,7 @@ exports.createConversation = async (req, res) => {
     const { ensureProfile } = require("../services/userService");
     await ensureProfile(userId, req.user);
 
-    // 1. Resolve Usernames/IDs/Emails to Profile Records
+    // 1. Resolve Usernames/IDs/Emails to Profile Records (with self-healing for new users)
     const cleanIdentifiers = recipientUsernames.map(u => String(u).trim().replace(/^@/, ''));
     let finalProfiles = [];
 
@@ -490,6 +490,11 @@ exports.createConversation = async (req, res) => {
       if (isUUID) {
         const { data } = await supabase.from("profiles").select("id, username").eq("id", identifier).maybeSingle();
         p = data;
+
+        // Self-healing: If identifier is a valid UUID but profile missing, trigger ensureProfile
+        if (!p) {
+          p = await ensureProfile(identifier);
+        }
       }
 
       if (!p) {
@@ -505,6 +510,25 @@ exports.createConversation = async (req, res) => {
       if (!p) {
         const { data } = await supabase.from("profiles").select("id, username").ilike("full_name", identifier).maybeSingle();
         p = data;
+      }
+
+      // Fallback self-healing: If user registered in auth.users but profile missing in public.profiles
+      if (!p) {
+        try {
+          const { data: authUsers } = await supabase.auth.admin.listUsers();
+          if (authUsers?.users) {
+            const foundUser = authUsers.users.find(u => 
+              u.id === identifier || 
+              (u.email && u.email.toLowerCase() === identifier.toLowerCase()) ||
+              (u.user_metadata?.username && String(u.user_metadata.username).toLowerCase() === identifier.toLowerCase())
+            );
+            if (foundUser) {
+              p = await ensureProfile(foundUser.id, foundUser);
+            }
+          }
+        } catch (adminErr) {
+          console.warn(`[Chat] Could not lookup auth user for identifier ${identifier}:`, adminErr.message);
+        }
       }
 
       if (p && !finalProfiles.some(existing => existing.id === p.id)) {
