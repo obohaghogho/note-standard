@@ -101,8 +101,9 @@ export const AdDisplay = ({ className = '', currentTags = EMPTY_TAGS }: AdDispla
         fetchRelevantAd();
         
         // Set up realtime subscription for new approved ads
+        const channelId = `public:ads_${Math.random().toString(36).substring(2, 9)}`;
         const channel = supabase
-            .channel('public:ads')
+            .channel(channelId)
             .on(
                 'postgres_changes',
                 {
@@ -115,8 +116,9 @@ export const AdDisplay = ({ className = '', currentTags = EMPTY_TAGS }: AdDispla
                     console.log('Realtime ad update received:', payload);
                     fetchRelevantAd(true);
                 }
-            )
-            .subscribe();
+            );
+
+        channel.subscribe();
 
         return () => {
             supabase.removeChannel(channel);
