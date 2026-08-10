@@ -236,7 +236,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const TAB_ID = useRef<string>(crypto.randomUUID());
     const isPrimaryTabRef = useRef<boolean>(false);
     useEffect(() => {
-        const TAB_LEASE_KEY = 'chat_primary_tab_lease';
+        if (!user?.id) {
+            isPrimaryTabRef.current = true;
+            return;
+        }
+        const TAB_LEASE_KEY = `chat_primary_tab_lease_${user.id}`;
         const TAB_LEASE_TTL = 6000;
         const claimLease = () => {
             const stored = localStorage.getItem(TAB_LEASE_KEY);
@@ -256,7 +260,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         claimLease();
         const leaseInterval = setInterval(claimLease, 4000);
         return () => clearInterval(leaseInterval);
-    }, []);
+    }, [user?.id]);
 
     // Layer 3: Batch ACK Engine — primary tab only, with dedup window
     useEffect(() => {
