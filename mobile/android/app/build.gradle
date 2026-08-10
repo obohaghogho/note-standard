@@ -82,10 +82,10 @@ def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBu
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
 android {
-    ndkVersion (findProperty('android.ndkVersion') ?: (rootProject.ext.has('ndkVersion') ? rootProject.ext.ndkVersion : "26.1.10909125"))
+    ndkVersion (findProperty('android.ndkVersion') ?: (rootProject.ext.has('ndkVersion') ? rootProject.ext.ndkVersion : "26.1.10909125")).toString()
 
-    buildToolsVersion (findProperty('android.buildToolsVersion') ?: (rootProject.ext.has('buildToolsVersion') ? rootProject.ext.buildToolsVersion : "35.0.0"))
-    compileSdk (findProperty('android.compileSdkVersion') ?: (rootProject.ext.has('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 35)).toInteger()
+    buildToolsVersion (findProperty('android.buildToolsVersion') ?: (rootProject.ext.has('buildToolsVersion') ? rootProject.ext.buildToolsVersion : "35.0.0")).toString()
+    compileSdk ((findProperty('android.compileSdkVersion') ?: (rootProject.ext.has('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 35)) as Integer)
 
     namespace 'com.notestandard.app'
     
@@ -96,10 +96,10 @@ android {
 
     defaultConfig {
         applicationId 'com.notestandard.app'
-        minSdkVersion (findProperty('android.minSdkVersion') ?: (rootProject.ext.has('minSdkVersion') ? rootProject.ext.minSdkVersion : 23)).toInteger()
-        targetSdkVersion (findProperty('android.targetSdkVersion') ?: (rootProject.ext.has('targetSdkVersion') ? rootProject.ext.targetSdkVersion : 34)).toInteger()
-        versionCode (findProperty('versionCode') ?: '106').toInteger()
-        versionName (findProperty('versionName') ?: "1.6.6")
+        minSdkVersion ((findProperty('android.minSdkVersion') ?: (rootProject.ext.has('minSdkVersion') ? rootProject.ext.minSdkVersion : 23)) as Integer)
+        targetSdkVersion ((findProperty('android.targetSdkVersion') ?: (rootProject.ext.has('targetSdkVersion') ? rootProject.ext.targetSdkVersion : 34)) as Integer)
+        versionCode Integer.parseInt((findProperty('versionCode') ?: '106').toString())
+        versionName (findProperty('versionName') ?: "1.6.6").toString()
         multiDexEnabled true
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
