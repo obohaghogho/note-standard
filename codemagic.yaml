@@ -79,7 +79,7 @@ workflows:
     publishing:
       email:
         recipients:
-          - obohaghogho@gmail.com
+          - obohaghogho107@gmail.com
         notify:
           success: true
           failure: true
@@ -145,7 +145,7 @@ workflows:
     publishing:
       email:
         recipients:
-          - obohaghogho@gmail.com
+          - obohaghogho107@gmail.com
         notify:
           success: true
           failure: true
