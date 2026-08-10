@@ -121,9 +121,9 @@ const ConversationItem = React.memo(({
 
                     {lastMsg && lastMsg.sender_id === user?.id && (
                         <div className="flex-shrink-0 opacity-60 scale-75">
-                            {lastMsg.read_at ? (
+                            {lastMsg.read_at || lastMsg.status === 'read' ? (
                                 <CheckCheck size={14} className="text-blue-400 font-bold" />
-                            ) : lastMsg.delivered_at ? (
+                            ) : lastMsg.delivered_at || lastMsg.status === 'delivered' ? (
                                 <CheckCheck size={14} className="text-gray-400" />
                             ) : (
                                 <Check size={14} className="text-gray-500" />

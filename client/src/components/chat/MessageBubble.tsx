@@ -247,9 +247,9 @@ const MessageBubble = memo(({
                             )}
                             {isSender && (
                                 <div className="scale-75 origin-right relative flex items-center justify-center">
-                                    {msg.read_at ? (
+                                    {msg.read_at || msg.status === 'read' ? (
                                         <CheckCheck size={14} className="text-cyan-400 drop-shadow-[0_0_3px_rgba(34,211,238,0.8)] animate-in zoom-in-50 duration-300 transition-all font-extrabold" />
-                                    ) : msg.delivered_at ? (
+                                    ) : msg.delivered_at || msg.status === 'delivered' ? (
                                         <CheckCheck size={14} className="text-gray-300 animate-in fade-in duration-300 opacity-80" />
                                     ) : (
                                         <Check size={14} className="animate-in fade-in duration-300 opacity-60" />
@@ -307,9 +307,9 @@ const MessageBubble = memo(({
                             )}
                             {isSender && (
                                 <div className="scale-75 origin-right relative flex items-center justify-center">
-                                    {msg.read_at ? (
+                                    {msg.read_at || msg.status === 'read' ? (
                                         <CheckCheck size={14} className="text-cyan-400 drop-shadow-[0_0_3px_rgba(34,211,238,0.8)] animate-in zoom-in-50 duration-300 transition-all font-extrabold" />
-                                    ) : msg.delivered_at ? (
+                                    ) : msg.delivered_at || msg.status === 'delivered' ? (
                                         <CheckCheck size={14} className="text-gray-300 animate-in fade-in duration-300 opacity-80" />
                                     ) : (
                                         <Check size={14} className="animate-in fade-in duration-300 opacity-60" />
@@ -325,6 +325,7 @@ const MessageBubble = memo(({
 }, (prev, next) => {
     return prev.msg.id === next.msg.id &&
            prev.msg.content === next.msg.content &&
+           prev.msg.status === next.msg.status &&
            prev.msg.read_at === next.msg.read_at &&
            prev.msg.delivered_at === next.msg.delivered_at &&
            prev.msg.is_edited === next.msg.is_edited &&
