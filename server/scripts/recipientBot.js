@@ -7,10 +7,17 @@
 
 const io = require('socket.io-client');
 const jwt = require('jsonwebtoken');
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const GATEWAY_URL = process.env.GATEWAY_URL || 'http://localhost:5001';
-const JWT_SECRET = 'c8bd3d17c329908dbb13a651fd95d4b431dfca1fc9dcaa0e2d2ed7a9686cb2d55bba8d09d1a435a313e3dfc915d87f9732bca0ba5d999ef542d6942ddddddf3c';
+const JWT_SECRET = process.env.JWT_SECRET;
 const RECIPIENT_ID = 'fb579aae-a735-4c41-bebc-6a63042c2c00'; // recipient_test UUID
+
+if (!JWT_SECRET) {
+    console.error('JWT_SECRET environment variable is required.');
+    process.exit(1);
+}
 
 function generateToken() {
     return jwt.sign({

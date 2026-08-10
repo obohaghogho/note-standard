@@ -7,8 +7,15 @@
 const io = require('socket.io-client');
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-const JWT_SECRET = 'c8bd3d17c329908dbb13a651fd95d4b431dfca1fc9dcaa0e2d2ed7a9686cb2d55bba8d09d1a435a313e3dfc915d87f9732bca0ba5d999ef542d6942ddddddf3c';
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+    console.error('JWT_SECRET environment variable is required.');
+    process.exit(1);
+}
 
 function generateToken(userId, email) {
     return jwt.sign({
