@@ -12,13 +12,14 @@ router.use(requireAuth);
 router.post('/register', async (req, res) => {
     try {
         const { deviceId, userId, userAgent, ipAddress } = req.body;
+        const effectiveUserId = req.user?.id || userId;
 
-        if (!deviceId || !userId) {
+        if (!deviceId || !effectiveUserId) {
             return res.status(400).json({ error: 'deviceId and userId are required' });
         }
 
         const result = await registerDeviceSession({
-            userId,
+            userId: effectiveUserId,
             deviceId,
             ipAddress: ipAddress || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
             userAgent: userAgent || req.headers['user-agent']

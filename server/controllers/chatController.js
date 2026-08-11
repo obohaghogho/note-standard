@@ -686,12 +686,25 @@ exports.createConversation = async (req, res) => {
       })),
     ];
 
-    const { error: memberError } = await supabase
+    let { error: memberError } = await supabase
       .from("conversation_members")
       .insert(membersPayload);
 
     if (memberError) {
-      console.error("[Chat] Error adding members:", memberError.message);
+      console.warn("[Chat] Initial members insert warning, retrying with core columns:", memberError.message);
+      const simplePayload = membersPayload.map(({ conversation_id, user_id, role }) => ({
+        conversation_id,
+        user_id,
+        role: role || 'member'
+      }));
+      const retryRes = await supabase
+        .from("conversation_members")
+        .insert(simplePayload);
+      memberError = retryRes.error;
+    }
+
+    if (memberError) {
+      console.error("[Chat] Fatal Error adding members:", memberError.message);
       await supabase.from("conversations").delete().eq("id", conversationId);
       throw memberError;
     }
