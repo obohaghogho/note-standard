@@ -112,12 +112,12 @@ android {
             keyPassword 'android'
         }
         release {
-            if (project.hasProperty('signKey.storeFile') && project.property('signKey.storeFile') != "") {
+            if (project.hasProperty('signKey.storeFile') && project.property('signKey.storeFile') != "" && file(project.property('signKey.storeFile')).exists()) {
                 storeFile file(project.property('signKey.storeFile'))
                 storePassword project.property('signKey.storePassword')
                 keyAlias project.property('signKey.keyAlias')
                 keyPassword project.property('signKey.keyPassword')
-            } else if (project.hasProperty('MYAPP_RELEASE_STORE_FILE') && project.property('MYAPP_RELEASE_STORE_FILE') != "") {
+            } else if (project.hasProperty('MYAPP_RELEASE_STORE_FILE') && project.property('MYAPP_RELEASE_STORE_FILE') != "" && file(project.property('MYAPP_RELEASE_STORE_FILE')).exists()) {
                 storeFile file(project.property('MYAPP_RELEASE_STORE_FILE'))
                 storePassword project.property('MYAPP_RELEASE_STORE_PASSWORD')
                 keyAlias project.property('MYAPP_RELEASE_KEY_ALIAS')
