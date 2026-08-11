@@ -28,6 +28,14 @@ allprojects {
     mavenCentral()
     maven { url 'https://www.jitpack.io' }
   }
+  configurations.all {
+    resolutionStrategy {
+      force "org.jetbrains.kotlin:kotlin-stdlib:${findProperty('android.kotlinVersion') ?: '2.0.21'}"
+      force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:${findProperty('android.kotlinVersion') ?: '2.0.21'}"
+      force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:${findProperty('android.kotlinVersion') ?: '2.0.21'}"
+      force "org.jetbrains.kotlin:kotlin-reflect:${findProperty('android.kotlinVersion') ?: '2.0.21'}"
+    }
+  }
 }
 
 apply plugin: "expo-root-project"
