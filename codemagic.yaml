@@ -55,12 +55,15 @@ workflows:
             -PsignKey.storePassword="$CM_KEYSTORE_PASSWORD" \
             -PsignKey.keyAlias="$CM_KEY_ALIAS" \
             -PsignKey.keyPassword="$CM_KEY_PASSWORD" \
-            --no-daemon \
-            --stacktrace 2>&1 | tee build_log.txt || {
+            --no-daemon 2>&1 | tee build_log.txt || {
               echo "=========================================================="
-              echo "=== GRADLE FAILURE SUMMARY (LAST 60 LINES) ==="
+              echo "=== GRADLE FAILURE SUMMARY (ROOT CAUSE AUDIT) ==="
               echo "=========================================================="
-              tail -n 60 build_log.txt
+              grep -A 25 -B 5 "* What went wrong:" build_log.txt || true
+              echo "=========================================================="
+              echo "=== LAST 300 LINES OF BUILD LOG ==="
+              echo "=========================================================="
+              tail -n 300 build_log.txt
               exit 1
             }
 
@@ -76,9 +79,13 @@ workflows:
             -PsignKey.keyPassword="$CM_KEY_PASSWORD" \
             --no-daemon 2>&1 | tee bundle_log.txt || {
               echo "=========================================================="
-              echo "=== GRADLE AAB FAILURE SUMMARY (LAST 60 LINES) ==="
+              echo "=== GRADLE AAB FAILURE SUMMARY (ROOT CAUSE AUDIT) ==="
               echo "=========================================================="
-              tail -n 60 bundle_log.txt
+              grep -A 25 -B 5 "* What went wrong:" bundle_log.txt || true
+              echo "=========================================================="
+              echo "=== LAST 300 LINES OF BUNDLE LOG ==="
+              echo "=========================================================="
+              tail -n 300 bundle_log.txt
               exit 1
             }
 
