@@ -26,6 +26,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: false
 
     - name: Configure Git Safe Directory
       run: git config --global --add safe.directory "*"
