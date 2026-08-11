@@ -13,7 +13,7 @@ workflows:
         - notestandard_keystore
       vars:
         PACKAGE_NAME: "com.notestandard.app"
-      node: 20.17.0
+      node: 22.14.0
 
     triggering:
       events:
@@ -100,7 +100,7 @@ workflows:
         BUNDLE_ID: "com.notestandard.app"
         XCODE_WORKSPACE: "mobile/ios/NoteStandard.xcworkspace"
         XCODE_SCHEME: "NoteStandard"
-      node: 20.17.0
+      node: 22.14.0
 
     triggering:
       events:
