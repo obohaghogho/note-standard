@@ -3,8 +3,8 @@ const path = require('path');
 
 const config = getDefaultConfig(__dirname);
 
-// Watch the shared directory at the monorepo root
-config.watchFolders = [path.resolve(__dirname, '../shared')];
+// Watch the monorepo root directory
+config.watchFolders = [path.resolve(__dirname, '..')];
 
 // Resolve 'shared/...' imports to the shared directory
 config.resolver.extraNodeModules = {
