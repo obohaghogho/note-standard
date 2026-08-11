@@ -285,7 +285,7 @@ self.addEventListener('push', (event) => {
                                 conversationId: notifConversationId,
                                 message: {
                                     id: options.data?.messageId,
-                                    content: body,
+                                    content: options.body,
                                     senderName: title
                                 }
                             });
