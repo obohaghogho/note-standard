@@ -49,24 +49,38 @@ workflows:
         script: |
           cd mobile/android
           chmod +x gradlew
+          set -o pipefail
           ./gradlew assembleRelease \
             -PsignKey.storeFile="$CM_KEYSTORE_PATH" \
             -PsignKey.storePassword="$CM_KEYSTORE_PASSWORD" \
             -PsignKey.keyAlias="$CM_KEY_ALIAS" \
             -PsignKey.keyPassword="$CM_KEY_PASSWORD" \
             --no-daemon \
-            --stacktrace
+            --stacktrace 2>&1 | tee build_log.txt || {
+              echo "=========================================================="
+              echo "=== GRADLE FAILURE SUMMARY (LAST 60 LINES) ==="
+              echo "=========================================================="
+              tail -n 60 build_log.txt
+              exit 1
+            }
 
       # 5. Also build AAB for Play Store upload
       - name: Build Android AAB (Play Store)
         script: |
           cd mobile/android
+          set -o pipefail
           ./gradlew bundleRelease \
             -PsignKey.storeFile="$CM_KEYSTORE_PATH" \
             -PsignKey.storePassword="$CM_KEYSTORE_PASSWORD" \
             -PsignKey.keyAlias="$CM_KEY_ALIAS" \
             -PsignKey.keyPassword="$CM_KEY_PASSWORD" \
-            --no-daemon
+            --no-daemon 2>&1 | tee bundle_log.txt || {
+              echo "=========================================================="
+              echo "=== GRADLE AAB FAILURE SUMMARY (LAST 60 LINES) ==="
+              echo "=========================================================="
+              tail -n 60 bundle_log.txt
+              exit 1
+            }
 
     artifacts:
       # Direct-install APK
