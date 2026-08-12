@@ -1,5 +1,5 @@
 import React from 'react';
-import { Inbox, LucideIcon } from 'lucide-react';
+import { Inbox, type LucideIcon } from 'lucide-react';
 
 interface EmptyStateCardProps {
     icon?: LucideIcon;
