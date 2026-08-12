@@ -121,8 +121,9 @@ export default function WalletScreen() {
       ]);
 
       if (wRes.status === 'fulfilled') {
-        const raw = wRes.value.data || [];
-        setWallets(raw.map((w: any) => ({
+        const rawData = wRes.value.data;
+        const rawList = Array.isArray(rawData) ? rawData : (rawData?.wallets || []);
+        setWallets(rawList.map((w: any) => ({
           ...w,
           balance: parseFloat(w.balance) || 0,
           available_balance: parseFloat(w.available_balance ?? w.balances?.available ?? w.balance) || 0,

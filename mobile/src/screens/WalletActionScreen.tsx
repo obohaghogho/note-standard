@@ -25,6 +25,11 @@ export default function WalletActionScreen() {
   const isDeposit = type === 'deposit';
   const isFiat = ['USD', 'NGN', 'EUR', 'GBP', 'JPY', 'TZS', 'GHS', 'KES', 'ZAR', 'CAD'].includes(currency);
 
+  const [bankList, setBankList] = useState<Array<{ code: string; name: string }>>([]);
+  const [bankCode, setBankCode] = useState('');
+  const [resolvingAccount, setResolvingAccount] = useState(false);
+  const [verifiedName, setVerifiedName] = useState('');
+
   React.useEffect(() => {
     async function loadCapabilities() {
       try {
@@ -42,8 +47,54 @@ export default function WalletActionScreen() {
         // Fallback to bank if capability fetch fails
       }
     }
+
+    async function loadBanks() {
+      if (currency === 'NGN') {
+        try {
+          const res = await apiClient.get('/anchor/banks');
+          const list = res.data?.banks || res.data?.data || [];
+          if (list.length > 0) {
+            setBankList(list.map((b: any) => ({ code: b.code || b.bankCode, name: b.name || b.bankName })));
+          }
+        } catch (e) {
+          // Fallback static list for NGN popular banks
+          setBankList([
+            { code: '058', name: 'GTBank' },
+            { code: '057', name: 'Zenith Bank' },
+            { code: '011', name: 'First Bank' },
+            { code: '033', name: 'United Bank for Africa (UBA)' },
+            { code: '044', name: 'Access Bank' },
+            { code: '214', name: 'FCMB' },
+            { code: '035', name: 'Wema Bank (ALAT)' },
+            { code: '50515', name: 'Moniepoint' },
+            { code: '999992', name: 'OPay' },
+            { code: '50211', name: 'Kuda Bank' },
+          ]);
+        }
+      }
+    }
+
     loadCapabilities();
+    loadBanks();
   }, [currency]);
+
+  const resolveAccountName = async (num: string, code: string) => {
+    if (num.length === 10 && code) {
+      setResolvingAccount(true);
+      try {
+        const res = await apiClient.post('/anchor/verify-account', { accountNumber: num, bankCode: code });
+        const name = res.data?.data?.accountName || res.data?.accountName || res.data?.data?.name;
+        if (name) {
+          setAccountName(name);
+          setVerifiedName(name);
+        }
+      } catch (err: any) {
+        setVerifiedName('');
+      } finally {
+        setResolvingAccount(false);
+      }
+    }
+  };
 
   const handleDeposit = async () => {
     if (!amount || isNaN(parseFloat(amount))) {
@@ -227,6 +278,30 @@ export default function WalletActionScreen() {
         {!isDeposit && isFiat && (
           <>
             <Text style={styles.label}>Bank Name</Text>
+            {currency === 'NGN' && bankList.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                {bankList.map((b) => (
+                  <TouchableOpacity
+                    key={b.code}
+                    style={[
+                      { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: '#1e293b', marginRight: 8, borderWidth: 1, borderColor: '#334155' },
+                      bankCode === b.code && { backgroundColor: '#6366f122', borderColor: '#6366f1' }
+                    ]}
+                    onPress={() => {
+                      setBankCode(b.code);
+                      setBankName(b.name);
+                      if (accountNumber.length === 10) {
+                        resolveAccountName(accountNumber, b.code);
+                      }
+                    }}
+                  >
+                    <Text style={{ color: bankCode === b.code ? '#818cf8' : '#94a3b8', fontSize: 12, fontWeight: '600' }}>
+                      {b.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
             <TextInput
               style={styles.input}
               placeholder="e.g. GTBank, Chase, Barclays"
@@ -237,12 +312,29 @@ export default function WalletActionScreen() {
             <Text style={styles.label}>Account Number / IBAN</Text>
             <TextInput
               style={styles.input}
-              placeholder="Your account number"
+              placeholder="10-digit account number"
               placeholderTextColor="#444"
               keyboardType="numeric"
+              maxLength={10}
               value={accountNumber}
-              onChangeText={setAccountNumber}
+              onChangeText={(val) => {
+                setAccountNumber(val);
+                if (val.length === 10 && bankCode) {
+                  resolveAccountName(val, bankCode);
+                }
+              }}
             />
+            {resolvingAccount && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                <ActivityIndicator size="small" color="#6366f1" />
+                <Text style={{ color: '#818cf8', fontSize: 12, marginLeft: 8 }}>Verifying account name via NIP...</Text>
+              </View>
+            )}
+            {verifiedName ? (
+              <View style={{ padding: 10, borderRadius: 8, backgroundColor: '#05966922', borderWidth: 1, borderColor: '#10b981', marginBottom: 12 }}>
+                <Text style={{ color: '#34d399', fontSize: 12, fontWeight: '700' }}>✅ Account Verified: {verifiedName}</Text>
+              </View>
+            ) : null}
             <Text style={styles.label}>Account Holder Name</Text>
             <TextInput
               style={styles.input}
