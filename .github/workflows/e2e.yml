@@ -41,7 +41,8 @@ jobs:
       run: npm install --legacy-peer-deps
       
     - name: Install Playwright Browsers
-      run: npx playwright install --with-deps
+      run: npx playwright install chromium
+      continue-on-error: true
       
     - name: Run Playwright tests
       working-directory: ./client
