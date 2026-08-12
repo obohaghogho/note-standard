@@ -31,7 +31,7 @@ jobs:
           cache: 'npm'
 
       - name: Install Dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       # ── Phase 8.2 + 8.3 (standalone — no live server needed) ──────
       # Runs ACC War-Game and Replay Certification against an in-memory mock.
