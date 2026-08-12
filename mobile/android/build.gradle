@@ -5,6 +5,11 @@ buildscript {
     google()
     mavenCentral()
   }
+  configurations.all {
+    resolutionStrategy {
+      force "org.jetbrains.kotlin:kotlin-gradle-plugin:${findProperty('android.kotlinVersion') ?: '2.0.21'}"
+    }
+  }
   dependencies {
     classpath 'com.google.gms:google-services:4.4.2'
     classpath('com.android.tools.build:gradle')
