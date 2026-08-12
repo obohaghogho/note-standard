@@ -49,9 +49,13 @@
     "next": "16.2.10",
     "node-fetch": "^2.7.0",
     "node-forge": "^1.4.0",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
     "whatwg-url": "^16.0.1"
+  },
+  "overrides": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.14.0",
