@@ -9,7 +9,7 @@ buildscript {
     classpath 'com.google.gms:google-services:4.4.2'
     classpath('com.android.tools.build:gradle')
     classpath('com.facebook.react:react-native-gradle-plugin')
-    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${findProperty('android.kotlinVersion') ?: '2.1.20'}")
+    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${findProperty('android.kotlinVersion') ?: '2.0.21'}")
   }
 }
 
@@ -19,7 +19,7 @@ ext {
   compileSdkVersion = Integer.parseInt(findProperty('android.compileSdkVersion') ?: "35")
   targetSdkVersion = Integer.parseInt(findProperty('android.targetSdkVersion') ?: "34")
   ndkVersion = findProperty('android.ndkVersion') ?: "26.1.10909125"
-  kotlinVersion = findProperty('android.kotlinVersion') ?: "2.1.20"
+  kotlinVersion = findProperty('android.kotlinVersion') ?: "2.0.21"
 }
 
 allprojects {
@@ -30,10 +30,10 @@ allprojects {
   }
   configurations.all {
     resolutionStrategy {
-      force "org.jetbrains.kotlin:kotlin-stdlib:${findProperty('android.kotlinVersion') ?: '2.1.20'}"
-      force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:${findProperty('android.kotlinVersion') ?: '2.1.20'}"
-      force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:${findProperty('android.kotlinVersion') ?: '2.1.20'}"
-      force "org.jetbrains.kotlin:kotlin-reflect:${findProperty('android.kotlinVersion') ?: '2.1.20'}"
+      force "org.jetbrains.kotlin:kotlin-stdlib:${findProperty('android.kotlinVersion') ?: '2.0.21'}"
+      force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:${findProperty('android.kotlinVersion') ?: '2.0.21'}"
+      force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:${findProperty('android.kotlinVersion') ?: '2.0.21'}"
+      force "org.jetbrains.kotlin:kotlin-reflect:${findProperty('android.kotlinVersion') ?: '2.0.21'}"
     }
   }
 }
