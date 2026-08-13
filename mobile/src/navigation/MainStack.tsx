@@ -18,9 +18,23 @@ import NotificationsScreen from '../screens/notifications/NotificationsScreen';
 import SearchScreen from '../screens/search/SearchScreen';
 import UserIssueTrackerScreen from '../screens/support/UserIssueTrackerScreen';
 import SecuritySettingsScreen from '../screens/profile/SecuritySettingsScreen';
+import { ProfileEditScreen } from '../screens/profile/ProfileEditScreen';
+import { KycVerificationScreen } from '../screens/profile/KycVerificationScreen';
+import { CommunityFeedScreen } from '../screens/community/CommunityFeedScreen';
+import { AffiliateScreen } from '../screens/affiliate/AffiliateScreen';
+import { AdsDashboardScreen } from '../screens/ads/AdsDashboardScreen';
+import { CampaignBuilderScreen } from '../screens/ads/CampaignBuilderScreen';
+import { SubscriptionPlansScreen } from '../screens/subscription/SubscriptionPlansScreen';
+import { BillingHistoryScreen } from '../screens/subscription/BillingHistoryScreen';
 
 export type MainStackParamList = {
   MainTabs: undefined;
+  CommunityFeed: undefined;
+  Affiliate: undefined;
+  AdsDashboard: undefined;
+  CampaignBuilder: undefined;
+  SubscriptionPlans: undefined;
+  BillingHistory: undefined;
   NoteEditor: { noteId?: string };
   WalletAction: { type: 'deposit' | 'withdraw' | 'sell'; currency: string };
   Exchange: { mode?: 'convert' | 'buy' | 'sell' | 'swap' };
@@ -30,6 +44,8 @@ export type MainStackParamList = {
   BankAccounts: undefined;
   ShareNote: { noteId?: string; noteTitle?: string };
   PublicProfile: { userId: string };
+  ProfileEdit: undefined;
+  KycVerification: undefined;
   TeamDetail: { teamId: string };
   CreateTeam: undefined;
   Notifications: undefined;
@@ -89,6 +105,46 @@ export default function MainStack() {
       <Stack.Screen
         name="PublicProfile"
         component={PublicProfileScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="ProfileEdit"
+        component={ProfileEditScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="KycVerification"
+        component={KycVerificationScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="CommunityFeed"
+        component={CommunityFeedScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="Affiliate"
+        component={AffiliateScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="AdsDashboard"
+        component={AdsDashboardScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="CampaignBuilder"
+        component={CampaignBuilderScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="SubscriptionPlans"
+        component={SubscriptionPlansScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="BillingHistory"
+        component={BillingHistoryScreen}
         options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen

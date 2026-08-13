@@ -53,3 +53,10 @@ user_pasted_agreement.txt
 temp_user_agreement.txt
 *.txt
 
+# JDK & archives
+jdk17/
+*.zip
+scratch/
+ANCHOR_COMPLIANCE_RESUBMISSION/
+
+

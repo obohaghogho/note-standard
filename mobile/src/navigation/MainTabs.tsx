@@ -2,6 +2,7 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text, View } from 'react-native';
 import FeedScreen from '../screens/FeedScreen';
+import { CommunityFeedScreen } from '../screens/community/CommunityFeedScreen';
 import ChatStack from './ChatStack';
 import NotesScreen from '../screens/NotesScreen';
 import WalletScreen from '../screens/WalletScreen';
@@ -10,6 +11,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 
 export type MainTabParamList = {
   Home: undefined;
+  Community: undefined;
   Chat: undefined;
   Wallet: undefined;
   Teams: undefined;
@@ -49,6 +51,11 @@ export default function MainTabs() {
         name="Home"
         component={FeedScreen}
         options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="🏠" label="Home" focused={focused} /> }}
+      />
+      <Tab.Screen
+        name="Community"
+        component={CommunityFeedScreen}
+        options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="🌐" label="Community" focused={focused} /> }}
       />
       <Tab.Screen
         name="Chat"

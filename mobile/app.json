@@ -3,6 +3,7 @@
     "name": "NoteStandard",
     "slug": "mobile",
     "version": "1.6.6",
+    "scheme": "notestandard",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",

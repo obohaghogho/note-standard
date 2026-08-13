@@ -12,7 +12,16 @@ export interface User {
     username: string;
     full_name?: string;
     avatar_url?: string;
+    cover_url?: string;
+    bio?: string;
+    website?: string;
+    country_code?: string;
+    phone?: string;
+    kyc_level?: number;
+    preferred_language?: string;
     plan_tier?: string;
+    is_pro?: boolean;
+    is_advertiser?: boolean;
 }
 
 export class AuthService {

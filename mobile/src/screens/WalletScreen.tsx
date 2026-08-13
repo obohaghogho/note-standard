@@ -9,6 +9,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useIsFocused } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList } from '../navigation/MainStack';
+import { DynamicTransactionLimitsCard } from '../components/wallet/DynamicTransactionLimitsCard';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface Wallet {
@@ -526,6 +527,11 @@ export default function WalletScreen() {
           renderItem={activeTab === 'fiat' ? renderFiatCard : renderCryptoCard}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366f1" />}
           contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 40 }}
+          ListHeaderComponent={
+            <DynamicTransactionLimitsCard
+              onUpgradePress={() => (navigation as any).navigate('KycVerification')}
+            />
+          }
           ListFooterComponent={renderActivity}
         />
       )}

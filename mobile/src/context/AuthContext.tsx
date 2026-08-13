@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import apiClient, { setSwitchingAccount } from '../api/apiClient';
+import { supabase } from '../api/supabase';
 import { AuthService, User } from '../services/AuthService';
 import { StoredAccount } from '../utils/AccountManager';
 import EventEmitter from '../services/EventEmitter';
@@ -18,6 +19,7 @@ interface AuthContextType {
   removeAccount: (userId: string) => Promise<void>;
   addAccount: () => void;
   accountReady: boolean;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -241,13 +243,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addAccount = () => {
-    setUser(null); 
+    setUser(null);
+  };
+
+  const refreshProfile = async () => {
+    try {
+      const currentUser = await AuthService.getUser();
+      if (!currentUser?.id) return;
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', currentUser.id)
+        .single();
+
+      if (data && !error) {
+        const updatedUser = { ...currentUser, ...data };
+        setUser(updatedUser);
+        await AuthService.setUser(updatedUser);
+      }
+    } catch (err) {
+      console.warn('[AuthContext] refreshProfile error:', err);
+    }
   };
 
   return (
     <AuthContext.Provider value={{ 
       user, isLoading, isAuthenticated: !!user, accounts,
-      login, register, logout, switchAccount, removeAccount, addAccount, accountReady 
+      login, register, logout, switchAccount, removeAccount, addAccount, accountReady, refreshProfile 
     }}>
       {children}
     </AuthContext.Provider>

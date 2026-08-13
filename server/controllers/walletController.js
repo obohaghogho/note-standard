@@ -1513,4 +1513,44 @@ exports.getCurrencyAuditLogs = async (req, res) => {
   }
 };
 
+exports.getMyAffiliateStats = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('id', userId)
+      .single();
+
+    const referralCode = profile?.username || userId.slice(0, 8);
+
+    const { count } = await supabase
+      .from('profiles')
+      .select('id', { count: 'exact', head: true })
+      .eq('referred_by', userId);
+
+    const { data: commissions } = await supabase
+      .from('affiliate_commissions')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    const totalEarned = (commissions || []).reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0);
+
+    res.json({
+      success: true,
+      referral_code: referralCode,
+      referral_link: `https://app.notestandard.com/register?ref=${referralCode}`,
+      total_referrals: count || 0,
+      total_earned: totalEarned,
+      currency: 'USD',
+      commissions: commissions || [],
+    });
+  } catch (err) {
+    console.error('[WalletController] getMyAffiliateStats Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
 

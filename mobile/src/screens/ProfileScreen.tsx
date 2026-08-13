@@ -8,6 +8,8 @@ import { useAuth } from '../context/AuthContext';
 import apiClient from '../api/apiClient';
 import { useNavigation } from '@react-navigation/native';
 
+import { LanguageSettingsModal } from './settings/LanguageSettingsModal';
+
 const MenuItem = ({
   icon, label, value, onPress, danger
 }: {
@@ -28,6 +30,7 @@ const MenuItem = ({
 export default function ProfileScreen() {
   const { user, accounts, logout, switchAccount, removeAccount, addAccount } = useAuth();
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showLangModal, setShowLangModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [updatingPassword, setUpdatingPassword] = useState(false);
@@ -36,6 +39,7 @@ export default function ProfileScreen() {
   const name = user?.full_name || user?.username || 'User';
   const email = user?.email || '';
   const plan = user?.plan_tier || 'FREE';
+  const lang = (user?.preferred_language || 'en').toUpperCase();
   const initial = name.charAt(0).toUpperCase();
 
   const handleLogout = () => {
@@ -92,8 +96,14 @@ export default function ProfileScreen() {
       </LinearGradient>
 
       {/* Account Section */}
-      <Text style={styles.sectionLabel}>Account & Financial Settings</Text>
+      <Text style={styles.sectionLabel}>Account & Profile Settings</Text>
       <View style={styles.section}>
+        <MenuItem icon="👑" label="Subscription Plans & Billing" value={user?.is_pro ? 'Pro Tier Active' : 'Free Tier'} onPress={() => navigation.navigate('SubscriptionPlans')} />
+        <MenuItem icon="📢" label="Advertiser & Campaign Portal" value="Auction, CPC & Ads" onPress={() => navigation.navigate('AdsDashboard')} />
+        <MenuItem icon="🎁" label="Affiliate & Referral Program" value="Earn lifetime rewards" onPress={() => navigation.navigate('Affiliate')} />
+        <MenuItem icon="🛡️" label="Identity Verification (KYC)" value={`Tier ${user?.kyc_level || 0} Active`} onPress={() => navigation.navigate('KycVerification')} />
+        <MenuItem icon="✏️" label="Edit Profile & Photos" value="Avatar, Cover, Bio, Phone" onPress={() => navigation.navigate('ProfileEdit')} />
+        <MenuItem icon="🌐" label="Language / Locale" value={lang} onPress={() => setShowLangModal(true)} />
         <MenuItem icon="👤" label="Full Name" value={name} />
         <MenuItem icon="📧" label="Email" value={email} />
         <MenuItem icon="🔒" label="Security & Password" onPress={() => navigation.navigate('SecuritySettings')} />
@@ -296,6 +306,12 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Language Settings Modal */}
+      <LanguageSettingsModal
+        visible={showLangModal}
+        onClose={() => setShowLangModal(false)}
+      />
     </ScrollView>
   );
 }
