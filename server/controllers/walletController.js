@@ -323,7 +323,7 @@ exports.depositTransfer = async (req, res, next) => {
       userId: req.user.id
     });
 
-    if (upCurr === 'NGN' || chosenProvider === 'fincra') {
+    if (['NGN', 'GHS'].includes(upCurr) || chosenProvider === 'fincra') {
       const normalizedBankDetails = {
         bankName: instructions.account.bank_name || process.env.FINCRA_BANK_NAME || 'Guaranty Trust Bank',
         accountName: instructions.account.holder || process.env.FINCRA_ACCOUNT_NAME || 'JOSSY DIGITAL TECHNOLOGIES LTD',
@@ -331,13 +331,13 @@ exports.depositTransfer = async (req, res, next) => {
         bankCode: instructions.account.bank_code || process.env.FINCRA_BANK_CODE || '058',
         accountType: instructions.account.type || 'Virtual Account',
         reference: instructions.reference.code,
-        note: 'Transfer Nigerian Naira (NGN) only from a valid Nigerian bank account. Include your unique reference in transfer narration.'
+        note: instructions.notices ? instructions.notices[0] : `Transfer ${upCurr} only from a valid bank account. Include your unique reference in transfer narration.`
       };
 
       // Ensure a pending transaction and manual deposit record exist in DB so proof submissions & webhooks can match
       try {
         const walletService = require("../services/walletService");
-        const wallet = await walletService.createWallet(req.user.id, 'NGN', 'native');
+        const wallet = await walletService.createWallet(req.user.id, upCurr, 'native');
         if (wallet && wallet.id) {
           const depositAmount = parseFloat(amount) || 0;
           const refCode = instructions.reference.code;
@@ -354,7 +354,7 @@ exports.depositTransfer = async (req, res, next) => {
               user_id: req.user.id,
               wallet_id: wallet.id,
               amount: depositAmount,
-              currency: 'NGN',
+              currency: upCurr,
               type: 'DEPOSIT',
               status: 'PENDING',
               payment_status: 'PAYMENT_PENDING',
@@ -363,7 +363,7 @@ exports.depositTransfer = async (req, res, next) => {
               idempotency_key: refCode,
               reference_id: refCode,
               provider: 'fincra',
-              display_label: 'NGN Bank Transfer Deposit',
+              display_label: `${upCurr} Bank Transfer Deposit`,
               metadata: {
                 display_ref: refCode,
                 provider: 'fincra',
@@ -385,20 +385,20 @@ exports.depositTransfer = async (req, res, next) => {
             await supabase.from("manual_deposits").insert({
               user_id: req.user.id,
               amount: depositAmount,
-              currency: 'NGN',
+              currency: upCurr,
               reference: refCode,
               status: 'pending'
             }).catch(mErr => console.warn("[WalletController] Manual deposit pre-create warning:", mErr.message));
           }
         }
       } catch (prepErr) {
-        console.warn("[WalletController] Pre-creation of NGN deposit record warning:", prepErr.message);
+        console.warn(`[WalletController] Pre-creation of ${upCurr} deposit record warning:`, prepErr.message);
       }
 
       return res.json({
         success: true,
         provider: 'FINCRA',
-        currency: 'NGN',
+        currency: upCurr,
         bankDetails: normalizedBankDetails,
         instructions
       });
