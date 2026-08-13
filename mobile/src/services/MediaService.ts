@@ -55,24 +55,41 @@ export class MediaService {
       }
 
       let arrayBuffer: ArrayBuffer | null = null;
-      let retries = 3;
-      while (retries > 0) {
-        try {
-          arrayBuffer = await new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.onload = () => resolve(xhr.response);
-            xhr.onerror = () => {
-              reject(new Error('Failed to read local file (Network request failed)'));
-            };
-            xhr.responseType = 'arraybuffer';
-            xhr.open('GET', readableUri, true);
-            xhr.send(null);
+
+      // Primary strategy for Android native file URIs: FileSystem.readAsStringAsync (bypasses XHR GET local network block)
+      try {
+        if (FileSystem && typeof (FileSystem as any).readAsStringAsync === 'function') {
+          const base64 = await (FileSystem as any).readAsStringAsync(readableUri, {
+            encoding: (FileSystem as any).EncodingType?.Base64 || 'base64',
           });
-          break;
-        } catch (e) {
-          retries--;
-          if (retries === 0) throw e;
-          await new Promise(r => setTimeout(r, 2000));
+          const buf = Buffer.from(base64, 'base64');
+          arrayBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+          console.log('[MediaService] Local file read successfully via FileSystem base64 strategy');
+        }
+      } catch (fsErr) {
+        console.warn('[MediaService] FileSystem base64 read warning, trying XHR fallback:', fsErr);
+      }
+
+      if (!arrayBuffer) {
+        let retries = 3;
+        while (retries > 0) {
+          try {
+            arrayBuffer = await new Promise((resolve, reject) => {
+              const xhr = new XMLHttpRequest();
+              xhr.onload = () => resolve(xhr.response);
+              xhr.onerror = () => {
+                reject(new Error('Failed to read local file (Network request failed)'));
+              };
+              xhr.responseType = 'arraybuffer';
+              xhr.open('GET', readableUri, true);
+              xhr.send(null);
+            });
+            break;
+          } catch (e) {
+            retries--;
+            if (retries === 0) throw e;
+            await new Promise(r => setTimeout(r, 1000));
+          }
         }
       }
 

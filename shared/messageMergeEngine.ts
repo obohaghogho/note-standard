@@ -33,7 +33,7 @@ export interface MergeResult {
 }
 
 function getEventKey(m: Message): string | undefined {
-    return m.event_id || m.client_request_id || m.clientRequestId;
+    return m.event_id || m.eventId || m.client_event_id || m.client_request_id || m.clientRequestId;
 }
 
 export function mergeMessages(existing: Message[], incoming: Message[]): MergeResult {

@@ -50,9 +50,9 @@ class FincraBankingProviderV1 extends IBankingProvider {
     return {
       providerId: 'fincra',
       version: 'v1',
-      name: 'Fincra NGN Virtual Accounts',
+      name: 'Fincra Virtual Accounts',
       bankName: this.bankName,
-      supportedCurrencies: ['NGN'],
+      supportedCurrencies: ['NGN', 'GHS'],
       supportsVirtualAccounts: true,
       supportsBankTransfer: true,
       supportsCards: true,
@@ -65,46 +65,34 @@ class FincraBankingProviderV1 extends IBankingProvider {
   }
 
   /**
-   * Internal account details (Includes internal channel reference)
-   */
-  async getAccountDetails(userId = null) {
-    return {
-      providerId: 'fincra',
-      version: 'v1',
-      accountHolder: this.accountHolder,
-      bankName: this.bankName,
-      bankCode: this.bankCode,
-      accountNumber: this.accountNumber,
-      channelReference: this.channelReference, // Internal only
-      accountType: this.accountType,
-      currency: this.currency,
-      country: this.country,
-      allocationMode: this.allocationMode
-    };
-  }
-
-  /**
    * Enterprise Customer Deposit Instructions.
    * Customer UI receives ONLY customer-safe fields. Channel Reference is NOT exposed.
    */
   async createDepositInstructions({ currency = 'NGN', rail = 'BANK_TRANSFER', userId }) {
+    const isGhs = String(currency).toUpperCase() === 'GHS';
+    const bankName = isGhs ? (process.env.FINCRA_GHS_BANK_NAME || 'FIRST BANK') : this.bankName;
+    const bankCode = isGhs ? (process.env.FINCRA_GHS_BANK_CODE || 'INCEGHAC') : this.bankCode;
+    const accountHolder = isGhs ? (process.env.FINCRA_GHS_ACCOUNT_NAME || 'Jossy Digital Technologies Ltd.') : this.accountHolder;
+    const accountNumber = isGhs ? (process.env.FINCRA_GHS_ACCOUNT_NUMBER || '9990000132713') : this.accountNumber;
+    const curr = isGhs ? 'GHS' : 'NGN';
+
     const UserBankReferenceService = require('../payment/UserBankReferenceService');
     const userRef = await UserBankReferenceService.getOrCreateUserReference(userId, 'fincra');
     const DepositSessionService = require('../payment/DepositSessionService');
-    const session = await DepositSessionService.createSession(userId, currency, userRef);
+    const session = await DepositSessionService.createSession(userId, curr, userRef);
 
     return {
       session_id: session.session_id,
       expires_at: session.expires_at,
       provider: {
         name: 'FINCRA',
-        bank_partner: this.bankName
+        bank_partner: bankName
       },
       account: {
-        holder: this.accountHolder,
-        number: this.accountNumber,
-        bank_name: this.bankName,
-        bank_code: this.bankCode,
+        holder: accountHolder,
+        number: accountNumber,
+        bank_name: bankName,
+        bank_code: bankCode,
         type: this.accountType
       },
       reference: {
@@ -112,23 +100,23 @@ class FincraBankingProviderV1 extends IBankingProvider {
         persistent: true
       },
       qr_payload: JSON.stringify({
-        bank: this.bankName,
-        bank_code: this.bankCode,
-        account: this.accountNumber,
+        bank: bankName,
+        bank_code: bankCode,
+        account: accountNumber,
         reference: userRef,
-        currency: 'NGN'
+        currency: curr
       }),
       copy_payload: {
-        all: `Bank: ${this.bankName}\nAccount Name: ${this.accountHolder}\nAccount Number: ${this.accountNumber}\nBank Code: ${this.bankCode}\nReference: ${userRef}`,
-        bank_name: this.bankName,
-        account_number: this.accountNumber,
-        account_name: this.accountHolder,
-        bank_code: this.bankCode,
+        all: `Bank: ${bankName}\nAccount Name: ${accountHolder}\nAccount Number: ${accountNumber}\nBank Code: ${bankCode}\nReference: ${userRef}`,
+        bank_name: bankName,
+        account_number: accountNumber,
+        account_name: accountHolder,
+        bank_code: bankCode,
         reference: userRef
       },
       estimated_time: 'Instant to several minutes',
       notices: [
-        'Transfer Nigerian Naira (NGN) only from a valid Nigerian bank account.',
+        `Transfer ${curr === 'GHS' ? 'Ghanaian Cedi (GHS)' : 'Nigerian Naira (NGN)'} only from a valid bank account.`,
         `Include your unique reference (${userRef}) in your bank transfer narration/memo.`,
         'Keep your transaction receipt until your wallet is credited.',
         'Deposits are automatically matched and credited to your ledger after verification.'

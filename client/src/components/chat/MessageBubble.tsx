@@ -298,9 +298,9 @@ const MessageBubble = memo(({
                                 </p>
                             </div>
                         )}
-                        <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
+                        <div className="flex items-center justify-end gap-1 mt-1 opacity-70 flex-shrink-0">
                             {!isGrouped && (
-                                <span className="text-[10px] flex items-center gap-1" style={{ color: isSender ? activeTheme.colors.timestampSent : activeTheme.colors.timestampReceived }}>
+                                <span className="text-[10px] flex items-center gap-1 whitespace-nowrap flex-shrink-0 chat-timestamp" style={{ color: isSender ? activeTheme.colors.timestampSent : activeTheme.colors.timestampReceived }}>
                                     {msg.is_edited && <span className="italic opacity-70">(edited)</span>}
                                     {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}
                                 </span>
