@@ -244,6 +244,29 @@ export default function WalletScreen() {
           </Text>
         </View>
       </View>
+
+      {/* Quick Action Shortcuts */}
+      <View style={{ flexDirection: 'row', gap: 6, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#ffffff10' }}>
+        <TouchableOpacity style={styles.quickFeatureBtn} onPress={() => (navigation as any).navigate('Transfer', {})}>
+          <Text style={styles.quickFeatureIcon}>💸</Text>
+          <Text style={styles.quickFeatureText}>Send P2P</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.quickFeatureBtn} onPress={() => (navigation as any).navigate('VirtualAccountDetails', {})}>
+          <Text style={styles.quickFeatureIcon}>🏦</Text>
+          <Text style={styles.quickFeatureText}>Virtual Bank</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.quickFeatureBtn} onPress={() => (navigation as any).navigate('BankAccounts')}>
+          <Text style={styles.quickFeatureIcon}>💳</Text>
+          <Text style={styles.quickFeatureText}>Saved Banks</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.quickFeatureBtn} onPress={() => goToExchange('swap')}>
+          <Text style={styles.quickFeatureIcon}>🔂</Text>
+          <Text style={styles.quickFeatureText}>Swap</Text>
+        </TouchableOpacity>
+      </View>
     </LinearGradient>
   );
 
@@ -594,4 +617,8 @@ const styles = StyleSheet.create({
   ledgerType: { color: '#e5e7eb', fontSize: 13, fontWeight: '600' },
   ledgerStatus: { color: '#6b7280', fontSize: 11, marginTop: 1 },
   ledgerAmount: { fontSize: 13, fontWeight: '700' },
+
+  quickFeatureBtn: { flex: 1, backgroundColor: '#ffffff0d', borderRadius: 10, paddingVertical: 8, alignItems: 'center', borderWidth: 1, borderColor: '#ffffff10' },
+  quickFeatureIcon: { fontSize: 16, marginBottom: 2 },
+  quickFeatureText: { color: '#fff', fontSize: 10, fontWeight: '700' }
 });

@@ -1,115 +1,229 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
-import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { MainTabParamList } from '../navigation/MainTabs';
-import { DashboardService, DashboardStats } from '../services/DashboardService';
-import { useIsFocused } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
+import apiClient from '../api/apiClient';
+import { notesService } from '../api/notesService';
 
-type Props = { navigation: BottomTabNavigationProp<MainTabParamList, 'Home'> };
+interface ActivityItem {
+  id: string;
+  type: 'NOTE' | 'TX';
+  title: string;
+  subtitle: string;
+  date: Date;
+  status?: string;
+  amount?: string;
+}
 
-const QuickAction = ({ icon, label, color, onPress }: { icon: string; label: string; color: string; onPress: () => void }) => (
-  <TouchableOpacity style={[styles.quickAction, { borderColor: color + '33' }]} onPress={onPress}>
-    <Text style={styles.quickIcon}>{icon}</Text>
-    <Text style={styles.quickLabel}>{label}</Text>
-  </TouchableOpacity>
-);
-
-const StatCard = ({ value, label, color }: { value: string; label: string; color: string }) => (
-  <View style={[styles.statCard, { borderColor: color + '44' }]}>
-    <Text style={[styles.statValue, { color }]}>{value}</Text>
-    <Text style={styles.statLabel}>{label}</Text>
-  </View>
-);
-
-export default function FeedScreen({ navigation }: Props) {
+export default function FeedScreen() {
+  const navigation = useNavigation<any>();
   const { user } = useAuth();
   const isFocused = useIsFocused();
-  const [stats, setStats] = React.useState<DashboardStats>({
-    messages: 0,
-    notes: 0,
-    calls: 0,
-    balance: '0.00'
+
+  const [stats, setStats] = useState({
+    notesCount: 0,
+    balanceStr: '$0.00',
+    unreadNotifs: 0,
   });
-  const [loading, setLoading] = React.useState(true);
+  const [recentActivities, setRecentActivities] = useState<ActivityItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const loadStats = React.useCallback(async () => {
-    const data = await DashboardService.getStats();
-    setStats(data);
-    setLoading(false);
-  }, []);
-
-  React.useEffect(() => {
-    if (isFocused) {
-      loadStats();
-    }
-  }, [isFocused, loadStats]);
-
-  const firstName = user?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'there';
+  const firstName = user?.full_name?.split(' ')[0] || user?.username || user?.email?.split('@')[0] || 'User';
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
+  const loadDashboardData = useCallback(async () => {
+    if (!user) return;
+    try {
+      const [wRes, nRes, notifRes, notesList] = await Promise.allSettled([
+        apiClient.get('/wallet'),
+        apiClient.get('/wallet/transactions?limit=5'),
+        apiClient.get('/notifications'),
+        notesService.getNotes(user.id)
+      ]);
+
+      let bal = '$0.00';
+      let txList: any[] = [];
+      let unread = 0;
+
+      if (wRes.status === 'fulfilled') {
+        const raw = wRes.value.data;
+        const list = Array.isArray(raw) ? raw : (raw?.wallets || []);
+        const usd = list.find((w: any) => (w.currency || w.asset || '').toUpperCase() === 'USD');
+        const ngn = list.find((w: any) => (w.currency || w.asset || '').toUpperCase() === 'NGN');
+        if (usd) bal = `$${(parseFloat(usd.balance) || 0).toFixed(2)}`;
+        else if (ngn) bal = `₦${(parseFloat(ngn.balance) || 0).toLocaleString()}`;
+      }
+
+      if (nRes.status === 'fulfilled') {
+        txList = nRes.value.data?.transactions || nRes.value.data || [];
+      }
+
+      if (notifRes.status === 'fulfilled') {
+        const notifs = Array.isArray(notifRes.value.data) ? notifRes.value.data : (notifRes.value.data?.notifications || []);
+        unread = notifs.filter((n: any) => !n.is_read).length;
+      }
+
+      const notesArr = notesList.status === 'fulfilled' ? notesList.value : [];
+
+      setStats({
+        notesCount: notesArr.length,
+        balanceStr: bal,
+        unreadNotifs: unread,
+      });
+
+      // Map combined activity feed (Notes + Transactions)
+      const noteActs: ActivityItem[] = notesArr.slice(0, 4).map(n => ({
+        id: n.id,
+        type: 'NOTE',
+        title: n.title || 'Untitled Note',
+        subtitle: n.content ? n.content.substring(0, 40) + '...' : 'Note updated',
+        date: new Date(n.updated_at || n.created_at)
+      }));
+
+      const txActs: ActivityItem[] = txList.slice(0, 4).map(t => ({
+        id: t.id,
+        type: 'TX',
+        title: t.display_label || `${t.type || 'Transaction'} (${t.currency || ''})`,
+        subtitle: t.status || 'Completed',
+        date: new Date(t.created_at),
+        status: t.status,
+        amount: `${t.type === 'WITHDRAWAL' ? '-' : '+'}${t.amount} ${t.currency || ''}`
+      }));
+
+      const combined = [...noteActs, ...txActs]
+        .sort((a, b) => b.date.getTime() - a.date.getTime())
+        .slice(0, 6);
+
+      setRecentActivities(combined);
+    } catch (e) {
+      console.warn('[FeedScreen] Dashboard data load error:', e);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (isFocused) {
+      loadDashboardData();
+    }
+  }, [isFocused, loadDashboardData]);
+
   return (
     <LinearGradient colors={['#060611', '#0d0d1a']} style={styles.gradient}>
-      <ScrollView 
-        style={styles.scroll} 
+      <ScrollView
+        style={styles.scroll}
         contentContainerStyle={styles.content}
         refreshControl={
-          <View /> // Add real refresh control later
+          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadDashboardData(); }} tintColor="#6366f1" />
         }
       >
-        {/* Header */}
-        <View style={styles.header}>
+        {/* Top Header Bar */}
+        <View style={styles.topHeader}>
           <View>
             <Text style={styles.greeting}>{greeting},</Text>
             <Text style={styles.name}>{firstName} 👋</Text>
           </View>
-          <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={styles.avatarCircle}>
-            <Text style={styles.avatarText}>{firstName.charAt(0).toUpperCase()}</Text>
-          </TouchableOpacity>
+          
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Search')}>
+              <Text style={styles.iconText}>🔍</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Notifications')}>
+              <Text style={styles.iconText}>🔔</Text>
+              {stats.unreadNotifs > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{stats.unreadNotifs}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.avatarCircle} onPress={() => navigation.navigate('Profile')}>
+              <Text style={styles.avatarText}>{firstName.charAt(0).toUpperCase()}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Hero Banner with Balance */}
-        <LinearGradient colors={['#6366f1', '#4f46e5', '#3730a3']} style={styles.banner} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        {/* Hero Banner with Balance & Quick Launch */}
+        <LinearGradient colors={['#4f46e5', '#3730a3', '#1e1b4b']} style={styles.heroBanner}>
+          <View style={styles.bannerHeader}>
             <View>
-              <Text style={styles.bannerTitle}>Total Balance</Text>
-              <Text style={styles.balanceText}>{stats.balance}</Text>
+              <Text style={styles.bannerLabel}>Total Balance</Text>
+              <Text style={styles.balanceText}>{stats.balanceStr}</Text>
             </View>
-            <View style={styles.bannerBadge}>
-              <Text style={styles.bannerBadgeText}>✓ Secure</Text>
+            <View style={styles.syncedBadge}>
+              <Text style={styles.syncedText}>✓ Synced</Text>
             </View>
           </View>
-          <TouchableOpacity 
-            style={styles.fundButton}
-            onPress={() => navigation.navigate('Wallet')}
-          >
-            <Text style={styles.fundButtonText}>Manage Wallet</Text>
-          </TouchableOpacity>
+
+          <View style={styles.heroActionRow}>
+            <TouchableOpacity style={styles.launchBtn} onPress={() => navigation.navigate('NoteEditor', {})}>
+              <Text style={styles.launchBtnText}>+ Launch New Note</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.transferBtn} onPress={() => navigation.navigate('Transfer', {})}>
+              <Text style={styles.transferBtnText}>Send P2P ↗</Text>
+            </TouchableOpacity>
+          </View>
         </LinearGradient>
 
-        {/* Stats */}
-        <Text style={styles.sectionTitle}>Your Activity</Text>
-        <View style={styles.statsRow}>
-          <StatCard value={stats.messages.toString()} label="Messages" color="#6366f1" />
-          <StatCard value={stats.notes.toString()} label="Notes" color="#10b981" />
-          <StatCard value={stats.calls.toString()} label="Calls" color="#f59e0b" />
-        </View>
-
-        {/* Quick Actions */}
+        {/* Quick Actions Bento Grid */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.actionsGrid}>
-          <QuickAction icon="💬" label="Chat" color="#6366f1" onPress={() => navigation.navigate('Chat')} />
-          <QuickAction icon="💳" label="Wallet" color="#10b981" onPress={() => navigation.navigate('Wallet')} />
-          <QuickAction icon="👥" label="Teams" color="#f59e0b" onPress={() => navigation.navigate('Teams')} />
-          <QuickAction icon="📝" label="Notes" color="#ec4899" onPress={() => navigation.navigate('Notes')} />
+          <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('Transfer', {})}>
+            <Text style={styles.actionIcon}>💸</Text>
+            <Text style={styles.actionTitle}>Send P2P</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('VirtualAccountDetails', {})}>
+            <Text style={styles.actionIcon}>🏦</Text>
+            <Text style={styles.actionTitle}>Virtual Account</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('Exchange', {})}>
+            <Text style={styles.actionIcon}>🔂</Text>
+            <Text style={styles.actionTitle}>Swap Currency</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('Search')}>
+            <Text style={styles.actionIcon}>🔍</Text>
+            <Text style={styles.actionTitle}>Global Search</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Tips */}
-        <View style={styles.tipCard}>
-          <Text style={styles.tipTitle}>💡 Getting Started</Text>
-          <Text style={styles.tipText}>Open Chat to message your contacts, or head to Social to connect with new friends.</Text>
+        {/* Recent Activity Feed */}
+        <Text style={styles.sectionTitle}>Recent Activity Momentum</Text>
+        <View style={styles.activityFeed}>
+          {recentActivities.length === 0 ? (
+            <View style={styles.emptyFeed}>
+              <Text style={styles.emptyText}>No recent activity yet. Create a note or perform a transaction!</Text>
+            </View>
+          ) : (
+            recentActivities.map(act => (
+              <TouchableOpacity
+                key={act.id}
+                style={styles.activityCard}
+                onPress={() => {
+                  if (act.type === 'NOTE') navigation.navigate('NoteEditor', { noteId: act.id });
+                  else navigation.navigate('Wallet');
+                }}
+              >
+                <View style={[styles.actIconCircle, { backgroundColor: act.type === 'NOTE' ? '#10b98122' : '#6366f122' }]}>
+                  <Text style={{ fontSize: 18 }}>{act.type === 'NOTE' ? '📝' : '💳'}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.actTitle} numberOfLines={1}>{act.title}</Text>
+                  <Text style={styles.actSub} numberOfLines={1}>{act.subtitle}</Text>
+                </View>
+                {act.amount && <Text style={styles.actAmount}>{act.amount}</Text>}
+              </TouchableOpacity>
+            ))
+          )}
         </View>
       </ScrollView>
     </LinearGradient>
@@ -119,30 +233,54 @@ export default function FeedScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   gradient: { flex: 1 },
   scroll: { flex: 1 },
-  content: { padding: 20, paddingTop: 60, paddingBottom: 40 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 },
-  greeting: { color: '#666', fontSize: 14 },
-  name: { color: '#fff', fontSize: 26, fontWeight: '800' },
-  avatarCircle: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#6366f1', justifyContent: 'center', alignItems: 'center' },
-  avatarText: { color: '#fff', fontSize: 20, fontWeight: '800' },
-  banner: { borderRadius: 20, padding: 24, marginBottom: 32 },
-  bannerTitle: { color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: '600', textTransform: 'uppercase' },
-  balanceText: { color: '#fff', fontSize: 32, fontWeight: '800', marginTop: 4 },
-  bannerSubtitle: { color: 'rgba(255,255,255,0.8)', fontSize: 13, marginTop: 4 },
-  bannerBadge: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 },
-  bannerBadgeText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-  fundButton: { marginTop: 20, backgroundColor: '#fff', paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
-  fundButtonText: { color: '#4f46e5', fontWeight: '700', fontSize: 14 },
-  sectionTitle: { color: '#aaa', fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 14 },
-  statsRow: { flexDirection: 'row', gap: 12, marginBottom: 32 },
-  statCard: { flex: 1, backgroundColor: '#111122', borderRadius: 16, padding: 16, alignItems: 'center', borderWidth: 1 },
-  statValue: { fontSize: 22, fontWeight: '800' },
-  statLabel: { color: '#666', fontSize: 11, marginTop: 4 },
-  actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 32 },
-  quickAction: { width: '47%', backgroundColor: '#111122', borderRadius: 18, padding: 20, alignItems: 'center', borderWidth: 1 },
-  quickIcon: { fontSize: 28, marginBottom: 8 },
-  quickLabel: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  tipCard: { backgroundColor: '#111122', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#1e1e3a' },
-  tipTitle: { color: '#fff', fontSize: 15, fontWeight: '700', marginBottom: 8 },
-  tipText: { color: '#666', fontSize: 13, lineHeight: 20 },
+  content: { padding: 20, paddingTop: 50, paddingBottom: 40 },
+  topHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  greeting: { color: '#888', fontSize: 13, fontWeight: '600' },
+  name: { color: '#fff', fontSize: 24, fontWeight: '900' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  iconBtn: {
+    width: 42, height: 42, borderRadius: 21, backgroundColor: '#111122',
+    justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#222244'
+  },
+  iconText: { fontSize: 18 },
+  badge: {
+    position: 'absolute', top: 2, right: 2, backgroundColor: '#ef4444',
+    borderRadius: 8, minWidth: 16, height: 16, justifyContent: 'center', alignItems: 'center'
+  },
+  badgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+  avatarCircle: {
+    width: 42, height: 42, borderRadius: 21, backgroundColor: '#6366f1',
+    justifyContent: 'center', alignItems: 'center'
+  },
+  avatarText: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  heroBanner: { borderRadius: 24, padding: 22, marginBottom: 28, borderWidth: 1, borderColor: '#6366f1' },
+  bannerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
+  bannerLabel: { color: '#a5b4fc', fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
+  balanceText: { color: '#fff', fontSize: 32, fontWeight: '900', marginTop: 4 },
+  syncedBadge: { backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  syncedText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  heroActionRow: { flexDirection: 'row', gap: 10 },
+  launchBtn: { flex: 1, backgroundColor: '#fff', paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
+  launchBtnText: { color: '#3730a3', fontSize: 14, fontWeight: '800' },
+  transferBtn: { backgroundColor: 'rgba(255,255,255,0.2)', paddingVertical: 14, paddingHorizontal: 16, borderRadius: 14, alignItems: 'center' },
+  transferBtnText: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  sectionTitle: { color: '#aaa', fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 14 },
+  actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 28 },
+  actionCard: {
+    width: '48%', backgroundColor: '#111122', borderRadius: 18, padding: 18,
+    borderWidth: 1, borderColor: '#222244', alignItems: 'center'
+  },
+  actionIcon: { fontSize: 28, marginBottom: 6 },
+  actionTitle: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  activityFeed: { gap: 10 },
+  activityCard: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#111122',
+    borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#222244'
+  },
+  actIconCircle: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  actTitle: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  actSub: { color: '#888', fontSize: 12, marginTop: 2 },
+  actAmount: { color: '#10b981', fontSize: 13, fontWeight: '800', marginLeft: 8 },
+  emptyFeed: { backgroundColor: '#111122', padding: 20, borderRadius: 16, alignItems: 'center' },
+  emptyText: { color: '#666', fontSize: 13, textAlign: 'center' }
 });

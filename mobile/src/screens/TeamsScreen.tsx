@@ -752,6 +752,12 @@ export default function TeamsScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Teams</Text>
+        <TouchableOpacity
+          style={styles.headerBtn}
+          onPress={() => (navigation as any).navigate('CreateTeam')}
+        >
+          <Text style={styles.headerBtnText}>+ Create / Join</Text>
+        </TouchableOpacity>
         <View style={styles.countBadge}>
           <Text style={styles.countText}>{teams.length} Hubs</Text>
         </View>
@@ -821,6 +827,8 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16, borderBottomWidth: 1, borderColor: '#111133' },
   title: { color: '#fff', fontSize: 26, fontWeight: '800', flex: 1 },
+  headerBtn: { backgroundColor: '#f59e0b', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, marginRight: 10 },
+  headerBtnText: { color: '#fff', fontSize: 12, fontWeight: '800' },
   countBadge: { backgroundColor: '#f59e0b22', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 4, borderWidth: 1, borderColor: '#f59e0b44' },
   countText: { color: '#f59e0b', fontWeight: '700', fontSize: 14 },
   list: { padding: 16 },

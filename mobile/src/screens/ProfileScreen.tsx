@@ -92,11 +92,12 @@ export default function ProfileScreen() {
       </LinearGradient>
 
       {/* Account Section */}
-      <Text style={styles.sectionLabel}>Account Settings</Text>
+      <Text style={styles.sectionLabel}>Account & Financial Settings</Text>
       <View style={styles.section}>
         <MenuItem icon="👤" label="Full Name" value={name} />
         <MenuItem icon="📧" label="Email" value={email} />
-        <MenuItem icon="🔒" label="Change Password" onPress={() => setShowPasswordModal(true)} />
+        <MenuItem icon="🔒" label="Security & Password" onPress={() => navigation.navigate('SecuritySettings')} />
+        <MenuItem icon="💳" label="Saved Payout Accounts" onPress={() => navigation.navigate('BankAccounts')} />
       </View>
 
       {/* Multi-Account Management */}
@@ -105,16 +106,6 @@ export default function ProfileScreen() {
         {accounts.map(acc => {
           const isActiveAcc = acc.id === user?.id;
 
-          /**
-           * INTENT: One tap = switch account. Long-press = forget account.
-           * The "✕" button is a secondary affordance that also shows a
-           * confirmation prompt before removing. It NEVER fires removeAccount
-           * directly — it always requires explicit user confirmation.
-           *
-           * REGRESSION FIX: Previously the ✕ button called removeAccount()
-           * with no confirmation, causing accidental account removal when
-           * the user meant to tap-to-switch.
-           */
           const handleForgetAccount = () => {
             Alert.alert(
               'Forget Account',
@@ -130,37 +121,8 @@ export default function ProfileScreen() {
             );
           };
 
-          const handleManageAccount = () => {
-            const lastActiveStr = acc.lastActive ? new Date(acc.lastActive).toLocaleString() : 'Just now';
-            const planTier = (acc.profile?.plan_tier || 'FREE').toUpperCase();
-            const tokenStatus = acc.tokenState ? acc.tokenState.toUpperCase() : (acc.token ? 'VALID' : 'STALE');
-            const sessionMeta = acc.sessionId ? `${acc.sessionId.substring(0, 8)}...` : 'Active';
-            const deviceMeta = acc.deviceId ? `${acc.deviceId.substring(0, 8)}...` : 'Current Hardware';
-
-            Alert.alert(
-              `Manage: ${acc.full_name || acc.username}`,
-              `• Name: ${acc.full_name || 'N/A'}\n` +
-              `• Username: @${acc.username || 'user'}\n` +
-              `• Email: ${acc.email}\n` +
-              `• Tier: ${planTier}\n` +
-              `• Token Status: ${tokenStatus}\n` +
-              `• Session ID: ${sessionMeta}\n` +
-              `• Device ID: ${deviceMeta}\n` +
-              `• Push Routing: Registered (V2)\n` +
-              `• Last Active: ${lastActiveStr}`,
-              [
-                {
-                  text: 'Forget Account',
-                  style: 'destructive',
-                  onPress: handleForgetAccount,
-                },
-                { text: 'Close', style: 'cancel' },
-              ]
-            );
-          };
-
           const handleAccountMenu = () => {
-            const planTier = (acc.profile?.plan_tier || 'FREE').toUpperCase();
+            const planTier = ((acc as any).profile?.plan_tier || 'FREE').toUpperCase();
             const tokenStatus = acc.tokenState ? acc.tokenState.toUpperCase() : (acc.token ? 'VALID' : 'STALE');
             const sessionMeta = acc.sessionId ? `${acc.sessionId.substring(0, 8)}...` : 'Active';
             const deviceMeta = acc.deviceId ? `${acc.deviceId.substring(0, 8)}...` : 'Current Hardware';
@@ -197,26 +159,6 @@ export default function ProfileScreen() {
                   },
                 },
                 {
-                  text: 'Notification Status',
-                  onPress: () => {
-                    Alert.alert(
-                      'Push Registration',
-                      `Routing: V2 Enterprise Architecture\nStatus: Registered for active device\nDevice Token: Validated`,
-                      [{ text: 'OK' }]
-                    );
-                  },
-                },
-                {
-                  text: 'Wallet Summary',
-                  onPress: () => {
-                    Alert.alert(
-                      'Wallet Ledger Status',
-                      `Account: ${acc.email}\nLedger Isolation: Enforced\nState: Fully Isolated`,
-                      [{ text: 'OK' }]
-                    );
-                  },
-                },
-                {
                   text: 'Forget Account',
                   style: 'destructive',
                   onPress: handleForgetAccount,
@@ -228,8 +170,6 @@ export default function ProfileScreen() {
 
           return (
             <View key={acc.id} style={styles.accountItem}>
-              {/* PRIMARY TAP: switches to this account */}
-              {/* LONG PRESS: opens account context menu */}
               <TouchableOpacity
                 style={styles.accountInfo}
                 onPress={() => !isActiveAcc && switchAccount(acc.id)}
@@ -250,7 +190,6 @@ export default function ProfileScreen() {
                 {isActiveAcc && <Text style={styles.activeTag}>Active</Text>}
               </TouchableOpacity>
 
-              {/* THREE-DOT MENU BUTTON — Visible for all saved accounts */}
               <TouchableOpacity
                 onPress={(e: GestureResponderEvent) => {
                   e.stopPropagation();
@@ -271,26 +210,33 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.sectionLabel}>Preferences</Text>
+      <Text style={styles.sectionLabel}>Preferences & Activity</Text>
       <View style={styles.section}>
         <MenuItem
           icon="🔔"
-          label="Notifications"
-          value="Device Settings"
-          onPress={() => Alert.alert('Notifications', 'Managed in device Settings')}
+          label="Notifications Center"
+          value="View All"
+          onPress={() => navigation.navigate('Notifications')}
+        />
+        <MenuItem
+          icon="🔍"
+          label="Global Search"
+          value="Notes, Chats, Teams"
+          onPress={() => navigation.navigate('Search')}
         />
         <MenuItem
           icon="🎨"
           label="Appearance"
-          value="Dark Theme"
-          onPress={() => Alert.alert('Appearance', 'Optimized for comfort')}
+          value="Dark Mode (Crystal)"
+          onPress={() => Alert.alert('Appearance', 'Optimized dark mode active')}
         />
         <MenuItem icon="📱" label="App Version" value="1.4.2" />
       </View>
 
-      <Text style={styles.sectionLabel}>Support</Text>
+      <Text style={styles.sectionLabel}>Support & Feedback</Text>
       <View style={styles.section}>
-        <MenuItem icon="💬" label="Need Help" onPress={handleSupport} />
+        <MenuItem icon="💬" label="Support Chat" onPress={handleSupport} />
+        <MenuItem icon="🐛" label="Submit Bug / Feedback" onPress={() => navigation.navigate('UserIssueTracker')} />
       </View>
 
       {/* Session */}

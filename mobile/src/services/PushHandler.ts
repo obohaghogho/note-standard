@@ -13,7 +13,7 @@ import apiClient from '../api/apiClient';
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const { data } = notification.request.content;
-    const payload = data?.data ?? data;
+    const payload: any = data?.data ?? data;
     const isMessage = payload?.type === 'message' || payload?.type === 'chat_message';
     
     let shouldSuppress = isMessage;
@@ -133,7 +133,7 @@ export class PushHandler {
       const { data, title, body } = notification.request.content;
       console.log('[PushHandler] 🔔 Standard Push Received:', JSON.stringify(data));
       
-      const payload = data?.data ?? data;
+      const payload: any = data?.data ?? data;
 
       if (payload.type === 'incoming_call' && Platform.OS === 'android') {
         this.handleIncomingCall(payload as unknown as CallData);

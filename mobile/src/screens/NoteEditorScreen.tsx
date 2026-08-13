@@ -1,18 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Alert, ScrollView, KeyboardAvoidingView, Platform
+  ActivityIndicator, Alert, ScrollView, KeyboardAvoidingView, Platform, Switch
 } from 'react-native';
 import apiClient from '../api/apiClient';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
 export default function NoteEditorScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { noteId } = route.params || {};
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [isPinned, setIsPinned] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -28,6 +32,9 @@ export default function NoteEditorScreen() {
       const res = await apiClient.get(`/notes/${noteId}`);
       setTitle(res.data.title || '');
       setContent(res.data.content || '');
+      setIsFavorite(!!res.data.is_favorite);
+      setIsPinned(!!res.data.is_pinned);
+      setIsPublic(!res.data.is_private);
     } catch (e) {
       Alert.alert('Error', 'Failed to load note');
       navigation.goBack();
@@ -44,14 +51,20 @@ export default function NoteEditorScreen() {
 
     setSaving(true);
     try {
-      const payload = { title, content };
+      const payload = {
+        title,
+        content,
+        is_favorite: isFavorite,
+        is_pinned: isPinned,
+        is_private: !isPublic,
+      };
 
       if (noteId) {
         await apiClient.put(`/notes/${noteId}`, payload);
       } else {
         await apiClient.post(`/notes`, payload);
       }
-      
+
       Alert.alert('Success', 'Note saved successfully');
       navigation.goBack();
     } catch (e) {
@@ -111,6 +124,43 @@ export default function NoteEditorScreen() {
       </View>
 
       <ScrollView style={styles.content}>
+        {/* Action toolbar */}
+        <View style={styles.toolbar}>
+          <TouchableOpacity
+            style={[styles.toolChip, isFavorite && styles.toolChipActive]}
+            onPress={() => setIsFavorite(!isFavorite)}
+          >
+            <Text style={styles.toolText}>{isFavorite ? '⭐ Favorited' : '☆ Favorite'}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.toolChip, isPinned && styles.toolChipActive]}
+            onPress={() => setIsPinned(!isPinned)}
+          >
+            <Text style={styles.toolText}>{isPinned ? '📌 Pinned' : '📍 Pin Note'}</Text>
+          </TouchableOpacity>
+
+          {noteId && (
+            <TouchableOpacity
+              style={styles.shareChip}
+              onPress={() => navigation.navigate('ShareNote', { noteId, noteTitle: title })}
+            >
+              <Text style={styles.shareText}>👥 Share</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Public Feed Toggle */}
+        <View style={styles.toggleRow}>
+          <Text style={styles.toggleLabel}>Publish to Community Feed</Text>
+          <Switch
+            value={isPublic}
+            onValueChange={setIsPublic}
+            trackColor={{ false: '#222244', true: '#10b981' }}
+            thumbColor="#fff"
+          />
+        </View>
+
         <TextInput
           style={styles.titleInput}
           placeholder="Title"
@@ -119,6 +169,7 @@ export default function NoteEditorScreen() {
           onChangeText={setTitle}
           multiline
         />
+
         <TextInput
           style={styles.contentInput}
           placeholder="Start writing..."
@@ -155,6 +206,14 @@ const styles = StyleSheet.create({
   headerBtn: { color: '#666', fontSize: 16, fontWeight: '600' },
   headerTitle: { color: '#fff', fontSize: 17, fontWeight: '700' },
   content: { flex: 1, padding: 20 },
+  toolbar: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  toolChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, backgroundColor: '#111122', borderWidth: 1, borderColor: '#222244' },
+  toolChipActive: { backgroundColor: '#10b98122', borderColor: '#10b981' },
+  toolText: { color: '#ccc', fontSize: 12, fontWeight: '600' },
+  shareChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, backgroundColor: '#6366f122', borderWidth: 1, borderColor: '#6366f1' },
+  shareText: { color: '#818cf8', fontSize: 12, fontWeight: '700' },
+  toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#111122', marginBottom: 16 },
+  toggleLabel: { color: '#888', fontSize: 13, fontWeight: '600' },
   titleInput: { 
     color: '#fff', 
     fontSize: 24, 

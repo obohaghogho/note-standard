@@ -185,6 +185,17 @@ export default function WalletActionScreen() {
       }
 
       const res = await apiClient.post(`/wallet/withdraw`, payload);
+      if (res.data?.otpRequired) {
+        navigation.navigate('WithdrawalOtp', {
+          withdrawal_reference: res.data.withdrawal_reference || res.data.reference,
+          fincra_reference: res.data.fincra_reference,
+          trace_id: res.data.trace_id,
+          amount: parseFloat(amount),
+          currency,
+        });
+        return;
+      }
+
       Alert.alert(
         '✅ Withdrawal Submitted',
         res.data?.message || 'Your withdrawal request has been submitted and will be processed within 1-24 hours.',
