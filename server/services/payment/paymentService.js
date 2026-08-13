@@ -155,16 +155,9 @@ class PaymentService {
       }
 
       if (createError) {
-        // Handle race condition / unique constraint violation (23505 or duplicate key message)
-        const isUniqueViolation = createError.code === "23505" || 
-          (createError.message && (
-            createError.message.includes("unique") || 
-            createError.message.includes("duplicate") ||
-            createError.message.includes("unique_personal_wallet")
-          ));
-
-        if (isUniqueViolation) {
-          logger.info(`[PaymentService] Race condition / unique constraint hit: Wallet already exists for ${userId} (${upCurrency})`);
+        // Fallback Tier A: Re-query wallets_store to see if the user already has a wallet row for this currency
+        try {
+          logger.info(`[PaymentService] Direct insert error (${createError.code || createError.message}). Attempting re-query fallback for ${userId} (${upCurrency})...`);
           const { data: retryList } = await supabase
             .from("wallets_store")
             .select("*")
@@ -172,13 +165,34 @@ class PaymentService {
             .eq("currency", upCurrency);
 
           if (retryList && retryList.length > 0) {
-            wallet = retryList[0];
+            wallet = retryList.find(w => 
+              w.network && String(w.network).toLowerCase() === String(lookupNetwork).toLowerCase()
+            ) || retryList[0];
             createError = null;
+            logger.info(`[PaymentService] Successfully recovered wallet via re-query: ${wallet.id}`);
+          }
+        } catch (reErr) {
+          logger.warn(`[PaymentService] Re-query fallback warning: ${reErr.message}`);
+        }
+
+        // Fallback Tier B: Delegate to unified walletService facade (FiatWalletService / CryptoWalletService)
+        if (!wallet) {
+          try {
+            logger.info(`[PaymentService] Attempting walletService facade creation for ${userId} (${upCurrency})...`);
+            const walletService = require("../walletService");
+            const fallbackWallet = await walletService.createWallet(userId, upCurrency, lookupNetwork);
+            if (fallbackWallet && fallbackWallet.id) {
+              wallet = fallbackWallet;
+              createError = null;
+              logger.info(`[PaymentService] Successfully created/recovered wallet via walletService: ${wallet.id}`);
+            }
+          } catch (wsErr) {
+            logger.warn(`[PaymentService] walletService facade fallback warning: ${wsErr.message}`);
           }
         }
       }
 
-      if (createError) {
+      if (createError && !wallet) {
         logger.error("Failed to create wallet for deposit", {
           createError,
           userId,
