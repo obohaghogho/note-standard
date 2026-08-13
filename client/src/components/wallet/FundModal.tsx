@@ -820,7 +820,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                                         <span className="text-gray-400 font-semibold">Provider:</span>
                                         <span className="bg-purple-600/20 text-purple-300 px-2.5 py-1 rounded-md font-bold flex items-center gap-1.5 border border-purple-500/30">
                                             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                                            {effectivePayCurrency === 'NGN' ? 'FINCRA | Guaranty Trust Bank' : 'GREY | Lead Bank (USA)'}
+                                            {effectivePayCurrency === 'GHS' ? 'FINCRA | First Bank Ghana' : effectivePayCurrency === 'NGN' ? 'FINCRA | Guaranty Trust Bank' : 'GREY | Lead Bank (USA)'}
                                         </span>
                                     </div>
                                     <span className="text-emerald-400 font-bold text-[11px]">✓ Live Virtual Account</span>
@@ -886,7 +886,9 @@ export const FundModal: React.FC<FundModalProps> = ({
                                         <div>
                                             <h4 className="text-xs font-bold text-white uppercase tracking-wider">Bank Account Details</h4>
                                             <p className="text-[10px] text-gray-400">
-                                                {effectivePayCurrency === 'NGN' 
+                                                {effectivePayCurrency === 'GHS'
+                                                    ? 'Transfer GHS to the First Bank Ghana Virtual Account below'
+                                                    : effectivePayCurrency === 'NGN' 
                                                     ? 'Transfer NGN to the GTBank Virtual Account below' 
                                                     : `Send your ${transferRail} transfer to the account below`}
                                             </p>
@@ -894,13 +896,13 @@ export const FundModal: React.FC<FundModalProps> = ({
                                         <button
                                             type="button"
                                             onClick={() => {
-                                                const bName = bankDetails?.bankDetails?.bankName || (bankDetails as any)?.instructions?.account?.bank_name || (effectivePayCurrency === 'NGN' ? 'Guaranty Trust Bank' : 'Lead Bank');
-                                                const aHolder = bankDetails?.bankDetails?.accountName || (bankDetails as any)?.instructions?.account?.holder || 'JOSSY DIGITAL TECHNOLOGIES LTD';
-                                                const aNum = bankDetails?.bankDetails?.accountNumber || (bankDetails as any)?.instructions?.account?.number || (effectivePayCurrency === 'NGN' ? '5000701121' : '217394889898');
-                                                const bCode = bankDetails?.bankDetails?.bankCode || (bankDetails as any)?.instructions?.account?.bank_code || (effectivePayCurrency === 'NGN' ? '058' : '');
-                                                const refCode = bankDetails?.bankDetails?.reference || (bankDetails as any)?.instructions?.reference?.code || bankDetails?.providerReference || 'NS-NGN-TRANSFER';
+                                                const bName = bankDetails?.bankDetails?.bankName || (bankDetails as any)?.instructions?.account?.bank_name || (effectivePayCurrency === 'GHS' ? 'FIRST BANK' : effectivePayCurrency === 'NGN' ? 'Guaranty Trust Bank' : 'Lead Bank');
+                                                const aHolder = bankDetails?.bankDetails?.accountName || (bankDetails as any)?.instructions?.account?.holder || (effectivePayCurrency === 'GHS' ? 'Jossy Digital Technologies Ltd.' : 'JOSSY DIGITAL TECHNOLOGIES LTD');
+                                                const aNum = bankDetails?.bankDetails?.accountNumber || (bankDetails as any)?.instructions?.account?.number || (effectivePayCurrency === 'GHS' ? '9990000132713' : effectivePayCurrency === 'NGN' ? '5000701121' : '217394889898');
+                                                const bCode = bankDetails?.bankDetails?.bankCode || (bankDetails as any)?.instructions?.account?.bank_code || (effectivePayCurrency === 'GHS' ? 'INCEGHAC' : effectivePayCurrency === 'NGN' ? '058' : '');
+                                                const refCode = bankDetails?.bankDetails?.reference || (bankDetails as any)?.instructions?.reference?.code || bankDetails?.providerReference || (effectivePayCurrency === 'GHS' ? 'NS-22YWA8D' : effectivePayCurrency === 'NGN' ? 'NS-NGN-REGISTERING' : 'NS-9X2AB71');
                                                 
-                                                const formatted = effectivePayCurrency === 'NGN'
+                                                const formatted = (effectivePayCurrency === 'NGN' || effectivePayCurrency === 'GHS')
                                                     ? `Bank Name: ${bName}\nBank Code: ${bCode}\nAccount Holder: ${aHolder}\nAccount Number: ${aNum}\nReference: ${refCode}`
                                                     : `Bank Name: ${bName}\nAccount Holder: ${aHolder}\nAccount Number: ${aNum}\nACH Routing: ${bankDetails?.bankDetails?.achRouting || '101019644'}\nReference: ${refCode}`;
                                                 copyToClipboard(formatted);
@@ -917,19 +919,19 @@ export const FundModal: React.FC<FundModalProps> = ({
                                     <div className="flex justify-between items-center text-xs">
                                         <span className="text-gray-400">Bank Name</span>
                                         <span className="font-bold text-white">
-                                            {bankDetails?.bankDetails?.bankName || (bankDetails as any)?.instructions?.account?.bank_name || (effectivePayCurrency === 'NGN' ? 'Guaranty Trust Bank' : 'Lead Bank')}
+                                            {bankDetails?.bankDetails?.bankName || (bankDetails as any)?.instructions?.account?.bank_name || (effectivePayCurrency === 'GHS' ? 'FIRST BANK' : effectivePayCurrency === 'NGN' ? 'Guaranty Trust Bank' : 'Lead Bank')}
                                         </span>
                                     </div>
 
-                                    {/* Bank Code (For NGN) */}
-                                    {effectivePayCurrency === 'NGN' && (
+                                    {/* Bank Code (For NGN and GHS) */}
+                                    {(effectivePayCurrency === 'NGN' || effectivePayCurrency === 'GHS') && (
                                         <div className="flex justify-between items-center text-xs">
                                             <span className="text-gray-400">Bank Code</span>
                                             <div className="flex items-center gap-2">
                                                 <span className="font-mono font-bold text-white">
-                                                    {bankDetails?.bankDetails?.bankCode || (bankDetails as any)?.instructions?.account?.bank_code || '058'}
+                                                    {bankDetails?.bankDetails?.bankCode || (bankDetails as any)?.instructions?.account?.bank_code || (effectivePayCurrency === 'GHS' ? 'INCEGHAC' : '058')}
                                                 </span>
-                                                <button onClick={() => copyToClipboard(bankDetails?.bankDetails?.bankCode || (bankDetails as any)?.instructions?.account?.bank_code || '058')}>
+                                                <button onClick={() => copyToClipboard(bankDetails?.bankDetails?.bankCode || (bankDetails as any)?.instructions?.account?.bank_code || (effectivePayCurrency === 'GHS' ? 'INCEGHAC' : '058'))}>
                                                     <Copy size={14} className="text-gray-400 hover:text-white" />
                                                 </button>
                                             </div>
@@ -940,7 +942,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                                     <div className="flex justify-between items-center text-xs">
                                         <span className="text-gray-400">Account Holder</span>
                                         <span className="font-bold text-white">
-                                            {bankDetails?.bankDetails?.accountName || (bankDetails as any)?.instructions?.account?.holder || 'JOSSY DIGITAL TECHNOLOGIES LTD'}
+                                            {bankDetails?.bankDetails?.accountName || (bankDetails as any)?.instructions?.account?.holder || (effectivePayCurrency === 'GHS' ? 'Jossy Digital Technologies Ltd.' : 'JOSSY DIGITAL TECHNOLOGIES LTD')}
                                         </span>
                                     </div>
 
@@ -948,7 +950,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                                     <div className="flex justify-between items-center text-xs">
                                         <span className="text-gray-400">Account Type</span>
                                         <span className="font-bold text-white">
-                                            {bankDetails?.bankDetails?.accountType || (bankDetails as any)?.instructions?.account?.type || (effectivePayCurrency === 'NGN' ? 'Virtual Account' : 'Checking')}
+                                            {bankDetails?.bankDetails?.accountType || (bankDetails as any)?.instructions?.account?.type || (effectivePayCurrency === 'NGN' || effectivePayCurrency === 'GHS' ? 'Virtual Account' : 'Checking')}
                                         </span>
                                     </div>
 
@@ -957,9 +959,9 @@ export const FundModal: React.FC<FundModalProps> = ({
                                         <span className="text-gray-400">Account Number</span>
                                         <div className="flex items-center gap-2">
                                             <span className="font-mono font-bold text-white text-sm">
-                                                {bankDetails?.bankDetails?.accountNumber || (bankDetails as any)?.instructions?.account?.number || (effectivePayCurrency === 'NGN' ? '5000701121' : '217394889898')}
+                                                {bankDetails?.bankDetails?.accountNumber || (bankDetails as any)?.instructions?.account?.number || (effectivePayCurrency === 'GHS' ? '9990000132713' : effectivePayCurrency === 'NGN' ? '5000701121' : '217394889898')}
                                             </span>
-                                            <button onClick={() => copyToClipboard(bankDetails?.bankDetails?.accountNumber || (bankDetails as any)?.instructions?.account?.number || (effectivePayCurrency === 'NGN' ? '5000701121' : '217394889898'))}>
+                                            <button onClick={() => copyToClipboard(bankDetails?.bankDetails?.accountNumber || (bankDetails as any)?.instructions?.account?.number || (effectivePayCurrency === 'GHS' ? '9990000132713' : effectivePayCurrency === 'NGN' ? '5000701121' : '217394889898'))}>
                                                 <Copy size={14} className="text-gray-400 hover:text-white" />
                                             </button>
                                         </div>
@@ -1022,11 +1024,11 @@ export const FundModal: React.FC<FundModalProps> = ({
 
                                     <div className="flex items-center justify-between bg-purple-900/60 p-3 rounded-lg border border-purple-400/30">
                                         <span className="font-mono text-base font-extrabold text-purple-200 tracking-wider">
-                                            {bankDetails?.bankDetails?.reference || (bankDetails as any)?.instructions?.reference?.code || bankDetails?.providerReference || (effectivePayCurrency === 'NGN' ? 'NS-NGN-REGISTERING' : 'NS-9X2AB71')}
+                                            {bankDetails?.bankDetails?.reference || (bankDetails as any)?.instructions?.reference?.code || bankDetails?.providerReference || (effectivePayCurrency === 'GHS' ? 'NS-22YWA8D' : effectivePayCurrency === 'NGN' ? 'NS-NGN-REGISTERING' : 'NS-9X2AB71')}
                                         </span>
                                         <button
                                             type="button"
-                                            onClick={() => copyToClipboard(bankDetails?.bankDetails?.reference || (bankDetails as any)?.instructions?.reference?.code || bankDetails?.providerReference || (effectivePayCurrency === 'NGN' ? 'NS-NGN-REGISTERING' : 'NS-9X2AB71'))}
+                                            onClick={() => copyToClipboard(bankDetails?.bankDetails?.reference || (bankDetails as any)?.instructions?.reference?.code || bankDetails?.providerReference || (effectivePayCurrency === 'GHS' ? 'NS-22YWA8D' : effectivePayCurrency === 'NGN' ? 'NS-NGN-REGISTERING' : 'NS-9X2AB71'))}
                                             className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-md text-xs font-bold transition-colors flex items-center gap-1.5 shadow"
                                         >
                                             <Copy size={14} />
@@ -1062,7 +1064,9 @@ export const FundModal: React.FC<FundModalProps> = ({
                                         <span>ℹ️</span> Incoming Provider Fee Notice
                                     </p>
                                     <p className="text-[10.5px] text-blue-300/90">
-                                        {effectivePayCurrency === 'NGN' 
+                                        {effectivePayCurrency === 'GHS'
+                                            ? "Fincra processes incoming Ghanaian Cedi (GHS) bank transfers with zero hidden deposit surcharges. Transfers settle directly into your NoteStandard wallet."
+                                            : effectivePayCurrency === 'NGN' 
                                             ? "Fincra processes incoming Nigerian Naira (NGN) bank transfers with zero hidden deposit surcharges. Transfers settle directly into your NoteStandard wallet."
                                             : "Grey charges a flat fee for incoming bank transfers (ACH: $2.00, Wire: $15.00). These provider fees are recorded separately in NoteStandard's treasury and do not affect your wallet credit."}
                                     </p>
@@ -1070,7 +1074,23 @@ export const FundModal: React.FC<FundModalProps> = ({
 
                                 {/* Deposit Boundaries Matrix */}
                                 <div className="grid grid-cols-2 gap-2 text-[11px] p-3 bg-gray-900/60 border border-gray-800 rounded-xl">
-                                    {effectivePayCurrency === 'NGN' ? (
+                                    {effectivePayCurrency === 'GHS' ? (
+                                        <>
+                                            <div className="space-y-1">
+                                                <p className="font-bold text-emerald-400 text-[11px]">Supported</p>
+                                                <p className="text-gray-300">✓ GHS Bank Transfers</p>
+                                                <p className="text-gray-300">✓ Ghanaian Commercial Banks</p>
+                                                <p className="text-gray-300">✓ Mobile Money (MTN / Telecel / AT)</p>
+                                                <p className="text-gray-300">✓ First Bank Ghana Virtual Accounts</p>
+                                            </div>
+                                            <div className="space-y-1 border-l border-gray-800 pl-3">
+                                                <p className="font-bold text-red-400 text-[11px]">Not Supported</p>
+                                                <p className="text-gray-400">✗ Foreign USD/EUR Banks</p>
+                                                <p className="text-gray-400">✗ International Wire/ACH</p>
+                                                <p className="text-gray-400">✗ Non-GHS Currency</p>
+                                            </div>
+                                        </>
+                                    ) : effectivePayCurrency === 'NGN' ? (
                                         <>
                                             <div className="space-y-1">
                                                 <p className="font-bold text-emerald-400 text-[11px]">Supported</p>
