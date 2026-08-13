@@ -54,97 +54,91 @@ export class MediaService {
         }
       }
 
-      let arrayBuffer: ArrayBuffer | null = null;
-
-      // Primary strategy for Android native file URIs: FileSystem.readAsStringAsync (bypasses XHR GET local network block)
-      try {
-        if (FileSystem && typeof (FileSystem as any).readAsStringAsync === 'function') {
-          const base64 = await (FileSystem as any).readAsStringAsync(readableUri, {
-            encoding: (FileSystem as any).EncodingType?.Base64 || 'base64',
-          });
-          const buf = Buffer.from(base64, 'base64');
-          arrayBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
-          console.log('[MediaService] Local file read successfully via FileSystem base64 strategy');
-        }
-      } catch (fsErr) {
-        console.warn('[MediaService] FileSystem base64 read warning, trying XHR fallback:', fsErr);
-      }
-
-      if (!arrayBuffer) {
-        let retries = 3;
-        while (retries > 0) {
-          try {
-            arrayBuffer = await new Promise((resolve, reject) => {
-              const xhr = new XMLHttpRequest();
-              xhr.onload = () => resolve(xhr.response);
-              xhr.onerror = () => {
-                reject(new Error('Failed to read local file (Network request failed)'));
-              };
-              xhr.responseType = 'arraybuffer';
-              xhr.open('GET', readableUri, true);
-              xhr.send(null);
-            });
-            break;
-          } catch (e) {
-            retries--;
-            if (retries === 0) throw e;
-            await new Promise(r => setTimeout(r, 1000));
-          }
-        }
-      }
-
-      if (!arrayBuffer) throw new Error('Failed to load file into memory');
-
-      console.log(`[MediaService] Uploading ${storagePath} (${arrayBuffer.byteLength} bytes, type: ${fileType})`);
-
-      // Upload to Supabase Storage using direct REST API to bypass JS client auth state bugs
+      // Direct high-performance native upload via FileSystem.uploadAsync (bypasses JS memory & XHR file GET block)
       let uploadData: { path: string } | null = null;
       let uploadRetries = 3;
 
+      const token = await AuthService.getToken();
+      const supabaseUrl = 'https://tngcvgisfctggvivcnva.supabase.co';
+      const uploadUrl = `${supabaseUrl}/storage/v1/object/chat-media/${storagePath}`;
+
       while (uploadRetries > 0) {
         try {
-          const token = await AuthService.getToken();
-          const supabaseUrl = 'https://tngcvgisfctggvivcnva.supabase.co';
-          const uploadUrl = `${supabaseUrl}/storage/v1/object/chat-media/${storagePath}`;
+          if (FileSystem && typeof (FileSystem as any).uploadAsync === 'function') {
+            console.log(`[MediaService] Uploading ${storagePath} via FileSystem.uploadAsync from ${readableUri}`);
+            const uploadResult = await (FileSystem as any).uploadAsync(uploadUrl, readableUri, {
+              httpMethod: 'POST',
+              uploadType: (FileSystem as any).FileSystemUploadType?.BINARY_CONTENT || 0,
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': fileType,
+                'x-upsert': 'false'
+              }
+            });
 
-          const res = await fetch(uploadUrl, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': fileType,
-              'x-upsert': 'false'
-            },
-            body: arrayBuffer,
-          });
+            if (uploadResult.status < 200 || uploadResult.status >= 300) {
+              throw new Error(`Upload HTTP ${uploadResult.status}: ${uploadResult.body}`);
+            }
 
-          if (!res.ok) {
-            const errText = await res.text();
-            throw new Error(errText);
+            uploadData = { path: storagePath };
+            break;
+          } else {
+            // Fallback strategy for environments without FileSystem.uploadAsync
+            let arrayBuffer: ArrayBuffer | null = null;
+            if (typeof (FileSystem as any).readAsStringAsync === 'function') {
+              const base64 = await (FileSystem as any).readAsStringAsync(readableUri, {
+                encoding: (FileSystem as any).EncodingType?.Base64 || 'base64',
+              });
+              const binaryString = atob(base64);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              arrayBuffer = bytes.buffer;
+            }
+
+            if (!arrayBuffer) throw new Error('Failed to read file buffer');
+
+            const res = await fetch(uploadUrl, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': fileType,
+                'x-upsert': 'false'
+              },
+              body: arrayBuffer,
+            });
+
+            if (!res.ok) throw new Error(await res.text());
+            uploadData = { path: storagePath };
+            break;
           }
-
-          uploadData = { path: storagePath };
-          break;
         } catch (error: any) {
           uploadRetries--;
           if (uploadRetries === 0) {
             console.error('[MediaService] Supabase REST upload error:', error);
             throw new Error(`Storage upload failed: ${error.message}`);
           }
-          await new Promise(r => setTimeout(r, 3000)); // wait before retry
+          await new Promise(r => setTimeout(r, 2000));
         }
       }
  
       if (!uploadData) throw new Error('Storage upload failed');
  
-      console.log('[MediaService] Upload successful, creating attachment record...');
- 
+      // Get file size for attachment registration
+      let fileSize = 0;
+      try {
+        const fileInfo = await (FileSystem as any).getInfoAsync(readableUri);
+        if (fileInfo && fileInfo.size) fileSize = fileInfo.size;
+      } catch (_) {}
+
       // Create attachment record via our backend
       try {
         const res = await apiClient.post('/media/attachments', {
           conversationId: contextId,
           fileName: safeFileName,
           fileType,
-          fileSize: arrayBuffer.byteLength,
+          fileSize,
           storagePath: uploadData.path,
           metadata: {},
         });

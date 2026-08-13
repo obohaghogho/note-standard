@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
     },
     headerActionIcon: { fontSize: 18 },
     msgList: { padding: 16, paddingBottom: 8 },
-    emptyChat: { alignItems: 'center', paddingTop: 60 },
+    emptyChat: { alignItems: 'center', paddingTop: 60, transform: [{ scaleY: -1 }] },
     emptyChatText: { color: '#444', fontSize: 14 },
     actionPreview: {
         flexDirection: 'row', alignItems: 'center',
