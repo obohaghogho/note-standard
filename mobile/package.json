@@ -44,6 +44,7 @@
     "react-native-reanimated": "^3.16.1",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
+    "react-native-svg": "15.12.1",
     "react-native-url-polyfill": "^3.0.0",
     "react-native-voip-push-notification": "^3.3.3",
     "react-native-webrtc": "^124.0.3",
