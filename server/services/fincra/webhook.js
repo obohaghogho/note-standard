@@ -172,11 +172,15 @@ async function handleDepositSuccessful(payload) {
     if (searchRef) {
       const { data: txMatch } = await supabase
         .from("transactions")
-        .select("user_id")
+        .select("user_id, status, wallet_credit_status, payment_status")
         .or(`reference_id.eq.${searchRef},metadata->>display_ref.eq.${searchRef}`)
         .maybeSingle();
 
       if (txMatch) {
+        if (txMatch.status === 'COMPLETED' || txMatch.wallet_credit_status === 'WALLET_CREDITED' || txMatch.payment_status === 'WALLET_CREDITED') {
+          logger.info(`[Fincra/webhook] Transaction ${searchRef} already credited via IdempotentLedgerCreditService. Skipping double credit.`);
+          return { handled: true, status: 'SUCCESSFUL', reason: 'Already credited' };
+        }
         userId = txMatch.user_id;
         logger.info(`[Fincra/webhook] Resolved user ${userId} via transaction reference match (${searchRef}).`);
       } else {
@@ -252,26 +256,16 @@ async function handleDepositSuccessful(payload) {
   const IdempotentLedgerCreditService = require("../payment/IdempotentLedgerCreditService");
   const searchRef = data.customerReference || data.merchantReference || data.reference || data.narration || fincraRef;
 
-  // First, find primary transaction record to update payment_status
   let { data: primaryTx } = await supabase
     .from("transactions")
     .select("id, reference_id, payment_status, wallet_credit_status")
     .or(`reference_id.eq.${searchRef},provider_reference.eq.${fincraRef},metadata->>display_ref.eq.${searchRef}`)
     .maybeSingle();
 
-  if (primaryTx) {
-    await supabase.from("transactions")
-      .update({
-        payment_status: "PAYMENT_CONFIRMED",
-        provider_transaction_id: fincraRef,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", primaryTx.id);
-  }
-
   // Idempotently credit wallet via authoritative credit engine
+  let creditRes = null;
   try {
-    const creditRes = await IdempotentLedgerCreditService.creditWallet({
+    creditRes = await IdempotentLedgerCreditService.creditWallet({
       transactionId: primaryTx?.id || null,
       reference: searchRef,
       providerTransactionId: fincraRef,
@@ -285,95 +279,19 @@ async function handleDepositSuccessful(payload) {
     logger.error(`[Fincra/webhook] IdempotentLedgerCreditService error: ${creditErr.message}`);
   }
 
-  if (isSettled) {
-    await supabase.from("fincra_transactions")
-      .update({ status: FINCRA_TX_STATUS.SUCCESSFUL })
-      .eq("fincra_reference", fincraRef);
+  await supabase.from("fincra_transactions")
+    .update({ status: FINCRA_TX_STATUS.SUCCESSFUL })
+    .eq("fincra_reference", fincraRef);
 
-    await recordFincraAudit({
-      action: "DEPOSIT_CREDITED_AVAILABLE",
-      userId,
-      details: { fincraRef, amount, currency, status: 'AVAILABLE' },
-    });
+  await recordFincraAudit({
+    action: "DEPOSIT_CREDITED_AVAILABLE",
+    userId,
+    details: { fincraRef, amount, currency, status: 'AVAILABLE' },
+  });
 
-    logger.info(`[Fincra/webhook] ✅ Deposit credited to AVAILABLE: ${amount} ${currency} for user ${userId}.`);
+  logger.info(`[Fincra/webhook] ✅ Deposit processed via IdempotentLedgerCreditService: ${amount} ${currency} for user ${userId}.`);
 
-    // Notification
-    try {
-      const notificationService = require("../notificationService");
-      await notificationService.sendNotification(userId, {
-        type: 'DEPOSIT_SETTLED',
-        title: 'Deposit Settled & Available',
-        message: `Your deposit of ${currency} ${amount.toLocaleString()} is now available in your wallet.`,
-        data: { amount, currency, fincraRef },
-      });
-    } catch (nErr) {
-      logger.warn(`[Fincra/webhook] Notification failed: ${nErr.message}`);
-    }
-
-  } else {
-    // Credit PENDING balance via RPC and record item in settlement_pending_items
-    const { error: rpcErr } = await supabase.rpc('credit_pending_balance', {
-      p_wallet_id: wallet.id,
-      p_amount: amount,
-    });
-
-    if (rpcErr) {
-      logger.error(`[Fincra/webhook] RPC credit_pending_balance failed: ${rpcErr.message}`);
-      const newBal = parseFloat(wallet.balance || 0) + amount;
-      const newPend = parseFloat(wallet.pending_balance || 0) + amount;
-      await supabase.from("wallets_store")
-        .update({ balance: newBal, pending_balance: newPend, updated_at: new Date().toISOString() })
-        .eq("id", wallet.id);
-    }
-
-    const expectedSettlementAt = await SettlementPolicyService.calculateExpectedSettlementAt('fincra', currency);
-
-    await supabase.from("settlement_pending_items").insert({
-      wallet_id: wallet.id,
-      user_id: userId,
-      amount,
-      currency,
-      provider: 'fincra',
-      provider_reference: fincraRef,
-      provider_status: 'pending',
-      expected_settlement_at: expectedSettlementAt,
-    }).catch(err => logger.warn(`[Fincra/webhook] Pending item insert warning: ${err.message}`));
-
-    await supabase.from("fincra_transactions")
-      .update({ status: FINCRA_TX_STATUS.PENDING })
-      .eq("fincra_reference", fincraRef);
-
-    await recordFincraAudit({
-      action: "DEPOSIT_CREDITED_PENDING",
-      userId,
-      details: { fincraRef, amount, currency, status: 'PENDING', expectedSettlementAt },
-    });
-
-    logger.info(`[Fincra/webhook] ⏳ Deposit parked in PENDING: ${amount} ${currency} for user ${userId}. Expected: ${expectedSettlementAt}`);
-
-    try {
-      const notificationService = require("../notificationService");
-      await notificationService.sendNotification(userId, {
-        type: 'DEPOSIT_RECEIVED',
-        title: 'Deposit Received (Pending Settlement)',
-        message: `Your deposit of ${currency} ${amount.toLocaleString()} was received and is pending settlement. Funds will be available soon.`,
-        data: { amount, currency, fincraRef, expectedSettlementAt },
-      });
-    } catch (nErr) {
-      logger.warn(`[Fincra/webhook] Notification failed: ${nErr.message}`);
-    }
-  }
-
-  // Realtime update
-  try {
-    const realtime = require("../realtimeService");
-    await realtime.notifyUser(userId, "fincra_deposit", { amount, currency, fincraRef, isSettled });
-  } catch (notifyErr) {
-    logger.warn(`[Fincra/webhook] Realtime notification failed: ${notifyErr.message}`);
-  }
-
-  return { handled: true, userId, amount, currency, isSettled };
+  return { handled: true, status: 'SUCCESSFUL', creditRes };
 }
 
 /**

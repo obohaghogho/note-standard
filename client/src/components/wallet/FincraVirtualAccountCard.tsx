@@ -28,7 +28,7 @@ interface FincraVirtualAccountCardProps {
   userId?: string;
 }
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:5000" : "https://api.notestandard.com");
 
 export const FincraVirtualAccountCard: React.FC<FincraVirtualAccountCardProps> = () => {
   const [accounts, setAccounts]   = useState<FincraAccount[]>([]);

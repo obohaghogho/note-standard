@@ -6,9 +6,9 @@ import * as accountManager from '../utils/accountManager';
 import { resolveLocalUrl } from '../lib/networkUtils';
 import { getDeviceId } from '../utils/deviceId';
 
-// ─── Config ──────────────────────────────────────────────────────
-const rawSocketUrl = import.meta.env.VITE_SOCKET_URL;
-const SOCKET_URL = resolveLocalUrl(rawSocketUrl, 'http://localhost:4000');
+const defaultSocketUrl = import.meta.env.DEV ? 'http://localhost:4000' : 'https://gateway.notestandard.com';
+const rawSocketUrl = import.meta.env.VITE_SOCKET_URL || defaultSocketUrl;
+const SOCKET_URL = resolveLocalUrl(rawSocketUrl, defaultSocketUrl);
 
 if (!SOCKET_URL && import.meta.env.PROD) {
     console.error('❌ CRITICAL: VITE_SOCKET_URL is not defined in production environment!');

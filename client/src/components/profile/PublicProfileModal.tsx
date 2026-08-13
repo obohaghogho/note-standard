@@ -392,7 +392,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
     formData.append('file', file);
 
     try {
-      const uploadRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/upload/image`, {
+      const uploadRes = await fetch(`${import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5000' : 'https://api.notestandard.com')}/api/upload/image`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`

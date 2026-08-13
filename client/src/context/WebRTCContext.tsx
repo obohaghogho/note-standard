@@ -9,8 +9,9 @@ import { resolveLocalUrl } from '../lib/networkUtils';
 // Fix #3: ICE servers are served by the gateway, not the API server.
 // VITE_API_URL  → Node.js API  (port 5000) — serves REST endpoints
 // VITE_SOCKET_URL → Gateway    (port 4000) — serves /webrtc/ice-servers
-const rawGatewayUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:4000';
-const GATEWAY_URL = resolveLocalUrl(rawGatewayUrl, 'http://localhost:4000');
+const defaultGatewayUrl = import.meta.env.DEV ? 'http://localhost:4000' : 'https://gateway.notestandard.com';
+const rawGatewayUrl = import.meta.env.VITE_SOCKET_URL || defaultGatewayUrl;
+const GATEWAY_URL = resolveLocalUrl(rawGatewayUrl, defaultGatewayUrl);
 
 // ── Structured call-trace logger ──────────────────────────────────────────────
 // Emits structured [CALL_TRACE] lines so the signaling lifecycle can be
