@@ -12,7 +12,7 @@ async function runGhsWebhookAudit() {
   const testUserId = '8677bd57-6fdf-46a3-b237-d8ec2e4ae7cd'; // test profile
 
   if (!process.env.FINCRA_WEBHOOK_SECRET) {
-    process.env.FINCRA_WEBHOOK_SECRET = 'htauSP5UsxpQXNeZStlaD3Cm7KbDjTHg';
+    process.env.FINCRA_WEBHOOK_SECRET = 'dummy_test_webhook_secret_for_idempotency_audit';
   }
   const webhookSecret = process.env.FINCRA_WEBHOOK_SECRET;
 

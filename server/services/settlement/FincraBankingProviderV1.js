@@ -34,8 +34,7 @@ class FincraBankingProviderV1 extends IBankingProvider {
     this.currency = (process.env.FINCRA_CURRENCY || 'NGN').trim();
     this.country = (process.env.FINCRA_COUNTRY || 'NG').trim();
     this.accountType = (process.env.FINCRA_ACCOUNT_TYPE || 'Virtual Account').trim();
-    this.allocationMode = (process.env.FINCRA_VIRTUAL_ACCOUNT_MODE || 'shared').trim();
-    this.webhookSecret = (process.env.FINCRA_SECRET_KEY || 'htauSP5UsxpQXNeZStlaD3Cm7KbDjTHg').trim();
+    this.webhookSecret = (process.env.FINCRA_WEBHOOK_SECRET || process.env.FINCRA_SECRET_KEY || '').trim();
   }
 
   getProviderId() {

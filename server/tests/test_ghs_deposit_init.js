@@ -44,7 +44,7 @@ async function runGhsAudit() {
 
   // Validate security: No secrets or channel references in instructions
   const stringified = JSON.stringify(instructions);
-  if (stringified.includes('FINCRA_SECRET') || stringified.includes('htauSP5UsxpQXNeZStlaD3Cm7KbDjTHg') || stringified.includes('fcb907bd-ab39-4361-bc9b-4f5e94e400c2')) {
+  if (stringified.includes('FINCRA_SECRET') || stringified.includes('fcb907bd-ab39-4361-bc9b-4f5e94e400c2')) {
     throw new Error('SECURITY VIOLATION: Banking instructions leak secret credentials or channel references!');
   }
 
