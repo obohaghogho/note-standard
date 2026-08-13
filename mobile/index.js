@@ -31,7 +31,7 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
       } catch (e) {
         console.error('[Background] CallKeep setup/display failed:', e);
       }
-    } else if (data.type === 'message' || data.type === 'chat_message') {
+    } else if (data.type === 'message' || data.type === 'chat_message' || data.title || data.body || data.message) {
       // Process delivery receipt in the background so the sender sees double-ticks
       const messageId = data.messageId;
       if (messageId) {
@@ -45,6 +45,26 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
         } catch (e) {
           console.error('[Background] Delivery receipt failed:', e);
         }
+      }
+
+      // Present local notification banner so user sees notification tray item on Android when app is in background or killed
+      try {
+        const Notifications = require('expo-notifications');
+        const notifTitle = data.title || (data.type === 'message' || data.type === 'chat_message' ? 'New Message' : 'NoteStandard Notification');
+        const notifBody = data.message || data.body || data.content || '';
+        
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: notifTitle,
+            body: notifBody,
+            data: data,
+            sound: 'default',
+          },
+          trigger: null,
+        });
+        console.log('[Background] Local notification presented for FCM data message:', notifTitle);
+      } catch (nErr) {
+        console.warn('[Background] Local notification presentation warning:', nErr);
       }
     }
   }

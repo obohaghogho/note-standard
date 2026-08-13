@@ -270,6 +270,15 @@ export class PushHandler {
           console.error('[PushHandler] ❌ Failed to sync refreshed APNs token:', e);
         }
       });
+    } else if (Platform.OS === 'android') {
+      messaging().onTokenRefresh(async (fcmToken) => {
+        console.log('[PushHandler] 🔄 FCM Token refreshed natively (Android):', fcmToken.substring(0, 10) + '...');
+        try {
+          await this.registerTokenWithBackend(fcmToken, 'fcm');
+        } catch (e) {
+          console.error('[PushHandler] ❌ Failed to sync refreshed FCM token:', e);
+        }
+      });
     }
   }
 
