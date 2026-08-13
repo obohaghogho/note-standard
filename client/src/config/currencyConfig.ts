@@ -98,10 +98,10 @@ export const FIAT_CURRENCY_CATALOG: CurrencyConfig[] = [
   {
     code: 'GHS', name: 'Ghanaian Cedi', symbol: 'GH₵', flag: '🇬🇭', color: '#006b3f',
     status: 'active', provider: 'Fincra Banking Partner',
-    features: ['Balance', 'Deposits', 'Bank Transfer', 'Card Payment', 'Virtual Account'],
-    deposit_enabled: true, withdraw_enabled: false, transfer_enabled: false,
-    buy_enabled: true, sell_enabled: false, convert_enabled: false, decimal_places: 2,
-    notice: 'GHS Bank Transfer & Card Deposits active. GHS withdrawal/transfer not release-enabled because corresponding production workflow has not passed verification.',
+    features: ['Balance', 'Deposits', 'Withdrawals', 'Bank Transfer', 'Card Payment', 'Virtual Account', 'FX Conversion'],
+    deposit_enabled: true, withdraw_enabled: true, transfer_enabled: true,
+    buy_enabled: true, sell_enabled: true, convert_enabled: true, decimal_places: 2,
+    notice: 'GHS Bank Transfer, Card Deposits, Withdrawals, Internal Transfers & Currency Conversions active.',
   },
   {
     code: 'KES', name: 'Kenyan Shilling', symbol: 'KSh', flag: '🇰🇪', color: '#990000',

@@ -201,7 +201,7 @@ const CURRENCY_REGISTRY = [
     releaseStage: "PROD_READY",
     supportedDepositMethods: ["MOBILE_MONEY", "BANK_TRANSFER", "CARD"],
     supportedWithdrawalMethods: ["MOBILE_MONEY", "BANK_TRANSFER"],
-    supportedSwapMethods: ["USD", "NGN"]
+    supportedSwapMethods: ["USD", "NGN", "USDT", "USDC", "BTC", "ETH"]
   }
 ];
 
