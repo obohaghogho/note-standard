@@ -81,8 +81,9 @@ module.exports = {
   FINCRA_SECRET_KEY: process.env.FINCRA_SECRET_KEY,
   FINCRA_PUBLIC_KEY: process.env.FINCRA_PUBLIC_KEY,
   NOWPAYMENTS_API_KEY: process.env.NOWPAYMENTS_API_KEY,
-  COINGECKO_BASE_URL: process.env.COINGECKO_API || "https://api.coingecko.com/api/v3",
-  CG_API_KEY: process.env.CG_API_KEY,
+  // AI Service (Groq)
+  GROQ_API_KEY: process.env.GROQ_API_KEY,
+  GROQ_MODEL: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
 };
 
 // Compute derived rates

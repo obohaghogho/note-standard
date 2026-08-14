@@ -74,7 +74,7 @@ const handleAiAssist = async (req, res) => {
     ];
 
     // 3. Request Groq API completion
-    const modelName = "llama-3.1-8b-instant";
+    const modelName = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
     const completion = await groq.chat.completions.create({
       messages,
       model: modelName,
@@ -85,7 +85,7 @@ const handleAiAssist = async (req, res) => {
     const aiResponse = completion.choices[0]?.message?.content ?? "I could not process that request.";
     const tokensUsed = completion.usage?.total_tokens || 0;
     const latency = Date.now() - startTime;
-    // Llama-3.1 8b instant cost estimate: ~$0.0001 per 1000 tokens
+    // GPT OSS 20B cost estimate: ~$0.0001 per 1000 tokens
     const estimatedCost = (tokensUsed / 1000) * 0.0001;
 
     // 4. Log generation in ai_generations table
@@ -126,7 +126,7 @@ const handleAiAssist = async (req, res) => {
         `INSERT INTO ai_generations 
           (user_id, note_id, prompt, response, action_type, model, provider, tokens_used, latency_ms, estimated_cost, status) 
          VALUES ($1, $2, $3, $4, $5, $6, 'groq', 0, $7, 0, 'failed')`,
-        [userId, noteId || null, "AI Assist request", err.message, actionType || "assist", "llama-3.1-8b-instant", latency]
+        [userId, noteId || null, "AI Assist request", err.message, actionType || "assist", process.env.GROQ_MODEL || "openai/gpt-oss-20b", latency]
       );
     } catch (dbErr) {
       logger.error("[NotesAiController] Failed to log failure:", dbErr.message);
@@ -172,7 +172,7 @@ const handleTrendsBriefing = async (req, res) => {
     ];
 
     // 4. Call Groq
-    const modelName = "llama-3.1-8b-instant";
+    const modelName = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
     const completion = await groq.chat.completions.create({
       messages,
       model: modelName,

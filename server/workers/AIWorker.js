@@ -19,7 +19,7 @@ async function auditAiUsage() {
     try {
       await client.query("BEGIN");
       for (const gen of pendingCost) {
-        // Cost per 1K tokens estimations based on Groq pricing (Llama-3.1 8b instant ~ $0.00005 input / $0.00008 output)
+        // Cost per 1K tokens estimations based on Groq pricing (GPT OSS 20B ~ $0.00005 input / $0.00008 output)
         // Average cost: $0.0001 per 1000 tokens
         const tokens = parseInt(gen.tokens_used);
         const cost = (tokens / 1000) * 0.0001;

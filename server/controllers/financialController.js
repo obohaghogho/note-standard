@@ -165,7 +165,7 @@ Do not return any conversational prefix or suffix. Return ONLY the JSON object.`
         { role: "system", content: systemPrompt },
         { role: "user", content: `Ledger Context:\n${textContext}` }
       ],
-      model: "llama-3.1-8b-instant",
+      model: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
       response_format: { type: "json_object" }
     });
 

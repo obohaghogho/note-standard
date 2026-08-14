@@ -73,7 +73,7 @@ ${contextString}`;
                 { role: "system", content: systemPrompt },
                 { role: "user", content: query }
             ],
-            model: "llama-3.1-8b-instant",
+            model: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
             temperature: 0.3,
             max_tokens: 500
         });

@@ -123,7 +123,7 @@ BEHAVIORAL RULES:
 
     const completion = await groq.chat.completions.create({
       messages,
-      model: 'llama-3.1-8b-instant',
+      model: process.env.GROQ_MODEL || 'openai/gpt-oss-20b',
       temperature: mode === 'challenge' ? 0.5 : 0.3,
       max_tokens: 600
     });
