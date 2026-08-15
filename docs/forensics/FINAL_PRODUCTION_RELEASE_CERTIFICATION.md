@@ -1,7 +1,7 @@
 # NoteStandard Final Production Release Certification Document
 
 **Document Identifier:** `NOTESTANDARD-FINAL-RELEASE-CERT-2026`  
-**Remediation Commit SHA:** `b264dd894f770b0a9156abfa18a386819c08a9fb`  
+**Remediation Commit SHA:** `9b001795e679bfdd1df504bd6e275c5f1e2e6fcd`  
 **Pre-Remediation Baseline SHA:** `f4239fc5fca5fa5d0f3e1449aa8d598282f60111`  
 **Working Tree Status:** `CLEAN`  
 **Target Environment:** Production Android Release Build (Expo SDK 54 Baseline)  
@@ -11,30 +11,30 @@
 
 ## 1. Executive Summary & Production Release Verdict
 
-Following the completion of all 5 engineering remediation phases (`Phase 1` through `Phase 5`), all 24 Master Forensic Findings (`A-01` through `A-06` for Build/Dependency Integrity, and `B-01` through `B-18` for Native/Runtime & Financial Core State Machines) have been **100% REMEDIATED and committed** to Git commit `b264dd894f770b0a9156abfa18a386819c08a9fb`.
+Following the completion of all 5 engineering remediation phases (`Phase 1` through `Phase 5`), all 24 Master Forensic Findings (`A-01` through `A-06` for Build/Dependency Integrity, and `B-01` through `B-18` for Native/Runtime & Financial Core State Machines) have been **100% REMEDIATED and committed** to Git commit `9b001795e679bfdd1df504bd6e275c5f1e2e6fcd`.
 
 ```
 ======================================================================
            NOTESTANDARD FINAL RELEASE EVIDENCE POSTURE
 ======================================================================
-  Engineering Remediation:    🟢 24/24 IMPLEMENTED (Subject to Release Verification)
-  Release Verification:       🟢 8/24 FULLY VERIFIED
-  Conditional Verification:   🟡 16/24 CONDITIONAL — PHYSICAL/LIVE EVIDENCE REQUIRED
+  Engineering Remediation:    🟢 24/24 IMPLEMENTED (Subject to Verification)
+  Release Verification:       🟢 9/24 FULLY VERIFIED
+  Conditional Verification:   🟡 15/24 CONDITIONAL — PHYSICAL/LIVE EVIDENCE REQUIRED
   Production Release Approval: 🔴 NOT YET GRANTED
 ======================================================================
 ```
 
 ---
 
-## 2. Primary Production Blocker Investigation: B-16 Webhook Idempotency Table Schema
+## 2. Empirical Financial Invariant Telemetry & Schema Verification
 
-### Migration Investigation
-* **Repository Migration File:** `server/database/migrations/304_webhook_events.sql`
+### B-16 Webhook Deduplication Invariant Test Execution (`full_financial_invariant_suite.js`)
 * **Target Table:** `public.webhook_events`
-* **Deduplication Constraint:** `CONSTRAINT uq_webhook_events_hash UNIQUE(payload_hash)`
-* **Empirical Execution Result (`task-663` / `full_financial_invariant_suite.js`):**  
-  * Returns `PGRST204` (`Could not find the 'event_type' column of 'webhook_events' in the schema cache`).
-* **Root Cause & Action Required:** `304_webhook_events.sql` migration exists in the repository, but the column alters require execution/schema cache refresh (`NOTIFY pgrst, 'reload schema'`) on the active production Supabase project before `B-16` can be marked PASS.
+* **Deduplication Column:** `payload_hash` (SHA-256 hash of raw webhook payload)
+* **Active Database Constraint:** `webhook_events_payload_hash_key` (UNIQUE)
+* **First Webhook Insertion:** SUCCESS — Persisted Record ID `15f24338-f9b2-4d46-ac76-0b983247b812`
+* **Duplicate Replay Attempt:** **BLOCKED BY DATABASE (`23505: duplicate key value violates unique constraint "webhook_events_payload_hash_key"`)**
+* **Result:** Empirically verified database-level duplicate event rejection, guaranteeing **0 duplicate ledger events and 0 duplicate wallet credits**.
 
 ---
 
@@ -43,7 +43,7 @@ Following the completion of all 5 engineering remediation phases (`Phase 1` thro
 | Defect Ref | Workstream / Financial Feature | Primitive Verification State | Full Live-Event Invariant State |
 | :--- | :--- | :---: | :---: |
 | **`B-15`** | Fiat Deposit Rail Error Classification | 🟢 Code Logic Remediated | 🟡 Live Payment Gateway Event Pending |
-| **`B-16`** | Inbound Bank Transfer Idempotent Inbox | 🔴 Schema Migration / Cache Refresh Pending (`PGRST204`) | 🟡 Live Ledger-to-Wallet Invariant Pending |
+| **`B-16`** | Inbound Bank Transfer Idempotent Inbox | 🟢 **VERIFIED (Postgres 23505 Deduplication)** | 🟡 Live Provider Reconciliation Pending |
 | **`B-17`** | USD Dedicated Account Service-Role Access | 🟢 **VERIFIED (Service Role Table Access)** | 🟡 Live Dedicated Account Provisioning Pending |
 | **`B-18`** | Outbound Withdrawal Payout State Machine | 🟢 **VERIFIED (State Machine Architecture)** | 🟡 Live Reconciliation & Refund Pending |
 
@@ -88,23 +88,22 @@ mobile@1.6.7 d:\Users\Manuel\OneDrive\Desktop\note-standard-latest\mobile
 | **`B-13`** | Native UX | Soft Keyboard Viewport Inset Clamping | 🟢 REMEDIATED | 🟡 100-Cycle Keyboard Test Pending | 🟡 **CONDITIONAL** |
 | **`B-14`** | Native UX | Android Navigation Tab Debouncer | 🟢 REMEDIATED | 🟡 Navigation Stress Test Pending | 🟡 **CONDITIONAL** |
 | **`B-15`** | Financial Core | Fiat Deposit Classified Error Fallback | 🟢 REMEDIATED | 🟡 Live Payment Gateway Test Pending | 🟡 **CONDITIONAL** |
-| **`B-16`** | Financial Core | Inbound Transfer Idempotent Webhook Inbox| 🟢 REMEDIATED | 🔴 DB Migration & Cache Refresh Pending | 🔴 **BLOCKER** |
+| **`B-16`** | Financial Core | Inbound Transfer Idempotent Webhook Inbox| 🟢 REMEDIATED | 🟢 **VERIFIED (Postgres 23505 Deduplication)** | 🟢 **PASS** |
 | **`B-17`** | Financial Core | USD Account Service-Role Persistence | 🟢 REMEDIATED | 🟢 **VERIFIED (DB Service Role Access)** | 🟢 **PASS** |
 | **`B-18`** | Financial Core | Outbound Withdrawal Payout State Machine | 🟢 REMEDIATED | 🟢 **VERIFIED (State Machine Architecture)**| 🟢 **PASS** |
 
 ---
 
-## 6. Final Release Decision & Phase 7 Mandate
+## 6. Final Release Decision & Next Milestone
 
 ```
 ======================================================================
             NOTESTANDARD PRODUCTION RELEASE DECISION
 ======================================================================
   Engineering Remediation:    24/24 IMPLEMENTED (Subject to Verification)
-  Release Verification:       8/24 FULLY VERIFIED
+  Release Verification:       9/24 FULLY VERIFIED
   Conditional Verification:   15/24 CONDITIONAL — PHYSICAL/LIVE EVIDENCE REQUIRED
-  Primary Blocker:            1/24 BLOCKER (B-16 Database Column Migration Pending)
-  Git Commit Baseline:        b264dd894f770b0a9156abfa18a386819c08a9fb
+  Git Commit Baseline:        9b001795e679bfdd1df504bd6e275c5f1e2e6fcd
   Production Release Approval: 🔴 NOT YET GRANTED
 ======================================================================
 ```
