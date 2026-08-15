@@ -150,15 +150,15 @@ exports.getAiInsights = async (req, res) => {
     }
 
     // Call Groq API
-    const systemPrompt = `You are NoteStandard NFI's Financial Intel AI. Analyze the user's recent double-entry ledger activities and generate spending insights, budget suggestions, cash flow predictions, a financial health score (0-100), and a risk assessment. Output must be valid JSON matching this schema:
+    const systemPrompt = `You are NoteStandard NFI's Financial Intel AI. Analyze the user's recent double-entry ledger activities and generate spending insights, budget suggestions, cash flow predictions, a financial health score (0-100), and a risk assessment. You MUST respond ONLY with a valid JSON object matching this schema:
 {
-  "spendingScore": number,
+  "spendingScore": 85,
   "forecast": "string",
   "suggestions": ["string", "string"],
-  "riskLevel": "Low" | "Medium" | "High",
+  "riskLevel": "Low",
   "smartCategoryHighlights": { "Category": "Percentage%" }
 }
-Do not return any conversational prefix or suffix. Return ONLY the JSON object.`;
+Do not return any conversational text outside of the JSON object.`;
 
     const chatCompletion = await groq.chat.completions.create({
       messages: [

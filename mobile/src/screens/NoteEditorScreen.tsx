@@ -123,21 +123,21 @@ export default function NoteEditorScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content}>
-        {/* Action toolbar */}
+      <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+        {/* Toolbar & AI Actions */}
         <View style={styles.toolbar}>
           <TouchableOpacity
             style={[styles.toolChip, isFavorite && styles.toolChipActive]}
             onPress={() => setIsFavorite(!isFavorite)}
           >
-            <Text style={styles.toolText}>{isFavorite ? '⭐ Favorited' : '☆ Favorite'}</Text>
+            <Text style={[styles.toolText, isFavorite && { color: '#f59e0b' }]}>{isFavorite ? '⭐ Favorite' : '☆ Favorite'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.toolChip, isPinned && styles.toolChipActive]}
             onPress={() => setIsPinned(!isPinned)}
           >
-            <Text style={styles.toolText}>{isPinned ? '📌 Pinned' : '📍 Pin Note'}</Text>
+            <Text style={[styles.toolText, isPinned && { color: '#3b82f6' }]}>{isPinned ? '📌 Pinned' : '📍 Pin'}</Text>
           </TouchableOpacity>
 
           {noteId && (
@@ -148,6 +148,32 @@ export default function NoteEditorScreen() {
               <Text style={styles.shareText}>👥 Share</Text>
             </TouchableOpacity>
           )}
+        </View>
+
+        {/* AI Assist Toolbar */}
+        <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+          <TouchableOpacity 
+            style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: '#8b5cf622', borderWidth: 1, borderColor: '#8b5cf6' }}
+            onPress={() => handleAiAssist('summarize')}
+            disabled={aiLoading}
+          >
+            <Text style={{ color: '#c084fc', fontSize: 11, fontWeight: '700' }}>✨ Summarize</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: '#3b82f622', borderWidth: 1, borderColor: '#3b82f6' }}
+            onPress={() => handleAiAssist('expand')}
+            disabled={aiLoading}
+          >
+            <Text style={{ color: '#60a5fa', fontSize: 11, fontWeight: '700' }}>✨ Expand</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: '#10b98122', borderWidth: 1, borderColor: '#10b981' }}
+            onPress={() => handleAiAssist('fix_grammar')}
+            disabled={aiLoading}
+          >
+            <Text style={{ color: '#34d399', fontSize: 11, fontWeight: '700' }}>✨ Fix Grammar</Text>
+          </TouchableOpacity>
+          {aiLoading && <ActivityIndicator size="small" color="#8b5cf6" style={{ marginLeft: 6 }} />}
         </View>
 
         {/* Public Feed Toggle */}

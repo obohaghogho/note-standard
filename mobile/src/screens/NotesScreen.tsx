@@ -124,6 +124,26 @@ export default function NotesScreen() {
         />
       </View>
 
+      {/* Dashboard Overview Stats Cards */}
+      <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginVertical: 8 }}>
+        <View style={{ flex: 1, backgroundColor: '#111122', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#222244' }}>
+          <Text style={{ color: '#888', fontSize: 10, fontWeight: '700' }}>TOTAL NOTES</Text>
+          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800', marginTop: 2 }}>{notes.filter(n => !n.is_deleted && !n.deleted_at).length}</Text>
+        </View>
+        <View style={{ flex: 1, backgroundColor: '#111122', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#222244' }}>
+          <Text style={{ color: '#f59e0b', fontSize: 10, fontWeight: '700' }}>FAVORITES</Text>
+          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800', marginTop: 2 }}>{notes.filter(n => n.is_favorite).length}</Text>
+        </View>
+        <View style={{ flex: 1, backgroundColor: '#111122', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#222244' }}>
+          <Text style={{ color: '#3b82f6', fontSize: 10, fontWeight: '700' }}>PINNED</Text>
+          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800', marginTop: 2 }}>{notes.filter(n => n.is_pinned).length}</Text>
+        </View>
+        <View style={{ flex: 1, backgroundColor: '#111122', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#222244' }}>
+          <Text style={{ color: '#818cf8', fontSize: 10, fontWeight: '700' }}>SHARED</Text>
+          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800', marginTop: 2 }}>{notes.filter(n => n.is_shared).length}</Text>
+        </View>
+      </View>
+
       {/* Tabs Filter Bar */}
       <View style={styles.tabsRow}>
         {(['all', 'favorites', 'shared', 'trash'] as NoteTab[]).map(tab => (

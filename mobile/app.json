@@ -34,7 +34,7 @@
     "android": {
       "package": "com.notestandard.app",
       "googleServicesFile": "./google-services.json",
-      "minSdkVersion": 23,
+      "minSdkVersion": 24,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1E40AF"

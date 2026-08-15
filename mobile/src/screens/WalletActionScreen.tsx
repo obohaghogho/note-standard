@@ -76,7 +76,25 @@ export default function WalletActionScreen() {
 
     loadCapabilities();
     loadBanks();
-  }, [currency]);
+
+    // Load saved bank account from server if available
+    async function loadSavedBankAccount() {
+      try {
+        const res = await apiClient.get('/bank-account');
+        if (res.data?.success && res.data?.account) {
+          const acc = res.data.account;
+          setBankName(acc.bank_name || '');
+          setAccountNumber(acc.account_number || '');
+          setAccountName(acc.account_holder || '');
+        }
+      } catch (e) {
+        // Ignored if no saved bank account exists yet
+      }
+    }
+    if (!isDeposit && isFiat) {
+      loadSavedBankAccount();
+    }
+  }, [currency, isDeposit, isFiat]);
 
   const resolveAccountName = async (num: string, code: string) => {
     if (num.length === 10 && code) {
@@ -205,6 +223,24 @@ export default function WalletActionScreen() {
       Alert.alert('Error', e.response?.data?.error || 'Withdrawal failed. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSavePayout = async () => {
+    if (!bankName || !accountNumber || !accountName) {
+      Alert.alert('Error', 'Please fill in bank name, account number, and holder name.');
+      return;
+    }
+    try {
+      await apiClient.post('/bank-account', {
+        currency: currency || 'NGN',
+        bank_name: bankName,
+        account_number: accountNumber,
+        account_holder: accountName,
+      });
+      Alert.alert('✅ Saved', 'Your payout account details have been saved securely.');
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to save payout method.');
     }
   };
 
@@ -354,6 +390,13 @@ export default function WalletActionScreen() {
               value={accountName}
               onChangeText={setAccountName}
             />
+
+            <TouchableOpacity 
+              style={{ padding: 10, borderRadius: 8, backgroundColor: '#1e1e38', alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: '#333366' }}
+              onPress={handleSavePayout}
+            >
+              <Text style={{ color: '#818cf8', fontWeight: '600', fontSize: 13 }}>💾 Save Account for Future Payouts</Text>
+            </TouchableOpacity>
           </>
         )}
 

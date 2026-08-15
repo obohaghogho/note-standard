@@ -1,4 +1,14 @@
-// Top-level build file where you can add configuration options common to all sub-projects/modules.
+ext {
+  buildToolsVersion = "35.0.0"
+  minSdkVersion = 24
+  minSdk = 24
+  compileSdkVersion = 36
+  compileSdk = 36
+  targetSdkVersion = 34
+  targetSdk = 34
+  ndkVersion = "27.1.12297006"
+  kotlinVersion = "2.0.20"
+}
 
 buildscript {
   repositories {
@@ -18,27 +28,73 @@ buildscript {
   }
 }
 
-ext {
-  buildToolsVersion = findProperty('android.buildToolsVersion') ?: "35.0.0"
-  minSdkVersion = Integer.parseInt(findProperty('android.minSdkVersion') ?: "24")
-  compileSdkVersion = Integer.parseInt(findProperty('android.compileSdkVersion') ?: "35")
-  targetSdkVersion = Integer.parseInt(findProperty('android.targetSdkVersion') ?: "34")
-  ndkVersion = findProperty('android.ndkVersion') ?: "26.1.10909125"
-  kotlinVersion = findProperty('android.kotlinVersion') ?: "2.0.21"
-}
-
 allprojects {
+  ext {
+    buildToolsVersion = "35.0.0"
+    minSdkVersion = 24
+    minSdk = 24
+    compileSdkVersion = 36
+    compileSdk = 36
+    targetSdkVersion = 34
+    targetSdk = 34
+    ndkVersion = "27.1.12297006"
+    kotlinVersion = "2.0.20"
+  }
   repositories {
     google()
     mavenCentral()
     maven { url 'https://www.jitpack.io' }
+    maven { url 'https://raw.githubusercontent.com/lukmccall/pika/maven' }
+    maven { url 'https://oss.sonatype.org/content/repositories/releases' }
+    maven { url 'https://central.sonatype.com/repository/maven-snapshots' }
   }
   configurations.all {
     resolutionStrategy {
-      force "org.jetbrains.kotlin:kotlin-stdlib:${findProperty('android.kotlinVersion') ?: '2.0.21'}"
-      force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:${findProperty('android.kotlinVersion') ?: '2.0.21'}"
-      force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:${findProperty('android.kotlinVersion') ?: '2.0.21'}"
-      force "org.jetbrains.kotlin:kotlin-reflect:${findProperty('android.kotlinVersion') ?: '2.0.21'}"
+      force "org.jetbrains.kotlin:kotlin-stdlib:${findProperty('android.kotlinVersion') ?: '2.0.20'}"
+      force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:${findProperty('android.kotlinVersion') ?: '2.0.20'}"
+      force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:${findProperty('android.kotlinVersion') ?: '2.0.20'}"
+      force "org.jetbrains.kotlin:kotlin-reflect:${findProperty('android.kotlinVersion') ?: '2.0.20'}"
+      force "androidx.core:core:1.15.0"
+      force "androidx.core:core-ktx:1.15.0"
+      eachDependency { details ->
+        if (details.requested.group == 'io.github.lukmccall.pika' && details.requested.name == 'pika-compiler') {
+          details.useVersion('0.3.2-2.0.0')
+        }
+      }
+    }
+  }
+  plugins.withId('com.android.library') {
+    android {
+      compileSdkVersion = 36
+      compileSdk = 36
+      defaultConfig {
+        minSdkVersion = 24
+        minSdk = 24
+        targetSdkVersion = 34
+        targetSdk = 34
+      }
+    }
+    androidComponents {
+      finalizeDsl { extension ->
+        extension.defaultConfig.minSdkVersion = 24
+      }
+    }
+  }
+  plugins.withId('com.android.application') {
+    android {
+      compileSdkVersion = 36
+      compileSdk = 36
+      defaultConfig {
+        minSdkVersion = 24
+        minSdk = 24
+        targetSdkVersion = 34
+        targetSdk = 34
+      }
+    }
+    androidComponents {
+      finalizeDsl { extension ->
+        extension.defaultConfig.minSdkVersion = 24
+      }
     }
   }
 }

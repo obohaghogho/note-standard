@@ -38,4 +38,14 @@ export class TeamsService {
       throw err;
     }
   }
+
+  static async deleteTeam(teamId: string): Promise<any> {
+    try {
+      const response = await apiClient.delete(`/teams/${teamId}`);
+      return response.data;
+    } catch (err) {
+      console.error('[TeamsService] Failed to delete team:', err);
+      throw err;
+    }
+  }
 }

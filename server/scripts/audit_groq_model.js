@@ -60,7 +60,7 @@ async function runGroqModelAudit() {
   // 2. Audit Financial Controller JSON Mode
   console.log(`\n[Test 2/3] Testing Financial Ledger AI Insights (JSON Mode)...`);
   try {
-    const systemPrompt = `You are NoteStandard NFI's Financial Intel AI. Analyze the user's recent double-entry ledger activities and generate spending insights, budget suggestions, cash flow predictions, a financial health score (0-100), and a risk assessment. Output must be valid JSON matching this schema:
+    const systemPrompt = `You are NoteStandard NFI's Financial Intel AI. Analyze the user's recent double-entry ledger activities and generate spending insights, budget suggestions, cash flow predictions, a financial health score (0-100), and a risk assessment. You MUST respond ONLY with a valid JSON object matching this schema:
 {
   "spendingScore": 85,
   "forecast": "Steady cash flows",
@@ -68,7 +68,7 @@ async function runGroqModelAudit() {
   "riskLevel": "Low",
   "smartCategoryHighlights": { "Transfers": "40%" }
 }
-Do not return any conversational prefix or suffix. Return ONLY the JSON object.`;
+Do not return any conversational text outside of the JSON object.`;
 
     const jsonCompletion = await groq.chat.completions.create({
       model: targetModel,

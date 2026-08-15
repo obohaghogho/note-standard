@@ -1553,4 +1553,56 @@ exports.getMyAffiliateStats = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/wallet/withdraw
+ * Consolidated withdrawal controller delegating to PayoutEngine
+ */
+exports.withdraw = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const correlationId = req.headers["x-correlation-id"] || req.headers["x-request-id"];
+    
+    // Normalize payload parameters from both web & mobile formats
+    const amount = parseFloat(req.body.amount || 0);
+    const currency = (req.body.currency || "NGN").toUpperCase();
+    const destination = req.body.destination || {};
+    
+    const bankCode = req.body.bankCode || req.body.bank_code || destination.bank_code || destination.bankCode || destination.bank_name;
+    const accountNumber = req.body.accountNumber || req.body.account_number || destination.account_number || destination.accountNumber;
+    const accountName = req.body.accountName || req.body.account_name || destination.account_name || destination.accountName || "Valued Customer";
+    const narration = req.body.narration || req.body.description || "NoteStandard Withdrawal";
+    const idempotencyKey = req.body.idempotencyKey || req.body.client_idempotency_key;
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ success: false, error: "Withdrawal amount must be greater than 0." });
+    }
+
+    if (!accountNumber) {
+      return res.status(400).json({ success: false, error: "Account number is required for withdrawal." });
+    }
+
+    const payoutEngine = require("../withdrawal/payoutEngine");
+    const result = await payoutEngine.processWithdrawal({
+      userId,
+      amount,
+      currency,
+      bankCode: bankCode || "058",
+      accountNumber,
+      accountName,
+      narration,
+      idempotencyKey,
+      correlationId,
+      ip: req.ip || req.socket?.remoteAddress,
+      deviceId: req.headers["x-device-id"] || "mobile",
+      userAgent: req.headers["user-agent"] || "mobile-apk",
+    });
+
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error("[WalletController] Withdrawal Error:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+
 

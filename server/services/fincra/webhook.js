@@ -142,9 +142,15 @@ async function handleDepositSuccessful(payload) {
   const fincraRef      = data.reference   || data.id;
   const amount         = parseFloat(data.amount || 0);
   const currency       = (data.currency  || "NGN").toUpperCase();
-  const accountNumber  = data.accountNumber || data.account_number;
+  const accountNumber  = data.accountNumber || 
+                         data.account_number || 
+                         data.virtualAccount?.accountNumber || 
+                         data.virtual_account?.account_number || 
+                         data.destinationAccountInformation?.accountNumber || 
+                         data.destination_account_information?.account_number || 
+                         data.virtualAccountInformation?.accountNumber;
 
-  logger.info(`[Fincra/webhook] Deposit received: ${amount} ${currency} (ref: ${fincraRef})`);
+  logger.info(`[Fincra/webhook] Deposit received: ${amount} ${currency} (ref: ${fincraRef}, account: ${accountNumber || 'N/A'})`);
 
   if (!fincraRef || !amount) {
     logger.warn("[Fincra/webhook] Deposit webhook missing required fields (fincraRef/amount). Skipping.");
@@ -157,12 +163,22 @@ async function handleDepositSuccessful(payload) {
     const { data: walletLink } = await supabase
       .from("fincra_wallet_links")
       .select("user_id, currency")
-      .eq("account_number", accountNumber)
-      .eq("currency", currency)
+      .eq("account_number", String(accountNumber).trim())
       .maybeSingle();
 
     if (walletLink) {
       userId = walletLink.user_id;
+    } else {
+      // Fallback check in bank_accounts table
+      const { data: bankAcc } = await supabase
+        .from("bank_accounts")
+        .select("user_id, currency")
+        .eq("account_number", String(accountNumber).trim())
+        .maybeSingle();
+
+      if (bankAcc) {
+        userId = bankAcc.user_id;
+      }
     }
   }
 
@@ -234,7 +250,7 @@ async function handleDepositSuccessful(payload) {
     });
   }
 
-  const { data: wallet } = await supabase
+  let { data: wallet } = await supabase
     .from("wallets_v6")
     .select("id, balance, available_balance, pending_balance")
     .eq("user_id", userId)
@@ -242,7 +258,23 @@ async function handleDepositSuccessful(payload) {
     .maybeSingle();
 
   if (!wallet) {
-    logger.error(`[Fincra/webhook] No wallet found for user ${userId} (${currency}). Cannot credit.`);
+    logger.info(`[Fincra/webhook] No wallet found for user ${userId} (${currency}). Auto-creating wallet...`);
+    try {
+      const FiatWalletService = require("../FiatWalletService");
+      wallet = await FiatWalletService.createWallet(userId, currency);
+    } catch (createErr) {
+      // Fallback: direct insert into wallets_v6
+      const { data: insertedWallet } = await supabase
+        .from("wallets_v6")
+        .insert({ user_id: userId, currency, balance: 0, available_balance: 0, pending_balance: 0 })
+        .select("id, balance, available_balance, pending_balance")
+        .single();
+      wallet = insertedWallet;
+    }
+  }
+
+  if (!wallet) {
+    logger.error(`[Fincra/webhook] Wallet initialization failed for user ${userId} (${currency}). Cannot credit.`);
     return { handled: false, reason: "Wallet not found" };
   }
 
@@ -261,6 +293,27 @@ async function handleDepositSuccessful(payload) {
     .select("id, reference_id, payment_status, wallet_credit_status")
     .or(`reference_id.eq.${searchRef},provider_reference.eq.${fincraRef},metadata->>display_ref.eq.${searchRef}`)
     .maybeSingle();
+
+  if (!primaryTx) {
+    const { data: newTx } = await supabase
+      .from("transactions")
+      .insert({
+        user_id: userId,
+        wallet_id: wallet.id,
+        amount,
+        currency,
+        type: "DEPOSIT",
+        status: "PENDING",
+        reference_id: searchRef,
+        provider_reference: fincraRef,
+        payment_status: "PAYMENT_CONFIRMED",
+        wallet_credit_status: "WALLET_CREDIT_PENDING",
+        metadata: { provider: "fincra", channel: "virtual_account", payload: data }
+      })
+      .select("id, reference_id")
+      .single();
+    primaryTx = newTx;
+  }
 
   // Idempotently credit wallet via authoritative credit engine
   let creditRes = null;

@@ -2787,3 +2787,251 @@ exports.closeSupportChat = async (req, res) => {
   }
 };
 
+// ── CHAT ACK & TELEMETRY HANDLERS (PHASE 3) ───────────────────────────────────
+
+/**
+ * PUT /api/chat/messages/:messageId/deliver
+ * Recipient device acknowledges receipt of message.
+ */
+exports.markMessageDelivered = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { messageId } = req.params;
+    const now = new Date().toISOString();
+
+    const { data: msg, error: fetchErr } = await supabase
+      .from("messages")
+      .select("id, conversation_id, sender_id, delivery_status, delivered_at")
+      .eq("id", messageId)
+      .maybeSingle();
+
+    if (fetchErr || !msg) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    if (msg.delivery_status === "delivered" || msg.delivery_status === "read" || msg.delivered_at) {
+      return res.json({ success: true, messageId, status: msg.delivery_status || "delivered", idempotent: true });
+    }
+
+    const { data: updated, error: updateErr } = await supabase
+      .from("messages")
+      .update({ delivery_status: "delivered", delivered_at: now })
+      .eq("id", messageId)
+      .select()
+      .single();
+
+    if (updateErr) throw updateErr;
+
+    // Emit Realtime Delivery ACK to the original sender
+    const realtime = require("../services/realtimeService");
+    await realtime.emitToUser(msg.sender_id, "chat:message_delivered", {
+      messageId,
+      conversationId: msg.conversation_id,
+      recipientId: userId,
+      delivered_at: now,
+    });
+
+    console.log(`[Chat/Telemetry] MESSAGE_DELIVERED | msgId: ${messageId} | recipient: ${userId} | sender: ${msg.sender_id}`);
+    res.json({ success: true, message: updated });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * PUT /api/chat/messages/:messageId/read
+ * Recipient device acknowledges reading message.
+ */
+exports.markMessageRead = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { messageId } = req.params;
+    const now = new Date().toISOString();
+
+    const { data: msg, error: fetchErr } = await supabase
+      .from("messages")
+      .select("id, conversation_id, sender_id, delivery_status, read_at")
+      .eq("id", messageId)
+      .maybeSingle();
+
+    if (fetchErr || !msg) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    if (msg.delivery_status === "read" || msg.read_at) {
+      return res.json({ success: true, messageId, status: "read", idempotent: true });
+    }
+
+    const { data: updated, error: updateErr } = await supabase
+      .from("messages")
+      .update({ delivery_status: "read", read_at: now })
+      .eq("id", messageId)
+      .select()
+      .single();
+
+    if (updateErr) throw updateErr;
+
+    // Update conversation_members last_read_at
+    await supabase
+      .from("conversation_members")
+      .update({ last_read_at: now })
+      .eq("conversation_id", msg.conversation_id)
+      .eq("user_id", userId);
+
+    // Emit Realtime Read ACK to the original sender
+    const realtime = require("../services/realtimeService");
+    await realtime.emitToUser(msg.sender_id, "chat:message_read", {
+      messageId,
+      conversationId: msg.conversation_id,
+      recipientId: userId,
+      read_at: now,
+    });
+
+    console.log(`[Chat/Telemetry] MESSAGE_READ | msgId: ${messageId} | reader: ${userId} | sender: ${msg.sender_id}`);
+    res.json({ success: true, message: updated });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * PUT /api/chat/conversations/:conversationId/deliver
+ * Recipient acknowledges delivery of all messages in conversation.
+ */
+exports.markConversationDelivered = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { conversationId } = req.params;
+    const now = new Date().toISOString();
+
+    const { data: updated, error } = await supabase
+      .from("messages")
+      .update({ delivery_status: "delivered", delivered_at: now })
+      .eq("conversation_id", conversationId)
+      .neq("sender_id", userId)
+      .is("delivered_at", null)
+      .select("id, sender_id");
+
+    if (error) throw error;
+
+    if (updated && updated.length > 0) {
+      const realtime = require("../services/realtimeService");
+      const senderIds = [...new Set(updated.map((m) => m.sender_id))];
+      for (const senderId of senderIds) {
+        await realtime.emitToUser(senderId, "chat:conversation_delivered", {
+          conversationId,
+          recipientId: userId,
+          delivered_at: now,
+          count: updated.length,
+        });
+      }
+    }
+
+    console.log(`[Chat/Telemetry] CONVERSATION_DELIVERED | convId: ${conversationId} | recipient: ${userId} | count: ${updated?.length || 0}`);
+    res.json({ success: true, count: updated?.length || 0 });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * PUT /api/chat/conversations/:conversationId/read
+ * Recipient acknowledges reading all messages in conversation.
+ */
+exports.markConversationRead = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { conversationId } = req.params;
+    const now = new Date().toISOString();
+
+    const { data: updated, error } = await supabase
+      .from("messages")
+      .update({ delivery_status: "read", read_at: now })
+      .eq("conversation_id", conversationId)
+      .neq("sender_id", userId)
+      .is("read_at", null)
+      .select("id, sender_id");
+
+    if (error) throw error;
+
+    await supabase
+      .from("conversation_members")
+      .update({ last_read_at: now })
+      .eq("conversation_id", conversationId)
+      .eq("user_id", userId);
+
+    if (updated && updated.length > 0) {
+      const realtime = require("../services/realtimeService");
+      const senderIds = [...new Set(updated.map((m) => m.sender_id))];
+      for (const senderId of senderIds) {
+        await realtime.emitToUser(senderId, "chat:conversation_read", {
+          conversationId,
+          recipientId: userId,
+          read_at: now,
+          count: updated.length,
+        });
+      }
+    }
+
+    console.log(`[Chat/Telemetry] CONVERSATION_READ | convId: ${conversationId} | reader: ${userId} | count: ${updated?.length || 0}`);
+    res.json({ success: true, count: updated?.length || 0 });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * PATCH /api/chat/messages/ack:batch
+ * Batch acknowledge delivery of multiple messages.
+ */
+exports.markMessagesDeliveredBatch = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { messageIds } = req.body;
+    const now = new Date().toISOString();
+
+    if (!Array.isArray(messageIds) || messageIds.length === 0) {
+      return res.status(400).json({ error: "messageIds array required" });
+    }
+
+    const { data: updated, error } = await supabase
+      .from("messages")
+      .update({ delivery_status: "delivered", delivered_at: now })
+      .in("id", messageIds)
+      .neq("sender_id", userId)
+      .is("delivered_at", null)
+      .select("id, sender_id, conversation_id");
+
+    if (error) throw error;
+
+    console.log(`[Chat/Telemetry] BATCH_DELIVERED | count: ${updated?.length || 0} | recipient: ${userId}`);
+    res.json({ success: true, count: updated?.length || 0 });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * POST /api/chat/messages/:messageId/webhook-deliver
+ * Gateway webhook delivery ACK.
+ */
+exports.webhookDeliver = async (req, res, next) => {
+  try {
+    const { messageId } = req.params;
+    const now = new Date().toISOString();
+
+    const { data: updated, error } = await supabase
+      .from("messages")
+      .update({ status: "delivered", delivered_at: now })
+      .eq("id", messageId)
+      .is("delivered_at", null)
+      .select("id, sender_id, conversation_id")
+      .maybeSingle();
+
+    if (error) throw error;
+    res.json({ success: true, delivered: !!updated });
+  } catch (err) {
+    next(err);
+  }
+};
+
