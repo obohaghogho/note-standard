@@ -1,7 +1,7 @@
 # NoteStandard Final Production Release Certification Document
 
 **Document Identifier:** `NOTESTANDARD-FINAL-RELEASE-CERT-2026`  
-**Remediation Commit SHA:** `9b001795e679bfdd1df504bd6e275c5f1e2e6fcd`  
+**Remediation Commit SHA:** `3e5cba02c98b7577772566f3b8472932ee76fc09`  
 **Pre-Remediation Baseline SHA:** `f4239fc5fca5fa5d0f3e1449aa8d598282f60111`  
 **Working Tree Status:** `CLEAN`  
 **Target Environment:** Production Android Release Build (Expo SDK 54 Baseline)  
@@ -11,7 +11,7 @@
 
 ## 1. Executive Summary & Production Release Verdict
 
-Following the completion of all 5 engineering remediation phases (`Phase 1` through `Phase 5`), all 24 Master Forensic Findings (`A-01` through `A-06` for Build/Dependency Integrity, and `B-01` through `B-18` for Native/Runtime & Financial Core State Machines) have been **100% REMEDIATED and committed** to Git commit `9b001795e679bfdd1df504bd6e275c5f1e2e6fcd`.
+Following the completion of all 5 engineering remediation phases (`Phase 1` through `Phase 5`), all 24 Master Forensic Findings (`A-01` through `A-06` for Build/Dependency Integrity, and `B-01` through `B-18` for Native/Runtime & Financial Core State Machines) have been **100% REMEDIATED and committed** to Git commit `3e5cba02c98b7577772566f3b8472932ee76fc09`.
 
 ```
 ======================================================================
@@ -28,13 +28,16 @@ Following the completion of all 5 engineering remediation phases (`Phase 1` thro
 
 ## 2. Empirical Financial Invariant Telemetry & Schema Verification
 
-### B-16 Webhook Deduplication Invariant Test Execution (`full_financial_invariant_suite.js`)
+### B-16 Webhook Deduplication Invariant & Control Flow Evidence
 * **Target Table:** `public.webhook_events`
-* **Deduplication Column:** `payload_hash` (SHA-256 hash of raw webhook payload)
-* **Active Database Constraint:** `webhook_events_payload_hash_key` (UNIQUE)
-* **First Webhook Insertion:** SUCCESS — Persisted Record ID `15f24338-f9b2-4d46-ac76-0b983247b812`
-* **Duplicate Replay Attempt:** **BLOCKED BY DATABASE (`23505: duplicate key value violates unique constraint "webhook_events_payload_hash_key"`)**
-* **Result:** Empirically verified database-level duplicate event rejection, guaranteeing **0 duplicate ledger events and 0 duplicate wallet credits**.
+* **Deduplication Field:** `payload_hash` (SHA-256 digest of raw payload)
+* **Unique Database Constraint:** `webhook_events_payload_hash_key`
+* **First Webhook Event:** Persisted (Record ID: `15f24338-f9b2-4d46-ac76-0b983247b812`)
+* **Duplicate Event Replay:** **BLOCKED BY DATABASE (`23505: duplicate key value violates unique constraint "webhook_events_payload_hash_key"`)**
+* **Downstream Idempotency Control Flow (`WebhookService.js`):**  
+  * Returns `res.status(200).send("Duplicate webhook ignored")` upon encountering `COMPLETED` transaction status or duplicate payload hash conflict.  
+  * Passes `idempotencyKey = paystack_webhook_${reference}` to `FiatWalletService.fundWallet` $\to$ `LedgerService.commitAtomicEvent`.
+* **Result:** Database-level duplicate webhook rejection **VERIFIED**. Duplicate settlement safety is protected by Postgres Error 23505 and application-layer transaction status idempotency guards.
 
 ---
 
@@ -43,7 +46,7 @@ Following the completion of all 5 engineering remediation phases (`Phase 1` thro
 | Defect Ref | Workstream / Financial Feature | Primitive Verification State | Full Live-Event Invariant State |
 | :--- | :--- | :---: | :---: |
 | **`B-15`** | Fiat Deposit Rail Error Classification | 🟢 Code Logic Remediated | 🟡 Live Payment Gateway Event Pending |
-| **`B-16`** | Inbound Bank Transfer Idempotent Inbox | 🟢 **VERIFIED (Postgres 23505 Deduplication)** | 🟡 Live Provider Reconciliation Pending |
+| **`B-16`** | Inbound Bank Transfer Idempotent Inbox | 🟢 **VERIFIED (Postgres 23505 & Control Flow)** | 🟡 Live Provider Reconciliation Pending |
 | **`B-17`** | USD Dedicated Account Service-Role Access | 🟢 **VERIFIED (Service Role Table Access)** | 🟡 Live Dedicated Account Provisioning Pending |
 | **`B-18`** | Outbound Withdrawal Payout State Machine | 🟢 **VERIFIED (State Machine Architecture)** | 🟡 Live Reconciliation & Refund Pending |
 
@@ -88,7 +91,7 @@ mobile@1.6.7 d:\Users\Manuel\OneDrive\Desktop\note-standard-latest\mobile
 | **`B-13`** | Native UX | Soft Keyboard Viewport Inset Clamping | 🟢 REMEDIATED | 🟡 100-Cycle Keyboard Test Pending | 🟡 **CONDITIONAL** |
 | **`B-14`** | Native UX | Android Navigation Tab Debouncer | 🟢 REMEDIATED | 🟡 Navigation Stress Test Pending | 🟡 **CONDITIONAL** |
 | **`B-15`** | Financial Core | Fiat Deposit Classified Error Fallback | 🟢 REMEDIATED | 🟡 Live Payment Gateway Test Pending | 🟡 **CONDITIONAL** |
-| **`B-16`** | Financial Core | Inbound Transfer Idempotent Webhook Inbox| 🟢 REMEDIATED | 🟢 **VERIFIED (Postgres 23505 Deduplication)** | 🟢 **PASS** |
+| **`B-16`** | Financial Core | Inbound Transfer Idempotent Webhook Inbox| 🟢 REMEDIATED | 🟢 **VERIFIED (Postgres 23505 & Control Flow)** | 🟢 **PASS** |
 | **`B-17`** | Financial Core | USD Account Service-Role Persistence | 🟢 REMEDIATED | 🟢 **VERIFIED (DB Service Role Access)** | 🟢 **PASS** |
 | **`B-18`** | Financial Core | Outbound Withdrawal Payout State Machine | 🟢 REMEDIATED | 🟢 **VERIFIED (State Machine Architecture)**| 🟢 **PASS** |
 
@@ -103,7 +106,7 @@ mobile@1.6.7 d:\Users\Manuel\OneDrive\Desktop\note-standard-latest\mobile
   Engineering Remediation:    24/24 IMPLEMENTED (Subject to Verification)
   Release Verification:       9/24 FULLY VERIFIED
   Conditional Verification:   15/24 CONDITIONAL — PHYSICAL/LIVE EVIDENCE REQUIRED
-  Git Commit Baseline:        9b001795e679bfdd1df504bd6e275c5f1e2e6fcd
+  Git Commit Baseline:        3e5cba02c98b7577772566f3b8472932ee76fc09
   Production Release Approval: 🔴 NOT YET GRANTED
 ======================================================================
 ```
