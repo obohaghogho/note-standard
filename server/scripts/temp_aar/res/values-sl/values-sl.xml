@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Opozorilo</string>
+    <string gender="unknown" name="combobox_description">Kombinirano polje</string>
+    <string gender="unknown" name="header_description">Naslov</string>
+    <string gender="unknown" name="image_description">Slika</string>
+    <string gender="unknown" name="imagebutton_description">Gumb, slika</string>
+    <string gender="unknown" name="link_description">Povezava</string>
+    <string gender="unknown" name="menu_description">Meni</string>
+    <string gender="unknown" name="menubar_description">Meni</string>
+    <string gender="unknown" name="menuitem_description">Element v meniju</string>
+    <string gender="unknown" name="progressbar_description">Črta napredka</string>
+    <string gender="unknown" name="radiogroup_description">Radio skupina</string>
+    <string gender="unknown" name="rn_tab_description">Zavihek</string>
+    <string gender="unknown" name="scrollbar_description">Drsnik</string>
+    <string gender="unknown" name="spinbutton_description">Vrtljivi gumb</string>
+    <string gender="unknown" name="state_busy_description">zasedeno</string>
+    <string gender="unknown" name="state_collapsed_description">strnjeno</string>
+    <string gender="unknown" name="state_expanded_description">razširjen</string>
+    <string gender="unknown" name="state_mixed_description">mešano</string>
+    <string gender="unknown" name="state_off_description">izključeno</string>
+    <string gender="unknown" name="state_on_description">vklopljeno</string>
+    <string gender="unknown" name="state_unselected_description">neizbrano</string>
+    <string gender="unknown" name="summary_description">Povzetek</string>
+    <string gender="unknown" name="tablist_description">Seznam z zavihki</string>
+    <string gender="unknown" name="timer_description">Časovnik</string>
+    <string gender="unknown" name="toolbar_description">Vrstica z orodji</string>
+</resources>

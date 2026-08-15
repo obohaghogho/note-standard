@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="catalyst_logbox_background">#ffffffff</color>
+    <color name="catalyst_redbox_background">#eecc0000</color>
+    <item name="accessibility_actions" type="id"/>
+    <item name="accessibility_collection" type="id"/>
+    <item name="accessibility_collection_item" type="id"/>
+    <item name="accessibility_hint" type="id"/>
+    <item name="accessibility_label" type="id"/>
+    <item name="accessibility_links" type="id"/>
+    <item name="accessibility_order" type="id"/>
+    <item name="accessibility_order_parent" type="id"/>
+    <item name="accessibility_role" type="id"/>
+    <item name="accessibility_state" type="id"/>
+    <item name="accessibility_state_expanded" type="id"/>
+    <item name="accessibility_value" type="id"/>
+    <item name="filter" type="id"/>
+    <item name="invalidate_transform" type="id"/>
+    <item name="labelled_by" type="id"/>
+    <item name="mix_blend_mode" type="id"/>
+    <item name="original_focusability" type="id"/>
+    <item name="pointer_events" type="id"/>
+    <item name="react_test_id" type="id"/>
+    <item name="role" type="id"/>
+    <item name="transform" type="id"/>
+    <item name="transform_origin" type="id"/>
+    <item name="use_hardware_layer" type="id"/>
+    <item name="view_clipped" type="id"/>
+    <item name="view_tag_instance_handle" type="id"/>
+    <item name="view_tag_native_id" type="id"/>
+    <integer name="react_native_dev_server_port">8081</integer>
+    <string description="important, and usually time-sensitive, information" name="alert_description">Alert</string>
+    <string name="catalyst_change_bundle_location" project="catalyst" translatable="false">Change Bundle Location</string>
+    <string name="catalyst_change_bundle_location_apply" project="catalyst" translatable="false">Apply Changes</string>
+    <string name="catalyst_change_bundle_location_cancel" project="catalyst" translatable="false">Cancel</string>
+    <string name="catalyst_change_bundle_location_input_hint" project="catalyst" translatable="false">127.0.0.1:8081</string>
+    <string name="catalyst_change_bundle_location_input_label" project="catalyst" translatable="false">Provide a custom bundler address and port:</string>
+    <string name="catalyst_change_bundle_location_instructions" project="catalyst" translatable="false">You can connect either via USB (localhost - default) or Wifi. If you connect via USB and running with a physical device, make sure you:\n 1. Connect your device via USB\n 2. Set the bundle location to `localhost:8081`\n 3. Run this command in your terminal:\n      `%1$s`</string>
+    <string name="catalyst_copy_button" project="catalyst" translatable="false">Copy\n</string>
+    <string name="catalyst_debug_connecting" project="catalyst" translatable="false">Connecting to debugger...</string>
+    <string name="catalyst_debug_error" project="catalyst" translatable="false">Failed to connect to debugger!</string>
+    <string name="catalyst_debug_open" project="catalyst" translatable="false">Open DevTools</string>
+    <string name="catalyst_debug_open_disabled" project="catalyst" translatable="false">Connect to the bundler to debug JavaScript</string>
+    <string name="catalyst_dev_menu_header" project="catalyst" translatable="false">React Native Dev Menu (%1$s)</string>
+    <string name="catalyst_dev_menu_sub_header" project="catalyst" translatable="false">Running %1$s</string>
+    <string name="catalyst_dismiss_button" project="catalyst" translatable="false">Dismiss\n(ESC)</string>
+    <string name="catalyst_heap_capture" project="catalyst" translatable="false">Capture Heap</string>
+    <string name="catalyst_hot_reloading" project="catalyst" translatable="false">Enable Fast Refresh</string>
+    <string name="catalyst_hot_reloading_auto_disable" project="catalyst" translatable="false">Disabling Fast Refresh because it requires a development bundle.</string>
+    <string name="catalyst_hot_reloading_auto_enable" project="catalyst" translatable="false">Switching to development bundle in order to enable Fast Refresh.</string>
+    <string name="catalyst_hot_reloading_stop" project="catalyst" translatable="false">Disable Fast Refresh</string>
+    <string name="catalyst_inspector_toggle" project="catalyst" translatable="false">Toggle Element Inspector</string>
+    <string name="catalyst_loading_from_url" project="catalyst" translatable="false">Loading from %1$s…</string>
+    <string name="catalyst_open_debugger_error" project="catalyst" translatable="false">Failed to open DevTools. Please check that the dev server is running and reload the app.</string>
+    <string name="catalyst_perf_monitor" project="catalyst" translatable="false">Show Perf Monitor</string>
+    <string name="catalyst_perf_monitor_stop" project="catalyst" translatable="false">Hide Perf Monitor</string>
+    <string name="catalyst_reload" project="catalyst" translatable="false">Reload</string>
+    <string name="catalyst_reload_button" project="catalyst" translatable="false">Reload\n(R,\u00A0R)</string>
+    <string name="catalyst_reload_error" project="catalyst" translatable="false">Failed to load bundle. Try restarting the bundler or reconnecting your device.</string>
+    <string name="catalyst_report_button" project="catalyst" translatable="false">Report</string>
+    <string name="catalyst_sample_profiler_toggle" project="catalyst" translatable="false">Toggle Sampling Profiler</string>
+    <string name="catalyst_settings" project="catalyst" translatable="false">Settings</string>
+    <string name="catalyst_settings_title" project="catalyst" translatable="false">Debug Settings</string>
+    <string description="input that controls another element that can pop up to help the user set the value of that input" name="combobox_description">Combo Box</string>
+    <string description="heading to a page or section" name="header_description">Heading</string>
+    <string description="images, code snippets, text, emojis, or other content that can be combined to deliver information in a visual manner" name="image_description">Image</string>
+    <string description="Displays a button with an image (instead of text) that can be pressed or clicked by the user" name="imagebutton_description">Button, Image</string>
+    <string description="provides an interactive reference to a resource" name="link_description">Link</string>
+    <string description="offers a list of choices to the user" name="menu_description">Menu</string>
+    <string description="presentation of menu that usually remains visible and is usually presented horizontally" name="menubar_description">Menu Bar</string>
+    <string description="an option in a set of choices contained by a menu or menubar" name="menuitem_description">Menu Item</string>
+    <string description="displays the progress status for tasks that take a long time" name="progressbar_description">Progress Bar</string>
+    <string description="a group of radio buttons" name="radiogroup_description">Radio Group</string>
+    <string name="react_native_dev_server_ip" translatable="false">localhost</string>
+    <string description="an interactive element inside a tablist" name="rn_tab_description">Tab</string>
+    <string description="controls the scrolling of content within a viewing area" name="scrollbar_description">Scroll Bar</string>
+    <string description="defines a type of range that expects the user to select a value from among discrete choices" name="spinbutton_description">Spin Button</string>
+    <string description="an element currently being updated or modified" name="state_busy_description">busy</string>
+    <string description="a menu, dialog, accordian panel, or other widget which is collapsed" name="state_collapsed_description">collapsed</string>
+    <string description="a menu, dialog, accordian panel, or other widget which is expanded" name="state_expanded_description">expanded</string>
+    <string description="a checkbox, radio button, or other widget which is both checked and unchecked" name="state_mixed_description">mixed</string>
+    <string description="a switch in its disabled state" name="state_off_description">off</string>
+    <string description="a switch in its enabled state" name="state_on_description">on</string>
+    <string description="used to indicate which elements within single-selection and multiple-selection composite widgets are not selected" name="state_unselected_description">unselected</string>
+    <string description="provides a summary of current conditions, settings, or state, such as the current temperature in the Weather app" name="summary_description">Summary</string>
+    <string description="container for a set of tabs" name="tablist_description">Tab List</string>
+    <string description="a numerical counter listing the amount of elapsed time from a starting point or the remaining time until an end point" name="timer_description">Timer</string>
+    <string description="a collection of commonly used function buttons or controls represented in a compact visual form" name="toolbar_description">Tool Bar</string>
+    <style name="Animation.Catalyst.LogBox" parent="@android:style/Animation">
+    <item name="android:windowEnterAnimation">@anim/catalyst_push_up_in</item>
+    <item name="android:windowExitAnimation">@anim/catalyst_push_up_out</item>
+  </style>
+    <style name="Animation.Catalyst.RedBox" parent="@android:style/Animation">
+    <item name="android:windowEnterAnimation">@anim/catalyst_push_up_in</item>
+    <item name="android:windowExitAnimation">@anim/catalyst_push_up_out</item>
+  </style>
+    <style name="CalendarDatePickerDialog" parent="android:Theme.Material.Dialog.Alert">
+        <item name="android:datePickerStyle">@style/CalendarDatePickerStyle</item>
+        <item name="android:windowIsFloating">true</item>
+    </style>
+    <style name="CalendarDatePickerStyle" parent="android:Widget.Material.DatePicker">
+        <item name="android:datePickerMode">calendar</item>
+    </style>
+    <style name="DialogAnimationFade">
+    <item name="android:windowEnterAnimation">@anim/catalyst_fade_in</item>
+    <item name="android:windowExitAnimation">@anim/catalyst_fade_out</item>
+  </style>
+    <style name="DialogAnimationSlide">
+    <item name="android:windowEnterAnimation">@anim/catalyst_slide_up</item>
+    <item name="android:windowExitAnimation">@anim/catalyst_slide_down</item>
+  </style>
+    <style name="NoAnimationDialog" parent="Theme.AppCompat.Dialog">
+    <item name="android:windowEnterAnimation">@null</item>
+    <item name="android:windowExitAnimation">@null</item>
+  </style>
+    <style name="SpinnerDatePickerDialog" parent="Theme.AppCompat.Light.Dialog">
+        <item name="android:datePickerStyle">@style/SpinnerDatePickerStyle</item>
+    </style>
+    <style name="SpinnerDatePickerStyle" parent="android:Widget.Material.Light.DatePicker">
+        <item name="android:datePickerMode">spinner</item>
+    </style>
+    <style name="Theme"/>
+    <style name="Theme.Catalyst"/>
+    <style name="Theme.Catalyst.LogBox">
+    <item name="android:windowTranslucentStatus">true</item>
+    <item name="android:windowTranslucentNavigation">false</item>
+    <item name="android:windowBackground">@android:color/transparent</item>
+    <item name="android:windowAnimationStyle">@style/Animation.Catalyst.LogBox</item>
+    <item name="android:inAnimation">@android:anim/fade_in</item>
+    <item name="android:outAnimation">@android:anim/fade_out</item>
+    <item name="android:textColor">@android:color/white</item>
+  </style>
+    <style name="Theme.Catalyst.RedBox">
+    <item name="android:windowBackground">@color/catalyst_redbox_background</item>
+    <item name="android:windowAnimationStyle">@style/Animation.Catalyst.RedBox</item>
+    <item name="android:inAnimation">@android:anim/fade_in</item>
+    <item name="android:outAnimation">@android:anim/fade_out</item>
+    <item name="android:textColor">@android:color/white</item>
+  </style>
+    <style name="Theme.FullScreenDialog">
+    <item name="android:windowNoTitle">true</item>
+    <item name="android:windowIsFloating">false</item>
+    <item name="android:windowBackground">@android:color/transparent</item>
+    <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    <item name="android:statusBarColor">@android:color/transparent</item>
+  </style>
+    <style name="Theme.FullScreenDialogAnimatedFade" parent="Theme.FullScreenDialog">
+    <item name="android:windowAnimationStyle">@style/DialogAnimationFade</item>
+  </style>
+    <style name="Theme.FullScreenDialogAnimatedSlide" parent="Theme.FullScreenDialog">
+    <item name="android:windowAnimationStyle">@style/DialogAnimationSlide</item>
+  </style>
+    <style name="Theme.ReactNative.AppCompat.Light" parent="@style/Theme.AppCompat.Light.NoActionBar">
+        <item name="android:textColor">@android:color/black</item>
+    </style>
+    <style name="Theme.ReactNative.AppCompat.Light.NoActionBar.FullScreen" parent="@style/Theme.ReactNative.AppCompat.Light">
+        <item name="android:windowNoTitle">true</item>
+        <item name="windowActionBar">false</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+    </style>
+    <style name="Theme.ReactNative.TextInput.DefaultBackground" parent="android:Widget.EditText">
+      <item name="android:editTextBackground">@drawable/abc_edit_text_material</item>
+    </style>
+    <style name="redboxButton">
+    <item name="android:layout_width">0dp</item>
+    <item name="android:layout_height">wrap_content</item>
+    <item name="android:layout_weight">1</item>
+    <item name="android:layout_margin">4dp</item>
+    <item name="android:background">@null</item>
+    <item name="android:gravity">center</item>
+    <item name="android:textColor">#dddddd</item>
+    <item name="android:textSize">14sp</item>
+  </style>
+</resources>

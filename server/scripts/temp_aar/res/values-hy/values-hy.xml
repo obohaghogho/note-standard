@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="combobox_description">Կոմբո արկղ</string>
+    <string gender="unknown" name="image_description">Նկար</string>
+    <string gender="unknown" name="imagebutton_description">Կոճակ, նկար</string>
+    <string gender="unknown" name="link_description">Հղում</string>
+    <string gender="unknown" name="menu_description">Ընտրացանկ</string>
+    <string gender="unknown" name="state_off_description">անջատած</string>
+    <string gender="unknown" name="state_on_description">միացրած</string>
+</resources>

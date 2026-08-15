@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Alertă</string>
+    <string gender="unknown" name="combobox_description">Casetă combo</string>
+    <string gender="unknown" name="header_description">Antet</string>
+    <string gender="unknown" name="image_description">Imagine</string>
+    <string gender="unknown" name="imagebutton_description">Buton, imagine</string>
+    <string gender="unknown" name="menu_description">Meniu</string>
+    <string gender="unknown" name="menubar_description">Bară meniu</string>
+    <string gender="unknown" name="menuitem_description">Element din meniu</string>
+    <string gender="unknown" name="progressbar_description">Bară de progres</string>
+    <string gender="unknown" name="radiogroup_description">Grup de butoane radio</string>
+    <string gender="unknown" name="rn_tab_description">Filă</string>
+    <string gender="unknown" name="scrollbar_description">Bară de derulare</string>
+    <string gender="unknown" name="spinbutton_description">Buton de incrementare</string>
+    <string gender="unknown" name="state_busy_description">ocupat</string>
+    <string gender="unknown" name="state_collapsed_description">restrâns</string>
+    <string gender="unknown" name="state_expanded_description">extins</string>
+    <string gender="unknown" name="state_mixed_description">combinat</string>
+    <string gender="unknown" name="state_off_description">dezactivat</string>
+    <string gender="unknown" name="state_on_description">activat</string>
+    <string gender="unknown" name="state_unselected_description">neselectat</string>
+    <string gender="unknown" name="summary_description">Rezumat</string>
+    <string gender="unknown" name="tablist_description">Listă file</string>
+    <string gender="unknown" name="toolbar_description">Bară de instrumente</string>
+</resources>

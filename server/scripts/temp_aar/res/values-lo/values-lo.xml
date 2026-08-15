@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="combobox_description">ກ່ອງຄອມໂບ</string>
+    <string gender="unknown" name="image_description">ຮູບພາບ</string>
+    <string gender="unknown" name="imagebutton_description">ປຸ່ມ, ຮູບພາບ</string>
+    <string gender="unknown" name="link_description">ລິ້ງ</string>
+    <string gender="unknown" name="menu_description">ເມນູ</string>
+    <string gender="unknown" name="state_off_description">ປິດ</string>
+    <string gender="unknown" name="state_on_description">ເປີດ</string>
+</resources>

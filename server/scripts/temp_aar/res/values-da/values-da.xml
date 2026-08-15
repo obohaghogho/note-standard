@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Underretning</string>
+    <string gender="unknown" name="combobox_description">Kombinationsboks</string>
+    <string gender="unknown" name="header_description">Overskrift</string>
+    <string gender="unknown" name="image_description">Billede</string>
+    <string gender="unknown" name="imagebutton_description">Knap, billede</string>
+    <string gender="unknown" name="menubar_description">Menulinje</string>
+    <string gender="unknown" name="menuitem_description">Menupunkt</string>
+    <string gender="unknown" name="progressbar_description">Statuslinje</string>
+    <string gender="unknown" name="radiogroup_description">Radiogruppe</string>
+    <string gender="unknown" name="rn_tab_description">Fane</string>
+    <string gender="unknown" name="scrollbar_description">Rullelinje</string>
+    <string gender="unknown" name="spinbutton_description">Snurreknap</string>
+    <string gender="unknown" name="state_busy_description">optaget</string>
+    <string gender="unknown" name="state_collapsed_description">skjult</string>
+    <string gender="unknown" name="state_expanded_description">udvidet</string>
+    <string gender="unknown" name="state_mixed_description">blandet</string>
+    <string gender="unknown" name="state_off_description">fra</string>
+    <string gender="unknown" name="state_on_description">til</string>
+    <string gender="unknown" name="state_unselected_description">fravalgt</string>
+    <string gender="unknown" name="summary_description">Oversigt</string>
+    <string gender="unknown" name="tablist_description">Liste over faner</string>
+    <string gender="unknown" name="toolbar_description">Værktøjslinje</string>
+</resources>

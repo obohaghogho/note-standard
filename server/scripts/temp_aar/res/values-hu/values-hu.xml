@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Figyelmeztetés</string>
+    <string gender="unknown" name="combobox_description">Kombinált lista</string>
+    <string gender="unknown" name="header_description">Címsor</string>
+    <string gender="unknown" name="image_description">Kép</string>
+    <string gender="unknown" name="imagebutton_description">Gomb, kép</string>
+    <string gender="unknown" name="link_description">Hivatkozás</string>
+    <string gender="unknown" name="menu_description">Menü</string>
+    <string gender="unknown" name="menubar_description">Menüsor</string>
+    <string gender="unknown" name="menuitem_description">Menüelem</string>
+    <string gender="unknown" name="progressbar_description">Folyamatjelző</string>
+    <string gender="unknown" name="radiogroup_description">Választógomb-csoport</string>
+    <string gender="unknown" name="rn_tab_description">Lapfül</string>
+    <string gender="unknown" name="scrollbar_description">Görgetősáv</string>
+    <string gender="unknown" name="spinbutton_description">Forgó gomb</string>
+    <string gender="unknown" name="state_busy_description">elfoglalt</string>
+    <string gender="unknown" name="state_collapsed_description">összecsukva</string>
+    <string gender="unknown" name="state_expanded_description">kibontva</string>
+    <string gender="unknown" name="state_mixed_description">vegyes</string>
+    <string gender="unknown" name="state_off_description">ki</string>
+    <string gender="unknown" name="state_on_description">be</string>
+    <string gender="unknown" name="state_unselected_description">nincs kiválasztva</string>
+    <string gender="unknown" name="summary_description">Összegzés</string>
+    <string gender="unknown" name="tablist_description">Lapfülek listája</string>
+    <string gender="unknown" name="timer_description">Időmérő</string>
+    <string gender="unknown" name="toolbar_description">Eszköztár</string>
+</resources>

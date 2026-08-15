@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">تنبيه</string>
+    <string gender="unknown" name="combobox_description">مربع تحرير وسرد</string>
+    <string gender="unknown" name="header_description">العنوان</string>
+    <string gender="unknown" name="image_description">صورة</string>
+    <string gender="unknown" name="imagebutton_description">زر، صورة</string>
+    <string gender="unknown" name="link_description">رابط</string>
+    <string gender="unknown" name="menu_description">القائمة</string>
+    <string gender="unknown" name="menubar_description">شريط القائمة</string>
+    <string gender="unknown" name="menuitem_description">عنصر القائمة</string>
+    <string gender="unknown" name="progressbar_description">شريط التقدم</string>
+    <string gender="unknown" name="radiogroup_description">مجموعة أزرار اختيار</string>
+    <string gender="unknown" name="rn_tab_description">علامة التبويب</string>
+    <string gender="unknown" name="scrollbar_description">شريط التمرير</string>
+    <string gender="unknown" name="spinbutton_description">زر زيادة ونقصان</string>
+    <string gender="unknown" name="state_busy_description">مشغول</string>
+    <string gender="unknown" name="state_collapsed_description">مطوي</string>
+    <string gender="unknown" name="state_expanded_description">موسع</string>
+    <string gender="unknown" name="state_mixed_description">مختلط</string>
+    <string gender="unknown" name="state_off_description">إيقاف تشغيل</string>
+    <string gender="unknown" name="state_on_description">تشغيل</string>
+    <string gender="unknown" name="state_unselected_description">غير محدَد</string>
+    <string gender="unknown" name="summary_description">ملخص</string>
+    <string gender="unknown" name="tablist_description">قائمة علامات التبويب</string>
+    <string gender="unknown" name="timer_description">مؤقِت</string>
+    <string gender="unknown" name="toolbar_description">شريط الأدوات</string>
+</resources>

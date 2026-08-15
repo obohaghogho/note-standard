@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Aviso</string>
+    <string gender="unknown" name="combobox_description">Caixa de combinação</string>
+    <string gender="unknown" name="header_description">Título</string>
+    <string gender="unknown" name="image_description">Imagem</string>
+    <string gender="unknown" name="imagebutton_description">Botão, Imagem</string>
+    <string gender="unknown" name="link_description">Ligação</string>
+    <string gender="unknown" name="menubar_description">Barra do menu</string>
+    <string gender="unknown" name="menuitem_description">Item do menu</string>
+    <string gender="unknown" name="progressbar_description">Barra de progresso</string>
+    <string gender="unknown" name="radiogroup_description">Grupo de opções</string>
+    <string gender="unknown" name="rn_tab_description">Separador</string>
+    <string gender="unknown" name="scrollbar_description">Barra de deslocamento</string>
+    <string gender="unknown" name="spinbutton_description">Botão giratório</string>
+    <string gender="unknown" name="state_busy_description">ocupado</string>
+    <string gender="unknown" name="state_collapsed_description">fechado</string>
+    <string gender="unknown" name="state_expanded_description">expandido</string>
+    <string gender="unknown" name="state_mixed_description">misto</string>
+    <string gender="unknown" name="state_off_description">desativado</string>
+    <string gender="unknown" name="state_on_description">ativado</string>
+    <string gender="unknown" name="state_unselected_description">não selecionado</string>
+    <string gender="unknown" name="summary_description">Resumo</string>
+    <string gender="unknown" name="tablist_description">Lista de separadores</string>
+    <string gender="unknown" name="timer_description">Temporizador</string>
+    <string gender="unknown" name="toolbar_description">Barra de ferramentas</string>
+</resources>

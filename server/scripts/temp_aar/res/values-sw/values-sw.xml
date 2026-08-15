@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Arifa</string>
+    <string gender="unknown" name="combobox_description">Kisanduku cha Combo</string>
+    <string gender="unknown" name="header_description">Kichwa</string>
+    <string gender="unknown" name="image_description">Picha</string>
+    <string gender="unknown" name="imagebutton_description">Kitufe, Picha</string>
+    <string gender="unknown" name="link_description">Kiungo</string>
+    <string gender="unknown" name="menu_description">Menyu</string>
+    <string gender="unknown" name="menubar_description">Upau wa Menyu</string>
+    <string gender="unknown" name="menuitem_description">Kipengee cha Menyu</string>
+    <string gender="unknown" name="progressbar_description">Upau wa Hatua</string>
+    <string gender="unknown" name="radiogroup_description">Kundi la Redio</string>
+    <string gender="unknown" name="rn_tab_description">Kichupo</string>
+    <string gender="unknown" name="scrollbar_description">Mwambaa wa Kubiringiza</string>
+    <string gender="unknown" name="spinbutton_description">Kitufe cha Kuzungusha</string>
+    <string gender="unknown" name="state_busy_description">shughulini</string>
+    <string gender="unknown" name="state_collapsed_description">imekunjwa</string>
+    <string gender="unknown" name="state_expanded_description">imepanuliwa</string>
+    <string gender="unknown" name="state_mixed_description">mchanganyiko</string>
+    <string gender="unknown" name="state_off_description">imezimwa</string>
+    <string gender="unknown" name="state_on_description">imewashwa</string>
+    <string gender="unknown" name="state_unselected_description">haijateuliwa</string>
+    <string gender="unknown" name="summary_description">Muhtasari</string>
+    <string gender="unknown" name="tablist_description">Orodha ya Kichupo</string>
+    <string gender="unknown" name="timer_description">Kipima muda</string>
+    <string gender="unknown" name="toolbar_description">Upau wa Zana</string>
+</resources>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Sinjalizim</string>
+    <string gender="unknown" name="combobox_description">Kuti kombinimi</string>
+    <string gender="unknown" name="header_description">Titull</string>
+    <string gender="unknown" name="image_description">Imazh</string>
+    <string gender="unknown" name="imagebutton_description">Buton, imazh</string>
+    <string gender="unknown" name="link_description">Lidhja</string>
+    <string gender="unknown" name="menu_description">Meny</string>
+    <string gender="unknown" name="menubar_description">Shiriti i menysë</string>
+    <string gender="unknown" name="menuitem_description">Artikull i menysë</string>
+    <string gender="unknown" name="progressbar_description">Shiriti i Progresit</string>
+    <string gender="unknown" name="radiogroup_description">Grupi i Radios</string>
+    <string gender="unknown" name="rn_tab_description">Skedë</string>
+    <string gender="unknown" name="scrollbar_description">Shiriti i lëvizjes</string>
+    <string gender="unknown" name="spinbutton_description">Butoni i rrotullimit</string>
+    <string gender="unknown" name="state_busy_description">I zënë</string>
+    <string gender="unknown" name="state_collapsed_description">palosur</string>
+    <string gender="unknown" name="state_expanded_description">zgjeruar</string>
+    <string gender="unknown" name="state_mixed_description">përzier</string>
+    <string gender="unknown" name="state_off_description">joaktiv</string>
+    <string gender="unknown" name="state_on_description">aktive</string>
+    <string gender="unknown" name="state_unselected_description">i pazgjedhur</string>
+    <string gender="unknown" name="summary_description">Përmbledhja</string>
+    <string gender="unknown" name="tablist_description">Lista e skedave</string>
+    <string gender="unknown" name="timer_description">Kohëmatësi</string>
+    <string gender="unknown" name="toolbar_description">Shiriti i mjeteve</string>
+</resources>

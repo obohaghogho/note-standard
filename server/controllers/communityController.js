@@ -210,23 +210,31 @@ const toggleLike = async (req, res, next) => {
     } else {
       const { error: insertError } = await supabase
         .from("community_likes")
-        .insert([{ post_id: postId, user_id: userId, reaction: reaction || 'like' }]);
-      if (insertError) throw insertError;
+        .upsert(
+          [{ post_id: postId, user_id: userId, reaction: reaction || 'like' }],
+          { onConflict: 'post_id,user_id' }
+        );
+      
+      if (insertError && insertError.code !== '23505') {
+        throw insertError;
+      }
 
       // Log activity which triggers notification via EventBus
       const { data: post } = await supabase
         .from("community_posts")
         .select("author_id")
         .eq("id", postId)
-        .single();
+        .maybeSingle();
 
-      await activityService.logActivity({
-        userId,
-        actionType: 'liked_post',
-        entityType: 'community_post',
-        entityId: postId,
-        metadata: { post_owner_id: post?.author_id }
-      });
+      if (post) {
+        await activityService.logActivity({
+          userId,
+          actionType: 'liked_post',
+          entityType: 'community_post',
+          entityId: postId,
+          metadata: { post_owner_id: post.author_id }
+        }).catch(err => logger.warn('[Community] Activity log failed:', err.message));
+      }
 
       return res.json({ liked: true });
     }

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Avviso</string>
+    <string gender="unknown" name="combobox_description">Casella combinata</string>
+    <string gender="unknown" name="header_description">Titolo</string>
+    <string gender="unknown" name="image_description">Immagine</string>
+    <string gender="unknown" name="imagebutton_description">Pulsante, Immagine</string>
+    <string gender="unknown" name="menubar_description">Barra dei menu</string>
+    <string gender="unknown" name="menuitem_description">Elemento del menu</string>
+    <string gender="unknown" name="progressbar_description">Barra di avanzamento</string>
+    <string gender="unknown" name="radiogroup_description">Gruppo radio</string>
+    <string gender="unknown" name="scrollbar_description">Barra di scorrimento</string>
+    <string gender="unknown" name="spinbutton_description">Pulsante girevole</string>
+    <string gender="unknown" name="state_busy_description">occupato</string>
+    <string gender="unknown" name="state_collapsed_description">chiuso</string>
+    <string gender="unknown" name="state_expanded_description">aperto</string>
+    <string gender="unknown" name="state_mixed_description">misto</string>
+    <string gender="unknown" name="state_off_description">no</string>
+    <string gender="unknown" name="state_on_description">sì</string>
+    <string gender="unknown" name="state_unselected_description">non selezionato</string>
+    <string gender="unknown" name="summary_description">Riepilogo</string>
+    <string gender="unknown" name="tablist_description">Lista delle tab</string>
+    <string gender="unknown" name="toolbar_description">Barra degli strumenti</string>
+</resources>

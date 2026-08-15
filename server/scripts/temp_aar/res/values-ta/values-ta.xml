@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">நினைவூட்டல்</string>
+    <string gender="unknown" name="combobox_description">காம்போ பெட்டி</string>
+    <string gender="unknown" name="header_description">தலைப்பு</string>
+    <string gender="unknown" name="image_description">படம்</string>
+    <string gender="unknown" name="imagebutton_description">பொத்தான், படம்</string>
+    <string gender="unknown" name="link_description">இணைப்பு</string>
+    <string gender="unknown" name="menu_description">மெனு</string>
+    <string gender="unknown" name="menubar_description">மெனு பட்டி</string>
+    <string gender="unknown" name="menuitem_description">மெனு பொருள்</string>
+    <string gender="unknown" name="progressbar_description">போக்கு பட்டி</string>
+    <string gender="unknown" name="radiogroup_description">ரேடியோ குழு</string>
+    <string gender="unknown" name="rn_tab_description">பிரிவு</string>
+    <string gender="unknown" name="scrollbar_description">உருட்டுப்பட்டி</string>
+    <string gender="unknown" name="spinbutton_description">ஸ்பின் பட்டன்</string>
+    <string gender="unknown" name="state_busy_description">பணிமிகுதி</string>
+    <string gender="unknown" name="state_collapsed_description">சுருக்கப்பட்டது</string>
+    <string gender="unknown" name="state_expanded_description">விரிவாக்கப்பட்டது</string>
+    <string gender="unknown" name="state_mixed_description">கலந்துள்ளது</string>
+    <string gender="unknown" name="state_off_description">ஆஃப்</string>
+    <string gender="unknown" name="state_on_description">ஆன்</string>
+    <string gender="unknown" name="state_unselected_description">தேர்வுநீக்கப்பட்டது</string>
+    <string gender="unknown" name="summary_description">சுருக்கம்</string>
+    <string gender="unknown" name="tablist_description">பிரிவுப் பட்டியல்</string>
+    <string gender="unknown" name="timer_description">டைமர்</string>
+    <string gender="unknown" name="toolbar_description">கருவிப்பட்டி</string>
+</resources>

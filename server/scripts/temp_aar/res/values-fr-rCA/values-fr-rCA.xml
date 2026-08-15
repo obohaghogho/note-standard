@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Alerte</string>
+    <string gender="unknown" name="combobox_description">Zone combinée</string>
+    <string gender="unknown" name="header_description">Titre</string>
+    <string gender="unknown" name="imagebutton_description">Bouton, image</string>
+    <string gender="unknown" name="link_description">Lien</string>
+    <string gender="unknown" name="menubar_description">Barre de menu</string>
+    <string gender="unknown" name="menuitem_description">Option de menu</string>
+    <string gender="unknown" name="progressbar_description">Barre de progression</string>
+    <string gender="unknown" name="radiogroup_description">Groupe de boutons radio</string>
+    <string gender="unknown" name="rn_tab_description">Onglet</string>
+    <string gender="unknown" name="scrollbar_description">Barre de déroulement</string>
+    <string gender="unknown" name="spinbutton_description">Bouton compteur circulaire</string>
+    <string gender="unknown" name="state_busy_description">en cours de traitement</string>
+    <string gender="unknown" name="state_collapsed_description">réduit</string>
+    <string gender="unknown" name="state_expanded_description">agrandi</string>
+    <string gender="unknown" name="state_mixed_description">à double état</string>
+    <string gender="unknown" name="state_off_description">désactivé</string>
+    <string gender="unknown" name="state_on_description">activé</string>
+    <string gender="unknown" name="state_unselected_description">désélectionné</string>
+    <string gender="unknown" name="summary_description">Résumé</string>
+    <string gender="unknown" name="tablist_description">Liste des onglets</string>
+    <string gender="unknown" name="timer_description">Minuterie</string>
+    <string gender="unknown" name="toolbar_description">Barre d’outils</string>
+</resources>

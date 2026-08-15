@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Paziņojums</string>
+    <string gender="unknown" name="combobox_description">Kombinētais lodziņš</string>
+    <string gender="unknown" name="header_description">Virsraksts</string>
+    <string gender="unknown" name="image_description">Attēls</string>
+    <string gender="unknown" name="imagebutton_description">Poga, attēls</string>
+    <string gender="unknown" name="link_description">Saite</string>
+    <string gender="unknown" name="menu_description">Izvēlne</string>
+    <string gender="unknown" name="menubar_description">Izvēļņu josla</string>
+    <string gender="unknown" name="menuitem_description">Izvēlnes opcija</string>
+    <string gender="unknown" name="progressbar_description">Progresa josla</string>
+    <string gender="unknown" name="radiogroup_description">Radiopogu kopa</string>
+    <string gender="unknown" name="rn_tab_description">Cilne</string>
+    <string gender="unknown" name="scrollbar_description">Ritināšanas josla</string>
+    <string gender="unknown" name="spinbutton_description">Vērtību poga</string>
+    <string gender="unknown" name="state_busy_description">aizņemts</string>
+    <string gender="unknown" name="state_collapsed_description">sakļauts</string>
+    <string gender="unknown" name="state_expanded_description">izvērsts</string>
+    <string gender="unknown" name="state_mixed_description">jaukti</string>
+    <string gender="unknown" name="state_off_description">izslēgts</string>
+    <string gender="unknown" name="state_on_description">ieslēgts</string>
+    <string gender="unknown" name="state_unselected_description">nav atlasīts</string>
+    <string gender="unknown" name="summary_description">Kopsavilkums</string>
+    <string gender="unknown" name="tablist_description">Ciļņu saraksts</string>
+    <string gender="unknown" name="timer_description">Taimeris</string>
+    <string gender="unknown" name="toolbar_description">Rīkjosla</string>
+</resources>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Waarschuwing</string>
+    <string gender="unknown" name="combobox_description">Combivak</string>
+    <string gender="unknown" name="header_description">Kop</string>
+    <string gender="unknown" name="image_description">Afbeelding</string>
+    <string gender="unknown" name="imagebutton_description">Knop, afbeelding</string>
+    <string gender="unknown" name="menubar_description">Menubalk</string>
+    <string gender="unknown" name="menuitem_description">Menu-item</string>
+    <string gender="unknown" name="progressbar_description">Voortgangsbalk</string>
+    <string gender="unknown" name="radiogroup_description">Keuzegroep</string>
+    <string gender="unknown" name="rn_tab_description">Tabblad</string>
+    <string gender="unknown" name="scrollbar_description">Scrollbalk</string>
+    <string gender="unknown" name="spinbutton_description">Draaiknop</string>
+    <string gender="unknown" name="state_busy_description">bezig</string>
+    <string gender="unknown" name="state_collapsed_description">samengevouwen</string>
+    <string gender="unknown" name="state_expanded_description">uitgevouwen</string>
+    <string gender="unknown" name="state_mixed_description">gemengd</string>
+    <string gender="unknown" name="state_off_description">uit</string>
+    <string gender="unknown" name="state_on_description">aan</string>
+    <string gender="unknown" name="state_unselected_description">gedeselecteerd</string>
+    <string gender="unknown" name="summary_description">Samenvatting</string>
+    <string gender="unknown" name="tablist_description">Lijst met tabbladen</string>
+    <string gender="unknown" name="toolbar_description">Werkbalk</string>
+</resources>

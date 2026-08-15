@@ -82,7 +82,9 @@ export default function ChatScreen({ navigation, route }: Props) {
                 offset = rawOffset > 0 ? rawOffset : 0;
             } else {
                 // Android: Tab bar is hidden (tabBarHideOnKeyboard: true)
-                offset = kbHeight > insets.bottom ? kbHeight - insets.bottom : 0;
+                // Math.max ensures smooth offset clamping without negative inset jumps on Android 14
+                const rawAndroidOffset = kbHeight - (insets.bottom || 0);
+                offset = Math.max(0, rawAndroidOffset);
             }
         }
         return { paddingBottom: offset };

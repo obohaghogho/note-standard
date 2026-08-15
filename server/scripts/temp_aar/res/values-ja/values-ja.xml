@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">アラート</string>
+    <string gender="unknown" name="combobox_description">コンボボックス</string>
+    <string gender="unknown" name="header_description">見出し</string>
+    <string gender="unknown" name="image_description">画像</string>
+    <string gender="unknown" name="imagebutton_description">ボタン、画像</string>
+    <string gender="unknown" name="link_description">リンク</string>
+    <string gender="unknown" name="menu_description">メニュー</string>
+    <string gender="unknown" name="menubar_description">メニューバー</string>
+    <string gender="unknown" name="menuitem_description">メニューアイテム</string>
+    <string gender="unknown" name="progressbar_description">進行状況バー</string>
+    <string gender="unknown" name="radiogroup_description">ラジオグループ</string>
+    <string gender="unknown" name="rn_tab_description">タブ</string>
+    <string gender="unknown" name="scrollbar_description">スクロールバー</string>
+    <string gender="unknown" name="spinbutton_description">スピンボタン</string>
+    <string gender="unknown" name="state_busy_description">作業中</string>
+    <string gender="unknown" name="state_collapsed_description">縮小中</string>
+    <string gender="unknown" name="state_expanded_description">展開中</string>
+    <string gender="unknown" name="state_mixed_description">混合</string>
+    <string gender="unknown" name="state_off_description">オフ</string>
+    <string gender="unknown" name="state_on_description">オン</string>
+    <string gender="unknown" name="state_unselected_description">未選択</string>
+    <string gender="unknown" name="summary_description">概要</string>
+    <string gender="unknown" name="tablist_description">タブリスト</string>
+    <string gender="unknown" name="timer_description">タイマー</string>
+    <string gender="unknown" name="toolbar_description">ツールバー</string>
+</resources>

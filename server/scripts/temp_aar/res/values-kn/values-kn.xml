@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">ಎಚ್ಚರಿಕೆ</string>
+    <string gender="unknown" name="combobox_description">ಕೊಂಬೊ ಬಾಕ್ಸ್</string>
+    <string gender="unknown" name="header_description">ಶಿರೋಲೇಖ</string>
+    <string gender="unknown" name="image_description">ಚಿತ್ರ</string>
+    <string gender="unknown" name="imagebutton_description">ಬಟನ್, ಚಿತ್ರ</string>
+    <string gender="unknown" name="link_description">ಲಿಂಕ್</string>
+    <string gender="unknown" name="menu_description">ಮೆನು</string>
+    <string gender="unknown" name="menubar_description">ಮೆನು ಬಾರ್</string>
+    <string gender="unknown" name="menuitem_description">ಮೆನು ಐಟಂ</string>
+    <string gender="unknown" name="progressbar_description">ಪ್ರೋಗ್ರೆಸ್ ಬಾರ್</string>
+    <string gender="unknown" name="radiogroup_description">ರೇಡಿಯೋ ಗುಂಪು</string>
+    <string gender="unknown" name="rn_tab_description">ಟ್ಯಾಬ್</string>
+    <string gender="unknown" name="scrollbar_description">ಸ್ಕ್ರಾಲ್ ಬಾರ್</string>
+    <string gender="unknown" name="spinbutton_description">ಸ್ಪಿನ್ ಬಟನ್</string>
+    <string gender="unknown" name="state_busy_description">ಕಾರ್ಯನಿರತ</string>
+    <string gender="unknown" name="state_collapsed_description">ಮುಚ್ಚಿದೆ</string>
+    <string gender="unknown" name="state_expanded_description">ವಿಸ್ತರಿಸಲಾಗಿದೆ</string>
+    <string gender="unknown" name="state_mixed_description">ಬಗೆಬಗೆಯ</string>
+    <string gender="unknown" name="state_off_description">ಆಫ್</string>
+    <string gender="unknown" name="state_on_description">ಆನ್</string>
+    <string gender="unknown" name="state_unselected_description">ಆಯ್ಕೆ ರದ್ದುಮಾಡಲಾಗಿದೆ</string>
+    <string gender="unknown" name="summary_description">ಸಾರಾಂಶ</string>
+    <string gender="unknown" name="tablist_description">ಟ್ಯಾಬ್ ಪಟ್ಟಿ</string>
+    <string gender="unknown" name="timer_description">ಟೈಮರ್</string>
+    <string gender="unknown" name="toolbar_description">ಟೂಲ್ ಬಾರ್</string>
+</resources>

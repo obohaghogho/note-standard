@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Hälytys</string>
+    <string gender="unknown" name="combobox_description">Yhdistelmäruutu</string>
+    <string gender="unknown" name="header_description">Otsikko</string>
+    <string gender="unknown" name="image_description">Kuva</string>
+    <string gender="unknown" name="imagebutton_description">Painike, kuva</string>
+    <string gender="unknown" name="link_description">Linkki</string>
+    <string gender="unknown" name="menu_description">Valikko</string>
+    <string gender="unknown" name="menubar_description">Valikkopalkki</string>
+    <string gender="unknown" name="menuitem_description">Valikkokohde</string>
+    <string gender="unknown" name="progressbar_description">Edistymispalkki</string>
+    <string gender="unknown" name="radiogroup_description">Valintanappiryhmä</string>
+    <string gender="unknown" name="rn_tab_description">Välilehti</string>
+    <string gender="unknown" name="scrollbar_description">Vierityspalkki</string>
+    <string gender="unknown" name="spinbutton_description">Pyörityspainike</string>
+    <string gender="unknown" name="state_busy_description">varattu</string>
+    <string gender="unknown" name="state_collapsed_description">pienennetty</string>
+    <string gender="unknown" name="state_expanded_description">laajennettu</string>
+    <string gender="unknown" name="state_mixed_description">yhdistetty</string>
+    <string gender="unknown" name="state_off_description">ei käytössä</string>
+    <string gender="unknown" name="state_on_description">käytössä</string>
+    <string gender="unknown" name="state_unselected_description">ei valittu</string>
+    <string gender="unknown" name="summary_description">Yhteenveto</string>
+    <string gender="unknown" name="tablist_description">Välilehtilista</string>
+    <string gender="unknown" name="timer_description">Ajastin</string>
+    <string gender="unknown" name="toolbar_description">Työkalupalkki</string>
+</resources>

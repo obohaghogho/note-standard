@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">გაფრთხილება</string>
+    <string gender="unknown" name="header_description">სათაური</string>
+    <string gender="unknown" name="image_description">გამოსახულება</string>
+    <string gender="unknown" name="imagebutton_description">ღილაკი, გამოსახულება</string>
+    <string gender="unknown" name="link_description">ბმული</string>
+    <string gender="unknown" name="menu_description">მენიუ</string>
+    <string gender="unknown" name="menubar_description">მენიუს ზოლი</string>
+    <string gender="unknown" name="menuitem_description">მენიუს ერთეული</string>
+    <string gender="unknown" name="progressbar_description">პროგრესის ზოლი</string>
+    <string gender="unknown" name="radiogroup_description">რადიო ჯგუფი</string>
+    <string gender="unknown" name="rn_tab_description">ჩანართი</string>
+    <string gender="unknown" name="scrollbar_description">გადაადგილების პანელი</string>
+    <string gender="unknown" name="spinbutton_description">დატრიალების ღილაკი</string>
+    <string gender="unknown" name="state_busy_description">დაკავებული</string>
+    <string gender="unknown" name="state_collapsed_description">აკეცილი</string>
+    <string gender="unknown" name="state_expanded_description">გაშლილი</string>
+    <string gender="unknown" name="state_mixed_description">შერეული</string>
+    <string gender="unknown" name="state_off_description">გამორთულია</string>
+    <string gender="unknown" name="state_on_description">ჩართული</string>
+    <string gender="unknown" name="state_unselected_description">აურჩეველი</string>
+    <string gender="unknown" name="summary_description">შეჯამება</string>
+    <string gender="unknown" name="tablist_description">ჩანართების სია</string>
+    <string gender="unknown" name="timer_description">ტაიმერი</string>
+    <string gender="unknown" name="toolbar_description">ხელსაწყოების ზოლი</string>
+</resources>

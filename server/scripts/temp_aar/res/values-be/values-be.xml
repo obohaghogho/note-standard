@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="combobox_description">Камбінаваны спіс</string>
+    <string gender="unknown" name="image_description">Відарыс</string>
+    <string gender="unknown" name="imagebutton_description">Кнопка, відарыс</string>
+    <string gender="unknown" name="link_description">Спасылка</string>
+    <string gender="unknown" name="menu_description">Меню</string>
+</resources>

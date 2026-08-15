@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">သတိပေးချက်</string>
+    <string gender="unknown" name="combobox_description">ရွေးရန်အကွက်</string>
+    <string gender="unknown" name="header_description">ခေါင်းစီး</string>
+    <string gender="unknown" name="image_description">ဓာတ်ပုံ</string>
+    <string gender="unknown" name="imagebutton_description">ခလုတ်၊ ဓာတ်ပုံ</string>
+    <string gender="unknown" name="link_description">လင့်ခ်</string>
+    <string gender="unknown" name="menu_description">မီနူး</string>
+    <string gender="unknown" name="menubar_description">မီနူး ဘားတန်း</string>
+    <string gender="unknown" name="menuitem_description">မီနူး အကြောင်းအရာ</string>
+    <string gender="unknown" name="progressbar_description">ပြီးစီးမှုပြ ဘားတန်း</string>
+    <string gender="unknown" name="radiogroup_description">ရေဒီယိုအုပ်စု</string>
+    <string gender="unknown" name="rn_tab_description">တက်ဘ်</string>
+    <string gender="unknown" name="scrollbar_description">ရွှေ့ဆွဲကြည့်ရန် ဘားတန်း</string>
+    <string gender="unknown" name="spinbutton_description">လှည့်ရန် ခလုတ်</string>
+    <string gender="unknown" name="state_busy_description">လုပ်ဆောင်နေဆဲ</string>
+    <string gender="unknown" name="state_collapsed_description">ခေါက်သိမ်းထားပါတယ်</string>
+    <string gender="unknown" name="state_expanded_description">ချဲ့ထားပြီး</string>
+    <string gender="unknown" name="state_mixed_description">ရောစပ်ထားပြီး</string>
+    <string gender="unknown" name="state_off_description">ပိတ်</string>
+    <string gender="unknown" name="state_on_description">ဖွင့်</string>
+    <string gender="unknown" name="state_unselected_description">ရွေးမထားပါ</string>
+    <string gender="unknown" name="summary_description">အနှစ်ချုပ်</string>
+    <string gender="unknown" name="tablist_description">တက်ဘ်စာရင်း</string>
+    <string gender="unknown" name="timer_description">အချိန်တိုင်းစက်</string>
+    <string gender="unknown" name="toolbar_description">ကိရိယာ ဘားတန်း</string>
+</resources>

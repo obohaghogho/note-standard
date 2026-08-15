@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="combobox_description">Kombo siyahısı</string>
+    <string gender="unknown" name="image_description">Şəkil</string>
+    <string gender="unknown" name="imagebutton_description">Düymə, şəkil</string>
+    <string gender="unknown" name="link_description">Keçid</string>
+    <string gender="unknown" name="menu_description">Menyu</string>
+    <string gender="unknown" name="state_off_description">deaktiv</string>
+    <string gender="unknown" name="state_on_description">aktivdir</string>
+</resources>

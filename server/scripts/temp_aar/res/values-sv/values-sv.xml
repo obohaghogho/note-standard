@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Avisering</string>
+    <string gender="unknown" name="combobox_description">Kombinationsruta</string>
+    <string gender="unknown" name="header_description">Rubrik</string>
+    <string gender="unknown" name="image_description">Bild</string>
+    <string gender="unknown" name="imagebutton_description">Knapp, bild</string>
+    <string gender="unknown" name="link_description">Länk</string>
+    <string gender="unknown" name="menu_description">Meny</string>
+    <string gender="unknown" name="menubar_description">Menyfält</string>
+    <string gender="unknown" name="menuitem_description">Menyobjekt</string>
+    <string gender="unknown" name="progressbar_description">Förloppsfält</string>
+    <string gender="unknown" name="radiogroup_description">Radiogrupp</string>
+    <string gender="unknown" name="rn_tab_description">Flik</string>
+    <string gender="unknown" name="scrollbar_description">Bläddringslist</string>
+    <string gender="unknown" name="spinbutton_description">Rotationsknapp</string>
+    <string gender="unknown" name="state_busy_description">upptagen</string>
+    <string gender="unknown" name="state_collapsed_description">minimerad</string>
+    <string gender="unknown" name="state_expanded_description">utökad</string>
+    <string gender="unknown" name="state_mixed_description">blandad</string>
+    <string gender="unknown" name="state_off_description">av</string>
+    <string gender="unknown" name="state_on_description">på</string>
+    <string gender="unknown" name="state_unselected_description">avmarkerad</string>
+    <string gender="unknown" name="summary_description">Sammanfattning</string>
+    <string gender="unknown" name="tablist_description">Fliklista</string>
+    <string gender="unknown" name="toolbar_description">Verktygsfält</string>
+</resources>

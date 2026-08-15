@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Upozorenje</string>
+    <string gender="unknown" name="combobox_description">Kombinirani okvir</string>
+    <string gender="unknown" name="header_description">Zaglavlje</string>
+    <string gender="unknown" name="image_description">Slika</string>
+    <string gender="unknown" name="imagebutton_description">Gumb, slika</string>
+    <string gender="unknown" name="link_description">Veza</string>
+    <string gender="unknown" name="menu_description">Izbornik</string>
+    <string gender="unknown" name="menubar_description">Traka izbornika</string>
+    <string gender="unknown" name="menuitem_description">Stavka izbornika</string>
+    <string gender="unknown" name="progressbar_description">Traka napretka</string>
+    <string gender="unknown" name="radiogroup_description">Grupa izbornih gumba</string>
+    <string gender="unknown" name="rn_tab_description">Kartica</string>
+    <string gender="unknown" name="scrollbar_description">Traka za pomicanje</string>
+    <string gender="unknown" name="spinbutton_description">Gumb za vrtnju</string>
+    <string gender="unknown" name="state_busy_description">zauzeto</string>
+    <string gender="unknown" name="state_collapsed_description">sažeto</string>
+    <string gender="unknown" name="state_expanded_description">prošireno</string>
+    <string gender="unknown" name="state_mixed_description">mješovito</string>
+    <string gender="unknown" name="state_off_description">isključeno</string>
+    <string gender="unknown" name="state_on_description">uključeno</string>
+    <string gender="unknown" name="state_unselected_description">poništen odabir</string>
+    <string gender="unknown" name="summary_description">Sažetak</string>
+    <string gender="unknown" name="tablist_description">Popis kartica</string>
+    <string gender="unknown" name="timer_description">Mjerač vremena</string>
+    <string gender="unknown" name="toolbar_description">Traka s alatima</string>
+</resources>

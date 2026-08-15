@@ -40,7 +40,6 @@
   },
   "dependencies": {
     "@config-plugins/react-native-callkeep": "^14.0.1",
-    "@expo/config": "^12.0.14",
     "@supabase/ssr": "^0.12.3",
     "bip39": "^3.1.0",
     "cors": "^2.8.5",

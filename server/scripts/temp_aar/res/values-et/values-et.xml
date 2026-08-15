@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Hoiatus</string>
+    <string gender="unknown" name="combobox_description">Liitboks</string>
+    <string gender="unknown" name="header_description">Pealkiri</string>
+    <string gender="unknown" name="image_description">Pilt</string>
+    <string gender="unknown" name="imagebutton_description">Nupp, pilt</string>
+    <string gender="unknown" name="menu_description">Menüü</string>
+    <string gender="unknown" name="menubar_description">Menüüriba</string>
+    <string gender="unknown" name="menuitem_description">Menüü-üksus</string>
+    <string gender="unknown" name="progressbar_description">Edenemisriba</string>
+    <string gender="unknown" name="radiogroup_description">Raadionuppude grupp</string>
+    <string gender="unknown" name="rn_tab_description">Vahekaart</string>
+    <string gender="unknown" name="scrollbar_description">Kerimisriba</string>
+    <string gender="unknown" name="spinbutton_description">Pööramisnupp</string>
+    <string gender="unknown" name="state_busy_description">hõivatud</string>
+    <string gender="unknown" name="state_collapsed_description">ahendatud</string>
+    <string gender="unknown" name="state_expanded_description">laiendatud</string>
+    <string gender="unknown" name="state_mixed_description">miksitud</string>
+    <string gender="unknown" name="state_off_description">väljas</string>
+    <string gender="unknown" name="state_on_description">sees</string>
+    <string gender="unknown" name="state_unselected_description">valimata</string>
+    <string gender="unknown" name="summary_description">Kokkuvõte</string>
+    <string gender="unknown" name="tablist_description">Vahekaartide loend</string>
+    <string gender="unknown" name="timer_description">Taimer</string>
+    <string gender="unknown" name="toolbar_description">Tööriistariba</string>
+</resources>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">الرٹ</string>
+    <string gender="unknown" name="combobox_description">کومبو باکس</string>
+    <string gender="unknown" name="header_description">سرخی</string>
+    <string gender="unknown" name="image_description">تصویر</string>
+    <string gender="unknown" name="imagebutton_description">بٹن، تصویر</string>
+    <string gender="unknown" name="link_description">لنک</string>
+    <string gender="unknown" name="menu_description">مینیو</string>
+    <string gender="unknown" name="menubar_description">مینیو بار</string>
+    <string gender="unknown" name="menuitem_description">مینیو آئٹم</string>
+    <string gender="unknown" name="progressbar_description">پیشرفت کی بار</string>
+    <string gender="unknown" name="radiogroup_description">ریڈیو گروپ</string>
+    <string gender="unknown" name="rn_tab_description">ٹیب</string>
+    <string gender="unknown" name="scrollbar_description">سکرول بار</string>
+    <string gender="unknown" name="spinbutton_description">گھمانے کا بٹن</string>
+    <string gender="unknown" name="state_busy_description">مصروف</string>
+    <string gender="unknown" name="state_collapsed_description">سکیڑا گیا</string>
+    <string gender="unknown" name="state_expanded_description">توسیع کیا گیا</string>
+    <string gender="unknown" name="state_mixed_description">امتزاج</string>
+    <string gender="unknown" name="state_off_description">آف ہے</string>
+    <string gender="unknown" name="state_on_description">آن ہے</string>
+    <string gender="unknown" name="state_unselected_description">غیر منتخب کردہ</string>
+    <string gender="unknown" name="summary_description">خلاصہ</string>
+    <string gender="unknown" name="tablist_description">ٹیب کی لسٹ</string>
+    <string gender="unknown" name="timer_description">ٹائمر</string>
+    <string gender="unknown" name="toolbar_description">ٹول بار</string>
+</resources>

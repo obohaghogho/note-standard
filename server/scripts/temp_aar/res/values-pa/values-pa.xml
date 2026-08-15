@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">ਸੁਚੇਤਨਾ</string>
+    <string gender="unknown" name="combobox_description">ਕੋਂਬੋ ਬਾਕਸ</string>
+    <string gender="unknown" name="header_description">ਸਿਰਲੇਖ</string>
+    <string gender="unknown" name="image_description">ਚਿੱਤਰ</string>
+    <string gender="unknown" name="imagebutton_description">ਬਟਨ, ਚਿੱਤਰ</string>
+    <string gender="unknown" name="link_description">ਲਿੰਕ</string>
+    <string gender="unknown" name="menu_description">ਮੀਨੂ</string>
+    <string gender="unknown" name="menubar_description">ਮੀਨੂ ਬਾਰ</string>
+    <string gender="unknown" name="menuitem_description">ਮੀਨੂ ਆਈਟਮ</string>
+    <string gender="unknown" name="progressbar_description">ਪ੍ਰੋਗਰੈੱਸ ਬਾਰ</string>
+    <string gender="unknown" name="radiogroup_description">ਰਡੀਓ ਗਰੁੱਪ</string>
+    <string gender="unknown" name="rn_tab_description">ਟੈਬ</string>
+    <string gender="unknown" name="scrollbar_description">ਸਕ੍ਰੋਲ ਬਾਰ</string>
+    <string gender="unknown" name="spinbutton_description">\'ਘੁੰਮਾਓ\' ਬਟਨ</string>
+    <string gender="unknown" name="state_busy_description">ਵਿਅਸਤ</string>
+    <string gender="unknown" name="state_collapsed_description">ਸਮੇਟਿਆ ਗਿਆ</string>
+    <string gender="unknown" name="state_expanded_description">ਵਿਸਤਾਰ ਕੀਤਾ ਗਿਆ</string>
+    <string gender="unknown" name="state_mixed_description">ਮਿਕਸਡ</string>
+    <string gender="unknown" name="state_off_description">ਬੰਦ</string>
+    <string gender="unknown" name="state_on_description">ਚਾਲੂ</string>
+    <string gender="unknown" name="state_unselected_description">ਚੋਣ ਹਟਾਈ ਗਈ</string>
+    <string gender="unknown" name="summary_description">ਸਾਰ</string>
+    <string gender="unknown" name="tablist_description">ਟੈਬ ਸੂਚੀ</string>
+    <string gender="unknown" name="timer_description">ਟਾਈਮਰ</string>
+    <string gender="unknown" name="toolbar_description">ਟੂਲ ਬਾਰ</string>
+</resources>

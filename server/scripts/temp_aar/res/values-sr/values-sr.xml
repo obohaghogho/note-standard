@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Обавештење</string>
+    <string gender="unknown" name="combobox_description">Комбиновано поље</string>
+    <string gender="unknown" name="header_description">Заглавље</string>
+    <string gender="unknown" name="image_description">Слика</string>
+    <string gender="unknown" name="imagebutton_description">Дугме, слика</string>
+    <string gender="unknown" name="link_description">Веза</string>
+    <string gender="unknown" name="menu_description">Мени</string>
+    <string gender="unknown" name="menubar_description">Трака са менијем</string>
+    <string gender="unknown" name="menuitem_description">Ставка из менија</string>
+    <string gender="unknown" name="progressbar_description">Трака са напретком</string>
+    <string gender="unknown" name="radiogroup_description">Група за радио</string>
+    <string gender="unknown" name="rn_tab_description">Картица</string>
+    <string gender="unknown" name="scrollbar_description">Трака за померање</string>
+    <string gender="unknown" name="spinbutton_description">Дугме за окретање</string>
+    <string gender="unknown" name="state_busy_description">заузето</string>
+    <string gender="unknown" name="state_collapsed_description">скупљено</string>
+    <string gender="unknown" name="state_expanded_description">проширено</string>
+    <string gender="unknown" name="state_mixed_description">мешано</string>
+    <string gender="unknown" name="state_off_description">искључено</string>
+    <string gender="unknown" name="state_on_description">укључено</string>
+    <string gender="unknown" name="state_unselected_description">избор опозван</string>
+    <string gender="unknown" name="summary_description">Резиме</string>
+    <string gender="unknown" name="tablist_description">Листа картица</string>
+    <string gender="unknown" name="timer_description">Тајмер</string>
+    <string gender="unknown" name="toolbar_description">Трака са алаткама</string>
+</resources>

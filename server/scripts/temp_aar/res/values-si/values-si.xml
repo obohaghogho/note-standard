@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">ඇඟවීම</string>
+    <string gender="unknown" name="combobox_description">සංයුක්ත පෙට්ටිය</string>
+    <string gender="unknown" name="header_description">සිරස්තලය</string>
+    <string gender="unknown" name="image_description">රූපය</string>
+    <string gender="unknown" name="imagebutton_description">‍බොත්තම, රූපය</string>
+    <string gender="unknown" name="link_description">සබැඳිය</string>
+    <string gender="unknown" name="menu_description">මෙනුව</string>
+    <string gender="unknown" name="menubar_description">මෙනු තීරුව</string>
+    <string gender="unknown" name="menuitem_description">‍මෙනු අයිතමය</string>
+    <string gender="unknown" name="progressbar_description">ප්‍රගති තීරුව</string>
+    <string gender="unknown" name="radiogroup_description">ගුවන්විදුලි සමූහය</string>
+    <string gender="unknown" name="rn_tab_description">ටැබය</string>
+    <string gender="unknown" name="scrollbar_description">අනුචලන තීරුව</string>
+    <string gender="unknown" name="spinbutton_description">වේගයෙන් කරකවන බොත්තම</string>
+    <string gender="unknown" name="state_busy_description">කාර්යබහුලයි</string>
+    <string gender="unknown" name="state_collapsed_description">හකුළන ලදී</string>
+    <string gender="unknown" name="state_expanded_description">විහිදුවන ලදි</string>
+    <string gender="unknown" name="state_mixed_description">මිශ්‍ර කළ</string>
+    <string gender="unknown" name="state_off_description">අක්‍රියයි</string>
+    <string gender="unknown" name="state_on_description">ක්‍රියාත්මකයි</string>
+    <string gender="unknown" name="state_unselected_description">තේරීම ඉවත් කරන ලද</string>
+    <string gender="unknown" name="summary_description">සාරාංශය</string>
+    <string gender="unknown" name="tablist_description">ටැබ ලැයිස්තුව</string>
+    <string gender="unknown" name="timer_description">කාල ගණකය</string>
+    <string gender="unknown" name="toolbar_description">මෙවලම් තීරුව</string>
+</resources>

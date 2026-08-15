@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Alerta</string>
+    <string gender="unknown" name="combobox_description">Caixa de combinação</string>
+    <string gender="unknown" name="header_description">Título</string>
+    <string gender="unknown" name="image_description">Imagem</string>
+    <string gender="unknown" name="imagebutton_description">Botão, imagem</string>
+    <string gender="unknown" name="link_description">Link</string>
+    <string gender="unknown" name="menu_description">Menu</string>
+    <string gender="unknown" name="menubar_description">Barra do menu</string>
+    <string gender="unknown" name="menuitem_description">Item do menu</string>
+    <string gender="unknown" name="progressbar_description">Barra de progresso</string>
+    <string gender="unknown" name="radiogroup_description">Botão de grupo de opções</string>
+    <string gender="unknown" name="rn_tab_description">Aba</string>
+    <string gender="unknown" name="scrollbar_description">Barra de rolamento</string>
+    <string gender="unknown" name="spinbutton_description">Botão de rotação</string>
+    <string gender="unknown" name="state_busy_description">ocupado</string>
+    <string gender="unknown" name="state_collapsed_description">recolhido</string>
+    <string gender="unknown" name="state_expanded_description">expandido</string>
+    <string gender="unknown" name="state_mixed_description">misto</string>
+    <string gender="unknown" name="state_off_description">desativado</string>
+    <string gender="unknown" name="state_on_description">ativado</string>
+    <string gender="unknown" name="state_unselected_description">desmarcados</string>
+    <string gender="unknown" name="summary_description">Resumo</string>
+    <string gender="unknown" name="tablist_description">Lista de abas</string>
+    <string gender="unknown" name="timer_description">Temporizador</string>
+    <string gender="unknown" name="toolbar_description">Barra de ferramentas</string>
+</resources>

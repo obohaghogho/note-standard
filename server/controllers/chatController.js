@@ -3035,3 +3035,56 @@ exports.webhookDeliver = async (req, res, next) => {
   }
 };
 
+/**
+ * GET /api/chat/conversations/:conversationId/search
+ * Search messages within a specific conversation (B-07)
+ */
+exports.searchMessages = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { conversationId } = req.params;
+    const query = (req.query.q || '').trim();
+
+    if (!conversationId || conversationId === 'undefined' || conversationId === 'null') {
+      return res.status(400).json({ error: 'Valid conversation ID is required' });
+    }
+
+    if (!query) {
+      return res.json({ success: true, messages: [], total: 0 });
+    }
+
+    // Verify user is a member of the conversation
+    const { data: member, error: memberErr } = await supabase
+      .from('conversation_members')
+      .select('id')
+      .eq('conversation_id', conversationId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (memberErr || !member) {
+      return res.status(403).json({ error: 'Access denied to conversation' });
+    }
+
+    // Search messages in this conversation
+    const { data: messages, error } = await supabase
+      .from('messages')
+      .select('id, conversation_id, sender_id, content, type, created_at')
+      .eq('conversation_id', conversationId)
+      .ilike('content', `%${query}%`)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      query,
+      messages: messages || [],
+      total: messages?.length || 0,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+

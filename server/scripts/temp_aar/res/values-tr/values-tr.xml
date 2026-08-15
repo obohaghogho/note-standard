@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Uyarı</string>
+    <string gender="unknown" name="combobox_description">Karma Kutu</string>
+    <string gender="unknown" name="header_description">Başlık</string>
+    <string gender="unknown" name="image_description">Görsel</string>
+    <string gender="unknown" name="imagebutton_description">Düğme, Görsel</string>
+    <string gender="unknown" name="link_description">Bağlantı</string>
+    <string gender="unknown" name="menu_description">Menü</string>
+    <string gender="unknown" name="menubar_description">Menü Çubuğu</string>
+    <string gender="unknown" name="menuitem_description">Menü Seçeneği</string>
+    <string gender="unknown" name="progressbar_description">İlerleme Çubuğu</string>
+    <string gender="unknown" name="radiogroup_description">Radyo Grubu</string>
+    <string gender="unknown" name="rn_tab_description">Sekme</string>
+    <string gender="unknown" name="scrollbar_description">Kaydırma Çubuğu</string>
+    <string gender="unknown" name="spinbutton_description">Döndürme Düğmesi</string>
+    <string gender="unknown" name="state_busy_description">meşgul</string>
+    <string gender="unknown" name="state_collapsed_description">daraltılmış</string>
+    <string gender="unknown" name="state_expanded_description">genişletilmiş</string>
+    <string gender="unknown" name="state_mixed_description">karışık</string>
+    <string gender="unknown" name="state_off_description">kapalı</string>
+    <string gender="unknown" name="state_on_description">açık</string>
+    <string gender="unknown" name="state_unselected_description">seçili değil</string>
+    <string gender="unknown" name="summary_description">Özet</string>
+    <string gender="unknown" name="tablist_description">Sekme Listesi</string>
+    <string gender="unknown" name="timer_description">Zamanlayıcı</string>
+    <string gender="unknown" name="toolbar_description">Araç Çubuğu</string>
+</resources>

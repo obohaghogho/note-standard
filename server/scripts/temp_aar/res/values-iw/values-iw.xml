@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">התראה</string>
+    <string gender="unknown" name="combobox_description">תיבה משולבת</string>
+    <string gender="unknown" name="header_description">כותרת</string>
+    <string gender="unknown" name="image_description">תמונה</string>
+    <string gender="unknown" name="imagebutton_description">לחצן, תמונה</string>
+    <string gender="unknown" name="link_description">קישור</string>
+    <string gender="unknown" name="menu_description">תפריט</string>
+    <string gender="unknown" name="menubar_description">סרגל תפריטים</string>
+    <string gender="unknown" name="menuitem_description">פריט בתפריט</string>
+    <string gender="unknown" name="progressbar_description">סרגל התקדמות</string>
+    <string gender="unknown" name="radiogroup_description">קבוצת רדיו</string>
+    <string gender="unknown" name="rn_tab_description">לשונית</string>
+    <string gender="unknown" name="scrollbar_description">סרגל גלילה</string>
+    <string gender="unknown" name="spinbutton_description">לחצן מסתובב</string>
+    <string gender="unknown" name="state_busy_description">תפוס</string>
+    <string gender="unknown" name="state_collapsed_description">מצומצם</string>
+    <string gender="unknown" name="state_expanded_description">מורחב</string>
+    <string gender="unknown" name="state_mixed_description">משולב</string>
+    <string gender="unknown" name="state_off_description">כבוי</string>
+    <string gender="unknown" name="state_on_description">מופעל</string>
+    <string gender="unknown" name="state_unselected_description">הבחירה בוטלה</string>
+    <string gender="unknown" name="summary_description">סיכום</string>
+    <string gender="unknown" name="tablist_description">רשימת לשוניות</string>
+    <string gender="unknown" name="timer_description">טיימר</string>
+    <string gender="unknown" name="toolbar_description">סרגל כלים</string>
+</resources>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Сповіщення</string>
+    <string gender="unknown" name="combobox_description">Комбінований список</string>
+    <string gender="unknown" name="header_description">Заголовок</string>
+    <string gender="unknown" name="image_description">Зображення</string>
+    <string gender="unknown" name="imagebutton_description">Кнопка, зображення</string>
+    <string gender="unknown" name="link_description">Посилання</string>
+    <string gender="unknown" name="menu_description">Меню</string>
+    <string gender="unknown" name="menubar_description">Рядок меню</string>
+    <string gender="unknown" name="menuitem_description">Об\'єкт меню</string>
+    <string gender="unknown" name="progressbar_description">Індикатор прогресу</string>
+    <string gender="unknown" name="radiogroup_description">Група перемикачів</string>
+    <string gender="unknown" name="rn_tab_description">Вкладка</string>
+    <string gender="unknown" name="scrollbar_description">Прокручування</string>
+    <string gender="unknown" name="spinbutton_description">Кнопка обертання</string>
+    <string gender="unknown" name="state_busy_description">зайнято</string>
+    <string gender="unknown" name="state_collapsed_description">згорнуто</string>
+    <string gender="unknown" name="state_expanded_description">розгорнуто</string>
+    <string gender="unknown" name="state_mixed_description">змішано</string>
+    <string gender="unknown" name="state_off_description">Вимк.</string>
+    <string gender="unknown" name="state_on_description">Увімк.</string>
+    <string gender="unknown" name="state_unselected_description">не вибрано</string>
+    <string gender="unknown" name="summary_description">Зведення</string>
+    <string gender="unknown" name="tablist_description">Список вкладок</string>
+    <string gender="unknown" name="timer_description">Таймер</string>
+    <string gender="unknown" name="toolbar_description">Панель інструментів</string>
+</resources>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Ειδοποίηση</string>
+    <string gender="unknown" name="combobox_description">Συνδυαστικό κουτάκι</string>
+    <string gender="unknown" name="header_description">Επικεφαλίδα</string>
+    <string gender="unknown" name="image_description">Εικόνα</string>
+    <string gender="unknown" name="imagebutton_description">Κουμπί, εικόνα</string>
+    <string gender="unknown" name="link_description">Σύνδεσμος</string>
+    <string gender="unknown" name="menu_description">Μενού</string>
+    <string gender="unknown" name="menubar_description">Γραμμή μενού</string>
+    <string gender="unknown" name="menuitem_description">Στοιχείο μενού</string>
+    <string gender="unknown" name="progressbar_description">Γραμμή προόδου</string>
+    <string gender="unknown" name="radiogroup_description">Ομάδα κουμπιών επιλογής</string>
+    <string gender="unknown" name="rn_tab_description">Καρτέλα</string>
+    <string gender="unknown" name="scrollbar_description">Γραμμή κύλισης</string>
+    <string gender="unknown" name="spinbutton_description">Κουμπί περιστροφής</string>
+    <string gender="unknown" name="state_busy_description">απασχολημένος/η</string>
+    <string gender="unknown" name="state_collapsed_description">συμπτυγμένο</string>
+    <string gender="unknown" name="state_expanded_description">διευρυμένο</string>
+    <string gender="unknown" name="state_mixed_description">συνδυασμός</string>
+    <string gender="unknown" name="state_off_description">όχι</string>
+    <string gender="unknown" name="state_on_description">ναι</string>
+    <string gender="unknown" name="state_unselected_description">μη επιλεγμένα</string>
+    <string gender="unknown" name="summary_description">Σύνοψη</string>
+    <string gender="unknown" name="tablist_description">Λίστα καρτελών</string>
+    <string gender="unknown" name="timer_description">Χρονόμετρο</string>
+    <string gender="unknown" name="toolbar_description">Γραμμή εργαλείων</string>
+</resources>

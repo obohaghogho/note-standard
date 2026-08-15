@@ -243,6 +243,8 @@ app.use("/api/nfi/financials", financialRoutes);
 app.use("/api/notes", notesRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/users", require("./routes/usersRoutes"));
+app.use("/api/search", require("./routes/search"));
+app.use("/api/feedback", require("./routes/support"));
 app.use("/api/upload", uploadRoutes);
 app.use("/api/media", require("./routes/media"));
 app.use("/api/version", require("./routes/version"));

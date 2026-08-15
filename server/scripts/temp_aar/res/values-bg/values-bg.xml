@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Сигнал</string>
+    <string gender="unknown" name="combobox_description">Комбинирана кутия</string>
+    <string gender="unknown" name="header_description">Заглавие</string>
+    <string gender="unknown" name="image_description">Изображение</string>
+    <string gender="unknown" name="imagebutton_description">Бутон, изображение</string>
+    <string gender="unknown" name="link_description">Връзка</string>
+    <string gender="unknown" name="menu_description">Меню</string>
+    <string gender="unknown" name="menubar_description">Лента с менюта</string>
+    <string gender="unknown" name="menuitem_description">Елемент от меню</string>
+    <string gender="unknown" name="progressbar_description">Лента за напредък</string>
+    <string gender="unknown" name="radiogroup_description">Радио група</string>
+    <string gender="unknown" name="rn_tab_description">Раздел</string>
+    <string gender="unknown" name="scrollbar_description">Лента за превъртане</string>
+    <string gender="unknown" name="spinbutton_description">Бутон за завъртане</string>
+    <string gender="unknown" name="state_busy_description">заето</string>
+    <string gender="unknown" name="state_collapsed_description">свито</string>
+    <string gender="unknown" name="state_expanded_description">разширено</string>
+    <string gender="unknown" name="state_mixed_description">смесено</string>
+    <string gender="unknown" name="state_off_description">изключено</string>
+    <string gender="unknown" name="state_on_description">включено</string>
+    <string gender="unknown" name="state_unselected_description">неизбрано</string>
+    <string gender="unknown" name="summary_description">Обобщение</string>
+    <string gender="unknown" name="tablist_description">Списък с раздели</string>
+    <string gender="unknown" name="timer_description">Таймер</string>
+    <string gender="unknown" name="toolbar_description">Лента с инструменти</string>
+</resources>

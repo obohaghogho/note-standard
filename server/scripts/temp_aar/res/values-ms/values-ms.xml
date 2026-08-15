@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Isyarat</string>
+    <string gender="unknown" name="combobox_description">Kotak Kombo</string>
+    <string gender="unknown" name="header_description">Tajuk</string>
+    <string gender="unknown" name="image_description">Imej</string>
+    <string gender="unknown" name="imagebutton_description">Butang, Imej</string>
+    <string gender="unknown" name="link_description">Pautan</string>
+    <string gender="unknown" name="menubar_description">Bar Menu</string>
+    <string gender="unknown" name="menuitem_description">Item Menu</string>
+    <string gender="unknown" name="progressbar_description">Bar Kemajuan</string>
+    <string gender="unknown" name="radiogroup_description">Kumpulan Radio</string>
+    <string gender="unknown" name="scrollbar_description">Bar Tatal</string>
+    <string gender="unknown" name="spinbutton_description">Butang Putaran</string>
+    <string gender="unknown" name="state_busy_description">sibuk</string>
+    <string gender="unknown" name="state_collapsed_description">diruntuhkan</string>
+    <string gender="unknown" name="state_expanded_description">dikembangkan</string>
+    <string gender="unknown" name="state_mixed_description">campuran</string>
+    <string gender="unknown" name="state_off_description">dimatikan</string>
+    <string gender="unknown" name="state_on_description">dihidupkan</string>
+    <string gender="unknown" name="state_unselected_description">dinyahpilih</string>
+    <string gender="unknown" name="summary_description">Ringkasan</string>
+    <string gender="unknown" name="tablist_description">Senarai Tab</string>
+    <string gender="unknown" name="timer_description">Pemasa</string>
+    <string gender="unknown" name="toolbar_description">Bar Alat</string>
+</resources>

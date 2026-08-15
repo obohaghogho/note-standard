@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Upozornenie</string>
+    <string gender="unknown" name="combobox_description">Kombinované pole</string>
+    <string gender="unknown" name="header_description">Nadpis</string>
+    <string gender="unknown" name="image_description">Obrázok</string>
+    <string gender="unknown" name="imagebutton_description">Tlačidlo, obrázok</string>
+    <string gender="unknown" name="link_description">Odkaz</string>
+    <string gender="unknown" name="menu_description">Ponuka</string>
+    <string gender="unknown" name="menubar_description">Lišta s ponukou</string>
+    <string gender="unknown" name="menuitem_description">Položka ponuky</string>
+    <string gender="unknown" name="progressbar_description">Indikátor postupu</string>
+    <string gender="unknown" name="radiogroup_description">Skupina tlačidiel na výber</string>
+    <string gender="unknown" name="rn_tab_description">Tabulátor</string>
+    <string gender="unknown" name="scrollbar_description">Lišta na posúvanie</string>
+    <string gender="unknown" name="spinbutton_description">Otočné tlačidlo</string>
+    <string gender="unknown" name="state_busy_description">obsadené</string>
+    <string gender="unknown" name="state_collapsed_description">zbalené</string>
+    <string gender="unknown" name="state_expanded_description">rozbalené</string>
+    <string gender="unknown" name="state_mixed_description">zmiešané</string>
+    <string gender="unknown" name="state_off_description">vypnuté</string>
+    <string gender="unknown" name="state_on_description">zapnuté</string>
+    <string gender="unknown" name="state_unselected_description">nevybrané</string>
+    <string gender="unknown" name="summary_description">Súhrn</string>
+    <string gender="unknown" name="tablist_description">Zoznam kariet</string>
+    <string gender="unknown" name="timer_description">Časovač</string>
+    <string gender="unknown" name="toolbar_description">Panel s nástrojmi</string>
+</resources>

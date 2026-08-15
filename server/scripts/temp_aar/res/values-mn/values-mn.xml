@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="combobox_description">Комбо хайрцаг</string>
+    <string gender="unknown" name="image_description">Зураг</string>
+    <string gender="unknown" name="imagebutton_description">Товч, зураг</string>
+    <string gender="unknown" name="link_description">Холбоос</string>
+    <string gender="unknown" name="menu_description">Цэс</string>
+    <string gender="unknown" name="state_off_description">идэвхгүй</string>
+    <string gender="unknown" name="state_on_description">идэвхтэй</string>
+</resources>

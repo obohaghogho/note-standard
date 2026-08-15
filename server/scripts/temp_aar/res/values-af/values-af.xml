@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Opletnota</string>
+    <string gender="unknown" name="combobox_description">Kombinasiekassie</string>
+    <string gender="unknown" name="header_description">Opskrif</string>
+    <string gender="unknown" name="image_description">Prent</string>
+    <string gender="unknown" name="imagebutton_description">Knoppie, prent</string>
+    <string gender="unknown" name="link_description">Skakel</string>
+    <string gender="unknown" name="menu_description">Kieslys</string>
+    <string gender="unknown" name="menubar_description">Kieslysbalk</string>
+    <string gender="unknown" name="menuitem_description">Kieslysitem</string>
+    <string gender="unknown" name="progressbar_description">Vorderingbalk</string>
+    <string gender="unknown" name="radiogroup_description">Radiogroep</string>
+    <string gender="unknown" name="rn_tab_description">Oortjie</string>
+    <string gender="unknown" name="scrollbar_description">Rolleesbalk</string>
+    <string gender="unknown" name="spinbutton_description">Tolknoppie</string>
+    <string gender="unknown" name="state_busy_description">besig</string>
+    <string gender="unknown" name="state_collapsed_description">is ingevou</string>
+    <string gender="unknown" name="state_expanded_description">is uitgevou</string>
+    <string gender="unknown" name="state_mixed_description">is gemeng</string>
+    <string gender="unknown" name="state_off_description">af</string>
+    <string gender="unknown" name="state_on_description">aan</string>
+    <string gender="unknown" name="state_unselected_description">ontkies</string>
+    <string gender="unknown" name="summary_description">Opsomming</string>
+    <string gender="unknown" name="tablist_description">Oortjielys</string>
+    <string gender="unknown" name="timer_description">Afteller</string>
+    <string gender="unknown" name="toolbar_description">Nutsbalk</string>
+</resources>

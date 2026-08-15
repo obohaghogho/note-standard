@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="combobox_description">Біріктірілген тізім</string>
+    <string gender="unknown" name="image_description">Кескін</string>
+    <string gender="unknown" name="imagebutton_description">Түйме, кескін</string>
+    <string gender="unknown" name="link_description">Сілтеме</string>
+    <string gender="unknown" name="menu_description">Мәзір</string>
+    <string gender="unknown" name="state_off_description">өшірулі</string>
+    <string gender="unknown" name="state_on_description">қосулы</string>
+</resources>

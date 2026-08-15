@@ -33,6 +33,8 @@ function TabIcon({ emoji, label, focused }: { emoji: string; label: string; focu
 }
 
 export default function MainTabs() {
+  const lastTabPressRef = React.useRef(0);
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -46,6 +48,16 @@ export default function MainTabs() {
         },
         tabBarShowLabel: false,
       }}
+      screenListeners={({ navigation, route }) => ({
+        tabPress: (e) => {
+          const now = Date.now();
+          if (now - lastTabPressRef.current < 350) {
+            e.preventDefault();
+          } else {
+            lastTabPressRef.current = now;
+          }
+        },
+      })}
     >
       <Tab.Screen
         name="Home"

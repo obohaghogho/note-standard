@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="combobox_description">Combo box</string>
+    <string gender="unknown" name="imagebutton_description">Button, image</string>
+    <string gender="unknown" name="menubar_description">Menu bar</string>
+    <string gender="unknown" name="menuitem_description">Menu item</string>
+    <string gender="unknown" name="progressbar_description">Progress bar</string>
+    <string gender="unknown" name="radiogroup_description">Radio group</string>
+    <string gender="unknown" name="scrollbar_description">Scroll bar</string>
+    <string gender="unknown" name="spinbutton_description">Spin button</string>
+    <string gender="unknown" name="tablist_description">Tab list</string>
+    <string gender="unknown" name="toolbar_description">Tool bar</string>
+</resources>

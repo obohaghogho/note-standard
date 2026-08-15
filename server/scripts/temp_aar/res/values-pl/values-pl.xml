@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="combobox_description">Pole kombi</string>
+    <string gender="unknown" name="header_description">Nagłówek</string>
+    <string gender="unknown" name="image_description">Obraz</string>
+    <string gender="unknown" name="imagebutton_description">Przycisk, obraz</string>
+    <string gender="unknown" name="menubar_description">Pasek menu</string>
+    <string gender="unknown" name="menuitem_description">Pozycja menu</string>
+    <string gender="unknown" name="progressbar_description">Pasek postępu</string>
+    <string gender="unknown" name="radiogroup_description">Grupa przycisków radiowych</string>
+    <string gender="unknown" name="rn_tab_description">Karta</string>
+    <string gender="unknown" name="scrollbar_description">Pasek przewijania</string>
+    <string gender="unknown" name="spinbutton_description">Przycisk kręcenia</string>
+    <string gender="unknown" name="state_busy_description">zajęte</string>
+    <string gender="unknown" name="state_collapsed_description">zwinięte</string>
+    <string gender="unknown" name="state_expanded_description">rozwinięte</string>
+    <string gender="unknown" name="state_mixed_description">mieszane</string>
+    <string gender="unknown" name="state_off_description">wył.</string>
+    <string gender="unknown" name="state_on_description">wł.</string>
+    <string gender="unknown" name="state_unselected_description">nie wybrano</string>
+    <string gender="unknown" name="summary_description">Podsumowanie</string>
+    <string gender="unknown" name="tablist_description">Lista kart</string>
+    <string gender="unknown" name="timer_description">Czasomierz</string>
+    <string gender="unknown" name="toolbar_description">Pasek narzędzi</string>
+</resources>

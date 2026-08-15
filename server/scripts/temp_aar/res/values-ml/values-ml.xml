@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">അലേർട്ട്</string>
+    <string gender="unknown" name="combobox_description">കോംബോ ബോക്‌സ്</string>
+    <string gender="unknown" name="header_description">തലക്കെട്ട്</string>
+    <string gender="unknown" name="image_description">ചിത്രം</string>
+    <string gender="unknown" name="imagebutton_description">ബട്ടൺ, ചിത്രം</string>
+    <string gender="unknown" name="link_description">ലിങ്ക്</string>
+    <string gender="unknown" name="menu_description">മെനു</string>
+    <string gender="unknown" name="menubar_description">മെനു ബാർ</string>
+    <string gender="unknown" name="menuitem_description">മെനു ഇനം</string>
+    <string gender="unknown" name="progressbar_description">പുരോഗതി ബാർ</string>
+    <string gender="unknown" name="radiogroup_description">റേഡിയോ ഗ്രൂപ്പ്</string>
+    <string gender="unknown" name="rn_tab_description">ടാബ്</string>
+    <string gender="unknown" name="scrollbar_description">സ്‌ക്രോൾ ബാർ</string>
+    <string gender="unknown" name="spinbutton_description">കറക്കുക ബട്ടൺ</string>
+    <string gender="unknown" name="state_busy_description">തിരക്കിലാണ്</string>
+    <string gender="unknown" name="state_collapsed_description">ചുരുക്കി</string>
+    <string gender="unknown" name="state_expanded_description">വിപുലീകരിച്ചു</string>
+    <string gender="unknown" name="state_mixed_description">മിശ്രിതം</string>
+    <string gender="unknown" name="state_off_description">ഓഫാണ്</string>
+    <string gender="unknown" name="state_on_description">ഓണാണ്</string>
+    <string gender="unknown" name="state_unselected_description">തിരഞ്ഞെടുത്തത് മാറ്റി</string>
+    <string gender="unknown" name="summary_description">സംഗ്രഹം</string>
+    <string gender="unknown" name="tablist_description">ടാബ് ലിസ്‌റ്റ്</string>
+    <string gender="unknown" name="timer_description">ടൈമർ</string>
+    <string gender="unknown" name="toolbar_description">ടൂൾ ബാർ</string>
+</resources>

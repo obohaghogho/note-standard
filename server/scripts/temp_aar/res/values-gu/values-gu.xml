@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">એલર્ટ</string>
+    <string gender="unknown" name="combobox_description">કોમ્બો બોક્સ</string>
+    <string gender="unknown" name="header_description">શીર્ષક</string>
+    <string gender="unknown" name="image_description">ફોટો</string>
+    <string gender="unknown" name="imagebutton_description">બટન, ફોટો</string>
+    <string gender="unknown" name="link_description">લિંક</string>
+    <string gender="unknown" name="menu_description">મેનૂ</string>
+    <string gender="unknown" name="menubar_description">મેનૂ બાર</string>
+    <string gender="unknown" name="menuitem_description">મેનૂ આઇટમ</string>
+    <string gender="unknown" name="progressbar_description">પ્રગતિ બાર</string>
+    <string gender="unknown" name="radiogroup_description">રેડિયો ગ્રૂપ</string>
+    <string gender="unknown" name="rn_tab_description">ટેબ</string>
+    <string gender="unknown" name="scrollbar_description">સ્ક્રોલ બાર</string>
+    <string gender="unknown" name="spinbutton_description">સ્પિન બટન</string>
+    <string gender="unknown" name="state_busy_description">વ્યસ્ત</string>
+    <string gender="unknown" name="state_collapsed_description">નાનું</string>
+    <string gender="unknown" name="state_expanded_description">વિસ્તૃત</string>
+    <string gender="unknown" name="state_mixed_description">મિક્સ કરેલ</string>
+    <string gender="unknown" name="state_off_description">બંધ</string>
+    <string gender="unknown" name="state_on_description">ચાલુ</string>
+    <string gender="unknown" name="state_unselected_description">પસંદગીમાંથી કાઢી નાખ્યું</string>
+    <string gender="unknown" name="summary_description">સારાંશ</string>
+    <string gender="unknown" name="tablist_description">ટેબ લિસ્ટ</string>
+    <string gender="unknown" name="timer_description">ટાઇમર</string>
+    <string gender="unknown" name="toolbar_description">ટૂલ બાર</string>
+</resources>

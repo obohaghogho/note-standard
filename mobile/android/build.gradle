@@ -7,7 +7,7 @@ ext {
   targetSdkVersion = 34
   targetSdk = 34
   ndkVersion = "27.1.12297006"
-  kotlinVersion = "2.0.20"
+  kotlinVersion = "2.0.21"
 }
 
 buildscript {

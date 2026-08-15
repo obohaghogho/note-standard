@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">提醒</string>
+    <string gender="unknown" name="combobox_description">组合框</string>
+    <string gender="unknown" name="header_description">标题</string>
+    <string gender="unknown" name="image_description">图片</string>
+    <string gender="unknown" name="imagebutton_description">按钮，图片</string>
+    <string gender="unknown" name="link_description">链接</string>
+    <string gender="unknown" name="menu_description">菜单</string>
+    <string gender="unknown" name="menubar_description">菜单栏</string>
+    <string gender="unknown" name="menuitem_description">菜单项目</string>
+    <string gender="unknown" name="progressbar_description">进度条</string>
+    <string gender="unknown" name="radiogroup_description">单选组</string>
+    <string gender="unknown" name="rn_tab_description">选项卡</string>
+    <string gender="unknown" name="scrollbar_description">滚动条</string>
+    <string gender="unknown" name="spinbutton_description">旋转按钮</string>
+    <string gender="unknown" name="state_busy_description">忙碌中</string>
+    <string gender="unknown" name="state_collapsed_description">已收起</string>
+    <string gender="unknown" name="state_expanded_description">已展开</string>
+    <string gender="unknown" name="state_mixed_description">混合</string>
+    <string gender="unknown" name="state_off_description">关闭</string>
+    <string gender="unknown" name="state_on_description">开启</string>
+    <string gender="unknown" name="state_unselected_description">未选中</string>
+    <string gender="unknown" name="summary_description">摘要</string>
+    <string gender="unknown" name="tablist_description">选项卡列表</string>
+    <string gender="unknown" name="timer_description">倒计时</string>
+    <string gender="unknown" name="toolbar_description">工具栏</string>
+</resources>

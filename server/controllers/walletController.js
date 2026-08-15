@@ -84,7 +84,7 @@ exports.deposit = async (req, res, next) => {
           channel: "card",
           plan: req.userProfile?.plan || "FREE"
         },
-        { provider: (provider && provider !== "paystack" && provider !== "fiat") ? provider : "fincra" }
+        { provider: (provider && provider !== "paystack" && provider !== "fincra" && provider !== "fiat") ? provider : null }
       );
       return res.json(result);
     }

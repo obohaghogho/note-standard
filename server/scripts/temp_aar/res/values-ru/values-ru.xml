@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Оповещение</string>
+    <string gender="unknown" name="combobox_description">Комбинированный список</string>
+    <string gender="unknown" name="header_description">Заголовок</string>
+    <string gender="unknown" name="image_description">Изображение</string>
+    <string gender="unknown" name="imagebutton_description">Кнопка, изображение</string>
+    <string gender="unknown" name="link_description">Ссылка</string>
+    <string gender="unknown" name="menu_description">Меню</string>
+    <string gender="unknown" name="menubar_description">Панель меню</string>
+    <string gender="unknown" name="menuitem_description">Элемент меню</string>
+    <string gender="unknown" name="progressbar_description">Индикатор прогресса</string>
+    <string gender="unknown" name="radiogroup_description">Группа кнопок-переключателей</string>
+    <string gender="unknown" name="rn_tab_description">Вкладка</string>
+    <string gender="unknown" name="scrollbar_description">Полоса прокрутки</string>
+    <string gender="unknown" name="spinbutton_description">Кнопка кольцевого списка</string>
+    <string gender="unknown" name="state_busy_description">занято</string>
+    <string gender="unknown" name="state_collapsed_description">свернуто</string>
+    <string gender="unknown" name="state_expanded_description">развернуто</string>
+    <string gender="unknown" name="state_mixed_description">смешано</string>
+    <string gender="unknown" name="state_off_description">выкл</string>
+    <string gender="unknown" name="state_on_description">включено</string>
+    <string gender="unknown" name="state_unselected_description">не выбрано</string>
+    <string gender="unknown" name="summary_description">Сводка</string>
+    <string gender="unknown" name="tablist_description">Список вкладок</string>
+    <string gender="unknown" name="timer_description">Таймер</string>
+    <string gender="unknown" name="toolbar_description">Панель инструментов</string>
+</resources>

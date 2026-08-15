@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Výstraha</string>
+    <string gender="unknown" name="combobox_description">Kombinované pole</string>
+    <string gender="unknown" name="header_description">Nadpis</string>
+    <string gender="unknown" name="image_description">Obrázek</string>
+    <string gender="unknown" name="imagebutton_description">Tlačítko, obrázek</string>
+    <string gender="unknown" name="link_description">Odkaz</string>
+    <string gender="unknown" name="menu_description">Nabídka</string>
+    <string gender="unknown" name="menubar_description">Panel nabídky</string>
+    <string gender="unknown" name="menuitem_description">Položka nabídky</string>
+    <string gender="unknown" name="progressbar_description">Ukazatel postupu</string>
+    <string gender="unknown" name="radiogroup_description">Skupina přepínačů</string>
+    <string gender="unknown" name="rn_tab_description">Karta</string>
+    <string gender="unknown" name="scrollbar_description">Posuvník</string>
+    <string gender="unknown" name="spinbutton_description">Číselník</string>
+    <string gender="unknown" name="state_busy_description">zaneprázdněno</string>
+    <string gender="unknown" name="state_collapsed_description">sbaleno</string>
+    <string gender="unknown" name="state_expanded_description">rozbaleno</string>
+    <string gender="unknown" name="state_mixed_description">oboje</string>
+    <string gender="unknown" name="state_off_description">vyp</string>
+    <string gender="unknown" name="state_on_description">zap</string>
+    <string gender="unknown" name="state_unselected_description">nevybráno</string>
+    <string gender="unknown" name="summary_description">Přehled</string>
+    <string gender="unknown" name="tablist_description">Seznam karet</string>
+    <string gender="unknown" name="timer_description">Časovač</string>
+    <string gender="unknown" name="toolbar_description">Panel nástrojů</string>
+</resources>

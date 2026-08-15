@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">Įspėjimas</string>
+    <string gender="unknown" name="combobox_description">Sudėtinis laukelis</string>
+    <string gender="unknown" name="header_description">Antraštė</string>
+    <string gender="unknown" name="image_description">Vaizdas</string>
+    <string gender="unknown" name="imagebutton_description">Mygtukas, vaizdas</string>
+    <string gender="unknown" name="link_description">Nuoroda</string>
+    <string gender="unknown" name="menu_description">Meniu</string>
+    <string gender="unknown" name="menubar_description">Meniu juosta</string>
+    <string gender="unknown" name="menuitem_description">Meniu elementas</string>
+    <string gender="unknown" name="progressbar_description">Eigos juosta</string>
+    <string gender="unknown" name="radiogroup_description">Akučių grupė</string>
+    <string gender="unknown" name="rn_tab_description">Skirtukas</string>
+    <string gender="unknown" name="scrollbar_description">Slinkimo juosta</string>
+    <string gender="unknown" name="spinbutton_description">Sukimo mygtukas</string>
+    <string gender="unknown" name="state_busy_description">naudojama</string>
+    <string gender="unknown" name="state_collapsed_description">sutraukta</string>
+    <string gender="unknown" name="state_expanded_description">išskleista</string>
+    <string gender="unknown" name="state_mixed_description">mišrus</string>
+    <string gender="unknown" name="state_off_description">išjungta</string>
+    <string gender="unknown" name="state_on_description">įjungta</string>
+    <string gender="unknown" name="state_unselected_description">pasirinkimas atšauktas</string>
+    <string gender="unknown" name="summary_description">Suvestinė</string>
+    <string gender="unknown" name="tablist_description">Skirtukų sąrašas</string>
+    <string gender="unknown" name="timer_description">Laikmatis</string>
+    <string gender="unknown" name="toolbar_description">Įrankių juosta</string>
+</resources>

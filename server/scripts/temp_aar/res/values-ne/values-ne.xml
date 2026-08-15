@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="combobox_description">कम्बो बक्स</string>
+    <string gender="unknown" name="image_description">फोटो</string>
+    <string gender="unknown" name="imagebutton_description">बटन, फोटो</string>
+    <string gender="unknown" name="link_description">लिङ्क</string>
+    <string gender="unknown" name="menu_description">मेनु</string>
+    <string gender="unknown" name="state_off_description">अफ</string>
+    <string gender="unknown" name="state_on_description">अन</string>
+</resources>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string gender="unknown" name="alert_description">హెచ్చరిక</string>
+    <string gender="unknown" name="combobox_description">కాంబో బాక్స్</string>
+    <string gender="unknown" name="header_description">శీర్షిక</string>
+    <string gender="unknown" name="image_description">చిత్రం</string>
+    <string gender="unknown" name="imagebutton_description">బటన్, చిత్రం</string>
+    <string gender="unknown" name="link_description">లింక్</string>
+    <string gender="unknown" name="menu_description">మెను</string>
+    <string gender="unknown" name="menubar_description">మెను బార్</string>
+    <string gender="unknown" name="menuitem_description">మెను ఐటమ్</string>
+    <string gender="unknown" name="progressbar_description">ప్రోగ్రెస్ బార్</string>
+    <string gender="unknown" name="radiogroup_description">రేడియో గ్రూప్</string>
+    <string gender="unknown" name="rn_tab_description">ట్యాబ్</string>
+    <string gender="unknown" name="scrollbar_description">స్క్రోల్ బార్</string>
+    <string gender="unknown" name="spinbutton_description">స్పిన్ బటన్</string>
+    <string gender="unknown" name="state_busy_description">బిజీగా ఉన్నారు</string>
+    <string gender="unknown" name="state_collapsed_description">కుదించబడింది</string>
+    <string gender="unknown" name="state_expanded_description">విస్తరింపబడింది</string>
+    <string gender="unknown" name="state_mixed_description">మిక్స్డ్</string>
+    <string gender="unknown" name="state_off_description">ఆఫ్ చేయి</string>
+    <string gender="unknown" name="state_on_description">ఆన్ చేయి</string>
+    <string gender="unknown" name="state_unselected_description">ఎంపిక తీసివేసారు</string>
+    <string gender="unknown" name="summary_description">సమ్మరీ</string>
+    <string gender="unknown" name="tablist_description">ట్యాబ్ జాబితా</string>
+    <string gender="unknown" name="timer_description">టైమర్</string>
+    <string gender="unknown" name="toolbar_description">టూల్ బార్</string>
+</resources>
