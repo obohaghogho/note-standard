@@ -61,10 +61,14 @@ export default function ProfileScreen() {
     setUpdatingPassword(true);
     try {
       await apiClient.post(`/auth/change-password`, { currentPassword, newPassword });
-      Alert.alert('Success', 'Password changed successfully');
       setShowPasswordModal(false);
       setCurrentPassword('');
       setNewPassword('');
+      Alert.alert(
+        'Password Changed',
+        'Your password was changed successfully. Please log in with your new password.',
+        [{ text: 'Log In Now', onPress: () => logout() }]
+      );
     } catch (e: any) {
       Alert.alert('Error', e.response?.data?.error || 'Failed to change password');
     } finally {

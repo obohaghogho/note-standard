@@ -46,9 +46,11 @@ router.post('/wallets/:currency/deposit-instructions', async (req, res) => {
       data: result
     });
   } catch (err) {
-    return res.status(500).json({
+    const statusCode = err.statusCode || 500;
+    return res.status(statusCode).json({
       success: false,
-      error: err.message
+      error: err.message,
+      code: err.code || 'DEPOSIT_INSTRUCTION_ERROR'
     });
   }
 });

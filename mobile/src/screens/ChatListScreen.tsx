@@ -16,6 +16,9 @@ import { FriendsList } from '../components/FriendsList';
 import apiClient from '../api/apiClient';
 import { Alert } from 'react-native';
 
+import { StatusTray, StatusGroup } from '../components/status/StatusTray';
+import { StatusViewerModal } from '../components/status/StatusViewerModal';
+
 type Props = { navigation: NativeStackNavigationProp<ChatStackParamList, 'ChatList'> };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -220,8 +223,20 @@ export default function ChatListScreen({ navigation }: Props) {
 
     const keyExtractor = useCallback((item: Conversation) => item.id, []);
 
+    const [selectedStatusGroup, setSelectedStatusGroup] = React.useState<StatusGroup | null>(null);
+    const [viewerVisible, setViewerVisible] = React.useState(false);
+
     const ListHeader = useMemo(() => (
         <View style={styles.socialHeader}>
+            <StatusTray
+                onOpenViewer={(group) => {
+                    setSelectedStatusGroup(group);
+                    setViewerVisible(true);
+                }}
+                onOpenCreator={() => {
+                    Alert.alert('Upload Status', 'Camera/Gallery status creation initialized.');
+                }}
+            />
             <FriendsList
                 conversations={conversations}
                 currentUserId={user?.id}
@@ -298,6 +313,13 @@ export default function ChatListScreen({ navigation }: Props) {
                 <Text style={styles.fabSupportIcon}>💬</Text>
                 <Text style={styles.fabSupportText}>Need Help?</Text>
             </TouchableOpacity>
+
+            <StatusViewerModal
+                visible={viewerVisible}
+                group={selectedStatusGroup}
+                currentUserId={user?.id}
+                onClose={() => setViewerVisible(false)}
+            />
         </View>
     );
 }

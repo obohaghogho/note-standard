@@ -102,7 +102,7 @@ export const SubscriptionPlansScreen: React.FC<SubscriptionPlansScreenProps> = (
       const res = await apiClient.get('/subscription/status');
       if (res.data) {
         setSubStatus({
-          plan_tier: res.data.plan_tier || res.data.plan || 'free',
+          plan_tier: res.data.plan_tier || res.data.plan || user?.plan_tier || 'free',
           status: res.data.status || 'active',
           current_period_end: res.data.current_period_end,
           cancel_at_period_end: res.data.cancel_at_period_end,
@@ -110,11 +110,12 @@ export const SubscriptionPlansScreen: React.FC<SubscriptionPlansScreenProps> = (
       }
     } catch (err) {
       console.warn('[SubscriptionPlans] Status fetch error:', err);
-      setSubStatus({ plan_tier: user?.is_pro ? 'pro' : 'free', status: 'active' });
+      // Preserve existing user plan_tier rather than defaulting to free
+      setSubStatus({ plan_tier: user?.plan_tier || (user?.is_pro ? 'pro' : 'free'), status: 'active' });
     } finally {
       setLoading(false);
     }
-  }, [user?.is_pro]);
+  }, [user?.plan_tier, user?.is_pro]);
 
   useEffect(() => {
     fetchSubscriptionStatus();

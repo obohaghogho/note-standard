@@ -267,6 +267,8 @@ function TeamChatModal({
     );
   };
 
+  const [activeTab, setActiveTab] = useState<'chat' | 'overview' | 'members' | 'files'>('chat');
+
   return (
     <Modal visible animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <KeyboardAvoidingView
@@ -278,7 +280,7 @@ function TeamChatModal({
           <TouchableOpacity onPress={onClose} style={styles.chatBackBtn}>
             <Text style={styles.chatBackText}>← Back</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => setShowMembersList(!showMembersList)} style={styles.chatHeaderInfo}>
+          <TouchableOpacity onPress={() => setActiveTab('members')} style={styles.chatHeaderInfo}>
             <Text style={styles.chatHeaderTitle} numberOfLines={1}>{team.name || 'Team Chat'}</Text>
             <Text style={styles.chatHeaderSub}>{members.length} MEMBERS • {team.my_role?.toUpperCase() || 'MEMBER'}</Text>
           </TouchableOpacity>
@@ -287,6 +289,27 @@ function TeamChatModal({
               <Text style={styles.headerActionIcon}>➕</Text>
             </TouchableOpacity>
           )}
+        </View>
+
+        {/* Tab Bar */}
+        <View style={{ flexDirection: 'row', backgroundColor: '#0f172a', paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: '#1e293b' }}>
+          {(['chat', 'overview', 'members', 'files'] as const).map((t) => (
+            <TouchableOpacity
+              key={t}
+              onPress={() => setActiveTab(t)}
+              style={{
+                flex: 1,
+                paddingVertical: 10,
+                alignItems: 'center',
+                borderBottomWidth: activeTab === t ? 2 : 0,
+                borderBottomColor: '#6366f1',
+              }}
+            >
+              <Text style={{ color: activeTab === t ? '#6366f1' : '#94a3b8', fontWeight: '600', textTransform: 'capitalize', fontSize: 13 }}>
+                {t}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
         {showMembersList && (

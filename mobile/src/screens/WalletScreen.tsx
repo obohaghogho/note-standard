@@ -50,13 +50,13 @@ interface LedgerEntry {
 
 // ── Currency metadata ─────────────────────────────────────────────────────────
 const CURRENCY_ICONS: Record<string, string> = {
-  BTC: '₿', ETH: 'Ξ', USD: '$', NGN: '₦',
+  BTC: '₿', ETH: 'Ξ', USD: '$', NGN: '₦', GHS: 'GH₵',
   EUR: '€', GBP: '£', USDT: '₮', USDC: '●', default: '◎',
 };
 
 const CURRENCY_FLAGS: Record<string, string> = {
-  NGN: '🇳🇬', USD: '🇺🇸', EUR: '🇪🇺', GBP: '🇬🇧',
-  BTC: '🟠', ETH: '🔷', USDT: '🟢', USDC: '🔵',
+  NGN: '🇳🇬', USD: '🇺🇸', GHS: '🇬🇭', EUR: '🇪🇺', GBP: '🇬🇧',
+  CAD: '🇨🇦', AUD: '🇦🇺', ZAR: '🇿🇦', BTC: '🟠', ETH: '🔷', USDT: '🟢', USDC: '🔵',
 };
 
 const CURRENCY_COLORS: Record<string, [string, string]> = {
@@ -64,6 +64,7 @@ const CURRENCY_COLORS: Record<string, [string, string]> = {
   ETH:  ['#8b5cf6', '#6d28d9'],
   USD:  ['#10b981', '#059669'],
   NGN:  ['#6366f1', '#4f46e5'],
+  GHS:  ['#eab308', '#ca8a04'],
   EUR:  ['#3b82f6', '#2563eb'],
   GBP:  ['#ec4899', '#db2777'],
   USDT: ['#26a17b', '#1a7a5e'],
@@ -71,19 +72,19 @@ const CURRENCY_COLORS: Record<string, [string, string]> = {
   default: ['#64748b', '#475569'],
 };
 
-const FIAT_CODES  = ['NGN', 'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'NZD', 'JPY'];
+const FIAT_CODES  = ['NGN', 'USD', 'GHS', 'EUR', 'GBP', 'CAD', 'AUD', 'ZAR'];
 const CRYPTO_CODES = ['BTC', 'ETH', 'USDT', 'USDC'];
 
-// ── Default catalog ───────────────────────────────────────────────────────────
+// ── Default catalog matching shared/config/fiatCurrencies.ts ────────────────
 const DEFAULT_FIAT: CurrencyMeta[] = [
-  { code: 'NGN', name: 'Nigerian Naira',  symbol: '₦', flag: '🇳🇬', color: '#6366f1', status: 'active' },
-  { code: 'USD', name: 'US Dollar',       symbol: '$', flag: '🇺🇸', color: '#10b981', status: 'active' },
-  { code: 'EUR', name: 'Euro',            symbol: '€', flag: '🇪🇺', color: '#3b82f6', status: 'active' },
-  { code: 'GBP', name: 'British Pound',   symbol: '£', flag: '🇬🇧', color: '#ec4899', status: 'active' },
-  { code: 'AUD', name: 'Australian Dollar', symbol: 'A$', flag: '🇦🇺', color: '#f59e0b', status: 'active' },
-  { code: 'CAD', name: 'Canadian Dollar', symbol: 'C$', flag: '🇨🇦', color: '#ff4d4d', status: 'active' },
-  { code: 'NZD', name: 'New Zealand Dollar', symbol: 'NZ$', flag: '🇳🇿', color: '#00247d', status: 'active' },
-  { code: 'JPY', name: 'Japanese Yen', symbol: '¥', flag: '🇯🇵', color: '#bc002d', status: 'active' },
+  { code: 'NGN', name: 'Nigerian Naira',    symbol: '₦',   flag: '🇳🇬', color: '#6366f1', status: 'active' },
+  { code: 'USD', name: 'US Dollar',         symbol: '$',   flag: '🇺🇸', color: '#10b981', status: 'active' },
+  { code: 'GHS', name: 'Ghanaian Cedi',     symbol: 'GH₵', flag: '🇬🇭', color: '#eab308', status: 'active' },
+  { code: 'EUR', name: 'Euro',              symbol: '€',   flag: '🇪🇺', color: '#3b82f6', status: 'coming_soon' },
+  { code: 'GBP', name: 'British Pound',     symbol: '£',   flag: '🇬🇧', color: '#ec4899', status: 'coming_soon' },
+  { code: 'CAD', name: 'Canadian Dollar',   symbol: 'CA$', flag: '🇨🇦', color: '#ff4d4d', status: 'coming_soon' },
+  { code: 'AUD', name: 'Australian Dollar', symbol: 'A$',  flag: '🇦🇺', color: '#f59e0b', status: 'coming_soon' },
+  { code: 'ZAR', name: 'South African Rand', symbol: 'R',  flag: '🇿🇦', color: '#00247d', status: 'coming_soon' },
 ];
 
 const DEFAULT_CRYPTO: CurrencyMeta[] = [

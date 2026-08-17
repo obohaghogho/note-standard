@@ -110,15 +110,17 @@ export const AffiliateScreen: React.FC<AffiliateScreenProps> = ({ navigation }) 
     Alert.alert('Copied!', 'Referral link copied to clipboard.');
   };
 
-  const handleShareLink = async () => {
-    if (!stats?.referral_link) return;
+  const handleClaimCommission = async () => {
     try {
-      await Share.share({
-        message: `Join NoteStandard today using my referral code: ${stats.referral_code}\n${stats.referral_link}`,
-        url: stats.referral_link,
-      });
-    } catch (err) {
-      console.warn('[AffiliateScreen] Share error:', err);
+      const res = await apiClient.post('/wallet/affiliates/claim');
+      if (res.data?.success) {
+        Alert.alert('Claim Successful', `Claimed $${res.data.amount || 0} into your wallet.`);
+        fetchAffiliateStats();
+      } else {
+        Alert.alert('Claim', res.data?.message || 'No pending commission to claim.');
+      }
+    } catch (err: any) {
+      Alert.alert('Claim Error', err.response?.data?.error || 'Failed to claim commission.');
     }
   };
 
