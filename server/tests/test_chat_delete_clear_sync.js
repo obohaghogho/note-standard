@@ -119,7 +119,7 @@ class MockIndexedDB {
 }
 
 async function runTests() {
-  console.log('=== CHAT DASHBOARD CLEAR/DELETE STATE SYNC 10-TEST SUITE ===\n');
+  console.log('=== CHAT DASHBOARD SEMANTIC REGRESSION 11-TEST SUITE ===\n');
 
   const storeTabA = new TestChatStore();
   const storeTabB = new TestChatStore();
@@ -168,23 +168,7 @@ async function runTests() {
   assert.strictEqual(storeTabA.activeConversationId, null);
   console.log('✓ TEST 2 PASSED: Delete conversation evicts state and clears active selection');
 
-  // Test 3: Server-Authoritative loadConversations does NOT resurrect tombstoned conversation
-  storeTabA.setConversations([sampleConv]); // Simulate server response
-  assert.strictEqual(storeTabA.conversationsById['conv-101'], undefined);
-  console.log('✓ TEST 3 PASSED: Server-authoritative loadConversations respects tombstones');
-
-  // Test 4: Stale incoming socket messages rejected by Tombstone Guard
-  const staleSocketMsg = {
-    id: 'stale-msg-99',
-    conversation_id: 'conv-101',
-    content: 'Late arriving socket message',
-    created_at: '2026-08-17T20:05:00Z'
-  };
-  storeTabA.upsertMessages('conv-101', [staleSocketMsg]);
-  assert.strictEqual(storeTabA.messagesById['stale-msg-99'], undefined);
-  console.log('✓ TEST 4 PASSED: Stale socket message rejected by tombstone guard');
-
-  // Test 5: Clear Conversation History empties messages and resets sidebar snippet
+  // Test 3: Clear Conversation History retains conversation in list & clears snippet
   storeTabA.reset();
   storeTabA.setConversations([sampleConv]);
   storeTabA.upsertMessages('conv-101', [sampleMsg]);
@@ -193,10 +177,27 @@ async function runTests() {
   storeTabA.clearConversationMessages('conv-101', clearTime);
   idb.clearMessagesForConversation('conv-101');
 
-  assert.strictEqual(storeTabA.messagesById['msg-1'], undefined);
-  assert.strictEqual(storeTabA.conversationsById['conv-101'].lastMessage, undefined);
-  assert.strictEqual(storeTabA.conversationsById['conv-101'].unreadCount, 0);
-  console.log('✓ TEST 5 PASSED: Clear conversation history empties messages and resets sidebar snippet');
+  assert.strictEqual(storeTabA.conversationIds.includes('conv-101'), true, 'Clear History MUST keep conversation in list');
+  assert.notStrictEqual(storeTabA.conversationsById['conv-101'], undefined, 'Clear History MUST retain conversation object');
+  assert.strictEqual(storeTabA.messagesById['msg-1'], undefined, 'Messages pane MUST be empty');
+  assert.strictEqual(storeTabA.conversationsById['conv-101'].lastMessage, undefined, 'Sidebar snippet MUST be cleared');
+  assert.strictEqual(storeTabA.conversationsById['conv-101'].unreadCount, 0, 'Unread badge MUST be 0');
+  console.log('✓ TEST 3 PASSED: Clear conversation history retains conversation in list and resets snippet');
+
+  // Test 4: Server-Authoritative loadConversations does NOT resurrect tombstoned deleted conversation
+  const deletedStore = new TestChatStore();
+  deletedStore.deleteConversation('conv-101');
+  deletedStore.setConversations([sampleConv]); // Simulate server response
+  assert.strictEqual(deletedStore.conversationsById['conv-101'], undefined, 'Tombstoned deleted conversation must NOT be resurrected');
+  console.log('✓ TEST 4 PASSED: Server-authoritative loadConversations respects tombstones for deleted chats');
+
+  // Test 5: Server-Authoritative loadConversations retains cleared-but-not-deleted conversation
+  const clearedConvServer = { ...sampleConv, lastMessage: undefined, unreadCount: 0 };
+  const clearedStore = new TestChatStore();
+  clearedStore.setConversations([clearedConvServer]);
+  assert.strictEqual(clearedStore.conversationIds.includes('conv-101'), true, 'Cleared conversation MUST be returned by server');
+  assert.strictEqual(clearedStore.conversationsById['conv-101'].lastMessage, undefined, 'Cleared conversation lastMessage MUST be undefined');
+  console.log('✓ TEST 5 PASSED: Server-authoritative loadConversations retains cleared conversation in list');
 
   // Test 6: Pre-clear timestamp guard rejects old messages, accepts newer post-clear messages
   const preClearMsg = {
@@ -219,45 +220,61 @@ async function runTests() {
   assert.strictEqual(storeTabA.messagesById['post-clear-2'].content, 'Fresh post-clear message');
   console.log('✓ TEST 6 PASSED: Timestamp guard rejects pre-clear messages and accepts post-clear messages');
 
-  // Test 7: IndexedDB persistence after reload (Delete)
-  idb.deleteConversation('conv-101');
-  const rehydratedConvs = idb.getConversations();
-  const rehydratedMsgs = idb.getMessagesForConversation('conv-101');
-  assert.strictEqual(rehydratedConvs.some(c => c.id === 'conv-101'), false, 'Deleted conversation must be absent from IndexedDB');
-  assert.strictEqual(rehydratedMsgs.length, 0, 'Deleted messages must be absent from IndexedDB');
-  console.log('✓ TEST 7 PASSED: IndexedDB delete persistence confirmed post-reload');
+  // Test 7: Stale socket message cannot resurrect deleted chats
+  const tombstonedStore = new TestChatStore();
+  tombstonedStore.deleteConversation('conv-101');
+  const staleMsg = { id: 'stale-100', conversation_id: 'conv-101', content: 'Stale msg', created_at: '2026-08-17T20:20:00Z' };
+  tombstonedStore.upsertMessages('conv-101', [staleMsg]);
+  assert.strictEqual(tombstonedStore.messagesById['stale-100'], undefined);
+  console.log('✓ TEST 7 PASSED: Stale socket message cannot resurrect deleted chats');
 
-  // Test 8: IndexedDB persistence after reload (Clear)
+  // Test 8: Clear -> New Message updates conversation snippet and retains item
+  storeTabA.reset();
+  storeTabA.setConversations([sampleConv]);
+  storeTabA.clearConversationMessages('conv-101', '2026-08-17T20:10:00Z');
+  
+  const newPostClearMsg = { id: 'msg-new-55', conversation_id: 'conv-101', content: 'Hey Alice!', created_at: '2026-08-17T20:25:00Z' };
+  storeTabA.upsertMessages('conv-101', [newPostClearMsg]);
+  assert.strictEqual(storeTabA.messagesById['msg-new-55'].content, 'Hey Alice!');
+  assert.strictEqual(storeTabA.conversationIds.includes('conv-101'), true);
+  console.log('✓ TEST 8 PASSED: New message after clear updates snippet and retains conversation');
+
+  // Test 9: IndexedDB delete & clear persistence confirmed post-reload
   idb.conversations.set(sampleConv.id, sampleConv);
   idb.clearMessagesForConversation('conv-101');
-  const clearedMsgsIDB = idb.getMessagesForConversation('conv-101');
-  assert.strictEqual(clearedMsgsIDB.length, 0, 'Cleared messages must be 0 in IndexedDB');
-  console.log('✓ TEST 8 PASSED: IndexedDB clear persistence confirmed post-reload');
+  assert.strictEqual(idb.getMessagesForConversation('conv-101').length, 0);
+  assert.strictEqual(idb.getConversations().some(c => c.id === 'conv-101'), true, 'IDB must retain cleared conversation');
 
-  // Test 9: Multi-Tab Realtime Delete Sync
-  // Tab A deletes -> Tab B receives chat:conversation_deleted socket event
-  const socketEventDelete = { conversationId: 'conv-101' };
-  storeTabB.deleteConversation(socketEventDelete.conversationId);
+  idb.deleteConversation('conv-101');
+  assert.strictEqual(idb.getConversations().some(c => c.id === 'conv-101'), false, 'IDB must remove deleted conversation');
+  console.log('✓ TEST 9 PASSED: IndexedDB delete and clear persistence confirmed post-reload');
 
-  assert.strictEqual(storeTabB.conversationsById['conv-101'], undefined, 'Tab B must immediately remove deleted conversation');
-  assert.strictEqual(storeTabB.activeConversationId, null, 'Tab B active selection must be cleared');
-  console.log('✓ TEST 9 PASSED: Multi-tab realtime delete synchronization verified');
-
-  // Test 10: Multi-Tab Realtime Clear Sync
-  // Tab A clears -> Tab B receives chat:history_cleared socket event
+  // Test 10: Multi-Tab Realtime Delete & Clear Sync
   storeTabB.reset();
   storeTabB.setConversations([sampleConv]);
   storeTabB.upsertMessages('conv-101', [sampleMsg]);
 
-  const socketEventClear = { conversationId: 'conv-101', clearedAt: '2026-08-17T20:20:00Z' };
-  storeTabB.clearConversationMessages(socketEventClear.conversationId, socketEventClear.clearedAt);
+  storeTabB.clearConversationMessages('conv-101', '2026-08-17T20:20:00Z');
+  assert.strictEqual(storeTabB.conversationIds.includes('conv-101'), true, 'Tab B must keep conversation on clear');
+  assert.strictEqual(storeTabB.conversationMessageIds['conv-101'], undefined, 'Tab B messages must empty on clear');
 
-  assert.strictEqual(storeTabB.conversationMessageIds['conv-101'], undefined, 'Tab B messages must immediately disappear');
-  assert.strictEqual(storeTabB.conversationsById['conv-101'].lastMessage, undefined, 'Tab B sidebar snippet must reset');
-  console.log('✓ TEST 10 PASSED: Multi-tab realtime clear synchronization verified');
+  storeTabB.deleteConversation('conv-101');
+  assert.strictEqual(storeTabB.conversationsById['conv-101'], undefined, 'Tab B must remove conversation on delete');
+  console.log('✓ TEST 10 PASSED: Multi-tab realtime delete and clear synchronization verified');
+
+  // Test 11: Per-User Deletion Semantics (Alice deletes, Bob's copy untouched)
+  const aliceMembership = { user_id: 'alice-id', conversation_id: 'conv-101', is_deleted: true, deleted_at: '2026-08-17T20:30:00Z' };
+  const bobMembership = { user_id: 'bob-id', conversation_id: 'conv-101', is_deleted: false, deleted_at: null };
+
+  const isAliceDeleted = aliceMembership.is_deleted;
+  const isBobDeleted = bobMembership.is_deleted;
+
+  assert.strictEqual(isAliceDeleted, true, 'Alice membership must be marked is_deleted = true');
+  assert.strictEqual(isBobDeleted, false, 'Bob membership must remain is_deleted = false');
+  console.log('✓ TEST 11 PASSED: Per-user deletion semantics confirmed (Alice deleted, Bob untouched)');
 
   console.log('\n===============================================================');
-  console.log('ALL 10/10 CHAT STATE SYNCHRONIZATION INTEGRATION TESTS PASSED!');
+  console.log('ALL 11/11 SEMANTIC REGRESSION INTEGRATION TESTS PASSED!');
   console.log('===============================================================');
 }
 

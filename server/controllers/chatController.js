@@ -155,13 +155,21 @@ exports.getConversations = async (req, res) => {
 
       let conversations = Array.isArray(rpcData) ? rpcData : [];
       
-      // Filter out support chats AND deleted direct conversations
+      // Filter out support chats AND per-user deleted conversations
       conversations = conversations.filter(c => {
         if (c.chat_type === "support" || c.name === "Support Chat") return false;
-        if (c.type === "direct" && c.membership?.cleared_at) {
+        if (c.membership?.is_deleted) return false;
+
+        // If user cleared history, mask last_message and unreadCount if last_message is prior to cleared_at
+        if (c.membership?.cleared_at) {
           const clearedAt = new Date(c.membership.cleared_at).getTime();
           const lastMsgAt = new Date(c.last_message?.created_at || c.updated_at || c.created_at || 0).getTime();
-          if (lastMsgAt <= clearedAt) return false;
+          if (lastMsgAt <= clearedAt) {
+            c.last_message = null;
+            c.lastMessage = null;
+            c.unreadCount = 0;
+            c.unread_count = 0;
+          }
         }
         return true;
       });
@@ -2188,9 +2196,7 @@ exports.deleteConversation = async (req, res) => {
       });
     }
 
-    // NEW LOGIC: Only remove the requesting user from the conversation if it's a group chat.
-    // For direct chats, DO NOT delete messages or the conversation itself, as that wipes it for others.
-    // Instead, we just update cleared_at to hide it.
+    const nowIso = new Date().toISOString();
     const { data: convData } = await supabase
       .from("conversations")
       .select("type")
@@ -2198,32 +2204,33 @@ exports.deleteConversation = async (req, res) => {
       .single();
 
     if (convData && convData.type === "direct") {
-      // Just clear history (hide chat) for direct chats to preserve relationships
+      // Per-user soft-deletion: mark is_deleted = true and set deleted_at & cleared_at
       const { error: updateError } = await supabase
         .from("conversation_members")
-        .update({ cleared_at: new Date().toISOString() })
+        .update({ is_deleted: true, deleted_at: nowIso, cleared_at: nowIso })
         .eq("conversation_id", conversationId)
         .eq("user_id", userId);
 
       if (updateError) throw updateError;
     } else {
-      // It's a group chat, safe to remove member
+      // It's a group chat, soft delete or remove member
       const { error: membersDeleteError } = await supabase
         .from("conversation_members")
-        .delete()
+        .update({ is_deleted: true, deleted_at: nowIso, cleared_at: nowIso })
         .eq("conversation_id", conversationId)
         .eq("user_id", userId);
 
       if (membersDeleteError) throw membersDeleteError;
 
-      // Optional: Only delete the actual conversation and messages if NO members are left
-      const { count: memberCount } = await supabase
+      // Optional: Only delete the actual conversation and messages if ALL members are deleted
+      const { count: activeMemberCount } = await supabase
         .from("conversation_members")
         .select("*", { count: 'exact', head: true })
-        .eq("conversation_id", conversationId);
+        .eq("conversation_id", conversationId)
+        .neq("is_deleted", true);
       
-      if (memberCount === 0) {
-        console.log(`[Chat Delete] Last member left, cleaning up conversation ${conversationId}`);
+      if (activeMemberCount === 0) {
+        console.log(`[Chat Delete] Last member left/deleted, cleaning up conversation ${conversationId}`);
         await supabase.from("messages").delete().eq("conversation_id", conversationId);
         await supabase.from("attachments").delete().eq("conversation_id", conversationId);
         await supabase.from("conversations").delete().eq("id", conversationId);
@@ -2231,7 +2238,7 @@ exports.deleteConversation = async (req, res) => {
     }
 
     // Notify participants via Gateway
-    await realtime.emitToConversation(conversationId, "chat:conversation_deleted", { conversationId });
+    await realtime.emitToConversation(conversationId, "chat:conversation_deleted", { conversationId, userId });
 
     res.json({ success: true, message: "Conversation deleted successfully" });
   } catch (err) {
@@ -2271,6 +2278,8 @@ exports.clearChatHistory = async (req, res) => {
     const isTransactional = features.isFeatureEnabled('SEQUENCE_ENFORCEMENT', userId);
     console.log(`[SEQUENCE_MODE]: ${isTransactional ? 'transactional' : 'legacy'} (User: ${userId}, Action: clearChatHistory)`);
 
+    const clearedAt = new Date().toISOString();
+
     if (isTransactional) {
         console.log(`[Chat Controller] Using RPC Transaction for clearChatHistory`);
         const { data: rpcData, error: rpcError } = await supabase.rpc('rpc_clear_chat', {
@@ -2281,7 +2290,7 @@ exports.clearChatHistory = async (req, res) => {
     } else {
         const { error } = await supabase
           .from("conversation_members")
-          .update({ cleared_at: new Date() })
+          .update({ cleared_at: clearedAt, is_deleted: false, deleted_at: null })
           .eq("conversation_id", conversationId)
           .eq("user_id", userId);
 
