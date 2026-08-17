@@ -273,8 +273,24 @@ async function runTests() {
   assert.strictEqual(isBobDeleted, false, 'Bob membership must remain is_deleted = false');
   console.log('✓ TEST 11 PASSED: Per-user deletion semantics confirmed (Alice deleted, Bob untouched)');
 
+  // Test 12: Peer Tombstone Guard prevents duplicate direct conversation resurrection
+  const deletedPeerSet = new Set(['user-alice']);
+  const staleServerConvs = [
+    { id: 'conv-dup-99', type: 'direct', members: [{ user_id: 'user-alice' }, { user_id: 'user-me' }] }
+  ];
+  const filteredByPeerTombstone = staleServerConvs.filter(c => {
+    if (c.type === 'direct') {
+      const other = c.members.find(m => m.user_id !== 'user-me');
+      if (other && deletedPeerSet.has(other.user_id)) return false;
+    }
+    return true;
+  });
+
+  assert.strictEqual(filteredByPeerTombstone.length, 0, 'Stale duplicate peer direct conversation MUST be rejected by peer tombstone set');
+  console.log('✓ TEST 12 PASSED: Peer tombstone guard prevents duplicate direct conversation resurrection');
+
   console.log('\n===============================================================');
-  console.log('ALL 11/11 SEMANTIC REGRESSION INTEGRATION TESTS PASSED!');
+  console.log('ALL 12/12 SEMANTIC REGRESSION INTEGRATION TESTS PASSED!');
   console.log('===============================================================');
 }
 

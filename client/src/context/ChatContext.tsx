@@ -232,6 +232,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const loadMessagesRef = useRef<(conversationId: string, force?: boolean) => Promise<void>>(() => Promise.resolve());
     const loadConversationsRef = useRef<() => Promise<void>>(() => Promise.resolve());
     const deletedConversationIdsRef = useRef<Set<string>>(new Set());
+    const deletedPeerIdsRef = useRef<Set<string>>(new Set());
     const clearedAtMapRef = useRef<Map<string, string>>(new Map());
 
     // Tab-primary singleton: Only one tab runs ACK batching, reconciliation and heartbeat.
@@ -635,6 +636,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         const idsToEvict = new Set<string>([conversationId]);
         if (peerId) {
+            deletedPeerIdsRef.current.add(peerId);
             conversationsRef.current.forEach(c => {
                 if (c.type === 'direct') {
                     const m = c.members?.find(mem => mem.user_id !== sessionRef.current?.user?.id);
@@ -721,9 +723,18 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 }));
                 
                 // Server-authoritative merge logic:
-                // Evaluated formula: (Server Conversations + Legitimate Pending Offline Creations) - Tombstoned Conversation IDs
+                // Evaluated formula: (Server Conversations + Legitimate Pending Offline Creations) - Tombstoned Conversation & Peer IDs
                 const tombstones = deletedConversationIdsRef.current;
-                const filteredServerData = mappedData.filter(conv => !tombstones.has(conv.id));
+                const peerTombstones = deletedPeerIdsRef.current;
+                const filteredServerData = mappedData.filter(conv => {
+                    if (tombstones.has(conv.id)) return false;
+                    if (conv.type === 'direct') {
+                        const otherMember = conv.members?.find((m: { user_id: string; profile?: { id?: string } }) => m.user_id !== user?.id);
+                        const pId = otherMember?.user_id || otherMember?.profile?.id;
+                        if (pId && peerTombstones.has(pId)) return false;
+                    }
+                    return true;
+                });
 
                 // Synchronize Zustand store and IndexedDB cache with server-authoritative snapshot
                 useChatStore.getState().setConversations(filteredServerData);
@@ -1090,6 +1101,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         // Clear deduplication caches on account switch
         deletedMessageIdsRef.current = new Set();
         deletedConversationIdsRef.current.clear();
+        deletedPeerIdsRef.current.clear();
         clearedAtMapRef.current.clear();
         processedEventIdsRef.current = new Set();
         lastSeenSequenceRef.current = {};
@@ -1268,6 +1280,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             // ── Conversation Tombstone Guard ─────────────────────────────────
             if (deletedConversationIdsRef.current.has(msg.conversation_id)) {
                 console.log(`[CLIENT_TRACE] conversation tombstone guard: FAIL (dropped) | convId: ${msg.conversation_id}`);
+                return;
+            }
+
+            if (msg.sender_id && deletedPeerIdsRef.current.has(msg.sender_id)) {
+                console.log(`[CLIENT_TRACE] peer tombstone guard: FAIL (dropped) | senderId: ${msg.sender_id}`);
                 return;
             }
 
