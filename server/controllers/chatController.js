@@ -608,12 +608,19 @@ exports.createConversation = async (req, res) => {
 
             const memberList = members || [];
 
-            // Reset is_deleted so the conversation reappears in the user's sidebar.
-            // IMPORTANT: Keep cleared_at at its current value so old messages from before
-            // the deletion remain hidden. This gives the user a "fresh start" experience.
+            // Re-open the conversation for this user with a clean slate:
+            // - Reset is_deleted and deleted_at so it appears in sidebar
+            // - ALWAYS set cleared_at = NOW() so all old messages are hidden
+            //   The user explicitly chose to re-add this person, so they expect
+            //   a fresh start. Old messages from before the delete should never show.
+            const reopenTimestamp = new Date().toISOString();
             await supabase
               .from("conversation_members")
-              .update({ is_deleted: false, deleted_at: null })
+              .update({ 
+                is_deleted: false, 
+                deleted_at: null, 
+                cleared_at: reopenTimestamp 
+              })
               .eq("conversation_id", existingId)
               .eq("user_id", userId);
 

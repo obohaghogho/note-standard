@@ -2701,6 +2701,21 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const pId = m.user_id || m.profile?.id;
                 if (pId) deletedPeerIdsRef.current.delete(pId);
             });
+
+            // Clear any stale cached messages for this conversation (critical for delete→re-add flow).
+            // The server now sets cleared_at = NOW() on re-open, so only fresh messages should show.
+            // We must clear client caches so old messages don't bleed through from IndexedDB/Zustand.
+            setMessages(prev => {
+                const next = { ...prev };
+                delete next[id];
+                messagesRef.current = next;
+                return next;
+            });
+            // Clear IndexedDB cache for this conversation
+            ChatCacheEngine.deleteConversation(id).catch(() => {});
+            // Clear the staleness gate so loadMessages does a fresh server fetch
+            delete messagesCachedAtRef.current[id];
+
             setActiveConversationId(id);
             loadConversations();
             return id;
