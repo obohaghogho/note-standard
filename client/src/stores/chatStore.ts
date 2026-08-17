@@ -143,6 +143,8 @@ export interface ChatStoreState {
   setDraft: (conversationId: string, content: string) => void;
   saveSnapshot: (snapshot: ConversationSnapshot) => void;
   updateMetrics: (partialMetrics: Partial<PerformanceMetrics>) => void;
+  deleteConversation: (conversationId: string) => void;
+  clearConversationMessages: (conversationId: string) => void;
   clearAll: () => void;
 }
 
@@ -358,6 +360,60 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
         ...partial,
       },
     }));
+  },
+
+  deleteConversation: (conversationId) => {
+    set((state) => {
+      const nextConvsById = { ...state.conversationsById };
+      delete nextConvsById[conversationId];
+
+      const nextConvIds = state.conversationIds.filter((id) => id !== conversationId);
+
+      const nextConvMsgIds = { ...state.conversationMessageIds };
+      const msgIdsToRemove = nextConvMsgIds[conversationId] || [];
+      delete nextConvMsgIds[conversationId];
+
+      const nextMsgsById = { ...state.messagesById };
+      msgIdsToRemove.forEach((id) => delete nextMsgsById[id]);
+
+      const nextActiveId =
+        state.activeConversationId === conversationId ? null : state.activeConversationId;
+
+      return {
+        conversationsById: nextConvsById,
+        conversationIds: nextConvIds,
+        conversationMessageIds: nextConvMsgIds,
+        messagesById: nextMsgsById,
+        activeConversationId: nextActiveId,
+      };
+    });
+  },
+
+  clearConversationMessages: (conversationId) => {
+    set((state) => {
+      const nextConvMsgIds = { ...state.conversationMessageIds };
+      const msgIdsToRemove = nextConvMsgIds[conversationId] || [];
+      delete nextConvMsgIds[conversationId];
+
+      const nextMsgsById = { ...state.messagesById };
+      msgIdsToRemove.forEach((id) => delete nextMsgsById[id]);
+
+      const conv = state.conversationsById[conversationId];
+      const nextConvsById = { ...state.conversationsById };
+      if (conv) {
+        nextConvsById[conversationId] = {
+          ...conv,
+          lastMessage: undefined,
+          unreadCount: 0,
+        };
+      }
+
+      return {
+        conversationMessageIds: nextConvMsgIds,
+        messagesById: nextMsgsById,
+        conversationsById: nextConvsById,
+      };
+    });
   },
 
   clearAll: () => {

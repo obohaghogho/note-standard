@@ -17,7 +17,8 @@ import { generateCorrelationId, trackCorrelation, completeCorrelation } from '..
 import { logger } from '../lib/logger';
 import { ChatBootKernel } from './ChatBootKernel';
 import { getDeviceId } from '../utils/deviceId';
-import { mergeMessageMonotonic, correlationRegistry, deriveStatusFromTimestamps, STATUS_RANK } from '../utils/messageStatusEngine';
+import { ChatCacheEngine } from '../services/chatCache';
+import { useChatStore } from '../stores/chatStore';
 
 export interface Message {
     id: string;
@@ -230,6 +231,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     // above the loadMessages useCallback. Synced after loadMessages is initialized.
     const loadMessagesRef = useRef<(conversationId: string, force?: boolean) => Promise<void>>(() => Promise.resolve());
     const loadConversationsRef = useRef<() => Promise<void>>(() => Promise.resolve());
+    const deletedConversationIdsRef = useRef<Set<string>>(new Set());
+    const clearedAtMapRef = useRef<Map<string, string>>(new Map());
 
     // Tab-primary singleton: Only one tab runs ACK batching, reconciliation and heartbeat.
     // Uses a localStorage lease refreshed every 4s. Other tabs detect staleness (>6s).
@@ -618,6 +621,52 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         convList.forEach(conv => s.emit('join_room', conv.id));
     }, []);
 
+    // ── Centralized Local Mutation Coordinator ─────────────────────────────────
+    const evictConversationLocally = useCallback((conversationId: string) => {
+        console.log(`[ChatContext] [COORDINATOR] Evicting conversation locally: ${conversationId}`);
+        deletedConversationIdsRef.current.add(conversationId);
+
+        setConversations(prev => prev.filter(c => c.id !== conversationId));
+        setMessages(prev => {
+            const next = { ...prev };
+            delete next[conversationId];
+            return next;
+        });
+
+        if (activeConversationIdRef.current === conversationId) {
+            setActiveConversationId(null);
+        }
+
+        useChatStore.getState().deleteConversation(conversationId);
+        ChatCacheEngine.deleteConversation(conversationId).catch(err => {
+            console.warn('[ChatContext] IndexedDB deleteConversation failed:', err);
+        });
+    }, [setActiveConversationId]);
+
+    const clearConversationLocally = useCallback((conversationId: string, clearedAtIso?: string) => {
+        const timestamp = clearedAtIso || new Date().toISOString();
+        console.log(`[ChatContext] [COORDINATOR] Clearing conversation messages locally: ${conversationId} at ${timestamp}`);
+        clearedAtMapRef.current.set(conversationId, timestamp);
+
+        setMessages(prev => ({ ...prev, [conversationId]: [] }));
+        setConversations(prev => prev.map(c => {
+            if (c.id === conversationId) {
+                return {
+                    ...c,
+                    lastMessage: undefined,
+                    last_message: undefined,
+                    unreadCount: 0,
+                };
+            }
+            return c;
+        }));
+
+        useChatStore.getState().clearConversationMessages(conversationId);
+        ChatCacheEngine.clearMessagesForConversation(conversationId).catch(err => {
+            console.warn('[ChatContext] IndexedDB clearMessagesForConversation failed:', err);
+        });
+    }, []);
+
     const loadConversations = useCallback(async () => {
         console.log('[CHAT] loadConversations started');
         if (!session || isSwitching || conversationsFetchRef.current) {
@@ -635,32 +684,27 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     lastMessage: conv.last_message 
                 }));
                 
-                // Requirement 9: Prevent conversation overwrite race. Merge-by-id logic.
+                // Server-authoritative merge logic:
+                // Evaluated formula: (Server Conversations + Legitimate Pending Offline Creations) - Tombstoned Conversation IDs
+                const tombstones = deletedConversationIdsRef.current;
+                const filteredServerData = mappedData.filter(conv => !tombstones.has(conv.id));
+
+                // Synchronize Zustand store and IndexedDB cache with server-authoritative snapshot
+                useChatStore.getState().setConversations(filteredServerData);
+                ChatCacheEngine.saveConversations(filteredServerData).catch(() => {});
+
                 setConversations(prev => {
-                    // Filter out any stale conversations belonging to a previous account
-                    const currentUserId = user?.id;
-                    const validPrev = prev.filter(c => !c.members || c.members.some(m => m.user_id === currentUserId));
-                    const existingMap = new Map(validPrev.map(c => [c.id, c]));
-                    mappedData.forEach((incoming: Conversation) => {
-                        const existing = existingMap.get(incoming.id);
-                        if (!existing) {
-                            existingMap.set(incoming.id, incoming);
-                            return;
+                    const existingMap = new Map(filteredServerData.map(c => [c.id, c]));
+                    
+                    // Retain only optimistic in-flight local creations not yet on server
+                    prev.forEach(p => {
+                        if (!existingMap.has(p.id) && !tombstones.has(p.id) && p.id.startsWith('temp-')) {
+                            existingMap.set(p.id, p);
                         }
-                        // FIX 4: Merge-preserve — never overwrite a real-time status upgrade
-                        // with a potentially stale server snapshot. Apply mergeMessageStatus
-                        // to the lastMessage so that optimistic ticks survive reconciliation.
-                        const mergedLastMessage = (existing.lastMessage && incoming.lastMessage)
-                            ? mergeMessageStatus(existing.lastMessage as Message, incoming.lastMessage as Partial<Message>) as Conversation['lastMessage']
-                            : (incoming.lastMessage ?? existing.lastMessage);
-                        existingMap.set(incoming.id, {
-                            ...incoming,
-                            lastMessage: mergedLastMessage,
-                        });
                     });
 
                     const allMerged = Array.from(existingMap.values()).sort((a, b) =>
-                        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+                        new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime()
                     );
 
                     // Deduplicate direct conversations by peer user ID
@@ -1009,10 +1053,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         messagesCachedAtRef.current = {};
         // Clear deduplication caches on account switch
         deletedMessageIdsRef.current = new Set();
+        deletedConversationIdsRef.current.clear();
+        clearedAtMapRef.current.clear();
         processedEventIdsRef.current = new Set();
         lastSeenSequenceRef.current = {};
         // Clear tick dedup gate so new account starts fresh
         appliedTicksRef.current = new Map();
+        useChatStore.getState().clearAll();
     }, []);
 
     const initialize = useCallback(async () => {
@@ -1179,6 +1226,19 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             // ── Tombstone guard: reject replays of deleted messages ────────────
             if (deletedMessageIdsRef.current.has(msg.id) || msg.is_deleted) {
                 console.log(`[CLIENT_TRACE] tombstone guard: FAIL (dropped) | id: ${msg.id}`);
+                return;
+            }
+
+            // ── Conversation Tombstone Guard ─────────────────────────────────
+            if (deletedConversationIdsRef.current.has(msg.conversation_id)) {
+                console.log(`[CLIENT_TRACE] conversation tombstone guard: FAIL (dropped) | convId: ${msg.conversation_id}`);
+                return;
+            }
+
+            // ── Pre-Clear Timestamp Guard ───────────────────────────────────
+            const clearedAt = clearedAtMapRef.current.get(msg.conversation_id);
+            if (clearedAt && new Date(msg.created_at).getTime() <= new Date(clearedAt).getTime()) {
+                console.log(`[CLIENT_TRACE] pre-clear timestamp guard: FAIL (dropped) | convId: ${msg.conversation_id} | msgTime: ${msg.created_at} | clearedAt: ${clearedAt}`);
                 return;
             }
 
@@ -1754,6 +1814,18 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         };
 
 
+        const onConversationDeleted = ({ conversationId }: { conversationId: string }) => {
+            if (!isMounted.current || !conversationId) return;
+            console.log(`[ChatContext] 📥 chat:conversation_deleted received:`, conversationId);
+            evictConversationLocally(conversationId);
+        };
+
+        const onHistoryCleared = ({ conversationId, clearedAt }: { conversationId: string; clearedAt?: string }) => {
+            if (!isMounted.current || !conversationId) return;
+            console.log(`[ChatContext] 📥 chat:history_cleared received:`, conversationId);
+            clearConversationLocally(conversationId, clearedAt);
+        };
+
         const onTyping = ({ conversationId, userId, isTyping }: { conversationId: string, userId: string, isTyping: boolean }) => {
             if (!isMounted.current || userId === user?.id) return;
             
@@ -1810,6 +1882,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         socket.on('chat:message', processIncomingMessage);
         socket.off('chat:new_message', processIncomingMessage);
         socket.on('chat:new_message', processIncomingMessage);
+
+        socket.off('chat:conversation_deleted', onConversationDeleted);
+        socket.on('chat:conversation_deleted', onConversationDeleted);
+
+        socket.off('chat:history_cleared', onHistoryCleared);
+        socket.on('chat:history_cleared', onHistoryCleared);
 
         socket.off('chat:message_deleted', onMessageDeleted);
         socket.on('chat:message_deleted', onMessageDeleted);
@@ -2630,14 +2708,23 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
 
     const deleteConversation = async (conversationId: string) => {
+        const convSnapshot = [...conversations];
+        const msgSnapshot = { ...messages };
+        const activeSnapshot = activeConversationId;
+
+        evictConversationLocally(conversationId);
+
         try {
             await api.delete(`/chat/conversations/${conversationId}`);
             toast.success('Chat deleted');
-            if (activeConversationId === conversationId) {
-                setActiveConversationId(null);
-            }
-            setConversations(prev => prev.filter(c => c.id !== conversationId));
-        } catch {
+        } catch (err) {
+            console.error('[ChatContext] deleteConversation API failed:', err);
+            deletedConversationIdsRef.current.delete(conversationId);
+            setConversations(convSnapshot);
+            setMessages(msgSnapshot);
+            setActiveConversationId(activeSnapshot);
+            useChatStore.getState().setConversations(convSnapshot);
+            ChatCacheEngine.saveConversations(convSnapshot).catch(() => {});
             toast.error('Failed to delete chat');
         }
     };
@@ -2657,11 +2744,24 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     const clearChatHistory = async (conversationId: string) => {
+        const msgSnapshot = messages[conversationId] || [];
+        const convSnapshot = conversations.find(c => c.id === conversationId);
+
+        clearConversationLocally(conversationId);
+
         try {
-            await api.delete(`/chat/conversations/${conversationId}/messages`);
+            const res = await api.delete(`/chat/conversations/${conversationId}/messages`);
+            const clearedAt = res.data?.clearedAt || new Date().toISOString();
+            clearedAtMapRef.current.set(conversationId, clearedAt);
             toast.success('Chat history cleared');
-            setMessages(prev => ({ ...prev, [conversationId]: [] }));
-        } catch {
+        } catch (err) {
+            console.error('[ChatContext] clearChatHistory API failed:', err);
+            if (msgSnapshot.length > 0) {
+                setMessages(prev => ({ ...prev, [conversationId]: msgSnapshot }));
+            }
+            if (convSnapshot) {
+                setConversations(prev => prev.map(c => c.id === conversationId ? convSnapshot : c));
+            }
             toast.error('Failed to clear chat history');
         }
     };

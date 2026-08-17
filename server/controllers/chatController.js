@@ -2288,7 +2288,11 @@ exports.clearChatHistory = async (req, res) => {
         if (error) throw error;
     }
 
-    res.json({ success: true, message: "Chat history cleared" });
+    // Notify participants via Gateway
+    const clearedAt = new Date().toISOString();
+    await realtime.emitToConversation(conversationId, "chat:history_cleared", { conversationId, userId, clearedAt });
+
+    res.json({ success: true, message: "Chat history cleared", clearedAt });
   } catch (err) {
     console.error("Error clearing chat history:", err.message);
     res.status(500).json({ error: "Server Error" });

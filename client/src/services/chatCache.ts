@@ -97,4 +97,75 @@ export class ChatCacheEngine {
       return [];
     }
   }
+
+  /**
+   * Single-transaction eviction of a conversation and all its messages.
+   */
+  public static async deleteConversation(conversationId: string): Promise<void> {
+    try {
+      const db = await this.getDB();
+      const tx = db.transaction([STORE_CONVERSATIONS, STORE_MESSAGES], 'readwrite');
+      const convStore = tx.objectStore(STORE_CONVERSATIONS);
+      const msgStore = tx.objectStore(STORE_MESSAGES);
+
+      convStore.delete(conversationId);
+
+      const index = msgStore.index('conversation_id');
+      const request = index.openKeyCursor(IDBKeyRange.only(conversationId));
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (cursor) {
+          msgStore.delete(cursor.primaryKey);
+          cursor.continue();
+        }
+      };
+
+      await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+
+      if (import.meta.env.DEV) {
+        const remainingMsgs = await this.getMessagesForConversation(conversationId);
+        const remainingConvs = await this.getConversations();
+        const convExists = remainingConvs.some((c) => c.id === conversationId);
+        console.log(`[ChatCache] Read-back verification for deleted conv ${conversationId}: convExists=${convExists}, remainingMsgs=${remainingMsgs.length}`);
+      }
+    } catch (err) {
+      console.warn('[ChatCache] Failed to delete conversation:', err);
+    }
+  }
+
+  /**
+   * Single-transaction clearing of all messages belonging to a conversation.
+   */
+  public static async clearMessagesForConversation(conversationId: string): Promise<void> {
+    try {
+      const db = await this.getDB();
+      const tx = db.transaction(STORE_MESSAGES, 'readwrite');
+      const msgStore = tx.objectStore(STORE_MESSAGES);
+      const index = msgStore.index('conversation_id');
+      const request = index.openKeyCursor(IDBKeyRange.only(conversationId));
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (cursor) {
+          msgStore.delete(cursor.primaryKey);
+          cursor.continue();
+        }
+      };
+
+      await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+
+      if (import.meta.env.DEV) {
+        const remainingMsgs = await this.getMessagesForConversation(conversationId);
+        console.log(`[ChatCache] Read-back verification for cleared conv ${conversationId}: remainingMsgs=${remainingMsgs.length}`);
+      }
+    } catch (err) {
+      console.warn('[ChatCache] Failed to clear messages for conversation:', err);
+    }
+  }
 }
+
