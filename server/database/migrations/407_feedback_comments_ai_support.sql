@@ -42,16 +42,19 @@ CREATE INDEX IF NOT EXISTS idx_feedback_comments_created_at
 ALTER TABLE feedback_comments ENABLE ROW LEVEL SECURITY;
 
 -- Anyone who submitted the parent report can see public comments
+DROP POLICY IF EXISTS "Users can view non-internal comments" ON feedback_comments;
 CREATE POLICY "Users can view non-internal comments"
   ON feedback_comments FOR SELECT
   USING (is_internal = false);
 
 -- Authenticated users can insert their own comments
+DROP POLICY IF EXISTS "Authenticated users can add comments" ON feedback_comments;
 CREATE POLICY "Authenticated users can add comments"
   ON feedback_comments FOR INSERT
   WITH CHECK (auth.uid() IS NULL OR author_id = auth.uid() OR author_id IS NULL);
 
 -- Admins can see all (including internal)
+DROP POLICY IF EXISTS "Admins can view all comments" ON feedback_comments;
 CREATE POLICY "Admins can view all comments"
   ON feedback_comments FOR SELECT
   USING (
@@ -60,6 +63,7 @@ CREATE POLICY "Admins can view all comments"
   );
 
 -- Admins can insert any comment (including AI replies with null author)
+DROP POLICY IF EXISTS "Admins can insert any comment" ON feedback_comments;
 CREATE POLICY "Admins can insert any comment"
   ON feedback_comments FOR INSERT
   WITH CHECK (
