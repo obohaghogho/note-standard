@@ -2659,6 +2659,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             if (!id) {
                 throw new Error(res.data?.error || 'Invalid server response');
             }
+            // Clear tombstones for newly created conversation & peer members so explicit new chat can be established
+            deletedConversationIdsRef.current.delete(id);
+            const members = res.data?.conversation?.members || [];
+            members.forEach((m: { user_id?: string; profile?: { id?: string } }) => {
+                const pId = m.user_id || m.profile?.id;
+                if (pId) deletedPeerIdsRef.current.delete(pId);
+            });
             setActiveConversationId(id);
             loadConversations();
             return id;
