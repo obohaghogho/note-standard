@@ -907,10 +907,20 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     const loadSingleConversation = useCallback(async (conversationId: string) => {
         if (!session || isSwitching) return;
+        // Tombstone guard: never fetch a conversation that has been deleted locally
+        if (deletedConversationIdsRef.current.has(conversationId)) {
+            console.log(`[ChatContext] loadSingleConversation BLOCKED by tombstone: ${conversationId}`);
+            return;
+        }
         try {
             const response = await api.get(`/chat/conversations/${conversationId}`);
             if (isMounted.current && response.data) {
                 const conv = response.data;
+                // Re-check tombstone after async gap — deletion may have happened while awaiting
+                if (deletedConversationIdsRef.current.has(conversationId)) {
+                    console.log(`[ChatContext] loadSingleConversation BLOCKED by tombstone (post-fetch): ${conversationId}`);
+                    return;
+                }
                 setConversations(prev => {
                     // Check if it already got loaded by loadConversations in the meantime
                     if (prev.some(c => c.id === conversationId)) return prev;
@@ -1857,6 +1867,20 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         const onNewConversation = (conv: Conversation) => {
             if (!isMounted.current || !conv || !conv.id) return;
             console.log(`[ChatContext] 📥 chat:new_conversation received:`, conv.id);
+            // Tombstone guard: never re-add a deleted conversation via socket event
+            if (deletedConversationIdsRef.current.has(conv.id)) {
+                console.log(`[ChatContext] onNewConversation BLOCKED by conversation tombstone: ${conv.id}`);
+                return;
+            }
+            // Peer tombstone guard for direct chats
+            if (conv.type === 'direct') {
+                const otherMember = conv.members?.find(m => m.user_id !== user?.id);
+                const peerId = otherMember?.user_id || (otherMember?.profile as { id?: string })?.id;
+                if (peerId && deletedPeerIdsRef.current.has(peerId)) {
+                    console.log(`[ChatContext] onNewConversation BLOCKED by peer tombstone: ${peerId}`);
+                    return;
+                }
+            }
             setConversations(prev => {
                 if (prev.some(c => c.id === conv.id)) {
                     return prev.map(c => c.id === conv.id ? { ...c, ...conv } : c);
@@ -2807,27 +2831,26 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
 
-    const deleteConversation = async (conversationId: string) => {
-        const convSnapshot = [...conversations];
-        const msgSnapshot = { ...messages };
-        const activeSnapshot = activeConversationId;
+    const deleteConversation = useCallback(async (conversationId: string) => {
+        console.log(`[ChatContext] deleteConversation called: ${conversationId}`);
 
+        // Step 1: Immediately evict from all local state (React, Zustand, IndexedDB, tombstones)
         evictConversationLocally(conversationId);
 
+        // Step 2: Fire-and-forget the backend deletion. The local eviction is already permanent
+        // via tombstone refs, so even if the API fails, the conversation won't reappear until
+        // a full page refresh (which re-fetches from server).
         try {
             await api.delete(`/chat/conversations/${conversationId}`);
-            toast.success('Chat deleted');
+            // NOTE: No toast.success here — the caller (ChatWindow/ConversationList) shows its own toast.
         } catch (err) {
             console.error('[ChatContext] deleteConversation API failed:', err);
-            deletedConversationIdsRef.current.delete(conversationId);
-            setConversations(convSnapshot);
-            setMessages(msgSnapshot);
-            setActiveConversationId(activeSnapshot);
-            useChatStore.getState().setConversations(convSnapshot);
-            ChatCacheEngine.saveConversations(convSnapshot).catch(() => {});
-            toast.error('Failed to delete chat');
+            // Do NOT restore the conversation from a stale snapshot — that was the source of the bug.
+            // The tombstone remains active, keeping the conversation hidden until refresh.
+            // Show a warning but don't undo the local eviction.
+            toast.error('Chat may not be fully deleted on server. Please try again.');
         }
-    };
+    }, [evictConversationLocally]);
 
     const muteConversation = async (conversationId: string, isMuted: boolean) => {
         try {
