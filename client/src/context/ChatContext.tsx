@@ -227,8 +227,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const reconcilingRef = useRef<boolean>(false); // Overlap lock for reconciliation
     const foregroundSyncInFlightRef = useRef<boolean>(false); // Guard for foreground sync
     const lastServerAckRef = useRef<number>(Date.now()); // Tracks last real event from server
-    // Stable ref to loadMessages — avoids TDZ when the reconciliation useEffect is declared
-    // above the loadMessages useCallback. Synced after loadMessages is initialized.
+    const sessionRef = useRef(session);
+    useEffect(() => { sessionRef.current = session; }, [session]);
+
+    const conversationsRef = useRef<Conversation[]>([]);
+    useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
+
+    const messagesRef = useRef<Record<string, Message[]>>({});
+    useEffect(() => { messagesRef.current = messages; }, [messages]);
+
     const loadMessagesRef = useRef<(conversationId: string, force?: boolean) => Promise<void>>(() => Promise.resolve());
     const loadConversationsRef = useRef<() => Promise<void>>(() => Promise.resolve());
     const deletedConversationIdsRef = useRef<Set<string>>(new Set());
@@ -626,26 +633,33 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const evictConversationLocally = useCallback((conversationId: string) => {
         console.log(`[ChatContext] [COORDINATOR] Evicting conversation locally: ${conversationId}`);
 
-        // Resolve peer user ID for direct chat to purge any duplicate direct conversation records
-        const targetConv = conversationsRef.current.find(c => c.id === conversationId);
-        let peerId: string | null = null;
-        if (targetConv && targetConv.type === 'direct') {
-            const otherMember = targetConv.members?.find(m => m.user_id !== sessionRef.current?.user?.id);
-            peerId = otherMember?.user_id || (otherMember?.profile as { id?: string })?.id || null;
-        }
-
         const idsToEvict = new Set<string>([conversationId]);
-        if (peerId) {
-            deletedPeerIdsRef.current.add(peerId);
-            conversationsRef.current.forEach(c => {
-                if (c.type === 'direct') {
-                    const m = c.members?.find(mem => mem.user_id !== sessionRef.current?.user?.id);
-                    const pid = m?.user_id || (m?.profile as { id?: string })?.id;
-                    if (pid === peerId) {
-                        idsToEvict.add(c.id);
+
+        try {
+            const currentUserId = user?.id || sessionRef.current?.user?.id;
+            const currentConvs = conversationsRef.current.length > 0 ? conversationsRef.current : conversations;
+            const targetConv = currentConvs.find(c => c.id === conversationId);
+            let peerId: string | null = null;
+
+            if (targetConv && targetConv.type === 'direct') {
+                const otherMember = targetConv.members?.find(m => m.user_id !== currentUserId);
+                peerId = otherMember?.user_id || (otherMember?.profile as { id?: string })?.id || null;
+            }
+
+            if (peerId) {
+                deletedPeerIdsRef.current.add(peerId);
+                currentConvs.forEach(c => {
+                    if (c.type === 'direct') {
+                        const m = c.members?.find(mem => mem.user_id !== currentUserId);
+                        const pid = m?.user_id || (m?.profile as { id?: string })?.id;
+                        if (pid === peerId) {
+                            idsToEvict.add(c.id);
+                        }
                     }
-                }
-            });
+                });
+            }
+        } catch (err) {
+            console.warn('[ChatContext] Error resolving peer eviction IDs, proceeding with target ID:', err);
         }
 
         idsToEvict.forEach(id => {
@@ -653,7 +667,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             if (typeof window !== 'undefined' && window.location.search.includes(id)) {
                 const url = new URL(window.location.href);
                 url.searchParams.delete('id');
-                window.history.replaceState({}, '', url.toString());
+                window.history.replaceState({}, '', url.pathname);
             }
         });
 
@@ -679,7 +693,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 console.warn('[ChatContext] IndexedDB deleteConversation failed:', err);
             });
         });
-    }, [setActiveConversationId]);
+    }, [setActiveConversationId, user?.id, conversations]);
 
     const clearConversationLocally = useCallback((conversationId: string, clearedAtIso?: string) => {
         const timestamp = clearedAtIso || new Date().toISOString();
