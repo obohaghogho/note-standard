@@ -1,13 +1,14 @@
-import React, { useMemo, startTransition, useRef, useCallback } from 'react';
+import React, { useMemo, startTransition, useRef, useCallback, useState } from 'react';
 import { useChat } from '../../context/ChatContext';
 import type { Conversation } from '../../context/ChatContext';
 import { useAuth } from '../../context/AuthContext';
-import { Check, CheckCheck } from 'lucide-react';
+import { Check, CheckCheck, Trash2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { usePresence } from '../../context/PresenceContext';
 import { useSearchParams } from 'react-router-dom';
 import SecureImage from '../common/SecureImage';
 import { UserBadge } from '../common/UserBadge';
+import { toast } from 'react-hot-toast';
 
 // Extracting ConversationItem and wrapping with React.memo prevents the entire list
 // from re-rendering when one item changes (e.g., typing status or active state).
@@ -17,14 +18,16 @@ const ConversationItem = React.memo(({
     isOnline, 
     isActive, 
     typingUsers,
-    onClick 
+    onClick,
+    onDelete
 }: { 
     conv: Conversation, 
     user: { id?: string } | null, 
     isOnline: boolean, 
     isActive: boolean, 
     typingUsers: string[],
-    onClick: (id: string) => void 
+    onClick: (id: string) => void,
+    onDelete: (id: string, e: React.MouseEvent) => void
 }) => {
     let displayName = conv.name;
     let displayAvatar = null;
@@ -45,7 +48,10 @@ const ConversationItem = React.memo(({
     return (
         <div
             onClick={() => onClick(conv.id)}
-            onContextMenu={(e) => e.preventDefault()}
+            onContextMenu={(e) => {
+                e.preventDefault();
+                onDelete(conv.id, e);
+            }}
             draggable={false}
             className={`p-4 md:p-5 cursor-pointer active:bg-white/[0.04] md:hover:bg-white/[0.02] transition-all flex items-center gap-4 relative group ${
                 isActive ? 'bg-white/[0.04]' : ''
@@ -92,9 +98,18 @@ const ConversationItem = React.memo(({
                             </span>
                         )}
                     </h3>
-                    <span className="text-[11px] text-gray-500 font-bold uppercase tracking-tight ml-2">
-                        {conv.updated_at ? formatDistanceToNow(new Date(conv.updated_at), { addSuffix: false }).replace('about ', '') : ''}
-                    </span>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-gray-500 font-bold uppercase tracking-tight">
+                            {conv.updated_at ? formatDistanceToNow(new Date(conv.updated_at), { addSuffix: false }).replace('about ', '') : ''}
+                        </span>
+                        <button
+                            onClick={(e) => onDelete(conv.id, e)}
+                            className="p-1 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                            title="Delete Conversation"
+                        >
+                            <Trash2 size={15} />
+                        </button>
+                    </div>
                 </div>
 
                 <div className="flex items-center justify-between gap-2">
@@ -159,21 +174,13 @@ const ConversationItem = React.memo(({
 });
 
 const ConversationList: React.FC = () => {
-    const { conversations, activeConversationId, setActiveConversationId, loading, typingUsers } = useChat();
+    const { conversations, activeConversationId, setActiveConversationId, deleteConversation, loading, typingUsers } = useChat();
     const { user } = useAuth();
     const { isUserOnline } = usePresence();
     const [, setSearchParams] = useSearchParams();
-    // Debounce guard: prevents double-navigation from rapid taps on Android.
     const lastClickTimeRef = useRef(0);
+    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
-    // Phase 3 Optimization: Stable sort that only re-runs when the sort key changes.
-    // The sort key is lastMessage.created_at (or updated_at), NOT read_at/delivered_at.
-    // Previously, every `chat:message_read` or `chat:message_delivered` event replaced the
-    // conversations array and re-triggered this sort — 10+ times/second in active chats.
-    // Now the sort is only re-triggered when conversation ORDER actually changes.
-    // Sort key includes: lastMessage timestamp (for ordering) + unreadCount (to force re-sort
-    // when a badge changes, bubbling the conversation to the top) + lastMessage.id (for dedup
-    // guard — catches canonical-message-replaces-optimistic swaps that have the same timestamp).
     const sortKeys = conversations.map(c =>
         `${c.id}:${c.lastMessage?.created_at ?? c.updated_at ?? ''}:${c.lastMessage?.id ?? ''}:${(c as unknown as { unreadCount?: number }).unreadCount ?? 0}:${c.lastMessage?.status ?? ''}:${c.lastMessage?.delivered_at ?? ''}:${c.lastMessage?.read_at ?? ''}`
     ).join(',');
@@ -185,7 +192,6 @@ const ConversationList: React.FC = () => {
             return timeB - timeA;
         });
 
-        // Deduplicate direct conversations by peer user ID so no user appears twice in the chat list
         const seenDirectPeerIds = new Set<string>();
         const uniqueConversations: Conversation[] = [];
 
@@ -210,15 +216,31 @@ const ConversationList: React.FC = () => {
 
     const handleConversationClick = useCallback((convId: string) => {
         const now = Date.now();
-        // 400ms debounce — prevents double-tap and rapid repeated navigation.
         if (now - lastClickTimeRef.current < 400) return;
         lastClickTimeRef.current = now;
-        // startTransition keeps UI responsive during the React Router transition.
         startTransition(() => {
             setActiveConversationId(convId);
             setSearchParams({ id: convId });
         });
     }, [setActiveConversationId, setSearchParams]);
+
+    const handleDeleteRequest = useCallback((convId: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        e.preventDefault();
+        setPendingDeleteId(convId);
+    }, []);
+
+    const confirmDelete = async () => {
+        if (!pendingDeleteId) return;
+        const targetId = pendingDeleteId;
+        setPendingDeleteId(null);
+        try {
+            await deleteConversation(targetId);
+            toast.success('Chat deleted');
+        } catch {
+            toast.error('Failed to delete chat');
+        }
+    };
 
     if (loading) return <div className="p-4 text-gray-400">Loading chats...</div>;
 
@@ -227,7 +249,7 @@ const ConversationList: React.FC = () => {
     }
 
     return (
-        <div className="flex flex-col h-full min-h-0 overflow-y-auto bg-gray-950 border-r border-white/5 custom-scrollbar pb-safe">
+        <div className="flex flex-col h-full min-h-0 overflow-y-auto bg-gray-950 border-r border-white/5 custom-scrollbar pb-safe relative">
             {sortedConversations.map((conv) => {
                 let isOnline = false;
                 
@@ -238,8 +260,6 @@ const ConversationList: React.FC = () => {
                     }
                 }
 
-                // Pass typingUsers as a separate stable prop — avoids creating
-                // a new `conv` object on every render which defeats React.memo.
                 const convTypingUsers = typingUsers[conv.id] || EMPTY_TYPING;
                 return (
                     <ConversationItem
@@ -250,9 +270,36 @@ const ConversationList: React.FC = () => {
                         isActive={activeConversationId === conv.id}
                         typingUsers={convTypingUsers}
                         onClick={handleConversationClick}
+                        onDelete={handleDeleteRequest}
                     />
                 );
             })}
+
+            {/* Quick Confirm Delete Modal */}
+            {pendingDeleteId && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-gray-900 border border-white/10 p-6 rounded-2xl max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-200">
+                        <h3 className="text-lg font-bold text-white mb-2">Delete Conversation</h3>
+                        <p className="text-sm text-gray-400 mb-6">
+                            Are you sure you want to delete this chat? All messages will be permanently removed for you.
+                        </p>
+                        <div className="flex justify-end gap-3">
+                            <button
+                                onClick={() => setPendingDeleteId(null)}
+                                className="px-4 py-2 text-sm font-semibold text-gray-400 hover:text-white transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmDelete}
+                                className="px-4 py-2 text-sm font-semibold bg-red-600 hover:bg-red-500 text-white rounded-xl shadow-lg transition-all"
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

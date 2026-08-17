@@ -2699,17 +2699,46 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         // 3. Add to tombstone so loadMessages won't re-hydrate this ID.
         deletedMessageIdsRef.current.add(messageId);
 
+        // 4. Update sidebar preview snippet (lastMessage) if deleted message was the last message
+        if (savedConvId) {
+            const targetConvId = savedConvId;
+            setConversations(prev => prev.map(c => {
+                if (c.id === targetConvId) {
+                    const remainingMsgs = (messagesRef.current[targetConvId] || []).filter(m => m.id !== messageId);
+                    const newLastMsg = remainingMsgs.length > 0 ? remainingMsgs[remainingMsgs.length - 1] : undefined;
+                    return {
+                        ...c,
+                        lastMessage: newLastMsg,
+                        last_message: newLastMsg,
+                    };
+                }
+                return c;
+            }));
+        }
+
         try {
             await api.delete(`/chat/messages/${messageId}`);
             // Success — tombstone entry stays permanently for this session.
         } catch {
-            // 4. Rollback: restore the message and remove from tombstone.
+            // 5. Rollback: restore the message and remove from tombstone.
             deletedMessageIdsRef.current.delete(messageId);
             if (savedMsg && savedConvId) {
+                const convIdToRestore = savedConvId;
+                const msgToRestore = savedMsg;
                 setMessages(prev => ({
                     ...prev,
-                    [savedConvId!]: [...(prev[savedConvId!] || []), savedMsg!]
+                    [convIdToRestore]: [...(prev[convIdToRestore] || []), msgToRestore]
                         .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                }));
+                setConversations(prev => prev.map(c => {
+                    if (c.id === convIdToRestore) {
+                        return {
+                            ...c,
+                            lastMessage: msgToRestore,
+                            last_message: msgToRestore,
+                        };
+                    }
+                    return c;
                 }));
             }
             toast.error('Failed to delete message');
