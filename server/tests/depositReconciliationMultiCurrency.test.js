@@ -88,7 +88,7 @@ async function runDepositTestSuite() {
     });
   }
 
-  const currencies = ["NGN", "USD", "EUR", "GBP"];
+  const currencies = ["NGN", "USD", "GHS"];
 
   // Clean all previous transactions, fincra records, and ledger entries across test database
   await supabase.from("transactions").delete().neq("id", "00000000-0000-0000-0000-000000000000");
@@ -227,12 +227,12 @@ async function runDepositTestSuite() {
 
     // ── SCENARIO 7: Idempotent Deposit Reversal & Risk Queue ────────────────
     console.log("\n--- Scenario 7: Idempotent Deposit Reversal & Risk Queue ---");
-    const walletRev = await setupTestWallet(userId, "EUR");
+    const walletRev = await setupTestWallet(userId, "USD");
     const { data: wB7 } = await supabase.from("wallets_store").select("balance").eq("id", walletRev.id).single();
     const balRevBefore = parseFloat(wB7.balance || 0);
-    const txRev = await createTestDeposit({ userId, currency: "EUR", amount: 300 });
+    const txRev = await createTestDeposit({ userId, currency: "USD", amount: 300 });
 
-    await IdempotentLedgerCreditService.creditWallet({ transactionId: txRev.id, reference: txRev.reference_id, currency: "EUR", amount: 300 });
+    await IdempotentLedgerCreditService.creditWallet({ transactionId: txRev.id, reference: txRev.reference_id, currency: "USD", amount: 300 });
     const rev1 = await IdempotentLedgerCreditService.reverseDeposit({ transactionId: txRev.id, reference: txRev.reference_id });
     const revDup = await IdempotentLedgerCreditService.reverseDeposit({ transactionId: txRev.id, reference: txRev.reference_id });
     console.log(`[DEBUG Scenario 7] rev1:`, JSON.stringify(rev1), `revDup:`, JSON.stringify(revDup));

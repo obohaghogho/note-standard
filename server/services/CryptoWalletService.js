@@ -118,8 +118,12 @@ class CryptoWalletService {
       return !addr.startsWith("SYSTEM_") && 
              !addr.startsWith("SETTLEMENT_") && 
              !addr.startsWith("FX_POOL_") && 
-             net !== "INTERNAL" && 
-             net !== "SYSTEM";
+             !addr.startsWith("TREASURY_") &&
+             !addr.startsWith("REVENUE_") &&
+             !addr.startsWith("PENDING_") &&
+             !addr.startsWith("RECONCILIATION_") &&
+             net !== "SYSTEM" &&
+             net !== "INTERNAL_SYSTEM";
     };
 
     if (!forceNew) {

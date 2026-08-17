@@ -44,7 +44,7 @@ const FINCRA_SUPPORTED_SET = new Set(Object.values(FINCRA_CURRENCIES));
 
 // Currencies approved by Fincra but not yet available for NoteStandard users.
 // These are displayed as "Coming Soon" in the UI but no transactions are allowed.
-const FINCRA_COMING_SOON_SET = new Set(["AUD", "NZD", "JPY"]);
+const FINCRA_COMING_SOON_SET = new Set(["AUD", "NZD", "JPY", "EUR", "GBP"]);
 
 // All currencies Fincra recognises (active + coming soon)
 const FINCRA_ALL_FIAT_SET = new Set([...FINCRA_SUPPORTED_SET, ...FINCRA_COMING_SOON_SET]);

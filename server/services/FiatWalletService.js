@@ -75,8 +75,12 @@ class FiatWalletService {
       return !addr.startsWith("SYSTEM_") && 
              !addr.startsWith("SETTLEMENT_") && 
              !addr.startsWith("FX_POOL_") && 
-             net !== "INTERNAL" && 
-             net !== "SYSTEM";
+             !addr.startsWith("TREASURY_") &&
+             !addr.startsWith("REVENUE_") &&
+             !addr.startsWith("PENDING_") &&
+             !addr.startsWith("RECONCILIATION_") &&
+             net !== "SYSTEM" &&
+             net !== "INTERNAL_SYSTEM";
     };
 
     // Step 1: In-Memory Search across all user's wallets in wallets_store
@@ -92,7 +96,28 @@ class FiatWalletService {
       if (match) return match;
     }
 
-    // Step 2: Build unique per-currency address
+    // Step 2: Attempt RPC ensure_user_wallet for authoritative, race-safe provisioning
+    try {
+      const { data: rpcWalletId, error: rpcError } = await supabase.rpc("ensure_user_wallet", {
+        p_user_id: normUserId,
+        p_currency: upCurrency,
+        p_network: "NATIVE",
+      });
+
+      if (rpcWalletId && !rpcError) {
+        const { data: fetchedWallet } = await supabase
+          .from("wallets_store")
+          .select("*")
+          .eq("id", rpcWalletId)
+          .maybeSingle();
+
+        if (fetchedWallet) return fetchedWallet;
+      }
+    } catch (rpcErr) {
+      logger.warn(`[FiatWalletService] RPC ensure_user_wallet fallback for user ${normUserId} (${upCurrency}): ${rpcErr.message}`);
+    }
+
+    // Step 3: Build unique per-currency address fallback
     let address = `${upCurrency}_${normUserId.replace(/-/g, '').substring(0, 12)}`;
     try {
       const { data: profile } = await supabase
@@ -108,7 +133,7 @@ class FiatWalletService {
       address = `${upCurrency}_${normUserId}`;
     }
 
-    // Step 3: Attempt insert into wallets_store
+    // Step 4: Fallback direct insert into wallets_store
     const { data: wallet, error } = await supabase
       .from("wallets_store")
       .insert({
@@ -123,7 +148,7 @@ class FiatWalletService {
 
     if (wallet) return wallet;
 
-    // Step 4: Fallback if insert errored (e.g. duplicate key or race condition)
+    // Step 5: Fallback recheck if insert errored (e.g. duplicate key or race condition)
     const { data: recheckWallets } = await supabase
       .from("wallets_store")
       .select("*")
@@ -135,36 +160,6 @@ class FiatWalletService {
       );
       if (recheckMatch) return recheckMatch;
     }
-
-    // Retry with timestamped fallback address if address collided
-    if (error) {
-      logger.warn(`[FiatWalletService] First insert attempt warning for user ${normUserId} (${upCurrency}): ${error.message}`);
-    }
-    const fallbackAddress = `${upCurrency}_${normUserId.replace(/-/g, '')}_${Date.now()}`;
-    const { data: retryWallet } = await supabase
-      .from("wallets_store")
-      .insert({
-        user_id: normUserId,
-        currency: upCurrency,
-        network: "NATIVE",
-        address: fallbackAddress,
-        provider: "internal",
-      })
-      .select()
-      .maybeSingle();
-
-    if (retryWallet) return retryWallet;
-
-    // Final fetch attempt
-    const { data: finalWallets } = await supabase
-      .from("wallets_store")
-      .select("*")
-      .eq("user_id", normUserId);
-
-    const finalMatch = (finalWallets || []).find(
-      (w) => String(w.currency).trim().toUpperCase() === upCurrency
-    );
-    if (finalMatch) return finalMatch;
 
     throw new Error(`Failed to initialize ${upCurrency} wallet for user: ${error ? error.message : "Unknown DB Error"}`);
   }

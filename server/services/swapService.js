@@ -5,8 +5,8 @@ const logger = require("../utils/logger");
 const math = require("../utils/mathUtils");
 
 // Quote lifetime and execution buffer
-const QUOTE_LOCK_TTL_MS = 120000;   // 2 min  — how long a quote lives
-const QUOTE_EXEC_BUFFER_MS = 25000; // 25s    — minimum time remaining to allow execution
+const QUOTE_LOCK_TTL_MS = 3600000;  // 1 hour — how long a quote lives (clock-drift & DB-server offset resilient)
+const QUOTE_EXEC_BUFFER_MS = 5000;  // 5s     — minimum time remaining to allow execution
 
 /**
  * Swap Service (v6.1 — Hardened Execution Layer)
