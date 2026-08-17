@@ -463,11 +463,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         if (connected) readReceiptEngine.flushQueue();
     }, [connected, isActiveWriter, readReceiptEngine]);
     const conversationsFetchRef = useRef(false);
-    const conversationsRef = useRef<Conversation[]>([]);
     const socketRef = useRef<Socket | null>(null);
     const lastUserIdRef = useRef<string | null>(null);
     const activeConversationIdRef = useRef<string | null>(null);
-    const messagesRef = useRef<Record<string, Message[]>>({});
     const typingTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
     // Tombstone: permanently tracks deleted message IDs across room switches and reconnects.
     const deletedMessageIdsRef = useRef<Set<string>>(new Set());
@@ -1168,7 +1166,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, [connected, conversations, joinAllRooms]);
 
     // Maintain refs to latest dependencies to avoid stale closures in socket handlers
-    const sessionRef = useRef(session);
     useEffect(() => { sessionRef.current = session; }, [session]);
 
     // Listen for Service Worker push relay: when a push arrives while the user is in the
