@@ -755,6 +755,21 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     return true;
                 });
 
+                // Hydrate clearedAtMapRef from server membership data.
+                // This is critical for the delete→re-add flow: after page refresh,
+                // clearedAtMapRef is empty. Without this hydration, loadMessages
+                // wouldn't filter old messages because it has no cleared_at to compare against.
+                filteredServerData.forEach(conv => {
+                    const serverClearedAt = (conv as any).membership?.cleared_at;
+                    if (serverClearedAt) {
+                        // Only set if we don't already have a more recent local entry
+                        const existing = clearedAtMapRef.current.get(conv.id);
+                        if (!existing || new Date(serverClearedAt).getTime() > new Date(existing).getTime()) {
+                            clearedAtMapRef.current.set(conv.id, serverClearedAt);
+                        }
+                    }
+                });
+
                 // Synchronize Zustand store and IndexedDB cache with server-authoritative snapshot
                 useChatStore.getState().setConversations(filteredServerData);
                 ChatCacheEngine.saveConversations(filteredServerData).catch(() => {});
