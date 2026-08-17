@@ -37,6 +37,7 @@ function ChatContent() {
     const { openMobileMenu } = useOutletContext<{ openMobileMenu?: () => void }>() || {};
     const { user, authReady } = useAuth();
 
+    // Effect 1: Sync URL → activeConversationId (URL drives state on navigation/deep-link)
     useEffect(() => {
         const id = searchParams.get('id');
         const username = searchParams.get('username') || searchParams.get('user') || searchParams.get('userId');
@@ -82,9 +83,23 @@ function ChatContent() {
             };
             initiateChat();
         } else if (activeConversationId) {
+            // URL has no ?id= but we have an active conversation — clear it
             setActiveConversationId(null);
         }
     }, [searchParams, activeConversationId, setActiveConversationId, startConversation, setSearchParams, user?.id, authReady]);
+
+    // Effect 2: Sync activeConversationId → URL (state drives URL after deletion/eviction)
+    // When activeConversationId is cleared (e.g. by evictConversationLocally setting it to null),
+    // but the URL still has ?id=..., clean it via React Router so Effect 1 doesn't resurrect it.
+    useEffect(() => {
+        if (!activeConversationId) {
+            const urlId = searchParams.get('id');
+            if (urlId) {
+                console.log(`[Chat] activeConversationId is null but URL has ?id=${urlId} — cleaning URL`);
+                setSearchParams({}, { replace: true });
+            }
+        }
+    }, [activeConversationId, searchParams, setSearchParams]);
 
     return (
         <div className="flex h-full bg-gray-950 shadow-none rounded-none md:border md:border-gray-800 md:rounded-2xl overflow-hidden md:shadow-2xl relative">
