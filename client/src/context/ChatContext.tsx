@@ -684,7 +684,14 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             setActiveConversationId(null);
         }
 
-        // 4. Sync Zustand store & IndexedDB for all evicted IDs
+        // 4. Record deletion timestamps so old messages are filtered client-side
+        //    even if the server hasn't deployed the cleared_at fix yet.
+        const deleteTimestamp = new Date().toISOString();
+        idsToEvict.forEach(id => {
+            clearedAtMapRef.current.set(id, deleteTimestamp);
+        });
+
+        // 5. Sync Zustand store & IndexedDB for all evicted IDs
         idsToEvict.forEach(id => {
             useChatStore.getState().deleteConversation(id);
             ChatCacheEngine.deleteConversation(id).catch(err => {
@@ -965,9 +972,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 messagesCachedAtRef.current[conversationId] = Date.now();
 
                 // Hard-filter: remove any message that is in the tombstone (optimistically deleted
-                // this session) or that the server already marked as soft-deleted.
+                // this session), that the server already marked as soft-deleted, or that
+                // was created before this conversation's cleared_at timestamp (delete→re-add).
+                const convClearedAt = clearedAtMapRef.current.get(conversationId);
+                const convClearedAtMs = convClearedAt ? new Date(convClearedAt).getTime() : 0;
                 const filtered = (res.data as (Message & { is_deleted?: boolean })[]).filter(
-                    m => !deletedMessageIdsRef.current.has(m.id) && !m.is_deleted
+                    m => !deletedMessageIdsRef.current.has(m.id) && !m.is_deleted &&
+                         (!convClearedAtMs || new Date(m.created_at).getTime() > convClearedAtMs)
                 );
                 
                 // ── BULK UN-ACKED DELIVERY SWEEP ─────────────────────────────────
