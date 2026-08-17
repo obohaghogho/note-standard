@@ -2204,11 +2204,41 @@ exports.deleteConversation = async (req, res) => {
       .single();
 
     if (convData && convData.type === "direct") {
+      // Find peer ID for direct chat to mark all direct conversation records with that peer as deleted
+      const { data: members } = await supabase
+        .from("conversation_members")
+        .select("user_id")
+        .eq("conversation_id", conversationId);
+      
+      const otherMember = members?.find(m => m.user_id !== userId);
+      const peerId = otherMember?.user_id;
+
+      let convIdsToMark = [conversationId];
+      if (peerId) {
+        const { data: userConvs } = await supabase
+          .from("conversation_members")
+          .select("conversation_id")
+          .eq("user_id", userId);
+        
+        const userConvIds = (userConvs || []).map(c => c.conversation_id);
+        if (userConvIds.length > 0) {
+          const { data: peerConvs } = await supabase
+            .from("conversation_members")
+            .select("conversation_id")
+            .in("conversation_id", userConvIds)
+            .eq("user_id", peerId);
+          
+          if (peerConvs && peerConvs.length > 0) {
+            convIdsToMark = peerConvs.map(c => c.conversation_id);
+          }
+        }
+      }
+
       // Per-user soft-deletion: mark is_deleted = true and set deleted_at & cleared_at
       const { error: updateError } = await supabase
         .from("conversation_members")
         .update({ is_deleted: true, deleted_at: nowIso, cleared_at: nowIso })
-        .eq("conversation_id", conversationId)
+        .in("conversation_id", convIdsToMark)
         .eq("user_id", userId);
 
       if (updateError) throw updateError;

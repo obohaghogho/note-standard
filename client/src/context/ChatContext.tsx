@@ -624,22 +624,58 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     // ── Centralized Local Mutation Coordinator ─────────────────────────────────
     const evictConversationLocally = useCallback((conversationId: string) => {
         console.log(`[ChatContext] [COORDINATOR] Evicting conversation locally: ${conversationId}`);
-        deletedConversationIdsRef.current.add(conversationId);
 
-        setConversations(prev => prev.filter(c => c.id !== conversationId));
+        // Resolve peer user ID for direct chat to purge any duplicate direct conversation records
+        const targetConv = conversationsRef.current.find(c => c.id === conversationId);
+        let peerId: string | null = null;
+        if (targetConv && targetConv.type === 'direct') {
+            const otherMember = targetConv.members?.find(m => m.user_id !== sessionRef.current?.user?.id);
+            peerId = otherMember?.user_id || (otherMember?.profile as { id?: string })?.id || null;
+        }
+
+        const idsToEvict = new Set<string>([conversationId]);
+        if (peerId) {
+            conversationsRef.current.forEach(c => {
+                if (c.type === 'direct') {
+                    const m = c.members?.find(mem => mem.user_id !== sessionRef.current?.user?.id);
+                    const pid = m?.user_id || (m?.profile as { id?: string })?.id;
+                    if (pid === peerId) {
+                        idsToEvict.add(c.id);
+                    }
+                }
+            });
+        }
+
+        idsToEvict.forEach(id => {
+            deletedConversationIdsRef.current.add(id);
+            if (typeof window !== 'undefined' && window.location.search.includes(id)) {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('id');
+                window.history.replaceState({}, '', url.toString());
+            }
+        });
+
+        // 1. Immediately filter React conversations state
+        setConversations(prev => prev.filter(c => !idsToEvict.has(c.id)));
+        
+        // 2. Immediately filter React messages state
         setMessages(prev => {
             const next = { ...prev };
-            delete next[conversationId];
+            idsToEvict.forEach(id => delete next[id]);
             return next;
         });
 
-        if (activeConversationIdRef.current === conversationId) {
+        // 3. Clear active selection if active conversation is evicted
+        if (activeConversationIdRef.current && idsToEvict.has(activeConversationIdRef.current)) {
             setActiveConversationId(null);
         }
 
-        useChatStore.getState().deleteConversation(conversationId);
-        ChatCacheEngine.deleteConversation(conversationId).catch(err => {
-            console.warn('[ChatContext] IndexedDB deleteConversation failed:', err);
+        // 4. Sync Zustand store & IndexedDB for all evicted IDs
+        idsToEvict.forEach(id => {
+            useChatStore.getState().deleteConversation(id);
+            ChatCacheEngine.deleteConversation(id).catch(err => {
+                console.warn('[ChatContext] IndexedDB deleteConversation failed:', err);
+            });
         });
     }, [setActiveConversationId]);
 
