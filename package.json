@@ -10,7 +10,7 @@
     "mobile"
   ],
   "engines": {
-    "node": ">=20.0.0",
+    "node": "22.x",
     "npm": ">=10"
   },
   "scripts": {
@@ -39,14 +39,11 @@
     "loadtest:soak": "npx artillery run load_tests/scenarios/04_soak_test.yml"
   },
   "dependencies": {
-    "@config-plugins/react-native-callkeep": "^14.0.1",
     "@supabase/ssr": "^0.12.3",
     "bip39": "^3.1.0",
     "cors": "^2.8.5",
     "docx": "^9.7.1",
-    "expo": "~54.0.34",
     "express": "^5.2.1",
-    "react-native-reanimated": "~3.16.1",
     "husky": "^9.1.7",
     "nanoid": "^6.0.0",
     "next": "16.2.10",
