@@ -2348,7 +2348,6 @@ exports.clearChatHistory = async (req, res) => {
     }
 
     // Notify participants via Gateway
-    const clearedAt = new Date().toISOString();
     await realtime.emitToConversation(conversationId, "chat:history_cleared", { conversationId, userId, clearedAt });
 
     res.json({ success: true, message: "Chat history cleared", clearedAt });
