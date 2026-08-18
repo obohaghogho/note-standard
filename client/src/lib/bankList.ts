@@ -28,6 +28,19 @@ export const POPULAR_BANKS: Bank[] = [
   { id: 'uk-2', name: 'HSBC', code: '40-00-00', country: 'United Kingdom' },
   { id: 'uk-3', name: 'Lloyds Bank', code: '30-00-00', country: 'United Kingdom' },
   { id: 'uk-4', name: 'Revolut', code: '04-00-75', country: 'United Kingdom' },
+
+  // Ghana
+  { id: 'gh-1', name: 'GCB Bank', code: 'GCBLGHAC', country: 'Ghana', slug: 'gcb-bank' },
+  { id: 'gh-2', name: 'Ecobank Ghana', code: 'EABORHAC', country: 'Ghana', slug: 'ecobank-ghana' },
+  { id: 'gh-3', name: 'Stanbic Bank Ghana', code: 'SBICGHAC', country: 'Ghana', slug: 'stanbic-ghana' },
+  { id: 'gh-4', name: 'Absa Bank Ghana', code: 'BABORHAC', country: 'Ghana', slug: 'absa-ghana' },
+  { id: 'gh-5', name: 'Fidelity Bank Ghana', code: 'FABORHAC', country: 'Ghana', slug: 'fidelity-ghana' },
+  { id: 'gh-6', name: 'CalBank', code: 'ACCEGHAC', country: 'Ghana', slug: 'calbank' },
+  { id: 'gh-7', name: 'First National Bank Ghana', code: 'FABORHAC', country: 'Ghana', slug: 'fnb-ghana' },
+  { id: 'gh-8', name: 'Republic Bank Ghana', code: 'HABORHAC', country: 'Ghana', slug: 'republic-ghana' },
+  { id: 'gh-9', name: 'MTN Mobile Money', code: 'MTN_MOMO', country: 'Ghana', slug: 'mtn-momo' },
+  { id: 'gh-10', name: 'Vodafone Cash', code: 'VODA_CASH', country: 'Ghana', slug: 'vodafone-cash' },
+  { id: 'gh-11', name: 'AirtelTigo Money', code: 'TIGO_CASH', country: 'Ghana', slug: 'airteltigo-money' },
 ];
 
 export const COUNTRIES = [

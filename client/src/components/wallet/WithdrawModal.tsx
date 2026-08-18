@@ -79,7 +79,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
     const [captchaToken, setCaptchaToken] = useState<string | null>(null);
     const recaptchaRef = React.useRef<ReCAPTCHA>(null);
 
-    const isFiat = selectedCurrency === 'USD' || selectedCurrency === 'NGN' || selectedCurrency === 'EUR' || selectedCurrency === 'GBP';
+    const isFiat = selectedCurrency === 'USD' || selectedCurrency === 'NGN' || selectedCurrency === 'EUR' || selectedCurrency === 'GBP' || selectedCurrency === 'GHS';
 
     const filteredBanks = POPULAR_BANKS.filter(b => 
         b.country === selectedCountry && 
