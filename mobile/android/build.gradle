@@ -7,7 +7,7 @@ ext {
   targetSdkVersion = 34
   targetSdk = 34
   ndkVersion = "27.1.12297006"
-  kotlinVersion = "2.0.21"
+  kotlinVersion = "2.0.20"
 }
 
 buildscript {
@@ -17,14 +17,14 @@ buildscript {
   }
   configurations.all {
     resolutionStrategy {
-      force "org.jetbrains.kotlin:kotlin-gradle-plugin:${findProperty('android.kotlinVersion') ?: '2.0.21'}"
+      force "org.jetbrains.kotlin:kotlin-gradle-plugin:${findProperty('android.kotlinVersion') ?: '2.0.20'}"
     }
   }
   dependencies {
     classpath 'com.google.gms:google-services:4.4.2'
     classpath('com.android.tools.build:gradle')
     classpath('com.facebook.react:react-native-gradle-plugin')
-    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${findProperty('android.kotlinVersion') ?: '2.0.21'}")
+    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${findProperty('android.kotlinVersion') ?: '2.0.20'}")
   }
 }
 
