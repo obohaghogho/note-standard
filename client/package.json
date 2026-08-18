@@ -6,7 +6,7 @@
   "scripts": {
     "start": "vite preview",
     "dev": "vite --host",
-    "build": "node verify-pay.js && npx vite build",
+    "build": "node verify-pay.js && vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "preview": "vite preview",
@@ -70,7 +70,7 @@
     "@types/uuid": "^10.0.0"
   },
   "engines": {
-    "node": "22.x",
+    "node": ">=20.0.0",
     "npm": ">=10"
   },
   "optionalDependencies": {

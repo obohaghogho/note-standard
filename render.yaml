@@ -3,7 +3,7 @@ services:
   - type: web
     name: note-standard-frontend
     runtime: static
-    buildCommand: npm install --legacy-peer-deps && npm run build --prefix client
+    buildCommand: npm install --legacy-peer-deps && npm run build
     publishPath: client/dist
     envVars:
       - key: NODE_VERSION
