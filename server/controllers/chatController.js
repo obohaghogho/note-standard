@@ -205,7 +205,7 @@ exports.getConversations = async (req, res) => {
     try {
       const { data: mData, error: mError } = await supabase
         .from("conversation_members")
-        .select("conversation_id, role, status, cleared_at")
+        .select("conversation_id, role, status, cleared_at, is_deleted, deleted_at")
         .eq("user_id", userId);
       if (mError) throw mError;
       memberships = mData || [];
@@ -292,6 +292,8 @@ exports.getConversations = async (req, res) => {
             role: membership?.role || "member",
             status: membership?.status || "accepted",
             cleared_at: membership?.cleared_at || null,
+            is_deleted: membership?.is_deleted || false,
+            deleted_at: membership?.deleted_at || null,
             joined_at: null
           },
           members: members || [],
@@ -316,13 +318,22 @@ exports.getConversations = async (req, res) => {
         new Date(a.last_message_at || a.last_message?.created_at || a.updated_at || a.created_at)
       );
 
-    // Filter out direct conversations that were deleted (cleared_at) and have no new messages since
+    // Filter out per-user deleted conversations, and mask cleared conversations
+    // (aligned with RPC path behavior at lines 159-174)
     const visible = sorted.filter(c => {
+      // Per-user deletion: completely remove from list
+      if (c.membership?.is_deleted) return false;
+
+      // Clear History: mask last_message but KEEP the conversation in the list
       if (c.type === "direct" && c.membership?.cleared_at) {
         const clearedAt = new Date(c.membership.cleared_at).getTime();
         const lastMsgAt = new Date(c.last_message_at || c.last_message?.created_at || 0).getTime();
-        // If there is no message, or the last message was before/at the time of clearing, hide it.
-        if (lastMsgAt <= clearedAt) return false;
+        if (lastMsgAt <= clearedAt) {
+          c.last_message = null;
+          c.lastMessage = null;
+          c.unreadCount = 0;
+          c.unread_count = 0;
+        }
       }
       return true;
     });
