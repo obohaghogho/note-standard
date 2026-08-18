@@ -9,7 +9,7 @@ const securityMonitor = require('../services/securityMonitor');
 //   USD, GBP, EUR — Grey / international wire withdrawals
 //   NGN           — Nigerian NUBAN accounts (10-digit) for domestic Paystack payouts
 //   JPY           — Japanese bank accounts for future international payouts
-const SUPPORTED_CURRENCIES = new Set(['USD', 'GBP', 'EUR', 'NGN', 'JPY']);
+const SUPPORTED_CURRENCIES = new Set(['USD', 'GBP', 'EUR', 'NGN', 'JPY', 'GHS', 'KES', 'ZAR', 'CAD', 'TZS', 'UGX', 'RWF', 'XOF', 'XAF']);
 
 // Account number validation:
 // Accepts: 8–34 digits to cover:

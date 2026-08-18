@@ -80,9 +80,9 @@ export default function WalletActionScreen() {
     // Load saved bank account from server if available
     async function loadSavedBankAccount() {
       try {
-        const res = await apiClient.get('/bank-account');
-        if (res.data?.success && res.data?.account) {
-          const acc = res.data.account;
+        const res = await apiClient.get(`/bank-account?currency=${currency}`);
+        const acc = res.data?.data !== undefined ? res.data.data : res.data;
+        if (acc && (acc.account_number || acc.account_holder || acc.bank_name)) {
           setBankName(acc.bank_name || '');
           setAccountNumber(acc.account_number || '');
           setAccountName(acc.account_holder || '');
