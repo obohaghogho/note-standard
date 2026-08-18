@@ -3,7 +3,7 @@ services:
   - type: web
     name: note-standard-frontend
     runtime: static
-    buildCommand: npm run build --prefix client
+    buildCommand: npm install --legacy-peer-deps && npm run build --prefix client
     publishPath: client/dist
     envVars:
       - key: NODE_VERSION
@@ -28,7 +28,7 @@ services:
     name: note-standard-server
     runtime: node
     plan: free
-    buildCommand: npm install && npm install --prefix server
+    buildCommand: npm install --legacy-peer-deps && npm install --legacy-peer-deps --prefix server
     startCommand: node server/index.js
     envVars:
       - key: NODE_VERSION
@@ -53,7 +53,7 @@ services:
     name: note-standard-gateway
     runtime: node
     plan: free
-    buildCommand: npm install && npm install --prefix realtime-gateway
+    buildCommand: npm install --legacy-peer-deps && npm install --legacy-peer-deps --prefix realtime-gateway
     startCommand: node realtime-gateway/server.js
     envVars:
       - key: NODE_VERSION

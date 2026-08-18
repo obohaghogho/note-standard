@@ -10,7 +10,7 @@
     "mobile"
   ],
   "engines": {
-    "node": "22.x",
+    "node": ">=20.0.0",
     "npm": ">=10"
   },
   "scripts": {
