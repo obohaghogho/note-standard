@@ -26,8 +26,10 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      'shared/messageMergeEngine': path.resolve(__dirname, '../shared/messageMergeEngine.ts'),
       'shared': path.resolve(__dirname, '../shared'),
     },
+    extensions: ['.ts', '.tsx', '.mjs', '.js', '.jsx', '.json'],
   },
   server: {
     host: '0.0.0.0',
