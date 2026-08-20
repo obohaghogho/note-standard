@@ -13,6 +13,7 @@ workflows:
         - notestandard_keystore
       vars:
         PACKAGE_NAME: "com.notestandard.app"
+        NODE_ENV: "production"
       node: 22.14.0
 
     triggering:
@@ -27,13 +28,7 @@ workflows:
       # 1. Install root monorepo dependencies
       - name: Install root dependencies
         script: |
-          npm install --legacy-peer-deps
-
-      # 2. Install mobile package dependencies
-      - name: Install mobile dependencies
-        script: |
-          cd mobile
-          npm install --legacy-peer-deps
+          npm ci
 
       # 3. Inject environment secrets into .env so the app picks them up at build time
       - name: Write .env file
@@ -121,6 +116,7 @@ workflows:
         BUNDLE_ID: "com.notestandard.app"
         XCODE_WORKSPACE: "mobile/ios/NoteStandard.xcworkspace"
         XCODE_SCHEME: "NoteStandard"
+        NODE_ENV: "production"
       node: 22.14.0
 
     triggering:
@@ -133,12 +129,7 @@ workflows:
     scripts:
       - name: Install root dependencies
         script: |
-          npm install --legacy-peer-deps
-
-      - name: Install mobile dependencies
-        script: |
-          cd mobile
-          npm install --legacy-peer-deps
+          npm ci
 
       - name: Write .env file
         script: |
