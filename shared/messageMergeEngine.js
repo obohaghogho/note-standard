@@ -66,7 +66,11 @@ function mergeMessages(existing, incoming) {
     return { merged, newlyAddedCount };
 }
 
+exports.getEventKey = getEventKey;
+exports.mergeMessages = mergeMessages;
+
 module.exports = {
     getEventKey,
     mergeMessages
 };
+
