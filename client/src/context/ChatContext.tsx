@@ -2165,7 +2165,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     }
 
                     const backendMsg = res.data.message || res.data;
-                    let canonicalMessage: Message = { ...backendMsg, isOwn: true, status: 'sent' };
+                    let canonicalMessage: Message = { 
+                        ...backendMsg, 
+                        event_id: backendMsg.event_id || intent.event_id, 
+                        isOwn: true, 
+                        status: 'sent' 
+                    };
 
                     const tickSetById = appliedTicksRef.current.get(canonicalMessage.id);
                     const tickSetByEventId = appliedTicksRef.current.get(intent.event_id);

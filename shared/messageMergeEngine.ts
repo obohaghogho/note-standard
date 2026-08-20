@@ -55,8 +55,24 @@ export function mergeMessages(existing: Message[], incoming: Message[]): MergeRe
     for (const msg of incoming) {
         // Priority 1: match by event_id / clientRequestId (canonical ACK identity)
         // Priority 2: match by id (legacy fallback)
+        // Priority 3: match by optimistic frame (temp- ID + same sender + same content within 15s)
         const incomingEvtKey = getEventKey(msg);
-        const existingMsg = (incomingEvtKey && byEvent.get(incomingEvtKey)) || byId.get(msg.id);
+        let existingMsg = (incomingEvtKey && byEvent.get(incomingEvtKey)) || byId.get(msg.id);
+
+        if (!existingMsg) {
+            // Content-matching fallback for optimistic messages whose event_id wasn't returned
+            for (const existingItem of byId.values()) {
+                if (
+                    existingItem.id.startsWith('temp-') &&
+                    existingItem.sender_id === msg.sender_id &&
+                    existingItem.content === msg.content &&
+                    Math.abs(new Date(existingItem.created_at).getTime() - new Date(msg.created_at).getTime()) < 15000
+                ) {
+                    existingMsg = existingItem;
+                    break;
+                }
+            }
+        }
 
         if (!existingMsg) {
             newlyAddedCount++;

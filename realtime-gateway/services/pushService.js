@@ -578,12 +578,10 @@ async function sendCallPush(params) {
           })
           .catch(err => {
             logPushMetric({ platform: 'web', push_type: 'vapid', status: 'failed', error_code: String(err.statusCode || err.message), user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
-            if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 400 || err.statusCode === 403) {
-              console.log(`[FORENSIC][PushService] ⚠️ Marking web push sub INVALID: ${sub.endpoint.substring(0, 30)}... (Status: ${err.statusCode})`);
+            if (err.statusCode === 410 || err.statusCode === 404) {
+              console.log(`[FORENSIC][PushService] ⚠️ Deleting expired web push sub: ${sub.endpoint.substring(0, 30)}... (Status: ${err.statusCode})`);
               logPushMetric({ platform: 'web', push_type: 'vapid', status: 'invalid_marked', error_code: String(err.statusCode), user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
               
-              // We don't delete legacy subscriptions instantly here anymore, but legacy doesn't have endpoint_status. 
-              // We will just delete legacy as it's legacy.
               return supabase.from("push_subscriptions")
                 .delete()
                 .match({ user_id: userId, endpoint: sub.endpoint });
@@ -733,16 +731,18 @@ async function dispatchV2Push(params, pushTargets, isCall = false) {
           .then(() => logPushMetric({ platform: 'web', push_type: 'vapid', status: 'accepted', user_id: userId, device_id: t.device_id, endpoint_hash: endpointHash }))
           .catch(err => {
             logPushMetric({ platform: 'web', push_type: 'vapid', status: 'failed', error_code: String(err.statusCode || err.message), user_id: userId, device_id: t.device_id, endpoint_hash: endpointHash });
-            if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 400 || err.statusCode === 403) {
-               console.log(`[FORENSIC][V2Router] ⚠️ Marking V2 Installation INVALID (${t.device_id}): ${t.push_endpoint.substring(0, 30)}... (Status: ${err.statusCode})`);
+            if (err.statusCode === 410 || err.statusCode === 404) {
+               console.log(`[FORENSIC][V2Router] ⚠️ Marking V2 Installation INVALID (${t.device_id}): ${t.push_endpoint.substring(0, 30)}... (Permanent Status: ${err.statusCode})`);
                supabase.from('device_installations')
                  .update({ 
                    endpoint_status: 'INVALID',
                    failure_reason: String(err.statusCode),
-                   last_validation_reason: 'PROVIDER_REJECTED',
+                   last_validation_reason: 'PROVIDER_REJECTED_PERMANENT',
                    last_push_failure: new Date().toISOString()
                  })
                  .eq('push_endpoint', t.push_endpoint).then();
+            } else {
+               console.log(`[V2Router] ⚠️ Transient push failure (${err.statusCode || err.message}) for device ${t.device_id}. Endpoint status preserved.`);
             }
           })
       );

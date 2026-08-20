@@ -1,4 +1,5 @@
-const OpenAI = require("openai");
+let OpenAI = null;
+try { OpenAI = require("openai"); } catch (e) { console.warn("[AI Support] openai module optional load warning:", e.message); }
 const supabase = require("../config/database");
 const fs = require("fs");
 const path = require("path");
@@ -47,13 +48,13 @@ class KnowledgeManager {
 class AiSupportService {
   constructor() {
     this.openai = null;
-    if (process.env.GROQ_API_KEY) {
+    if (process.env.GROQ_API_KEY && OpenAI) {
       this.openai = new OpenAI({
         apiKey: process.env.GROQ_API_KEY,
         baseURL: "https://api.groq.com/openai/v1",
       });
     } else {
-      console.warn("[AI Support] GROQ_API_KEY not set. AI support agent will be disabled.");
+      console.warn("[AI Support] GROQ_API_KEY not set or OpenAI package missing. Using Knowledge Base fallback mode.");
     }
 
     const systemPromptPath = path.join(__dirname, '../prompts/support-system-prompt.md');
@@ -169,7 +170,6 @@ class AiSupportService {
   }
 
   async processSupportMessage(conversationId, userMessage, userId, botSenderId) {
-    if (!this.isConfigured()) return null;
     const startTimeMs = Date.now();
 
     // Check for user close/resolution intent keywords
@@ -188,27 +188,27 @@ class AiSupportService {
     if (isCloseTrigger) {
         const idempotencyKey = `ai_close_${conversationId}`;
         
-        // Idempotency Check: Has a closing message already been sent for this conversation?
-        const { data: existingClosingMsg } = await supabase
-            .from("messages")
-            .select("id")
-            .eq("conversation_id", conversationId)
-            .ilike("content", "%resolved and closed%")
-            .limit(1)
-            .maybeSingle();
+        try {
+          const { data: existingClosingMsg, error: existingErr } = await supabase
+              .from("messages")
+              .select("id")
+              .eq("conversation_id", conversationId)
+              .ilike("content", "%resolved and closed%")
+              .limit(1)
+              .maybeSingle();
 
-        if (existingClosingMsg) {
-            console.log(`[AI Diagnostic] trigger: close_chat | convId: ${conversationId} | idempotencyKey: ${idempotencyKey} | status: SKIPPED_DUPLICATE`);
-            return null;
+          if (!existingErr && existingClosingMsg && existingClosingMsg.id) {
+              console.log(`[AI Diagnostic] trigger: close_chat | convId: ${conversationId} | idempotencyKey: ${idempotencyKey} | status: SKIPPED_DUPLICATE`);
+              return null;
+          }
+
+          await supabase
+              .from("conversations")
+              .update({ support_status: "resolved", updated_at: new Date().toISOString() })
+              .eq("id", conversationId);
+        } catch (dbErr) {
+          console.warn("[AI Diagnostic] DB check skipped during close trigger execution (non-fatal):", dbErr.message);
         }
-
-        console.log(`[AI Diagnostic] trigger: close_chat | convId: ${conversationId} | idempotencyKey: ${idempotencyKey} | status: GENERATED`);
-
-        // Automatically resolve conversation status
-        await supabase
-            .from("conversations")
-            .update({ support_status: "resolved", updated_at: new Date().toISOString() })
-            .eq("id", conversationId);
 
         return {
             text: "This support chat session has been resolved and closed. ✅ Whenever you reach out to our support team again, your previous messages will be wiped clean so you start with a fresh new session! Have a great day!",
@@ -299,32 +299,24 @@ class AiSupportService {
       }
 
       if (!completion) {
-        console.error("[AI] Groq Request Failed");
-        console.error(`HTTP Status: Error`);
-        console.error(`Latency: ${Date.now() - startTimeMs}ms`);
-        console.error(`Error: ${lastError?.message}`);
-        console.error(`Fallback Used: true`);
-        if (lastError) throw lastError;
-        return null;
+        console.warn(`[AI Support] LLM API unconfigured or unavailable. Generating Knowledge Base fallback response for query: "${userMessage.substring(0, 40)}..."`);
+        return this.generateKnowledgeFallbackResponse(userMessage, firstName, retrieval);
       }
       
       const latency = Date.now() - startTimeMs;
       const tokens = completion.usage?.total_tokens || 0;
       const aiResponseText = completion.choices[0]?.message?.content?.trim();
       
-      console.log(`[AI] Groq response received`);
-      console.log(`tokens: ${tokens}`);
-      console.log(`latency: ${latency}ms`);
-      console.log(`content: ${aiResponseText}`);
-
-      if (!aiResponseText) return null;
+      if (!aiResponseText) {
+        return this.generateKnowledgeFallbackResponse(userMessage, firstName, retrieval);
+      }
       
       let parsedResponse;
       try {
           parsedResponse = JSON.parse(aiResponseText);
       } catch (parseErr) {
           console.error("[AI Support] Failed to parse JSON response:", parseErr.message);
-          return null;
+          return this.generateKnowledgeFallbackResponse(userMessage, firstName, retrieval);
       }
       
       let calculatedConfidence = parsedResponse.confidence !== undefined ? parsedResponse.confidence : 0.95;
@@ -339,14 +331,14 @@ class AiSupportService {
       }
       
       if (isEscalated) {
-          parsedResponse.response = "I don't have enough information to answer that accurately. I'll connect this conversation to the support team.";
+          parsedResponse.response = `Hi ${firstName}! 👋 I don't have enough information to solve that automatically, so I've assigned a human specialist agent to your request. A support team member will follow up shortly!`;
       }
 
       const responseId = 'ai_resp_' + require('crypto').randomUUID().replace(/-/g, '').substring(0, 16);
 
       const aiDebugMetadata = {
           response_id: responseId,
-          model: modelUsed,
+          model: modelUsed || 'kb-fallback',
           latency: latency,
           knowledge_used: retrieval.content ? true : false,
           articles_used: retrieval.sources_used,
@@ -356,16 +348,14 @@ class AiSupportService {
       };
 
       const operationalMetadata = {
-          category: parsedResponse.category || "Unknown",
-          intent: parsedResponse.intent || "Unknown",
+          category: parsedResponse.category || "General",
+          intent: parsedResponse.intent || "Support Request",
           priority: parsedResponse.priority || "normal",
           confidence: calculatedConfidence,
           customer_problem: userMessage,
           actions_tried: parsedResponse.actions_tried || "",
           recommended_next_step: parsedResponse.recommended_next_step || (isEscalated ? "Review chat history and respond manually" : "None")
       };
-
-      console.log("[AI Support] Analytics Record:", JSON.stringify({...operationalMetadata, ...aiDebugMetadata}));
 
       return {
         text: parsedResponse.response,
@@ -375,9 +365,62 @@ class AiSupportService {
       };
       
     } catch (err) {
-      console.error("[AI Support] Error processing message:", err.message);
-      return null;
+      console.error("[AI Support] Error processing message, using Knowledge fallback:", err.message);
+      return this.generateKnowledgeFallbackResponse(userMessage, firstName, retrieval);
     }
+  }
+
+  /**
+   * Generates a deterministic Knowledge Base fallback response when LLM APIs are offline or unconfigured.
+   */
+  generateKnowledgeFallbackResponse(userMessage, firstName = 'User', retrieval = { sources_used: [], content: '' }) {
+    const isMatched = retrieval.sources_used && retrieval.sources_used.length > 0;
+    const responseId = 'ai_resp_kb_' + require('crypto').randomUUID().replace(/-/g, '').substring(0, 16);
+    
+    let text = `Hi ${firstName}! 👋 Thank you for reaching out to Note Standard Support. `;
+    let isEscalated = false;
+
+    if (isMatched) {
+      text += `Regarding your question, here is what our knowledge base recommends:\n\n`;
+      try {
+        const snippets = retrieval.content ? JSON.parse(retrieval.content.split('\n\n')[0] || '{}') : null;
+        if (snippets && snippets.solution) {
+          text += snippets.solution;
+        } else if (snippets && snippets.summary) {
+          text += snippets.summary;
+        } else {
+          text += `Please check your settings or account dashboard for recent updates. If you still need help, reply with more details!`;
+        }
+      } catch (e) {
+        text += `Please check your dashboard or account settings. Reply to this message if you need further assistance!`;
+      }
+    } else {
+      isEscalated = true;
+      text += `Our AI support system has received your report. A specialist support agent has been notified and will assist you shortly!`;
+    }
+
+    return {
+      text,
+      isEscalated,
+      operationalMetadata: {
+        category: "General",
+        intent: "Support Request",
+        priority: isEscalated ? "high" : "normal",
+        confidence: isMatched ? 0.85 : 0.40,
+        customer_problem: userMessage,
+        recommended_next_step: "Review chat history"
+      },
+      aiDebugMetadata: {
+        response_id: responseId,
+        model: "knowledge-base-engine",
+        latency: 5,
+        knowledge_used: isMatched,
+        articles_used: retrieval.sources_used || [],
+        token_usage: 0,
+        knowledge_version: retrieval.knowledge_version || "1.0",
+        prompt_version: "v2_fallback"
+      }
+    };
   }
 }
 
