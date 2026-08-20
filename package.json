@@ -26,6 +26,7 @@
     "lint": "eslint .",
     "typecheck": "npm run typecheck -w client",
     "prepare": "echo 'Skipping husky in production'",
+    "postinstall": "patch-package || exit 0",
     "chaos:ci": "node server/tools/ciChaosGate/ciRunner.js",
     "dev:payments": "next dev",
     "build:payments": "next build",
@@ -72,6 +73,7 @@
     "eslint-plugin-react-refresh": "^0.4.14",
     "globals": "^15.11.0",
     "is-ci": "^4.1.0",
+    "patch-package": "^8.0.0",
     "typescript": "^5",
     "typescript-eslint": "^8.12.1",
     "vite": "^6.4.1"
