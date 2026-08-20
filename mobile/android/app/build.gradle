@@ -6,7 +6,7 @@ ext {
     minSdkVersion = 24
     compileSdkVersion = 36
     targetSdkVersion = 34
-    REACT_NATIVE_NODE_MODULES_DIR = "${projectDir}/../../node_modules/react-native"
+    REACT_NATIVE_NODE_MODULES_DIR = "${projectDir}/../../../node_modules/react-native"
 }
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
