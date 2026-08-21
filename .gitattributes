@@ -1,0 +1,3 @@
+# Force LF line endings for patches and Kotlin source files
+patches/*.patch text eol=lf
+*.kt text eol=lf

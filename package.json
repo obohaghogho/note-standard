@@ -26,7 +26,7 @@
     "lint": "eslint .",
     "typecheck": "npm run typecheck -w client",
     "prepare": "echo 'Skipping husky in production'",
-    "postinstall": "patch-package || exit 0",
+    "postinstall": "npx patch-package && node -e \"const fs=require('fs'); const p='node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/jni/JavaScriptFunction.kt'; if(!fs.existsSync(p)||!fs.readFileSync(p,'utf8').includes('@set:PublishedApi')){console.error('FATAL: expo-modules-core Kotlin patch was NOT applied');process.exit(1);}console.log('PASS: expo-modules-core Kotlin @set:PublishedApi patch is present.');\"",
     "chaos:ci": "node server/tools/ciChaosGate/ciRunner.js",
     "dev:payments": "next dev",
     "build:payments": "next build",
