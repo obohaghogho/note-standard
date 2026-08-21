@@ -27,12 +27,12 @@ try {
   }
 
   const content = fs.readFileSync(targetFile, 'utf8');
-  if (content.includes('internal var returnType')) {
-    console.error('FATAL: expo-modules-core Kotlin patch was NOT applied (internal var returnType is still internal).');
+  if (!content.includes('setReturnType')) {
+    console.error('FATAL: expo-modules-core Kotlin patch was NOT applied (setReturnType method missing).');
     process.exit(1);
   }
 
-  console.log('PASS: expo-modules-core Kotlin returnType visibility patch is present.');
+  console.log('PASS: expo-modules-core Kotlin setReturnType PublishedApi patch is present.');
 } catch (error) {
   console.error('Postinstall error:', error.message);
   process.exit(1);

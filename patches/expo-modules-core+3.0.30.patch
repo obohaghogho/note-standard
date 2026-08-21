@@ -2,7 +2,23 @@ diff --git a/node_modules/expo-modules-core/android/src/main/java/expo/modules/k
 index e06fa99..720ea21 100644
 --- a/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/jni/JavaScriptFunction.kt
 +++ b/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/jni/JavaScriptFunction.kt
-@@ -15,2 +15,2 @@ import kotlin.reflect.typeOf
-   @PublishedApi
--  internal var returnType: KType? = null
-+  var returnType: KType? = null
+@@ -16,3 +16,8 @@ class JavaScriptFunction<ReturnType : Any?> @DoNotStrip private constructor(@Do
+   internal var returnType: KType? = null
+
++  @PublishedApi
++  internal fun setReturnType(type: KType) {
++    returnType = type
++  }
++
+   fun isValid() = mHybridData.isValid
+diff --git a/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/jni/JavaScriptValue.kt b/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/jni/JavaScriptValue.kt
+index f06fa99..820ea21 100644
+--- a/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/jni/JavaScriptValue.kt
++++ b/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/jni/JavaScriptValue.kt
+@@ -42,3 +42,3 @@ class JavaScriptValue @DoNotStrip private constructor(@DoNotStrip private val m
+   inline fun <reified ReturnType : Any?> getFunction(): JavaScriptFunction<ReturnType> {
+     return internalJniGetFunction<ReturnType>().apply {
+-      returnType = typeOf<ReturnType>()
++      setReturnType(typeOf<ReturnType>())
+     }
+   }
