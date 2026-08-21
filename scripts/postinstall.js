@@ -27,12 +27,12 @@ try {
   }
 
   const content = fs.readFileSync(targetFile, 'utf8');
-  if (!content.includes('@set:PublishedApi')) {
-    console.error('FATAL: expo-modules-core Kotlin patch was NOT applied (@set:PublishedApi missing).');
+  if (content.includes('internal var returnType')) {
+    console.error('FATAL: expo-modules-core Kotlin patch was NOT applied (internal var returnType is still internal).');
     process.exit(1);
   }
 
-  console.log('PASS: expo-modules-core Kotlin @set:PublishedApi patch is present.');
+  console.log('PASS: expo-modules-core Kotlin returnType visibility patch is present.');
 } catch (error) {
   console.error('Postinstall error:', error.message);
   process.exit(1);
