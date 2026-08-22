@@ -7,10 +7,18 @@ const eslintConfig = defineConfig([
   ...nextTs,
   // Override default ignores of eslint-config-next.
   globalIgnores([
-    // Default ignores of eslint-config-next:
     ".next/**",
     "out/**",
     "build/**",
+    "**/build/**",
+    "dist/**",
+    "**/dist/**",
+    "android/**",
+    "**/android/**",
+    "ios/**",
+    "**/ios/**",
+    "patches/**",
+    "scripts/**",
     "next-env.d.ts",
   ]),
   {
