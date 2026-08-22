@@ -25,17 +25,22 @@ async function loadEvents({ conversationId, correlationId }) {
     // Since message_events has RLS, we should fetch it via the ORM or an admin RPC.
     // The user's blueprint uses `db.query()`, assuming a raw Postgres client (pg).
     // Let's adapt it to use the Supabase JS client since the rest of the backend uses it.
-    let supaQuery = db.from('message_events').select('*');
-    if (conversationId) supaQuery = supaQuery.eq('conversation_id', conversationId);
-    if (correlationId) supaQuery = supaQuery.eq('correlation_id', correlationId);
-    supaQuery = supaQuery.order('created_at', { ascending: true });
+    try {
+        let supaQuery = db.from('message_events').select('*');
+        if (conversationId) supaQuery = supaQuery.eq('conversation_id', conversationId);
+        if (correlationId) supaQuery = supaQuery.eq('correlation_id', correlationId);
+        supaQuery = supaQuery.order('created_at', { ascending: true });
 
-    const { data, error } = await supaQuery;
-    if (error) {
-        console.error("[ReplayDebugger] Failed to load events:", error);
-        throw error;
+        const { data, error } = await supaQuery;
+        if (error) {
+            console.warn("[ReplayDebugger] DB query skipped:", error.message);
+            return [];
+        }
+        return data || [];
+    } catch (err) {
+        console.warn("[ReplayDebugger] DB query exception:", err.message);
+        return [];
     }
-    return data || [];
 }
 
 module.exports = { loadEvents };
