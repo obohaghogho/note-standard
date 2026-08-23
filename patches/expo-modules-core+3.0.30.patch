@@ -2,7 +2,8 @@ diff --git a/node_modules/expo-modules-core/android/src/main/java/expo/modules/k
 index e06fa99..720ea21 100644
 --- a/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/jni/JavaScriptFunction.kt
 +++ b/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/jni/JavaScriptFunction.kt
-@@ -16,3 +16,8 @@ class JavaScriptFunction<ReturnType : Any?> @DoNotStrip private constructor(@Do
+@@ -15,3 +15,8 @@ class JavaScriptFunction<ReturnType : Any?> @DoNotStrip private constructor(@Do
+   @PublishedApi
    internal var returnType: KType? = null
 
 +  @PublishedApi
@@ -15,7 +16,7 @@ diff --git a/node_modules/expo-modules-core/android/src/main/java/expo/modules/k
 index f06fa99..820ea21 100644
 --- a/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/jni/JavaScriptValue.kt
 +++ b/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/jni/JavaScriptValue.kt
-@@ -42,3 +42,3 @@ class JavaScriptValue @DoNotStrip private constructor(@DoNotStrip private val m
+@@ -40,5 +40,5 @@ class JavaScriptValue @DoNotStrip private constructor(@DoNotStrip private val m
    inline fun <reified ReturnType : Any?> getFunction(): JavaScriptFunction<ReturnType> {
      return internalJniGetFunction<ReturnType>().apply {
 -      returnType = typeOf<ReturnType>()
