@@ -23,11 +23,16 @@ if (redis && env.REDIS_URL) {
     redis.ping().then(() => {
         logger.info("[Queue Connected] Redis reachable (Queue Booted)");
     }).catch(err => {
-        logger.error("[Queue Connected] Redis ping failed during Queue boot", { error: err.message });
+        if (err.message && err.message.includes("max requests limit exceeded")) {
+            logger.warn("[Queue Connected] Upstash Redis quota limit reached (500,000 requests). Queue monitoring active in fallback mode.");
+        } else {
+            logger.error("[Queue Connected] Redis ping failed during Queue boot", { error: err.message });
+        }
     });
 
     // 2. Queue Depth Monitoring: Pulse every 30 seconds
     setInterval(async () => {
+        if (redis.quotaExceeded) return;
         const SystemState = require("../../config/SystemState");
         try {
             const count = await paymentQueue.count();
@@ -39,6 +44,7 @@ if (redis && env.REDIS_URL) {
                 SystemState.enterSafeMode("Queue capacity breached threshold.");
             }
         } catch (e) {
+            if (e.message && e.message.includes("max requests limit exceeded")) return;
             logger.error("[Queue Depth] Failed to read queue count", { error: e.message });
         }
     }, 30000);
@@ -47,12 +53,20 @@ if (redis && env.REDIS_URL) {
     paymentQueue.add("reconciliation-tier-1", {}, {
         repeat: { cron: "*/3 * * * *" }, // Every 3 minutes
         jobId: "reconciliation-tier-1-repeat" 
-    }).catch(err => logger.error("[Queue] Failed to schedule Tier 1 reconciliation", { error: err.message }));
+    }).catch(err => {
+        if (!err.message || !err.message.includes("max requests limit exceeded")) {
+            logger.error("[Queue] Failed to schedule Tier 1 reconciliation", { error: err.message });
+        }
+    });
 
     paymentQueue.add("reconciliation-tier-2", {}, {
         repeat: { cron: "0 * * * *" }, // Every hour (Tier 2 Deep Sweep)
         jobId: "reconciliation-tier-2-repeat"
-    }).catch(err => logger.error("[Queue] Failed to schedule Tier 2 reconciliation", { error: err.message }));
+    }).catch(err => {
+        if (!err.message || !err.message.includes("max requests limit exceeded")) {
+            logger.error("[Queue] Failed to schedule Tier 2 reconciliation", { error: err.message });
+        }
+    });
 
     // 4. Production-Safe Apple Pay Domain Verification Monitor (DFOS v7.0)
     // Runs every 60 minutes to ensure that Vercel routes are not intercepting/redirecting the association file.
