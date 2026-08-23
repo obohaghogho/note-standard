@@ -20,8 +20,10 @@ index f06fa99..820ea21 100644
 +++ b/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/jni/JavaScriptValue.kt
 @@ -40,5 +40,5 @@ class JavaScriptValue @DoNotStrip private constructor(@DoNotStrip private val m
    inline fun <reified ReturnType : Any?> getFunction(): JavaScriptFunction<ReturnType> {
-     return internalJniGetFunction<ReturnType>().apply {
--      returnType = typeOf<ReturnType>()
-+      setReturnType(typeOf<ReturnType>())
-     }
+-    return internalJniGetFunction<ReturnType>().apply {
+-      setReturnType(typeOf<ReturnType>())
+-    }
++    val function = internalJniGetFunction<ReturnType>()
++    function.setReturnType(typeOf<ReturnType>())
++    return function
    }
