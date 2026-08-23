@@ -125,7 +125,7 @@ export interface ChatContextValue {
     markMessageRead: (messageId: string, conversationId: string) => Promise<void>;
     markMessageDelivered: (messageId: string, conversationId: string) => Promise<void>;
     startConversation: (username: string) => Promise<string | null>; 
-    acceptConversation: (id: string) => Promise<void>;
+    acceptConversation: (conversationId: string) => Promise<void>;
     deleteConversation: (id: string) => Promise<void>;
     deleteMessage: (messageId: string) => Promise<void>;
     editMessage: (messageId: string, content: string) => Promise<void>;
