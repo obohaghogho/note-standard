@@ -287,49 +287,7 @@ export const WebNotificationRouter: React.FC = () => {
     );
   }
 
-  return (
-    <>
-      {showPromptBanner && (
-        <div className="fixed top-2 sm:top-3 left-1/2 -translate-x-1/2 z-[9999] w-[95%] max-w-xl bg-slate-900/95 border border-indigo-500/50 backdrop-blur-xl text-white p-3 sm:p-3.5 rounded-2xl shadow-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 animate-in slide-in-from-top-4 duration-300 ring-2 ring-indigo-500/20 max-h-[90vh] overflow-y-auto">
-          <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 border border-indigo-400/30 flex items-center justify-center flex-shrink-0 text-white shadow-lg animate-pulse mt-0.5 sm:mt-0">
-              🔔
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <p className="text-xs sm:text-sm font-bold leading-tight text-white">
-                  Enable Push Notifications
-                </p>
-                <span className="text-[9px] uppercase tracking-wider bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500/30 font-semibold">Alerts</span>
-              </div>
-              <p className="text-[10px] sm:text-xs text-slate-300 mt-0.5 leading-tight sm:truncate">Get instant message alerts on your phone or device.</p>
-            </div>
-            <button
-              onClick={handleDismissClick}
-              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer sm:hidden flex-shrink-0"
-              aria-label="Close notification banner"
-            >
-              <X size={18} />
-            </button>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0 justify-end sm:justify-start pt-1 sm:pt-0 border-t border-white/5 sm:border-t-0">
-            <button
-              onClick={handleEnableClick}
-              disabled={isEnabling}
-              className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-indigo-600 via-blue-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg hover:shadow-indigo-500/25 transition-all active:scale-95 cursor-pointer disabled:opacity-50 text-center min-h-[38px] flex items-center justify-center"
-            >
-              {isEnabling ? 'Enabling…' : 'Enable Notifications'}
-            </button>
-            <button
-              onClick={handleDismissClick}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer hidden sm:block flex-shrink-0"
-              aria-label="Close notification banner"
-            >
-              <X size={16} />
-            </button>
-          </div>
-        </div>
-      )}
-    </>
-  );
+  // Permission prompt banner is owned exclusively by PushNotificationBanner component
+  // to guarantee a single authoritative top banner across all pages/devices.
+  return null;
 };

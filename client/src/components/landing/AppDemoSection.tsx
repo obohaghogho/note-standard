@@ -159,18 +159,12 @@ export const AppDemoSection: React.FC = () => {
         return () => clearInterval(timer);
     }, [isPlaying, playbackSpeed, activeTab, currentChapterIndex]);
 
-    // Speech Synthesis for Narration (when sound is unmuted)
+    // Ensure no speech synthesis voice narration plays
     useEffect(() => {
-        if (!isMuted && isPlaying && activeTab === 'video' && 'speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(activeChapter.narration);
-            utterance.rate = playbackSpeed;
-            utterance.pitch = 1.0;
-            window.speechSynthesis.speak(utterance);
-        } else if (isMuted && 'speechSynthesis' in window) {
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
             window.speechSynthesis.cancel();
         }
-    }, [currentChapterIndex, isMuted, isPlaying, activeTab, playbackSpeed]);
+    }, []);
 
     const handleSelectChapter = (index: number) => {
         setCurrentChapterIndex(index);
