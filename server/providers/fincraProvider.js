@@ -71,57 +71,6 @@ class FincraProvider extends PayoutProvider {
 
     logger.info(`[FincraProvider] Initiating payout | ref=${reference} amount=${amount} ${currency} businessId=${businessId || 'MISSING'}`);
 
-    // ── AUTOMATED PRE-PAYOUT CORPORATE TREASURY REBALANCING ────────────────
-    // If NGN payout balance is lower than requested payout amount, automatically
-    // convert company USD reserves to NGN on Fincra so payout succeeds without admin intervention.
-    if (currency.toUpperCase() === 'NGN') {
-      try {
-        const walletRes = await instance.get(`/wallets?businessId=${businessId}`).catch(() => null);
-        const rawWallets = walletRes?.data?.data || walletRes?.data || [];
-        const ngnWallet = rawWallets.find(w => (w.currency || w.symbol || '').toUpperCase() === 'NGN');
-        const usdWallet = rawWallets.find(w => (w.currency || w.symbol || '').toUpperCase() === 'USD');
-
-        const ngnAvailable = parseFloat(ngnWallet?.availableBalance || ngnWallet?.balance || 0);
-        const usdAvailable = parseFloat(usdWallet?.availableBalance || usdWallet?.balance || 0);
-
-        if (ngnWallet && ngnAvailable < parseFloat(amount)) {
-          const neededNgn = parseFloat(amount) - ngnAvailable + 1000;
-          logger.warn(`[FincraProvider] Low NGN payout balance (${ngnAvailable} < ${amount}). Checking corporate USD balance (${usdAvailable} USD)...`);
-
-          // Convert at market rate buffer (~1350 NGN per USD)
-          const approxUsdNeeded = Math.ceil((neededNgn / 1350) * 100) / 100;
-
-          if (usdAvailable >= approxUsdNeeded && approxUsdNeeded > 0) {
-            logger.info(`[FincraProvider] 🔄 Executing automated USD -> NGN corporate conversion (${approxUsdNeeded} USD for ₦${neededNgn})...`);
-            const { generateFincraQuote, executeFincraConversion } = require("../services/fincra/conversion");
-            const quote = await generateFincraQuote({
-              sourceCurrency: "USD",
-              destinationCurrency: "NGN",
-              amount: approxUsdNeeded,
-              userId: "SYSTEM_AUTO_TREASURY"
-            });
-
-            const quoteRef = quote?.quoteReference || quote?.reference || quote?.id;
-            if (quoteRef) {
-              await executeFincraConversion({
-                quoteReference: quoteRef,
-                userId: "SYSTEM_AUTO_TREASURY",
-                sourceCurrency: "USD",
-                destinationCurrency: "NGN",
-                amount: approxUsdNeeded
-              });
-              logger.info(`[FincraProvider] ✅ Automatic USD -> NGN corporate conversion executed successfully. Proceeding with payout.`);
-              await new Promise(r => setTimeout(r, 1200));
-            }
-          } else {
-            logger.warn(`[FincraProvider] USD corporate balance (${usdAvailable}) insufficient to cover ₦${neededNgn} auto-conversion. Proceeding to payout call.`);
-          }
-        }
-      } catch (treasuryErr) {
-        logger.warn(`[FincraProvider] Auto treasury conversion warning: ${treasuryErr.message}. Proceeding with direct payout call.`);
-      }
-    }
-
     let res;
     try {
       res = await instance.post("/disbursements/payouts", payload);
@@ -254,6 +203,22 @@ class FincraProvider extends PayoutProvider {
       status,
       rawResponse: res.data,
     };
+  }
+
+  /**
+   * Generate executable FX quote via Fincra /quotes API.
+   */
+  async generateConversionQuote({ sourceCurrency, destinationCurrency, amount, userId }) {
+    const { generateFincraQuote } = require("../services/fincra/conversion");
+    return await generateFincraQuote({ sourceCurrency, destinationCurrency, amount, userId });
+  }
+
+  /**
+   * Execute corporate FX conversion via Fincra /conversions API.
+   */
+  async executeConversion({ quoteReference, userId, sourceCurrency, destinationCurrency, amount }) {
+    const { executeFincraConversion } = require("../services/fincra/conversion");
+    return await executeFincraConversion({ quoteReference, userId, sourceCurrency, destinationCurrency, amount });
   }
 
   /**

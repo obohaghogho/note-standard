@@ -76,12 +76,76 @@ class PayoutEngine {
       const riskScore = 15; // Low risk default
       const riskRoute = riskScore > 50 ? "MANUAL_REVIEW" : "AUTO";
 
-      // ── STEP 3: Check Merchant Balance Pre-Check ──────────────────────────
+      // ── STEP 3: Check Merchant Balance Pre-Check & Treasury Routing ─────────
       const provider = registry.getPrimary();
+      const isTreasuryCrossCurrencyEnabled = process.env.TREASURY_CROSS_CURRENCY_WITHDRAWALS_ENABLED === "true";
+
       const merchantBal = await provider.getMerchantBalance(currency);
       if (merchantBal.available < amount) {
-        logger.warn(`[PayoutEngine] [${correlation_id}] Merchant balance insufficient (${merchantBal.available} < ${amount})`);
-        throw new Error("MERCHANT_RESERVE_MAINTENANCE: Merchant payout reserves are currently undergoing top-up. Please try again shortly.");
+        logger.warn(`[PayoutEngine] [${correlation_id}] Primary merchant balance insufficient (${merchantBal.available} < ${amount} ${currency})`);
+
+        if (!isTreasuryCrossCurrencyEnabled) {
+          throw new Error("MERCHANT_RESERVE_MAINTENANCE: Merchant payout reserves are currently undergoing top-up. Please try again shortly.");
+        }
+
+        // Feature flag enabled: Invoke Treasury Liquidity Router
+        assertTransition(WITHDRAWAL_STATES.VALIDATED, WITHDRAWAL_STATES.TREASURY_CHECK);
+        const TreasuryLiquidityRouter = require("../services/treasury/TreasuryLiquidityRouter");
+        const TreasuryReservationService = require("../services/treasury/TreasuryReservationService");
+        const TreasuryConversionService = require("../services/treasury/TreasuryConversionService");
+        const { acquireCorporateTreasuryLock } = require("./redisLock");
+
+        const fundingDecision = await TreasuryLiquidityRouter.findFundingRoute({
+          destinationCurrency: currency,
+          destinationAmount: amount,
+          provider,
+          withdrawalReference: withdrawal_ref
+        });
+
+        if (!fundingDecision.fundingRequired || !fundingDecision.eligible) {
+          assertTransition(WITHDRAWAL_STATES.TREASURY_CHECK, WITHDRAWAL_STATES.TREASURY_INSUFFICIENT);
+          throw new Error(`TREASURY_INSUFFICIENT: ${fundingDecision.reason || 'Insufficient corporate treasury liquidity across all eligible source currencies.'}`);
+        }
+
+        assertTransition(WITHDRAWAL_STATES.TREASURY_CHECK, WITHDRAWAL_STATES.TREASURY_FUNDING_REQUIRED);
+
+        // Acquire Corporate Treasury Lock for selected source -> destination pair
+        const { release: releaseTreasuryLock } = await acquireCorporateTreasuryLock(
+          provider.name || "fincra",
+          fundingDecision.sourceCurrency,
+          fundingDecision.destinationCurrency,
+          30000
+        );
+
+        try {
+          // Reserve Corporate Treasury Liquidity in DB
+          const reservation = await TreasuryReservationService.createReservation({
+            withdrawalReference: withdrawal_ref,
+            provider: provider.name || "fincra",
+            sourceCurrency: fundingDecision.sourceCurrency,
+            sourceAmount: fundingDecision.sourceAmount,
+            destinationCurrency: fundingDecision.destinationCurrency,
+            destinationAmount: fundingDecision.destinationAmount,
+            fxRate: fundingDecision.fxRate,
+            providerFee: fundingDecision.providerFee,
+            spreadAmount: fundingDecision.spreadAmount,
+            ttlSeconds: 300
+          });
+
+          assertTransition(WITHDRAWAL_STATES.TREASURY_FUNDING_REQUIRED, WITHDRAWAL_STATES.TREASURY_SOURCE_RESERVED);
+
+          // Execute Corporate FX Conversion & Confirm Destination Liquidity
+          await TreasuryConversionService.executeConversion({
+            provider,
+            fundingDecision,
+            treasuryReference: reservation.treasuryReference,
+            withdrawalReference: withdrawal_ref
+          });
+
+          assertTransition(WITHDRAWAL_STATES.TREASURY_SOURCE_RESERVED, WITHDRAWAL_STATES.PAYOUT_FUNDS_CONFIRMED);
+        } finally {
+          await releaseTreasuryLock();
+        }
       }
 
       // ── STEP 3.5: Auto-Reconcile Stale Reserved Transactions ────────────────

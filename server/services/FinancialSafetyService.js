@@ -1,5 +1,16 @@
 const SystemState = require("../config/SystemState");
 const logger = require("../utils/logger");
+const { FINCRA_SUPPORTED_SET } = require("./fincra/constants");
+
+// Build comprehensive currency allowlist from authoritative sources:
+// 1. All Fincra-approved fiat currencies (NGN, USD, EUR, GBP, CAD, GHS, KES, etc.)
+// 2. On-chain crypto currencies (BTC, ETH) — handled by NowPayments
+// This replaces the previous hardcoded 6-currency list that silently blocked
+// EUR, GBP, CAD, and all African/Asian currencies from ledger operations.
+const ALLOWED_CURRENCIES = new Set([
+  ...FINCRA_SUPPORTED_SET,  // All 21 Fincra fiat + stablecoin currencies
+  'BTC', 'ETH',             // On-chain crypto (NowPayments custody)
+]);
 
 /**
  * Financial Safety Service
@@ -22,11 +33,9 @@ class FinancialSafetyService {
       throw new Error(`SYSTEM_RESTRICTION: Withdrawals and transfers are currently disabled (Mode: ${SystemState.getWithdrawalMode()})`);
     }
 
-    // 2. Currency Checks
-    const allowedCurrencies = ['NGN', 'USD', 'BTC', 'ETH', 'USDT', 'USDC'];
-    
+    // 2. Currency Checks — uses FINCRA_SUPPORTED_SET + crypto for complete coverage
     for (const entry of intent.entries) {
-      if (!allowedCurrencies.includes(entry.currency.toUpperCase())) {
+      if (!ALLOWED_CURRENCIES.has(entry.currency.toUpperCase())) {
         throw new Error(`SAFETY_VIOLATION: Unsupported currency detected: ${entry.currency}`);
       }
 

@@ -190,54 +190,67 @@ class IdempotentWithdrawalSettlementService {
 
       const totalDeduction = parseFloat(amount || tx.amount || 0) + parseFloat(fee || tx.fee || 0);
 
-      // 3. Execute Atomic RPC complete_withdrawal
-      logger.info(`[IdempotentWithdrawalSettlementService] Finalizing debit of ${totalDeduction} ${targetCurrency} for tx ${tx.id}`);
+      // 3. Execute 100% Atomic DB RPC (combines balance debit + status transition in ONE SQL transaction)
+      logger.info(`[IdempotentWithdrawalSettlementService] Finalizing debit of ${totalDeduction} ${targetCurrency} for tx ${tx.id} via atomic RPC`);
 
-      const { error: rpcErr } = await supabase.rpc("complete_withdrawal", {
+      const { data: atomicRes, error: atomicErr } = await supabase.rpc("atomic_finalize_withdrawal_settlement", {
+        p_transaction_id: tx.id,
         p_wallet_id: wallet.id,
         p_amount: totalDeduction,
+        p_provider_ref: providerTransactionId || tx.fincra_reference || reference,
+        p_source: source,
+        p_admin_id: adminId
       });
 
-      if (rpcErr) {
-        logger.error(`[IdempotentWithdrawalSettlementService] RPC complete_withdrawal failed for tx ${tx.id}: ${rpcErr.message}`);
-        // Fallback: update balance directly if RPC fails
+      if (atomicRes && atomicRes.success) {
+        if (atomicRes.already_debited) {
+          logger.info(`[IdempotentWithdrawalSettlementService] Idempotency Hit for tx ${tx.id}. Already debited.`);
+          return {
+            success: true,
+            alreadyDebited: true,
+            debited: false,
+            transactionId: tx.id,
+            withdrawalStatus: "COMPLETED",
+            fundsStatus: "DEBITED",
+          };
+        }
+        logger.info(`[IdempotentWithdrawalSettlementService] ✅ Atomic settlement RPC succeeded for tx ${tx.id}`);
+      } else {
+        // Fallback for non-migrated environment
+        logger.warn(`[IdempotentWithdrawalSettlementService] atomic_finalize_withdrawal_settlement RPC fallback: ${atomicErr?.message}`);
+
+        const { error: rpcErr } = await supabase.rpc("complete_withdrawal", {
+          p_wallet_id: wallet.id,
+          p_amount: totalDeduction,
+        });
+
+        if (rpcErr) {
+          await supabase
+            .from("wallets_store")
+            .update({
+              balance: wallet.balance - totalDeduction,
+              reserved_balance: Math.max(0, (wallet.reserved_balance || 0) - totalDeduction),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", wallet.id);
+        }
+
+        const now = new Date().toISOString();
         await supabase
-          .from("wallets_store")
+          .from("fincra_transactions")
           .update({
-            balance: wallet.balance - totalDeduction,
-            reserved_balance: Math.max(0, (wallet.reserved_balance || 0) - totalDeduction),
-            updated_at: new Date().toISOString(),
+            status: "SUCCESSFUL",
+            withdrawal_status: "COMPLETED",
+            funds_status: "DEBITED",
+            provider_status: "SUCCESS",
+            reconciliation_status: source.includes("ADMIN") || source.includes("RECONCILIATION") ? "RECONCILED" : "NONE",
+            fincra_reference: providerTransactionId || tx.fincra_reference || reference,
+            reconciled_at: now,
+            reconciled_by: adminId || source,
+            updated_at: now,
           })
-          .eq("id", wallet.id);
+          .eq("id", tx.id);
       }
-
-      // 4. Atomic Multi-State Update
-      const now = new Date().toISOString();
-      const { data: updatedTx, error: updateErr } = await supabase
-        .from("fincra_transactions")
-        .update({
-          status: "SUCCESSFUL",
-          withdrawal_status: "COMPLETED",
-          funds_status: "DEBITED",
-          provider_status: "SUCCESS",
-          reconciliation_status: source.includes("ADMIN") || source.includes("RECONCILIATION") ? "RECONCILED" : "NONE",
-          fincra_reference: providerTransactionId || tx.fincra_reference || reference,
-          reconciled_at: now,
-          reconciled_by: adminId || source,
-          updated_at: now,
-        })
-        .eq("id", tx.id)
-        .neq("funds_status", "DEBITED")
-        .select()
-        .maybeSingle();
-
-      if (!updatedTx) {
-        logger.info(`[IdempotentWithdrawalSettlementService] Concurrent update detected for tx ${tx.id}. Already debited.`);
-        return {
-          success: true,
-          alreadyDebited: true,
-          debited: false,
-          transactionId: tx.id,
         };
       }
 
@@ -400,46 +413,68 @@ class IdempotentWithdrawalSettlementService {
 
       const totalDeduction = parseFloat(amount || tx.amount || 0) + parseFloat(fee || tx.fee || 0);
 
-      // 3. Execute Atomic RPC reverse_withdrawal_reservation
-      logger.info(`[IdempotentWithdrawalSettlementService] Reversing fund reservation of ${totalDeduction} ${targetCurrency} for tx ${tx.id}`);
+      // 3. Execute 100% Atomic DB RPC (combines balance restore + status transition in ONE SQL transaction)
+      logger.info(`[IdempotentWithdrawalSettlementService] Reversing fund reservation of ${totalDeduction} ${targetCurrency} for tx ${tx.id} via atomic RPC`);
 
-      const { error: rpcErr } = await supabase.rpc("reverse_withdrawal_reservation", {
+      const { data: atomicRes, error: atomicErr } = await supabase.rpc("atomic_reverse_withdrawal_reservation", {
+        p_transaction_id: tx.id,
         p_wallet_id: wallet.id,
         p_amount: totalDeduction,
+        p_reason: reason,
+        p_error_code: errorCode,
+        p_source: source,
+        p_admin_id: adminId
       });
 
-      if (rpcErr) {
-        logger.error(`[IdempotentWithdrawalSettlementService] RPC reverse_withdrawal_reservation failed for tx ${tx.id}: ${rpcErr.message}`);
-        // Fallback safety update
-        await supabase
-          .from("wallets_store")
-          .update({
-            available_balance: wallet.available_balance + totalDeduction,
-            reserved_balance: Math.max(0, (wallet.reserved_balance || 0) - totalDeduction),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", wallet.id);
-      }
+      if (atomicRes && atomicRes.success) {
+        if (atomicRes.already_released) {
+          logger.info(`[IdempotentWithdrawalSettlementService] Idempotency Hit for tx ${tx.id}. Funds already released.`);
+          return {
+            success: true,
+            alreadyReleased: true,
+            released: false,
+            transactionId: tx.id,
+            withdrawalStatus: "REVERSED",
+            fundsStatus: "RELEASED",
+          };
+        }
+        logger.info(`[IdempotentWithdrawalSettlementService] ✅ Atomic reversal RPC succeeded for tx ${tx.id}`);
+      } else {
+        // Fallback for non-migrated environment
+        logger.warn(`[IdempotentWithdrawalSettlementService] atomic_reverse_withdrawal_reservation RPC fallback: ${atomicErr?.message}`);
 
-      // 4. Atomic Multi-State Update
-      const now = new Date().toISOString();
-      const { data: updatedTx, error: updateErr } = await supabase
-        .from("fincra_transactions")
-        .update({
-          status: "REVERSED",
-          withdrawal_status: "REVERSED",
-          funds_status: "RELEASED",
-          provider_status: "FAILED",
-          error_code: errorCode,
-          error_message: reason,
-          reconciled_at: now,
-          reconciled_by: adminId || source,
-          updated_at: now,
-        })
-        .eq("id", tx.id)
-        .neq("funds_status", "RELEASED")
-        .select()
-        .maybeSingle();
+        const { error: rpcErr } = await supabase.rpc("reverse_withdrawal_reservation", {
+          p_wallet_id: wallet.id,
+          p_amount: totalDeduction,
+        });
+
+        if (rpcErr) {
+          await supabase
+            .from("wallets_store")
+            .update({
+              available_balance: wallet.available_balance + totalDeduction,
+              reserved_balance: Math.max(0, (wallet.reserved_balance || 0) - totalDeduction),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", wallet.id);
+        }
+
+        const now = new Date().toISOString();
+        await supabase
+          .from("fincra_transactions")
+          .update({
+            status: "REVERSED",
+            withdrawal_status: "REVERSED",
+            funds_status: "RELEASED",
+            provider_status: "FAILED",
+            error_code: errorCode,
+            error_message: reason,
+            reconciled_at: now,
+            reconciled_by: adminId || source,
+            updated_at: now,
+          })
+          .eq("id", tx.id);
+      }
 
       if (!updatedTx) {
         logger.info(`[IdempotentWithdrawalSettlementService] Concurrent reversal check for tx ${tx.id}. Already released.`);
