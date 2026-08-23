@@ -33,7 +33,7 @@ const StatusOverlays = () => {
 function ChatContent() {
     const [isNewChatOpen, setIsNewChatOpen] = useState(false);
     const [searchParams, setSearchParams] = useSearchParams();
-    const { activeConversationId, setActiveConversationId, startConversation } = useChat();
+    const { activeConversationId, setActiveConversationId, startConversation, isConversationDeleted } = useChat();
     const { openMobileMenu } = useOutletContext<{ openMobileMenu?: () => void }>() || {};
     const { user, authReady } = useAuth();
 
@@ -67,6 +67,12 @@ function ChatContent() {
         }
 
         if (id) {
+            if (isConversationDeleted && isConversationDeleted(id)) {
+                console.log(`[Chat] URL contains tombstoned ?id=${id} — cleaning URL`);
+                setSearchParams({}, { replace: true });
+                if (activeConversationId) setActiveConversationId(null);
+                return;
+            }
             if (activeConversationId !== id) {
                 setActiveConversationId(id);
             }
@@ -86,7 +92,7 @@ function ChatContent() {
             // URL has no ?id= but we have an active conversation — clear it
             setActiveConversationId(null);
         }
-    }, [searchParams, activeConversationId, setActiveConversationId, startConversation, setSearchParams, user?.id, authReady]);
+    }, [searchParams, activeConversationId, setActiveConversationId, startConversation, setSearchParams, user?.id, authReady, isConversationDeleted]);
 
     // Effect 2: Sync activeConversationId → URL (state drives URL after deletion/eviction)
     // When activeConversationId is cleared (e.g. by evictConversationLocally setting it to null),

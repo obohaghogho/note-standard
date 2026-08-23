@@ -85,7 +85,7 @@ export function mergeMessages(existing: Message[], incoming: Message[]): MergeRe
         const existingSeq = existingMsg.sequence_number ?? -1;
         const incomingSeq = msg.sequence_number ?? -1;
 
-        if (incomingSeq >= existingSeq) {
+        if (incomingSeq >= existingSeq || existingMsg.id.startsWith('temp-')) {
             const updatedMsg = { ...existingMsg, ...msg };
             
             // Critical fix: Incoming messages from server/socket are authoritative.
@@ -111,19 +111,14 @@ export function mergeMessages(existing: Message[], incoming: Message[]): MergeRe
             }
 
             // Guard: Prevent a null/absent/empty reply_to from the server from wiping an
-            // existing optimistic reply context. This handles:
-            //   - PostgREST FK join returning null (schema cache miss / migration not applied)
-            //   - Server normalizer returning {} (empty object after null-stripping)
-            //   - Any payload where reply_to exists but lacks a valid id field
-            // We check reply_to?.id (not just reply_to) because an empty object {} is
-            // truthy but has no id, which would make the reply bubble vanish silently.
+            // existing optimistic reply context.
             if (!updatedMsg.reply_to?.id && existingMsg.reply_to?.id) {
                 updatedMsg.reply_to = existingMsg.reply_to;
             }
 
             // If the incoming message has a canonical UUID from the server, 
             // and the existing was a 'temp-' ID, we must update the byId map to reflect the real ID
-            // while removing the old temp ID to prevent map bloat/leaks.
+            // while removing the old temp ID to prevent map bloat/leaks and dual rendering.
             if (existingMsg.id.startsWith('temp-') && !msg.id.startsWith('temp-')) {
                 byId.delete(existingMsg.id);
             }

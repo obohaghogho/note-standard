@@ -138,6 +138,7 @@ export interface ChatContextValue {
     drafts: Record<string, string>;
     setDraft: (conversationId: string, content: string) => void;
     hasMore: Record<string, boolean>;
+    isConversationDeleted?: (id: string) => boolean;
     sendMessageToConversation: (payload: { conversationId: string; content: string; type?: string; attachmentId?: string; replyTo?: { id: string; content: string; sender_id: string; type?: string } }) => Promise<void>;
     markConversationRead: (conversationId: string) => Promise<void>;
     markConversationDelivered: (conversationId: string) => Promise<void>;
@@ -193,7 +194,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const { socket, connected, initialize: connectSocket } = useSocket();
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [messages, setMessages] = useState<Record<string, Message[]>>({});
-    const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+    const [activeConversationId, setActiveConversationIdState] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [hasMore, setHasMore] = useState<Record<string, boolean>>({});
     const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({});
@@ -241,6 +242,20 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const deletedConversationIdsRef = useRef<Set<string>>(new Set());
     const deletedPeerIdsRef = useRef<Set<string>>(new Set());
     const clearedAtMapRef = useRef<Map<string, string>>(new Map());
+
+    const setActiveConversationId = useCallback((id: string | null) => {
+        if (id && deletedConversationIdsRef.current.has(id)) {
+            console.log(`[ChatContext] setActiveConversationId BLOCKED for tombstoned conversation: ${id}`);
+            setActiveConversationIdState(null);
+            if (typeof window !== 'undefined' && window.location.search.includes(id)) {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('id');
+                window.history.replaceState({}, '', url.pathname + (url.searchParams.toString() ? '?' + url.searchParams.toString() : ''));
+            }
+            return;
+        }
+        setActiveConversationIdState(id);
+    }, []);
 
     // Tab-primary singleton: Only one tab runs ACK batching, reconciliation and heartbeat.
     // Uses a localStorage lease refreshed every 4s. Other tabs detect staleness (>6s).
@@ -2194,15 +2209,20 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
                     if (canonicalMessage.id && !canonicalMessage.id.startsWith('temp-')) {
                         processedEventIdsRef.current.add(`id:${canonicalMessage.id}`);
+                        seenMessagesRef.current.add(canonicalMessage.id);
                     }
                     if (canonicalMessage.event_id) {
                         processedEventIdsRef.current.add(`evt:${canonicalMessage.event_id}`);
+                        seenMessagesRef.current.add(canonicalMessage.event_id);
                     }
                     processedEventIdsRef.current.add(`evt:${intent.event_id}`);
+                    seenMessagesRef.current.add(intent.event_id);
 
                     setMessages(prev => {
                         const current = prev[intent.conversation_id] || [];
-                        const { merged } = mergeMessages(current, [canonicalMessage]);
+                        const tempId = intent.client_message_id || `temp-${intent.event_id}`;
+                        const filtered = current.filter(m => m.id !== tempId && (!m.event_id || m.event_id !== intent.event_id));
+                        const { merged } = mergeMessages(filtered, [canonicalMessage]);
                         return { ...prev, [intent.conversation_id]: merged as Message[] };
                     });
 
@@ -2399,6 +2419,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             reply_to: replyTo ? { ...replyTo, type: replyTo.type ?? 'text' } : undefined
         };
         
+        // Register event_id and tempId in deduplication gates immediately
+        seenMessagesRef.current.add(clientEventId);
+        seenMessagesRef.current.add(tempId);
+        processedEventIdsRef.current.add(`evt:${clientEventId}`);
+        processedEventIdsRef.current.add(`id:${tempId}`);
+
         setMessages(prev => {
             const current = prev[conversationId] || [];
             const merged = stableMerge(current, [optimisticMessage]);
@@ -2733,6 +2759,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 if (pId) deletedPeerIdsRef.current.delete(pId);
             });
 
+            const clearedAt = res.data?.conversation?.membership?.cleared_at;
+            if (clearedAt) {
+                clearedAtMapRef.current.set(id, clearedAt);
+            }
+            
             // Clear any stale cached messages for this conversation (critical for delete→re-add flow).
             // The server now sets cleared_at = NOW() on re-open, so only fresh messages should show.
             // We must clear client caches so old messages don't bleed through from IndexedDB/Zustand.
@@ -2953,6 +2984,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         sendTypingStatus,
         typingUsers, drafts, setDraft: (cid, content) => setDrafts(prev => ({ ...prev, [cid]: content })), 
         hasMore, sendMessageToConversation,
+        isConversationDeleted: (id: string) => deletedConversationIdsRef.current.has(id),
         markConversationRead, markConversationDelivered,
         isActiveWriter, isClaimingLease,
         onMessageVisible: (conversationId: string, messageId: string) => readReceiptEngine.onMessageVisible(conversationId, messageId),

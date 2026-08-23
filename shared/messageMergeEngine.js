@@ -46,12 +46,12 @@ function mergeMessages(existing, incoming) {
         const existingSeq = existingMsg.sequence_number ?? -1;
         const incomingSeq = msg.sequence_number ?? -1;
 
-        if (incomingSeq >= existingSeq) {
+        if (incomingSeq >= existingSeq || existingMsg.id.startsWith('temp-')) {
             const updatedMsg = { ...existingMsg, ...msg };
             if (existingMsg.id.startsWith('temp-') && !msg.id.startsWith('temp-')) {
                 byId.delete(existingMsg.id);
             }
-            byId.set(msg.id, updatedMsg);
+            byId.set(updatedMsg.id, updatedMsg);
             if (incomingEvtKey) byEvent.set(incomingEvtKey, updatedMsg);
         }
     }
