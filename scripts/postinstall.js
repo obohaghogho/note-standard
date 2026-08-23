@@ -45,10 +45,10 @@ try {
     }
   }
 
-  if (content.includes('setReturnType')) {
-    console.log('PASS: expo-modules-core Kotlin setReturnType PublishedApi patch is present.');
+  if (content.includes('setReturnType') && content.includes('@set:PublishedApi')) {
+    console.log('PASS: expo-modules-core Kotlin setReturnType @set:PublishedApi patch is present.');
   } else {
-    console.warn('[WARN] expo-modules-core Kotlin patch missing setReturnType, continuing non-native build.');
+    console.warn('[WARN] expo-modules-core Kotlin patch missing @set:PublishedApi, continuing non-native build.');
   }
 } catch (error) {
   console.warn('[WARN] Postinstall execution warning:', error.message);

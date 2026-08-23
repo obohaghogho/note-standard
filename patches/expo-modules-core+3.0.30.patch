@@ -2,9 +2,10 @@ diff --git a/node_modules/expo-modules-core/android/src/main/java/expo/modules/k
 index e06fa99..720ea21 100644
 --- a/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/jni/JavaScriptFunction.kt
 +++ b/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/jni/JavaScriptFunction.kt
-@@ -14,3 +14,10 @@ class JavaScriptFunction<ReturnType : Any?> @DoNotStrip private constructor(@Do
+@@ -14,3 +14,11 @@ class JavaScriptFunction<ReturnType : Any?> @DoNotStrip private constructor(@Do
 -  internal var returnType: KType? = null
 +  @PublishedApi
++  @set:PublishedApi
 +  internal var returnType: KType? = null
 +
 +  @PublishedApi
