@@ -36,6 +36,7 @@ ChartJS.register(
 interface ExecutiveOverviewProps {
   teams: TeamWithUnreadCount[];
   onSelectTeam: (teamId: string) => void;
+  onCreateWorkspace?: () => void;
 }
 
 // Generate last-7-days labels
@@ -49,7 +50,7 @@ function getLast7DayLabels(): string[] {
   return labels;
 }
 
-export const ExecutiveOverview: React.FC<ExecutiveOverviewProps> = ({ teams, onSelectTeam }) => {
+export const ExecutiveOverview: React.FC<ExecutiveOverviewProps> = ({ teams, onSelectTeam, onCreateWorkspace }) => {
   // Aggregate analytics from ALL teams in parallel
   const [aggregated, setAggregated] = useState<WorkspaceAnalytics | null>(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
@@ -191,7 +192,16 @@ export const ExecutiveOverview: React.FC<ExecutiveOverviewProps> = ({ teams, onS
               Monitor overall team velocity, task status, projects growth, and workspace compliance logs across all active workspaces.
             </p>
           </div>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap items-center gap-4">
+            {onCreateWorkspace && (
+              <button
+                onClick={onCreateWorkspace}
+                className="px-5 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-blue-600/30 transition-all flex items-center gap-2"
+              >
+                <UserPlus size={16} />
+                <span>Create Workspace</span>
+              </button>
+            )}
             <div className="p-4 rounded-2xl bg-white/5 border border-white/5 text-center min-w-[80px]">
               {loadingAnalytics ? (
                 <Loader2 size={20} className="animate-spin text-primary mx-auto" />
@@ -211,6 +221,29 @@ export const ExecutiveOverview: React.FC<ExecutiveOverviewProps> = ({ teams, onS
           </div>
         </div>
       </div>
+
+      {teams.length === 0 && (
+        <div className="p-8 rounded-[2.5rem] border border-blue-500/20 bg-blue-500/5 text-center space-y-4 max-w-lg mx-auto my-6 shadow-2xl">
+          <div className="w-16 h-16 rounded-2xl bg-blue-600/20 text-blue-400 flex items-center justify-center mx-auto">
+            <Layers size={32} />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-xl font-black text-white uppercase tracking-tight italic">No Active Workspaces</h3>
+            <p className="text-xs text-gray-400 font-medium leading-relaxed">
+              You do not have any active team workspaces. Initialize a new team workspace to start collaborating with your team members.
+            </p>
+          </div>
+          {onCreateWorkspace && (
+            <button
+              onClick={onCreateWorkspace}
+              className="px-6 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase tracking-wider shadow-xl shadow-blue-600/40 active:scale-95 transition-all inline-flex items-center gap-2"
+            >
+              <UserPlus size={18} />
+              <span>Create New Workspace</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Bento Grid Stats — all real data */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

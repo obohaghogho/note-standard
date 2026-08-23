@@ -418,9 +418,16 @@
     justify-content: center;
   }
 
-  /* Hide the desktop-only create button; mobile has it in header */
   .teams-icon-rail__btn--create {
-    display: none;
+    display: flex;
+    width: calc(100% - 32px);
+    margin: 8px 16px;
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--primary, #6366f1);
+    border: 1px dashed rgba(99, 102, 241, 0.4);
+    border-radius: 14px;
+    padding: 12px;
+    justify-content: center;
   }
 
   .teams-icon-rail__divider {

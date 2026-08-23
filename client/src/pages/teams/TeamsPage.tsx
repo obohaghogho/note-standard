@@ -424,7 +424,11 @@ export function TeamsPage() {
 
           /* Global Executive dashboard */
           <div className="teams-executive">
-            <ExecutiveOverview teams={teams} onSelectTeam={(id) => handleSelectTeam(id)} />
+            <ExecutiveOverview 
+              teams={teams} 
+              onSelectTeam={(id) => handleSelectTeam(id)}
+              onCreateWorkspace={() => isBusiness ? setShowCreateModal(true) : setShowUpgradeModal(true)}
+            />
           </div>
         )}
 

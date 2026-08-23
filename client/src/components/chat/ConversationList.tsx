@@ -245,7 +245,19 @@ const ConversationList: React.FC = () => {
     if (loading) return <div className="p-4 text-gray-400">Loading chats...</div>;
 
     if (conversations.length === 0) {
-        return <div className="p-4 text-gray-500">No conversations yet.</div>;
+        return (
+            <div className="p-8 text-center flex flex-col items-center justify-center h-full space-y-4 bg-gray-950">
+                <div className="w-14 h-14 rounded-2xl bg-blue-600/10 text-blue-500 flex items-center justify-center border border-blue-500/20 shadow-lg">
+                    <MessageSquare size={28} />
+                </div>
+                <div className="space-y-1 max-w-xs">
+                    <h4 className="text-base font-bold text-white">No active conversations</h4>
+                    <p className="text-xs text-gray-400 leading-relaxed">
+                        Start a new conversation with team members or friends to begin messaging.
+                    </p>
+                </div>
+            </div>
+        );
     }
 
     return (
