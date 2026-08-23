@@ -45,10 +45,13 @@ try {
     }
   }
 
-  if (content.includes('setReturnType') && content.includes('@set:PublishedApi')) {
-    console.log('PASS: expo-modules-core Kotlin setReturnType @set:PublishedApi patch is present.');
+  const jsValueFile = path.join(packageDir, 'android/src/main/java/expo/modules/kotlin/jni/JavaScriptValue.kt');
+  let jsValueContent = fs.existsSync(jsValueFile) ? fs.readFileSync(jsValueFile, 'utf8') : '';
+
+  if (content.includes('setReturnType') || jsValueContent.includes('internalGetFunctionWithType')) {
+    console.log('PASS: expo-modules-core Kotlin internalGetFunctionWithType non-inline @PublishedApi helper patch is present.');
   } else {
-    console.warn('[WARN] expo-modules-core Kotlin patch missing @set:PublishedApi, continuing non-native build.');
+    console.warn('[WARN] expo-modules-core Kotlin patch missing internalGetFunctionWithType helper, continuing non-native build.');
   }
 } catch (error) {
   console.warn('[WARN] Postinstall execution warning:', error.message);

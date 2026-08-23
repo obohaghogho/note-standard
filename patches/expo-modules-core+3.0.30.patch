@@ -2,13 +2,9 @@ diff --git a/node_modules/expo-modules-core/android/src/main/java/expo/modules/k
 index e06fa99..720ea21 100644
 --- a/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/jni/JavaScriptFunction.kt
 +++ b/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/jni/JavaScriptFunction.kt
-@@ -14,3 +14,11 @@ class JavaScriptFunction<ReturnType : Any?> @DoNotStrip private constructor(@Do
--  internal var returnType: KType? = null
-+  @PublishedApi
-+  @set:PublishedApi
-+  internal var returnType: KType? = null
-+
-+  @PublishedApi
+@@ -14,3 +14,8 @@ class JavaScriptFunction<ReturnType : Any?> @DoNotStrip private constructor(@Do
+   internal var returnType: KType? = null
+
 +  internal fun setReturnType(type: KType) {
 +    returnType = type
 +  }
@@ -18,12 +14,27 @@ diff --git a/node_modules/expo-modules-core/android/src/main/java/expo/modules/k
 index f06fa99..820ea21 100644
 --- a/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/jni/JavaScriptValue.kt
 +++ b/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/jni/JavaScriptValue.kt
-@@ -40,5 +40,5 @@ class JavaScriptValue @DoNotStrip private constructor(@DoNotStrip private val m
+@@ -37,15 +37,15 @@ class JavaScriptValue @DoNotStrip private constructor(@DoNotStrip private val m
+-  @PublishedApi
+-  internal fun <T : Any?> internalJniGetFunction(): JavaScriptFunction<T> = jniGetFunction()
++  @PublishedApi
++  internal fun <T : Any?> internalGetFunctionWithType(type: kotlin.reflect.KType): JavaScriptFunction<T> {
++    val fn = jniGetFunction<T>()
++    fn.setReturnType(type)
++    return fn
++  }
+
    inline fun <reified ReturnType : Any?> getFunction(): JavaScriptFunction<ReturnType> {
 -    return internalJniGetFunction<ReturnType>().apply {
 -      setReturnType(typeOf<ReturnType>())
 -    }
-+    val function = internalJniGetFunction<ReturnType>()
-+    function.setReturnType(typeOf<ReturnType>())
-+    return function
++    return internalGetFunctionWithType<ReturnType>(typeOf<ReturnType>())
+   }
+
+   @JvmName("getVoidFunction")
+   fun getFunction(): JavaScriptFunction<Unit> {
+-    return internalJniGetFunction<Unit>().apply {
+-      returnType = typeOf<Unit>()
+-    }
++    return internalGetFunctionWithType<Unit>(typeOf<Unit>())
    }
