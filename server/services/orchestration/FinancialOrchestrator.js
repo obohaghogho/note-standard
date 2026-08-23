@@ -87,7 +87,7 @@ class FinancialOrchestrator {
     executionLogId = eId;
 
     return dupResult;
-  },
+  }
 
   /**
    * Internal: runs the full pipeline after idempotency check.
@@ -312,7 +312,7 @@ class FinancialOrchestrator {
 
       throw err;
     }
-  },
+  }
 
   /**
    * Dispatch to the correct adapter method based on operation type.
@@ -331,7 +331,7 @@ class FinancialOrchestrator {
       default:
         throw new Error(`[CFO] Unknown operation type: ${operationType}`);
     }
-  },
+  }
 }
 
 module.exports = new FinancialOrchestrator();

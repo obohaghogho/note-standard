@@ -251,8 +251,6 @@ class IdempotentWithdrawalSettlementService {
           })
           .eq("id", tx.id);
       }
-        };
-      }
 
       // Also update primary transactions table if reference exists
       await supabase.from("transactions")

@@ -53,10 +53,6 @@ async function upgradeAllMockAddresses() {
         console.error(`❌ Failed to upgrade ${wallet.currency} for user ${wallet.user_id}:`, err.message);
         failureCount++;
       }
-    } catch (err) {
-      console.error(`❌ Failed to upgrade ${wallet.currency} for user ${wallet.user_id}:`, err.message);
-      failureCount++;
-    }
     
     // Slight delay to avoid hitting NOWPayments rate limits too hard if there are many
     await new Promise(resolve => setTimeout(resolve, 500));
