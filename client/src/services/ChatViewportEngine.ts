@@ -136,14 +136,7 @@ export class ChatViewportEngine {
     this.resizeObserver = new ResizeObserver(() => {
       requestAnimationFrame(() => {
         if (!this.container) return;
-        const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
         const isFocused = document.activeElement?.id === 'chat-window-input';
-
-        // On mobile touch devices, calling scrollToBottom during soft keyboard expansion
-        // causes mobile browsers to cancel focus and collapse the keyboard (fallback glitch).
-        if (isTouchDevice && isFocused) {
-          return;
-        }
 
         if (this.isInitializingRoom || this.isNearBottom || isFocused || this.state === ViewportState.FOLLOWING_BOTTOM) {
           this.scrollToBottom('instant');
@@ -154,6 +147,19 @@ export class ChatViewportEngine {
     if (this.composer) this.resizeObserver.observe(this.composer);
     if (this.innerWrapper) this.resizeObserver.observe(this.innerWrapper);
     this.resizeObserver.observe(this.container);
+
+    // 3. VisualViewport Resize Listener for Mobile Virtual Keyboards (Android & iOS)
+    if (typeof window !== 'undefined' && window.visualViewport) {
+      window.visualViewport.addEventListener('resize', () => {
+        requestAnimationFrame(() => {
+          if (!this.container) return;
+          const isFocused = document.activeElement?.id === 'chat-window-input';
+          if (this.isNearBottom || isFocused || this.state === ViewportState.FOLLOWING_BOTTOM) {
+            this.scrollToBottom('instant');
+          }
+        });
+      });
+    }
   }
 
 

@@ -1279,6 +1279,19 @@ const ChatWindow: React.FC = () => {
                                                 rows={1}
                                                 value={inputValue}
                                                 onChange={handleInputChange}
+                                                onFocus={() => {
+                                                    const forceBottom = () => {
+                                                        if (scrollContainerRef.current) {
+                                                            scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+                                                        }
+                                                        scrollToBottom('instant');
+                                                    };
+                                                    forceBottom();
+                                                    setTimeout(forceBottom, 50);
+                                                    setTimeout(forceBottom, 150);
+                                                    setTimeout(forceBottom, 300);
+                                                    setTimeout(forceBottom, 500);
+                                                }}
                                                 onKeyDown={() => {
                                                     // By product requirement, Enter inserts a newline instead of sending.
                                                     // Sending is done exclusively via the explicit Send button.
