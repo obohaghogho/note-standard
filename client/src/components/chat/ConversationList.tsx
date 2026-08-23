@@ -45,12 +45,57 @@ const ConversationItem = React.memo(({
     const unreadCount = (conv as unknown as { unreadCount?: number }).unreadCount || 0;
     const typingUsersList = typingUsers;
 
+    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const isLongPressRef = useRef(false);
+
+    const handleTouchStart = useCallback((e: React.TouchEvent) => {
+        isLongPressRef.current = false;
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => {
+            isLongPressRef.current = true;
+            if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                try { navigator.vibrate(40); } catch { /* ignore */ }
+            }
+            onDelete(conv.id, e as unknown as React.MouseEvent);
+        }, 600);
+    }, [conv.id, onDelete]);
+
+    const handleTouchEnd = useCallback(() => {
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+            timerRef.current = null;
+        }
+    }, []);
+
+    const handleTouchMove = useCallback(() => {
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+            timerRef.current = null;
+        }
+    }, []);
+
+    const handleClick = useCallback((e: React.MouseEvent) => {
+        if (isLongPressRef.current) {
+            e.stopPropagation();
+            e.preventDefault();
+            isLongPressRef.current = false;
+            return;
+        }
+        onClick(conv.id);
+    }, [conv.id, onClick]);
+
     return (
         <div
-            onClick={() => onClick(conv.id)}
+            onClick={handleClick}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            onTouchMove={handleTouchMove}
             onContextMenu={(e) => {
                 e.preventDefault();
-                onDelete(conv.id, e);
+                // Avoid firing context menu if long press already handled it
+                if (!isLongPressRef.current) {
+                    onDelete(conv.id, e);
+                }
             }}
             draggable={false}
             className={`p-4 md:p-5 cursor-pointer active:bg-white/[0.04] md:hover:bg-white/[0.02] transition-all flex items-center gap-4 relative group ${
@@ -59,7 +104,6 @@ const ConversationItem = React.memo(({
             style={{
                 userSelect: 'none',
                 WebkitUserSelect: 'none',
-                // Suppress iOS callout (share/copy popup on long press)
                 WebkitTouchCallout: 'none' as React.CSSProperties['WebkitTouchCallout'],
             }}
         >
@@ -103,8 +147,12 @@ const ConversationItem = React.memo(({
                             {conv.updated_at ? formatDistanceToNow(new Date(conv.updated_at), { addSuffix: false }).replace('about ', '') : ''}
                         </span>
                         <button
-                            onClick={(e) => onDelete(conv.id, e)}
-                            className="p-1 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                onDelete(conv.id, e);
+                            }}
+                            className="p-1 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg hidden md:flex opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                             title="Delete Conversation"
                         >
                             <Trash2 size={15} />
