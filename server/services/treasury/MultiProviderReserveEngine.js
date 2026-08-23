@@ -23,34 +23,136 @@ const logger   = require('../../utils/logger');
 // Supported currencies (fiat + crypto)
 const ALL_CURRENCIES = ['NGN', 'USD', 'EUR', 'GBP', 'BTC', 'ETH', 'USDT', 'USDC'];
 
+// Provider & Currency Specific Freshness TTL Hierarchy
+const TTL_MAP_MS = {
+  FINCRA:      { NGN: 15 * 60 * 1000 },
+  ANCHOR:      { USD: 15 * 60 * 1000 },
+  NOWPAYMENTS: { BTC: 30 * 60 * 1000, ETH: 30 * 60 * 1000, USDT: 30 * 60 * 1000, USDC: 30 * 60 * 1000 }
+};
+const DEFAULT_TTL_MS = 15 * 60 * 1000;
+
+/**
+ * Pure Fail-Closed Layer 8 Freshness Oracle & Provider Health Filter
+ * Formally Enforces Contract Option B (Canonical Health States ONLINE & HEALTHY):
+ *   1. Known Provider & Currency in TTL Hierarchy
+ *   2. sync_status === 'SUCCESS'
+ *   3. last_synced_at is finite, non-null, non-future, and within TTL
+ *   4. Normalized Provider Health === 'ONLINE' or 'HEALTHY' (Fail-closed on DEGRADED/OFFLINE/UNAVAILABLE/UNKNOWN)
+ *   5. available_balance is finite and non-negative (>= 0)
+ *
+ * @param {Array} allBalances - Raw custody rows from DB
+ * @param {Object} providerHealthMap - Map of health statuses (e.g. { FINCRA: 'ONLINE' })
+ * @param {Function} [nowFn=Date.now] - Injectable clock for deterministic testing
+ * @returns {Array} Admissible eligible balance records
+ */
+function filterEligibleBalances(allBalances, providerHealthMap = {}, nowFn = Date.now) {
+  const normalizedHealthMap = {};
+  for (const [k, v] of Object.entries(providerHealthMap || {})) {
+    normalizedHealthMap[String(k).trim().toUpperCase()] = String(v || '').trim().toUpperCase();
+  }
+
+  const now = nowFn();
+
+  return (allBalances || []).filter(b => {
+    const providerKey = String(b.provider || '').trim().toUpperCase();
+    const currencyKey = String(b.currency || '').trim().toUpperCase();
+
+    // Criterion 1: Fail-closed on unknown provider / currency
+    const providerTtls = TTL_MAP_MS[providerKey];
+    if (!providerTtls) return false;
+
+    const ttl = providerTtls[currencyKey];
+    if (!ttl) return false;
+
+    // Criterion 2: Fail-closed on non-SUCCESS sync status
+    if (b.sync_status !== 'SUCCESS') return false;
+
+    // Criterion 3: Timestamp MUST be finite, non-null, non-future, and within TTL
+    const rawTs = b.last_synced_at || b.last_sync_at;
+    const syncedAt = rawTs ? new Date(rawTs).getTime() : NaN;
+    if (!Number.isFinite(syncedAt)) return false;
+
+    const ageMs = now - syncedAt;
+    if (ageMs < 0 || ageMs > ttl) return false;
+
+    // Criterion 4: Normalized Provider Health MUST be ONLINE / HEALTHY
+    const rawHealth = normalizedHealthMap[providerKey] || 'OFFLINE';
+    const isHealthy = rawHealth === 'ONLINE' || rawHealth === 'HEALTHY';
+    if (!isHealthy) return false;
+
+    // Criterion 5: Balance MUST be finite and non-negative
+    const available = Number(b.available_balance);
+    if (!Number.isFinite(available) || available < 0) return false;
+
+    return true;
+  });
+}
+
 const MultiProviderReserveEngine = {
+  // Export filter for direct unit testing
+  filterEligibleBalances,
+  TTL_MAP_MS,
+
+  /**
+   * Helper to fetch current provider health status map from DB.
+   */
+  async fetchProviderHealthMap() {
+    try {
+      const { data } = await supabase
+        .from('provider_health_status')
+        .select('provider, status');
+
+      const healthMap = {};
+      for (const row of (data || [])) {
+        const key = String(row.provider || '').trim().toUpperCase();
+        const val = String(row.status || '').trim().toUpperCase();
+        healthMap[key] = val;
+      }
+      return healthMap;
+    } catch (e) {
+      logger.warn(`[MultiReserveEngine] Failed to fetch provider health status: ${e.message}`);
+      return {};
+    }
+  },
+
   /**
    * Compute reserve ratios for all currencies.
    * @returns {Promise<Object>} keyed by currency
    */
-  async computeAll() {
+  async computeAll(options = {}) {
     const results = {};
     for (const currency of ALL_CURRENCIES) {
-      results[currency] = await this.computeForCurrency(currency);
+      results[currency] = await this.computeForCurrency(currency, options);
     }
     return results;
   },
 
   /**
    * Compute aggregated + per-provider reserve ratios for one currency.
+   * Enforces Layer 8 Fail-Closed Oracle Filter.
    */
-  async computeForCurrency(currency) {
+  async computeForCurrency(currency, options = {}) {
     const up = String(currency).toUpperCase();
+    const nowFn = options.nowFn || Date.now;
+
+    // Resolve Provider Health Map
+    const healthMap = options.providerHealthMap || await this.fetchProviderHealthMap();
 
     // ── Total external assets (all providers) ─────────────────────────────────
     const { data: balances } = await supabase
       .from('treasury_provider_balances')
-      .select('provider, available_balance, pending_balance, sync_status, last_synced_at')
+      .select('*')
       .eq('currency', up);
 
-    const allBalances     = balances || [];
-    const syncedBalances  = allBalances.filter(b => b.sync_status === 'SUCCESS');
-    const failedProviders = allBalances.filter(b => b.sync_status !== 'SUCCESS').map(b => b.provider);
+    const allBalances = balances || [];
+    
+    // Apply Layer 8 Freshness Oracle & Provider Health Filter
+    const syncedBalances = filterEligibleBalances(allBalances, healthMap, nowFn);
+
+    const eligibleKeys = new Set(syncedBalances.map(b => String(b.provider).toUpperCase()));
+    const failedProviders = allBalances
+      .filter(b => !eligibleKeys.has(String(b.provider).toUpperCase()))
+      .map(b => b.provider);
 
     const totalAssets = syncedBalances.reduce(
       (sum, b) => sum + parseFloat(b.available_balance || 0), 0
