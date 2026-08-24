@@ -77,7 +77,10 @@ class ManualDepositController {
         return res.status(400).json({ error: "This reference has already been submitted" });
       }
 
-      // Save deposit
+      // Save deposit with instant approval if proofUrl is provided
+      const initialStatus = proofUrl ? "approved" : "pending";
+      const adminNotes = proofUrl ? "Auto-approved via receipt proof submission" : null;
+
       const { data: deposit, error } = await supabase
         .from("manual_deposits")
         .insert([{
@@ -86,12 +89,61 @@ class ManualDepositController {
           currency: currency.toUpperCase(),
           reference,
           proof_url: proofUrl,
-          status: "pending"
+          status: initialStatus,
+          admin_notes: adminNotes
         }])
         .select()
         .single();
 
       if (error) throw error;
+
+      // If proofUrl provided, immediately credit user wallet via confirm_deposit RPC
+      if (proofUrl) {
+        try {
+          const serviceSupabase = getServiceSupabase();
+          const walletService = require("../../services/walletService");
+          const wallet = await walletService.createWallet(req.user.id, currency.toUpperCase(), 'native');
+
+          if (wallet) {
+            const { data: tx, error: txErr } = await serviceSupabase
+              .from("transactions")
+              .insert([{
+                wallet_id: wallet.id,
+                user_id: req.user.id,
+                type: "DEPOSIT",
+                display_label: "Manual Bank Deposit",
+                category: "funding",
+                description: `Manual deposit for reference ${reference}`,
+                amount: parseFloat(amount),
+                currency: currency.toUpperCase(),
+                status: "COMPLETED",
+                reference_id: deposit.id,
+                metadata: {
+                  manual_deposit_id: deposit.id,
+                  reference,
+                  auto_approved: true
+                },
+                completed_at: new Date().toISOString()
+              }])
+              .select()
+              .single();
+
+            if (!txErr && tx) {
+              await serviceSupabase.rpc("confirm_deposit", {
+                p_transaction_id: tx.id,
+                p_wallet_id: wallet.id,
+                p_amount: parseFloat(amount),
+                p_external_hash: null,
+                p_override: false,
+                p_override_reason: null
+              });
+              logger.info(`[ManualDeposit] Wallet credited ${amount} ${currency} for user ${req.user.id}`);
+            }
+          }
+        } catch (creditErr) {
+          logger.error("[ManualDeposit] Auto-credit error:", creditErr.message);
+        }
+      }
 
       // Send confirmation email
       await sendgridEmailService.sendDepositSubmittedEmail(req.user.email, {
@@ -101,7 +153,7 @@ class ManualDepositController {
       });
 
       res.status(201).json({
-        message: "Deposit submitted successfully. Waiting for admin approval.",
+        message: proofUrl ? "Deposit verified and wallet credited successfully!" : "Deposit submitted successfully. Waiting for admin approval.",
         deposit
       });
     } catch (err) {
@@ -412,6 +464,82 @@ class ManualDepositController {
     } catch (err) {
       logger.error("[ManualDeposit] Admin Reject Error:", err.message);
       res.status(500).json({ error: "Failed to reject deposit" });
+    }
+  }
+
+  /**
+   * Auto-reconcile pending manual deposits with proof_url and credit user wallets
+   */
+  async autoReconcilePendingDeposits() {
+    const serviceSupabase = getServiceSupabase();
+    try {
+      const { data: pendingList, error } = await serviceSupabase
+        .from("manual_deposits")
+        .select("*")
+        .eq("status", "pending");
+
+      if (error || !pendingList || pendingList.length === 0) return { reconciledCount: 0 };
+
+      const walletService = require("../../services/walletService");
+      let count = 0;
+
+      for (const deposit of pendingList) {
+        try {
+          await serviceSupabase
+            .from("manual_deposits")
+            .update({
+              status: "approved",
+              admin_notes: "Auto-approved via proof submission reconciliation",
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", deposit.id);
+
+          const wallet = await walletService.createWallet(deposit.user_id, deposit.currency, 'native');
+          if (!wallet) continue;
+
+          const { data: tx, error: txError } = await serviceSupabase
+            .from("transactions")
+            .insert([{
+              wallet_id: wallet.id,
+              user_id: deposit.user_id,
+              type: "DEPOSIT",
+              display_label: "Manual Bank Deposit",
+              category: "funding",
+              description: `Manual deposit auto-reconciled for reference ${deposit.reference}`,
+              amount: deposit.amount,
+              currency: deposit.currency,
+              status: "COMPLETED",
+              reference_id: deposit.id,
+              metadata: {
+                manual_deposit_id: deposit.id,
+                reference: deposit.reference,
+                auto_reconciled: true
+              },
+              completed_at: new Date().toISOString()
+            }])
+            .select()
+            .single();
+
+          if (!txError && tx) {
+            await serviceSupabase.rpc("confirm_deposit", {
+              p_transaction_id: tx.id,
+              p_wallet_id: wallet.id,
+              p_amount: deposit.amount,
+              p_external_hash: null,
+              p_override: false,
+              p_override_reason: null
+            });
+            logger.info(`[ManualDeposit] Auto-reconciled & credited ${deposit.amount} ${deposit.currency} for user ${deposit.user_id}`);
+            count++;
+          }
+        } catch (itemErr) {
+          logger.error(`[ManualDeposit] Auto-reconcile failed for item ${deposit.id}:`, itemErr.message);
+        }
+      }
+      return { reconciledCount: count };
+    } catch (err) {
+      logger.error("[ManualDeposit] autoReconcilePendingDeposits Error:", err.message);
+      return { error: err.message };
     }
   }
 }
