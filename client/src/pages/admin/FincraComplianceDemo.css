@@ -1,0 +1,55 @@
+/* Fincra Compliance Demo Stylesheet */
+.fincra-demo-container {
+    padding: 1.5rem;
+    space-y: 1.5rem;
+    max-width: 1400px;
+    margin: 0 auto;
+    color: #f1f5f9;
+    font-family: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* Presentation Mode Overlay Rules */
+.presentation-mode-active {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background-color: #030712;
+    overflow-y: auto;
+    max-width: 100vw;
+    padding: 2rem;
+    margin: 0;
+    gap: 2rem;
+}
+
+/* Table scrollbars */
+.fincra-demo-container table {
+    width: 100%;
+}
+
+.fincra-demo-container input::-webkit-outer-spin-button,
+.fincra-demo-container input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.fincra-demo-container input[type=number] {
+    -moz-appearance: textfield;
+}
+
+/* Watermark in presentation mode */
+.presentation-mode-active::after {
+    content: "DEMO / TEST DATA — FINCRA COMPLIANCE REVIEW";
+    position: fixed;
+    bottom: 1rem;
+    right: 1.5rem;
+    font-family: monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: rgba(6, 182, 212, 0.4);
+    pointer-events: none;
+    z-index: 100000;
+    letter-spacing: 0.1em;
+}

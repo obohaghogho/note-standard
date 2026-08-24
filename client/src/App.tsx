@@ -90,6 +90,8 @@ const CollectionAccountsPage = lazyWithRetry(() => import('./pages/admin/Collect
 const DepositMonitoringPage = lazyWithRetry(() => import('./pages/admin/DepositMonitoringPage'), 'DepositMonitoringPage');
 const TreasuryDashboard = lazyWithRetry(() => import('./pages/admin/TreasuryDashboard').then(m => ({ default: m.TreasuryDashboard })), 'TreasuryDashboard');
 const GreyBankingPanel = lazyWithRetry(() => import('./pages/admin/GreyBankingPanel').then(m => ({ default: m.GreyBankingPanel })), 'GreyBankingPanel');
+const FincraComplianceDemo = lazyWithRetry(() => import('./pages/admin/FincraComplianceDemo'), 'FincraComplianceDemo');
+
 
 
 
@@ -196,6 +198,7 @@ function AuthenticatedProviders() {
                           <Route path="banking" element={<GreyBankingPanel />} />
                           <Route path="support-center" element={<SupportCenter />} />
                           <Route path="beta-feedback" element={<BetaFeedbackDashboard />} />
+                          <Route path="compliance-demo" element={<FincraComplianceDemo />} />
                         </Route>
                       </Route>
 

@@ -27,7 +27,8 @@ import {
     Coins,
     Landmark,
     Activity,
-    Sparkles
+    Sparkles,
+    ShieldCheck
 } from 'lucide-react';
 
 import { LanguageSelector } from '../common/LanguageSelector';
@@ -135,6 +136,7 @@ export const AdminLayout = () => {
         { to: '/admin/push-health', icon: Bell, label: 'Push & Coverage' },
         { to: '/admin/communication-health', icon: Activity, label: 'Comm Health' },
         { to: '/admin/fincra', icon: Wallet, label: 'Fincra Audit' },
+        { to: '/admin/compliance-demo', icon: ShieldCheck, label: 'Compliance Demo' },
         { to: '/admin/broadcasts', icon: Megaphone, label: 'Broadcasts' },
         { to: '/admin/limit-requests', icon: Zap, label: 'Limit Requests' },
         { to: '/admin/deposits', icon: ArrowDownToLine, label: 'Manual Deposits' },
