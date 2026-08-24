@@ -334,8 +334,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         setLoading(true);
 
-        // Check for synthetic Fincra Demo reviewer session
-        if (typeof window !== 'undefined' && (sessionStorage.getItem('notestandard_fincra_demo_session') === 'true' || localStorage.getItem('notestandard_fincra_demo_session') === 'true')) {
+        // Check for synthetic Fincra Demo reviewer session or link access
+        const isFincraRoute = typeof window !== 'undefined' && (window.location.pathname.startsWith('/admin/compliance-demo') || window.location.search.includes('demo=fincra'));
+        const isFincraSession = typeof window !== 'undefined' && (sessionStorage.getItem('notestandard_fincra_demo_session') === 'true' || localStorage.getItem('notestandard_fincra_demo_session') === 'true');
+
+        if (isFincraSession || isFincraRoute) {
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('notestandard_fincra_demo_session', 'true');
+            sessionStorage.setItem('notestandard_fincra_demo_session', 'true');
+          }
           const syntheticUser = {
             id: 'USR-DEMO-FINCRA-8821',
             email: 'fincra-demo@notestandard.com',
@@ -457,8 +464,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription: authListener } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       if (!isMounted.current) return;
 
-      // Ignore Supabase auth events when synthetic Fincra Demo session is active
-      if (typeof window !== 'undefined' && (sessionStorage.getItem('notestandard_fincra_demo_session') === 'true' || localStorage.getItem('notestandard_fincra_demo_session') === 'true')) {
+      // Ignore Supabase auth events when synthetic Fincra Demo session is active or on compliance route
+      const isFincraSessionActive = typeof window !== 'undefined' && (sessionStorage.getItem('notestandard_fincra_demo_session') === 'true' || localStorage.getItem('notestandard_fincra_demo_session') === 'true' || window.location.pathname.startsWith('/admin/compliance-demo') || window.location.search.includes('demo=fincra'));
+      if (isFincraSessionActive) {
         console.log('[Auth] Synthetic fincra_demo session active. Bypassing Supabase onAuthStateChange event:', event);
         return;
       }
