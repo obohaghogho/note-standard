@@ -172,33 +172,36 @@ function AuthenticatedProviders() {
                         </Route>
                       </Route>
 
-                      <Route element={<ProtectedRoute allowedRoles={['admin', 'support']} />}>
+                      <Route element={<ProtectedRoute allowedRoles={['admin', 'support', 'fincra_demo']} />}>
                         <Route path="/admin" element={<AdminLayout />}>
-                          <Route index element={<AdminDashboard />} />
-                          <Route path="users" element={<UserManagement />} />
-                          <Route path="chats" element={<AdminChat />} />
-                          <Route path="audit-logs" element={<AuditLogs />} />
-                          <Route path="broadcasts" element={<BroadcastManager />} />
-                          <Route path="auto-reply" element={<AutoReplySettings />} />
-                          <Route path="analytics" element={<Analytics />} />
-                          <Route path="reconciliation" element={<ReconciliationDashboard />} />
-                          <Route path="ads" element={<ManageAds />} />
-                          <Route path="deposits" element={<ManualDeposits />} />
-                          <Route path="withdrawals" element={<ManualWithdrawals />} />
-                          <Route path="limit-requests" element={<LimitRequestsPage />} />
-                          <Route path="settings" element={<AdminSettings />} />
-                          <Route path="push-health" element={<PushHealthDashboard />} />
-                          <Route path="communication-health" element={<CommunicationHealthDashboard />} />
-                          <Route path="fincra" element={<FincraAdminPanel />} />
-                          <Route path="crypto-treasury" element={<CryptoTreasuryDashboard />} />
-                          <Route path="payment-capabilities" element={<PaymentCapabilitiesPage />} />
-                          <Route path="collection-accounts" element={<CollectionAccountsPage />} />
-                          <Route path="deposit-monitoring" element={<DepositMonitoringPage />} />
-                          <Route path="treasury" element={<TreasuryDashboard />} />
-                          <Route path="banking" element={<GreyBankingPanel />} />
-                          <Route path="support-center" element={<SupportCenter />} />
-                          <Route path="beta-feedback" element={<BetaFeedbackDashboard />} />
                           <Route path="compliance-demo" element={<FincraComplianceDemo />} />
+
+                          <Route element={<ProtectedRoute allowedRoles={['admin', 'support']} />}>
+                            <Route index element={<AdminDashboard />} />
+                            <Route path="users" element={<UserManagement />} />
+                            <Route path="chats" element={<AdminChat />} />
+                            <Route path="audit-logs" element={<AuditLogs />} />
+                            <Route path="broadcasts" element={<BroadcastManager />} />
+                            <Route path="auto-reply" element={<AutoReplySettings />} />
+                            <Route path="analytics" element={<Analytics />} />
+                            <Route path="reconciliation" element={<ReconciliationDashboard />} />
+                            <Route path="ads" element={<ManageAds />} />
+                            <Route path="deposits" element={<ManualDeposits />} />
+                            <Route path="withdrawals" element={<ManualWithdrawals />} />
+                            <Route path="limit-requests" element={<LimitRequestsPage />} />
+                            <Route path="settings" element={<AdminSettings />} />
+                            <Route path="push-health" element={<PushHealthDashboard />} />
+                            <Route path="communication-health" element={<CommunicationHealthDashboard />} />
+                            <Route path="fincra" element={<FincraAdminPanel />} />
+                            <Route path="crypto-treasury" element={<CryptoTreasuryDashboard />} />
+                            <Route path="payment-capabilities" element={<PaymentCapabilitiesPage />} />
+                            <Route path="collection-accounts" element={<CollectionAccountsPage />} />
+                            <Route path="deposit-monitoring" element={<DepositMonitoringPage />} />
+                            <Route path="treasury" element={<TreasuryDashboard />} />
+                            <Route path="banking" element={<GreyBankingPanel />} />
+                            <Route path="support-center" element={<SupportCenter />} />
+                            <Route path="beta-feedback" element={<BetaFeedbackDashboard />} />
+                          </Route>
                         </Route>
                       </Route>
 

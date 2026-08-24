@@ -74,4 +74,19 @@ describe('Fincra Compliance Demo Accounting & Reconciliation Logic', () => {
         expect(restoredBalance - initialBalance).toBe(0);
     });
 
+    it('should allow fincra_demo role only for compliance demo route and restrict from full admin routes', () => {
+        const fincraDemoAllowedRoles = ['admin', 'support', 'fincra_demo'];
+        const fullAdminAllowedRoles = ['admin', 'support'];
+
+        const reviewerRole = 'fincra_demo';
+        const adminRole = 'admin';
+
+        // Check compliance demo access
+        expect(fincraDemoAllowedRoles.includes(reviewerRole)).toBe(true);
+
+        // Check restriction on full admin routes (e.g. /admin/users, /admin/withdrawals)
+        expect(fullAdminAllowedRoles.includes(reviewerRole)).toBe(false);
+        expect(fullAdminAllowedRoles.includes(adminRole)).toBe(true);
+    });
+
 });

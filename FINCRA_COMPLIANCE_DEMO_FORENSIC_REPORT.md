@@ -79,7 +79,9 @@ Every control listed in the demo was verified against authoritative repository e
 
 ## 5. COMPLIANCE DEMO PRESENTATION FEATURES
 
-- **Route:** `/admin/compliance-demo`
+- **Route:** `/admin/compliance-demo` (accessible to admins and isolated `fincra_demo` reviewer account).
+- **Reviewer Identity Isolation:** Dedicated reviewer identity (`fincra-demo@notestandard.com` / `USR-DEMO-FINCRA-8821`). Restricted **ONLY** to `/admin/compliance-demo`. Navigation to any production admin routes (`/admin/users`, `/admin/withdrawals`, `/admin/deposits`, `/admin/crypto-treasury`, `/admin/settings`, `/admin/audit-logs`) is intercepted and redirected back to `/admin/compliance-demo`.
+- **Sidebar Isolation:** Sidebar navigation shows **ONLY** `Compliance Demo` when signed in as reviewer. Zero production admin privileges granted.
 - **Voice Narration Assistant:** Built-in SpeechSynthesis voice narrator explaining each lifecycle stage and compliance control when recording video.
 - **Presentation Mode:** Toggleable full-screen presentation view optimized for **1920x1080 desktop browser screen recording**, hiding navigation sidebars and displaying a prominent `DEMO / TEST DATA — FINCRA COMPLIANCE REVIEW` watermark.
 - **Double-Entry Ledger Engine:** Real-time JS calculation verifying `Total Debits === Total Credits` dynamically (`BALANCED: YES/NO`).

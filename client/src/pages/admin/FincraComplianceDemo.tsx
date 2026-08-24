@@ -399,6 +399,19 @@ export default function FincraComplianceDemo() {
                         ISOLATED DEMO STATE
                     </span>
                 </div>
+
+                {/* Reviewer Account Identity Badge */}
+                <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <UserCheck className="w-4 h-4 text-cyan-400 shrink-0" />
+                        <span className="text-slate-300">Authenticated Reviewer Identity:</span>
+                        <span className="font-mono font-bold text-cyan-300">fincra-demo@notestandard.com</span>
+                        <span className="font-mono text-slate-400 text-[11px]">(USR-DEMO-FINCRA-8821)</span>
+                    </div>
+                    <span className="px-2.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 font-mono font-bold text-[10px] border border-cyan-500/30">
+                        ISOLATED DEMO ROLE — NO PROD ADMIN ACCESS
+                    </span>
+                </div>
             </div>
 
             {/* ─── GRID: SECTION 2 (USER/KYC) & SECTION 3 (WALLETS) ─── */}

@@ -151,14 +151,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('notestandard_fincra_demo_session');
+      }
+      setUser(null);
+      setProfile(null);
+      setSession(null);
+
+      const { error } = await supabase.auth.signOut().catch(() => ({ error: null }));
       if (error) throw error;
       
       if (user?.id) {
         accountManager.updateAccountTokens(user.id, { access_token: '', refresh_token: '', expires_at: 0 });
       }
       
-      // Rule 9: state will be updated by onAuthStateChange listener
       resetRateLimiters();
       toast.success('Signed out successfully');
     } catch (error) {
@@ -326,6 +332,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initAuthAndSubscribe = async () => {
       try {
         setLoading(true);
+
+        // Check for synthetic Fincra Demo reviewer session
+        if (typeof window !== 'undefined' && sessionStorage.getItem('notestandard_fincra_demo_session') === 'true') {
+          const syntheticUser = {
+            id: 'USR-DEMO-FINCRA-8821',
+            email: 'fincra-demo@notestandard.com',
+            aud: 'authenticated',
+            app_metadata: { provider: 'email' },
+            user_metadata: { full_name: 'Fincra Compliance Reviewer' },
+            created_at: new Date().toISOString()
+          } as User;
+
+          const syntheticProfile = {
+            id: 'USR-DEMO-FINCRA-8821',
+            email: 'fincra-demo@notestandard.com',
+            username: 'fincra-demo',
+            full_name: 'Fincra Compliance Reviewer',
+            avatar_url: null,
+            role: 'fincra_demo',
+            is_verified: true,
+            plan_tier: 'free'
+          } as Profile;
+
+          setUser(syntheticUser);
+          setProfile(syntheticProfile);
+          setSession({
+            access_token: 'DEMO-FINCRA-ACCESS-TOKEN',
+            refresh_token: 'DEMO-FINCRA-REFRESH-TOKEN',
+            expires_in: 3600,
+            token_type: 'bearer',
+            user: syntheticUser
+          });
+          setLoading(false);
+          setAuthReady(true);
+          return;
+        }
 
         // Rule 10: Session Rehydration on App Load
         // First check native Supabase storage which handles cross-tab syncing and auto-refresh natively

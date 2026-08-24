@@ -46,7 +46,6 @@ interface AdminProfile {
 }
 
 export const AdminLayout = () => {
-    const { session, signOut } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 1024);
@@ -55,7 +54,24 @@ export const AdminLayout = () => {
     const [chatActive, setChatActive] = useState(false);
     const touchStartX = useRef<number | null>(null);
 
+    const { session, profile, user, signOut } = useAuth();
+    const isFincraDemoUser = profile?.role === 'fincra_demo' || user?.email === 'fincra-demo@notestandard.com' || (typeof window !== 'undefined' && sessionStorage.getItem('notestandard_fincra_demo_session') === 'true');
+
     const fetchAdminProfile = useCallback(async () => {
+        if (isFincraDemoUser) {
+            setAdminProfile({
+                id: 'USR-DEMO-FINCRA-8821',
+                username: 'fincra-demo',
+                full_name: 'Fincra Compliance Reviewer',
+                avatar_url: '',
+                role: 'fincra_demo'
+            });
+            if (location.pathname === '/admin' || location.pathname === '/admin/') {
+                navigate('/admin/compliance-demo', { replace: true });
+            }
+            return;
+        }
+
         if (!session?.access_token) return;
 
         try {
@@ -80,12 +96,14 @@ export const AdminLayout = () => {
             console.error('Failed to fetch admin profile:', err);
             navigate('/dashboard');
         }
-    }, [session?.access_token, navigate]);
+    }, [session?.access_token, isFincraDemoUser, location.pathname, navigate]);
 
     useEffect(() => {
         fetchAdminProfile();
-        preloadCoreAdminRoutes();
-    }, [session, fetchAdminProfile]);
+        if (!isFincraDemoUser) {
+            preloadCoreAdminRoutes();
+        }
+    }, [session, fetchAdminProfile, isFincraDemoUser]);
 
     // Auto-close sidebar on route navigation on mobile viewports
     useEffect(() => {
@@ -117,11 +135,14 @@ export const AdminLayout = () => {
     };
 
     const handleLogout = async () => {
+        if (typeof window !== 'undefined') {
+            sessionStorage.removeItem('notestandard_fincra_demo_session');
+        }
         await signOut();
         navigate('/login');
     };
 
-    const navItems = [
+    const allNavItems = [
         { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
         { to: '/admin/beta-feedback', icon: Sparkles, label: 'Beta Feedback' },
         { to: '/admin/users', icon: Users, label: 'Users' },
@@ -145,6 +166,10 @@ export const AdminLayout = () => {
         { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
         { to: '/admin/settings', icon: Settings, label: 'Settings' },
     ];
+
+    const navItems = isFincraDemoUser
+        ? allNavItems.filter(item => item.to === '/admin/compliance-demo')
+        : allNavItems;
 
 
     return (
