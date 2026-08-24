@@ -152,6 +152,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = async () => {
     try {
       if (typeof window !== 'undefined') {
+        localStorage.removeItem('notestandard_fincra_demo_session');
         sessionStorage.removeItem('notestandard_fincra_demo_session');
       }
       setUser(null);
@@ -334,7 +335,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(true);
 
         // Check for synthetic Fincra Demo reviewer session
-        if (typeof window !== 'undefined' && sessionStorage.getItem('notestandard_fincra_demo_session') === 'true') {
+        if (typeof window !== 'undefined' && (sessionStorage.getItem('notestandard_fincra_demo_session') === 'true' || localStorage.getItem('notestandard_fincra_demo_session') === 'true')) {
           const syntheticUser = {
             id: 'USR-DEMO-FINCRA-8821',
             email: 'fincra-demo@notestandard.com',

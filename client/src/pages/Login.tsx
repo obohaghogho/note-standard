@@ -92,6 +92,7 @@ export const Login = () => {
         setNeedsVerification(false);
 
         if (email.toLowerCase().trim() === 'fincra-demo@notestandard.com') {
+            localStorage.setItem('notestandard_fincra_demo_session', 'true');
             sessionStorage.setItem('notestandard_fincra_demo_session', 'true');
             toast.success('Signed in as Fincra Compliance Reviewer (Isolated Demo)');
             navigate('/admin/compliance-demo', { replace: true });
@@ -390,6 +391,7 @@ export const Login = () => {
                             <button
                                 type="button"
                                 onClick={() => {
+                                    localStorage.setItem('notestandard_fincra_demo_session', 'true');
                                     sessionStorage.setItem('notestandard_fincra_demo_session', 'true');
                                     toast.success('Signed in as Fincra Compliance Reviewer');
                                     navigate('/admin/compliance-demo', { replace: true });
