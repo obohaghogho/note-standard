@@ -265,9 +265,11 @@ class AiSupportService {
       console.log(`History messages: ${chatHistory.length}`);
 
       const modelsToTry = [
-        "llama-3.3-70b-versatile",
-        process.env.GROQ_MODEL || "openai/gpt-oss-20b"
-      ];
+        process.env.GROQ_MODEL,
+        "openai/gpt-oss-20b",
+        "openai/gpt-oss-120b",
+        "qwen/qwen3.6-27b"
+      ].filter(Boolean);
 
       let completion = null;
       let lastError = null;

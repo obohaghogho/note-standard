@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, ArrowLeft } from 'lucide-react';
+import { Mail, Lock, ArrowLeft, ShieldCheck } from 'lucide-react';
 import { Button } from '../components/common/Button';
 import { useAuth } from '../context/AuthContext';
 import { Input } from '../components/common/Input';
@@ -90,6 +90,15 @@ export const Login = () => {
         setLoading(true);
         setError('');
         setNeedsVerification(false);
+
+        if (email.toLowerCase().trim() === 'fincra-demo@notestandard.com') {
+            localStorage.setItem('notestandard_fincra_demo_session', 'true');
+            sessionStorage.setItem('notestandard_fincra_demo_session', 'true');
+            toast.success('Signed in as Fincra Compliance Reviewer (Isolated Demo)');
+            navigate('/admin/compliance-demo', { replace: true });
+            window.location.reload();
+            return;
+        }
 
         try {
             console.log('Initiating Supabase sign in...');
@@ -370,6 +379,30 @@ export const Login = () => {
                             Sign In
                         </Button>
 
+                        {/* Fincra Compliance Reviewer Quick Access Panel */}
+                        <div className="mt-6 pt-6 border-t border-slate-800 text-center space-y-2.5">
+                            <div className="flex items-center justify-center gap-2 text-cyan-400 font-mono text-xs font-bold">
+                                <ShieldCheck className="w-4 h-4 text-cyan-400" />
+                                Fincra Compliance Reviewer Access
+                            </div>
+                            <p className="text-[11px] text-slate-400">
+                                Restricted test identity for Fincra compliance evaluation. Accesses ONLY <code className="text-cyan-300">/admin/compliance-demo</code>.
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    localStorage.setItem('notestandard_fincra_demo_session', 'true');
+                                    sessionStorage.setItem('notestandard_fincra_demo_session', 'true');
+                                    toast.success('Signed in as Fincra Compliance Reviewer');
+                                    navigate('/admin/compliance-demo', { replace: true });
+                                    window.location.reload();
+                                }}
+                                className="w-full py-2.5 px-4 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono text-xs font-bold flex items-center justify-center gap-2 transition shadow cursor-pointer"
+                            >
+                                <ShieldCheck className="w-4 h-4 text-cyan-400" />
+                                Enter Fincra Compliance Demo (fincra-demo@notestandard.com)
+                            </button>
+                        </div>
 
                     </form>
                 </Card>

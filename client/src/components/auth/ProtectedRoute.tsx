@@ -27,6 +27,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
     // Check allowed roles
     if (allowedRoles && profile?.role && !allowedRoles.includes(profile.role)) {
         console.warn("[ProtectedRoute] Unauthorized access attempt:", { user: user.id, role: profile.role, required: allowedRoles });
+        if (profile.role === 'fincra_demo' || user.email === 'fincra-demo@notestandard.com') {
+            return <Navigate to="/admin/compliance-demo" replace />;
+        }
         return <Navigate to="/dashboard" replace />;
     }
 

@@ -58,5 +58,4 @@ jdk17/
 *.zip
 scratch/
 ANCHOR_COMPLIANCE_RESUBMISSION/
-
-
+*.apk

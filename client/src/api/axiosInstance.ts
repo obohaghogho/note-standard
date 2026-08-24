@@ -74,6 +74,11 @@ api.interceptors.response.use(
 
     // 401: Session invalid or expired — attempt token refresh first before declaring session lost
     if (error.response?.status === 401) {
+      if (typeof window !== 'undefined' && (sessionStorage.getItem('notestandard_fincra_demo_session') === 'true' || localStorage.getItem('notestandard_fincra_demo_session') === 'true')) {
+        console.warn('[Axios] 401 received for synthetic fincra_demo session — bypassing login redirect.');
+        return Promise.reject(error);
+      }
+
       if (!window.location.pathname.includes('/login') && !config.__is401Retry) {
         config.__is401Retry = true;
         try {
