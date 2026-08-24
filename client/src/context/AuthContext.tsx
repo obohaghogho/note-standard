@@ -456,6 +456,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
      */
     const { data: { subscription: authListener } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       if (!isMounted.current) return;
+
+      // Ignore Supabase auth events when synthetic Fincra Demo session is active
+      if (typeof window !== 'undefined' && (sessionStorage.getItem('notestandard_fincra_demo_session') === 'true' || localStorage.getItem('notestandard_fincra_demo_session') === 'true')) {
+        console.log('[Auth] Synthetic fincra_demo session active. Bypassing Supabase onAuthStateChange event:', event);
+        return;
+      }
       
       const currentId = switchIdRef.current;
       console.log(`[Auth Forensic] Event: ${event} (#${currentId}) at ${Date.now()}`, { 
