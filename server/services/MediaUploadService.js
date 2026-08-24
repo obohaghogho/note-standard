@@ -138,6 +138,62 @@ class MediaUploadService {
       size: file.size,
     };
   }
+
+  /**
+   * Upload media file (Photos, Videos, Audio for Chat & Status)
+   */
+  static async uploadMedia({ file, userId, bucket = 'community_media' }) {
+    if (!file || !file.buffer) {
+      throw new Error('No media buffer provided');
+    }
+
+    const imageMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/svg+xml'];
+    const videoMimes = ['video/mp4', 'video/webm', 'video/quicktime', 'video/avi', 'video/x-matroska', 'video/mkv', 'video/3gpp'];
+    const audioMimes = ['audio/m4a', 'audio/mp4', 'audio/aac', 'audio/wav', 'audio/webm', 'audio/mpeg', 'audio/x-m4a', 'audio/ogg'];
+
+    const isImage = imageMimes.includes(file.mimetype) || file.mimetype.startsWith('image/');
+    const isVideo = videoMimes.includes(file.mimetype) || file.mimetype.startsWith('video/');
+    const isAudio = audioMimes.includes(file.mimetype) || file.mimetype.startsWith('audio/');
+
+    if (!isImage && !isVideo && !isAudio) {
+      throw new Error(`Unsupported media MIME type: ${file.mimetype}`);
+    }
+
+    const maxSizeBytes = 50 * 1024 * 1024; // 50MB
+    if (file.size > maxSizeBytes) {
+      throw new Error('Media file size exceeds 50MB limit');
+    }
+
+    const resourceType = isVideo ? 'video' : isAudio ? 'audio' : 'image';
+    const defaultExt = isVideo ? '.mp4' : isAudio ? '.m4a' : '.jpg';
+    const ext = path.extname(file.originalname) || defaultExt;
+    const filename = `${userId}/${Date.now()}_${Math.random().toString(36).substring(7)}${ext}`;
+
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .upload(filename, file.buffer, {
+        contentType: file.mimetype,
+        upsert: false,
+      });
+
+    if (error) {
+      logger.error('[MediaUploadService] Media upload error:', error);
+      throw error;
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(filename);
+
+    return {
+      url: publicUrlData.publicUrl,
+      secure_url: publicUrlData.publicUrl,
+      resource_type: resourceType,
+      key: filename,
+      mime: file.mimetype,
+      size: file.size,
+    };
+  }
 }
 
 module.exports = MediaUploadService;

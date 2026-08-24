@@ -9,7 +9,7 @@ const logger = require('../utils/logger');
 const storage = multer.memoryStorage();
 const upload = multer({
   storage,
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB Max
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB Max for video/media
 });
 
 // All upload routes require authentication & rate limiting
@@ -101,6 +101,37 @@ router.post('/audio', upload.single('file'), async (req, res) => {
   } catch (error) {
     logger.error('[Upload/Audio] Error:', error.message);
     res.status(400).json({ error: error.message || 'Audio upload failed' });
+  }
+});
+
+/**
+ * POST /api/upload/media
+ * Unified Status and Chat media upload (Photos, Videos, Audio)
+ */
+router.post('/media', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No media file uploaded' });
+    }
+
+    const result = await MediaUploadService.uploadMedia({
+      file: req.file,
+      userId: req.user.id,
+      bucket: 'status_media',
+    });
+
+    res.status(201).json({
+      success: true,
+      url: result.url,
+      secure_url: result.secure_url,
+      resource_type: result.resource_type,
+      key: result.key,
+      mime: result.mime,
+      size: result.size,
+    });
+  } catch (error) {
+    logger.error('[Upload/Media] Error:', error.message);
+    res.status(400).json({ error: error.message || 'Media upload failed' });
   }
 });
 
