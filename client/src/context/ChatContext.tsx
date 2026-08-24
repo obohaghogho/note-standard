@@ -19,7 +19,7 @@ import { ChatBootKernel } from './ChatBootKernel';
 import { getDeviceId } from '../utils/deviceId';
 import { ChatCacheEngine } from '../services/chatCache';
 import { useChatStore } from '../stores/chatStore';
-import { mergeMessageMonotonic } from '../utils/messageStatusEngine';
+import { mergeMessageMonotonic, correlationRegistry } from '../utils/messageStatusEngine';
 
 export interface Message {
     id: string;

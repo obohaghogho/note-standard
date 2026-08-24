@@ -169,8 +169,9 @@ class MediaUploadService {
     const ext = path.extname(file.originalname) || defaultExt;
     const filename = `${userId}/${Date.now()}_${Math.random().toString(36).substring(7)}${ext}`;
 
+    const targetBucket = 'chat-media';
     const { data, error } = await supabase.storage
-      .from(bucket)
+      .from(targetBucket)
       .upload(filename, file.buffer, {
         contentType: file.mimetype,
         upsert: false,
@@ -181,13 +182,19 @@ class MediaUploadService {
       throw error;
     }
 
+    const { data: signedData } = await supabase.storage
+      .from(targetBucket)
+      .createSignedUrl(filename, 60 * 60 * 24 * 365);
+
     const { data: publicUrlData } = supabase.storage
-      .from(bucket)
+      .from(targetBucket)
       .getPublicUrl(filename);
 
+    const finalUrl = signedData?.signedUrl || publicUrlData?.publicUrl;
+
     return {
-      url: publicUrlData.publicUrl,
-      secure_url: publicUrlData.publicUrl,
+      url: finalUrl,
+      secure_url: finalUrl,
       resource_type: resourceType,
       key: filename,
       mime: file.mimetype,
