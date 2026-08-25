@@ -5,7 +5,7 @@
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT NULL;
 
 -- Index for querying messages by metadata type (e.g. find all status replies)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_messages_metadata_status_reply
+CREATE INDEX IF NOT EXISTS idx_messages_metadata_status_reply
   ON messages USING gin (metadata jsonb_path_ops)
   WHERE metadata IS NOT NULL;
 
