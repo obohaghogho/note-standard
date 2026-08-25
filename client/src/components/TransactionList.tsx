@@ -5,6 +5,7 @@ import { formatCurrency } from '../lib/CurrencyFormatter';
 import walletApi from '../api/walletApi';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { HorizontalScrollContainer } from './common/HorizontalScrollContainer';
 
 interface TransactionHistoryProps {
     transactions: Transaction[];
@@ -130,12 +131,13 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
             </div>
 
             {/* Filter tabs */}
-            <div className="flex gap-2 mb-6 overflow-x-auto pb-1 no-scrollbar">
+            <HorizontalScrollContainer activeItemKey={activeFilter} className="mb-6">
                 {filters.map((f) => (
                     <button
                         key={f.value}
+                        data-active={activeFilter === f.value}
                         onClick={() => setActiveFilter(f.value)}
-                        className={`px-4 py-1.5 text-xs font-bold rounded-full whitespace-nowrap transition-all border ${
+                        className={`px-4 py-1.5 text-xs font-bold rounded-full whitespace-nowrap transition-all border shrink-0 ${
                             activeFilter === f.value
                                 ? 'bg-purple-500 text-white border-purple-500 shadow-lg shadow-purple-500/20'
                                 : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-600 hover:text-gray-300'
@@ -144,7 +146,7 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
                         {f.label}
                     </button>
                 ))}
-            </div>
+            </HorizontalScrollContainer>
             
             <div className="overflow-hidden">
                 {loading ? (

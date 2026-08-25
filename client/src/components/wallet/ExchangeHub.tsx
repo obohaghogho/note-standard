@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { walletApi } from '../../api/walletApi';
 import toast from 'react-hot-toast';
+import { HorizontalScrollContainer } from '../common/HorizontalScrollContainer';
 
 type ExchangeMode = 'convert' | 'buy' | 'sell' | 'swap';
 
@@ -268,7 +269,7 @@ export function ExchangeHub({
         <p className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wider flex items-center gap-1">
           <Zap size={11} /> Quick Convert
         </p>
-        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+        <HorizontalScrollContainer>
           {QUICK_PAIRS.map((pair) => (
             <button
               key={pair.label}
@@ -278,7 +279,7 @@ export function ExchangeHub({
               {pair.label}
             </button>
           ))}
-        </div>
+        </HorizontalScrollContainer>
       </div>
 
       {/* Exchange form */}

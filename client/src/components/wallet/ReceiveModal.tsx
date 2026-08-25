@@ -7,6 +7,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import walletApi from '../../api/walletApi';
 import { motion, AnimatePresence } from 'framer-motion';
+import { HorizontalScrollContainer } from '../common/HorizontalScrollContainer';
 
 interface ReceiveModalProps {
     isOpen: boolean;
@@ -145,22 +146,26 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, ini
 
                 <div className="modal-body">
                     {/* Currency Selector */}
-                    <div className="flex gap-2 overflow-x-auto pb-4 mb-2 scrollbar-hide">
-                        {wallets.map(w => (
-                            <button
-                                key={`${w.asset}_${w.network}`}
-                                onClick={() => handleCurrencyChange(w.asset, w.network)}
-                                className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all whitespace-nowrap flex flex-col items-center ${
-                                    selectedCurrency === w.asset && selectedNetwork === w.network
-                                    ? 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-500/20' 
-                                    : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:text-white'
-                                }`}
-                            >
-                                <span>{w.asset}</span>
-                                {w.network !== 'native' && <span className="text-[10px] opacity-70 uppercase">{w.network}</span>}
-                            </button>
-                        ))}
-                    </div>
+                    <HorizontalScrollContainer activeItemKey={`${selectedCurrency}_${selectedNetwork}`} className="mb-3">
+                        {wallets.map(w => {
+                            const isSelected = selectedCurrency === w.asset && selectedNetwork === w.network;
+                            return (
+                                <button
+                                    key={`${w.asset}_${w.network}`}
+                                    data-active={isSelected}
+                                    onClick={() => handleCurrencyChange(w.asset, w.network)}
+                                    className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all whitespace-nowrap flex flex-col items-center shrink-0 ${
+                                        isSelected
+                                        ? 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-500/20' 
+                                        : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:text-white'
+                                    }`}
+                                >
+                                    <span>{w.asset}</span>
+                                    {w.network !== 'native' && <span className="text-[10px] opacity-70 uppercase">{w.network}</span>}
+                                </button>
+                            );
+                        })}
+                    </HorizontalScrollContainer>
 
                     <AnimatePresence mode="wait">
                         {currentWallet || hdAddress ? (

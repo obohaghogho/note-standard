@@ -9,6 +9,7 @@ import { POPULAR_BANKS, COUNTRIES } from '../../lib/bankList';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReCAPTCHA from 'react-google-recaptcha';
 import { WithdrawalOtpModal } from './WithdrawalOtpModal';
+import { HorizontalScrollContainer } from '../common/HorizontalScrollContainer';
 
 interface WithdrawModalProps {
     isOpen: boolean;
@@ -298,17 +299,18 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                             {/* Country Selector */}
                             <div className="space-y-1">
                                 <span className="text-xs text-gray-400 font-medium ml-1">Country</span>
-                                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-800">
+                                <HorizontalScrollContainer activeItemKey={selectedCountry}>
                                     {COUNTRIES.map(c => (
                                         <button
                                             key={c.code}
                                             type="button"
+                                            data-active={selectedCountry === c.name}
                                             onClick={() => {
                                                 setSelectedCountry(c.name);
                                                 setSelectedBank(null);
                                                 setSearchTerm('');
                                             }}
-                                            className={`px-3 py-1.5 rounded-full text-xs font-medium border whitespace-nowrap transition-colors ${
+                                            className={`px-3 py-1.5 rounded-full text-xs font-medium border whitespace-nowrap transition-colors shrink-0 ${
                                                 selectedCountry === c.name 
                                                 ? 'bg-orange-500/10 border-orange-500 text-orange-400' 
                                                 : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
@@ -317,7 +319,7 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                                             {c.name}
                                         </button>
                                     ))}
-                                </div>
+                                </HorizontalScrollContainer>
                             </div>
 
                             {/* Bank Search & Select */}
