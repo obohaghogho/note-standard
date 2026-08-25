@@ -1,5 +1,5 @@
-/**
- * Status (Stories) Route — NoteStandard
+﻿/**
+ * Status (Stories) Route â€” NoteStandard
  * Mirrors WhatsApp-style 24-hour status updates.
  * Uses Supabase (service role) for data and realtimeService for push events.
  */
@@ -15,7 +15,7 @@ const logger = require('../utils/logger');
 
 const STATUS_EXPIRY_HOURS = parseInt(process.env.STATUS_EXPIRY_HOURS || '24');
 
-// ── Privacy helper ──────────────────────────────────────────────────────────
+// â”€â”€ Privacy helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function canViewStatus(status, viewerId, peerIdsSet = null) {
   if (status.user_id === viewerId) return true;
   if (status.privacy === 'everyone') return true;
@@ -56,7 +56,7 @@ async function canViewStatus(status, viewerId, peerIdsSet = null) {
   return false;
 }
 
-// ── GET /api/status/feed ────────────────────────────────────────────────────
+// â”€â”€ GET /api/status/feed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/feed', requireAuth, async (req, res) => {
   try {
     const viewerId = req.user.id;
@@ -175,7 +175,7 @@ router.get('/feed', requireAuth, async (req, res) => {
   }
 });
 
-// ── GET /api/status/my ──────────────────────────────────────────────────────
+// â”€â”€ GET /api/status/my â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/my', requireAuth, async (req, res) => {
   try {
     const now = new Date().toISOString();
@@ -290,7 +290,7 @@ router.get('/my', requireAuth, async (req, res) => {
   }
 });
 
-// ── POST /api/status — create ───────────────────────────────────────────────
+// â”€â”€ POST /api/status â€” create â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.post('/',
   requireAuth,
   body('type').isIn(['text','image','video','audio','gif','link','document']),
@@ -408,7 +408,7 @@ router.post('/',
   }
 );
 
-// ── POST /api/status/:id/view ───────────────────────────────────────────────
+// â”€â”€ POST /api/status/:id/view â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.post('/:id/view', requireAuth, async (req, res) => {
   try {
     const { data: status, error } = await supabase
@@ -466,7 +466,7 @@ router.post('/:id/view', requireAuth, async (req, res) => {
   }
 });
 
-// ── POST /api/status/:id/react ──────────────────────────────────────────────
+// â”€â”€ POST /api/status/:id/react â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.post('/:id/react', requireAuth, async (req, res) => {
   try {
     const { emoji } = req.body;
@@ -501,7 +501,7 @@ router.post('/:id/react', requireAuth, async (req, res) => {
   }
 });
 
-// ── POST /api/status/:id/reply ──────────────────────────────────────────────
+// â”€â”€ POST /api/status/:id/reply â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.post('/:id/reply', requireAuth, async (req, res) => {
   try {
     const { content } = req.body;
@@ -579,7 +579,39 @@ router.post('/:id/reply', requireAuth, async (req, res) => {
 
     if (members && members.length > 0) {
       const userIds = members.map(m => m.user_id);
+
+      // 1. Deliver the message itself
       await realtime.emitToUsers(userIds, 'chat:message', hydratedMessage || msg);
+
+      // 2. Emit chat:new_conversation — WhatsApp/Instagram status-reply-to-DM pattern.
+      //    Clients with no knowledge of this convId will receive the full conversation
+      //    object and inject it at the top of their chat list immediately.
+      const { data: convFull } = await supabase
+        .from('conversations')
+        .select('id, type, updated_at, last_message_at, conversation_members(user_id, role, profiles(id, username, full_name, avatar_url))')
+        .eq('id', convId)
+        .single();
+
+      if (convFull) {
+        const newConvPayload = {
+          ...convFull,
+          lastMessage: {
+            id: msg.id,
+            content: req.body.content || '',
+            sender_id: req.user.id,
+            created_at: msg.created_at || new Date().toISOString(),
+            type: 'text',
+          },
+          members: (convFull.conversation_members || []).map((m) => ({
+            user_id: m.user_id,
+            role: m.role,
+            profile: Array.isArray(m.profiles) ? m.profiles[0] : m.profiles,
+          })),
+          unreadCount: 1,
+        };
+        delete newConvPayload.conversation_members;
+        await realtime.emitToUsers(userIds, 'chat:new_conversation', newConvPayload);
+      }
     }
 
     res.status(201).json({ success: true, conversation_id: convId, message_id: msg?.id });
@@ -589,7 +621,7 @@ router.post('/:id/reply', requireAuth, async (req, res) => {
   }
 });
 
-// ── DELETE /api/status/:id ──────────────────────────────────────────────────
+// â”€â”€ DELETE /api/status/:id â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.delete('/:id', requireAuth, async (req, res) => {
   try {
     const { data: status } = await supabase
@@ -607,7 +639,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
   }
 });
 
-// ── PATCH /api/status/:id ───────────────────────────────────────────────────
+// â”€â”€ PATCH /api/status/:id â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.patch('/:id', requireAuth, async (req, res) => {
   try {
     const { privacy, is_archived } = req.body;
@@ -626,7 +658,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
   }
 });
 
-// ── POST /api/status/mute/:userId ───────────────────────────────────────────
+// â”€â”€ POST /api/status/mute/:userId â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.post('/mute/:userId', requireAuth, async (req, res) => {
   try {
     await supabase.from('status_mutes')
@@ -637,7 +669,7 @@ router.post('/mute/:userId', requireAuth, async (req, res) => {
   }
 });
 
-// ── DELETE /api/status/mute/:userId ─────────────────────────────────────────
+// â”€â”€ DELETE /api/status/mute/:userId â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.delete('/mute/:userId', requireAuth, async (req, res) => {
   try {
     await supabase.from('status_mutes')

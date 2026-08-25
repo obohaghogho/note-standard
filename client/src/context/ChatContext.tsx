@@ -1542,8 +1542,37 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 setConversations(cPrev => {
                     const convExists = cPrev.some(c => c.id === msg.conversation_id);
                     if (!convExists) {
-                        console.log(`[CLIENT_TRACE] [${Date.now()}] conversation filtering: FAIL (conversation not in state, triggering fetch)`);
-                        setTimeout(() => loadConversations(), 100);
+                        console.log(`[CLIENT_TRACE] [${Date.now()}] conversation not in state — fetching single conversation: ${msg.conversation_id}`);
+                        // ── WhatsApp/Instagram pattern ────────────────────────────────────────
+                        // Fetch the specific new conversation by ID (bypasses the full-list
+                        // re-entrancy guard) and inject it at the top of the list immediately.
+                        // This is what makes status-reply threads appear in the chat list.
+                        api.get(`/chat/conversations/${msg.conversation_id}`)
+                            .then(({ data: newConv }) => {
+                                if (!newConv || !isMounted.current) return;
+                                const mapped: Conversation = {
+                                    ...newConv,
+                                    lastMessage: newConv.last_message ?? newConv.lastMessage,
+                                    unreadCount: (newConv.unreadCount || 0) + 1,
+                                    updated_at: msg.created_at || newConv.updated_at,
+                                };
+                                setConversations(prev => {
+                                    // Don't add if it already arrived via a parallel fetch
+                                    if (prev.some(c => c.id === mapped.id)) {
+                                        return prev.map(c => c.id === mapped.id ? { ...c, lastMessage: mapped.lastMessage, updated_at: mapped.updated_at, unreadCount: (c.unreadCount || 0) + 1 } : c)
+                                            .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+                                    }
+                                    // Inject at top, then re-sort by recency
+                                    return [mapped, ...prev].sort((a, b) =>
+                                        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+                                    );
+                                });
+                            })
+                            .catch(() => {
+                                // Fallback: trigger a full conversation list refresh
+                                conversationsFetchRef.current = false;
+                                loadConversationsRef.current().catch(() => {});
+                            });
                         return cPrev;
                     }
 
