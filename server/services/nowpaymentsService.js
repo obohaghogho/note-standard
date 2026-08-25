@@ -99,11 +99,15 @@ exports.getOrCreateDepositAddress = async (
     USDT_ERC20: "usdterc20",
     USDT_TRC20: "usdttrc20",
     USDT_BEP20: "usdtbsc",
-    USDT_NATIVE: "usdttrc20", // Default to TRC20 for native
-    USDC: "usdcerc20",
-    USDC_ERC20: "usdcerc20",
-    USDC_POLYGON: "usdcmatictoken",
-    USDC_NATIVE: "usdcerc20", // Default to ERC20 for native
+    USDT_NATIVE: "usdttrc20",  // Default to TRC20 for native
+    USDC: "usdc",              // NowPayments uses 'usdc' for ERC20
+    USDC_ERC20: "usdc",        // Verified: 'usdcerc20' does NOT exist in NowPayments
+    USDC_POLYGON: "usdcmatic", // Verified: 'usdcmatictoken' → 'usdcmatic'
+    USDC_BSC: "usdcbsc",       // BEP20
+    USDC_SOLANA: "usdcsol",    // Solana
+    USDC_ARB: "usdcarb",       // Arbitrum
+    USDC_BASE: "usdcbase",     // Base chain
+    USDC_NATIVE: "usdc",       // Default to ERC20 for native
   };
 
   // Construct lookup key.
@@ -292,8 +296,11 @@ exports.getExchangeEstimate = async (fromCurrency, toCurrency, amount = 1) => {
       USDT_ERC20: "usdterc20",
       USDT_TRC20: "usdttrc20",
       USDT_BEP20: "usdtbsc",
-      USDC_ERC20: "usdcerc20",
-      USDC_POLYGON: "usdcmatictoken",
+      USDC: "usdc",
+      USDC_ERC20: "usdc",       // Verified: correct NowPayments ticker
+      USDC_POLYGON: "usdcmatic", // Verified: correct NowPayments ticker
+      USDC_BSC: "usdcbsc",
+      USDC_SOLANA: "usdcsol",
     };
 
     // Helper to resolve ticker - expected input is "CURRENCY" or "CURRENCY_NETWORK"

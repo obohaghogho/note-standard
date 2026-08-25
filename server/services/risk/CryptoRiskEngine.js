@@ -6,6 +6,17 @@
  * Centralized risk & compliance evaluation engine.
  * Evaluates withdrawal velocity, KYC/AML status, 2FA codes,
  * dynamic risk policies from DB, and multi-signature approval rules.
+ *
+ * Risk Tiers (USD-value based):
+ *   AUTO_LOW      < $500 USD      — fully automatic, no review
+ *   AUTO_REVIEW   $500–$2,500     — auto-approved but flagged for review
+ *   SINGLE_ADMIN  $2,500–$10,000  — 1 admin approval required
+ *   DUAL_ADMIN    > $10,000       — 2 distinct admin approvals required
+ *
+ * Additional guards:
+ *   - Per-tx hard ceiling (BTC $50K, ETH $25K, stables $50K)
+ *   - Daily velocity cap: max 5 withdrawals / 24h
+ *   - Daily USD volume cap: >$25K/day → SINGLE_ADMIN minimum
  */
 
 const pool = require('../../config/pgPool');
@@ -14,13 +25,14 @@ const logger = require('../../utils/logger');
 
 class CryptoRiskEngine {
   /**
-   * Evaluate a withdrawal request for risk compliance
+   * Evaluate a withdrawal request for risk compliance.
+   * Returns: { allowed, tier, requiredApprovals, approvalStatus, txStatus, requiresManualReview, estimatedUsdValue }
    */
   async evaluateWithdrawal({ userId, currency, amount, user2FAVerified = true, ipAddress = null }) {
     const upCurrency = String(currency).toUpperCase();
     const decAmount = new Decimal(amount);
 
-    // 1. Check User Wallet State
+    // ── 1. Wallet State Check ────────────────────────────────────────────────
     const walletRes = await pool.query(
       `SELECT status FROM public.crypto_wallets WHERE user_id = $1 AND currency = $2`,
       [userId, upCurrency]
@@ -29,48 +41,124 @@ class CryptoRiskEngine {
       throw new Error(`RISK_REJECT: Wallet status is '${walletRes.rows[0].status}'. Withdrawals restricted.`);
     }
 
-    // 2. Fetch applicable risk policy from DB (dynamic policy)
+    // ── 2. USD Value Estimation ──────────────────────────────────────────────
+    // CRITICAL: BTC/ETH have small token counts but massive USD value.
+    // Without USD conversion, 5 BTC (~$475K) would score as AUTO_LOW (5 < 1000).
+    // Reference prices are conservative — update periodically via DB config.
+    const refPricesUsd = {
+      BTC:  95000,  // conservative BTC/USD reference
+      ETH:  3500,   // conservative ETH/USD reference
+      USDT: 1,
+      USDC: 1,
+    };
+    const priceUsd = refPricesUsd[upCurrency] || 1;
+    const estimatedUsdValue = decAmount.mul(priceUsd);
+
+    // Per-transaction hard ceiling (enforced regardless of DB policy)
+    const perTxCeilingsUsd = {
+      BTC:  50000,   // $50K max per BTC withdrawal without dual admin
+      ETH:  25000,   // $25K max per ETH withdrawal
+      USDT: 50000,
+      USDC: 50000,
+    };
+    const perTxCeilingUsd = perTxCeilingsUsd[upCurrency] || 50000;
+
+    // ── 3. DB Policy Lookup ──────────────────────────────────────────────────
     const policyRes = await pool.query(
-      `SELECT * FROM public.crypto_risk_policies 
+      `SELECT * FROM public.crypto_risk_policies
        WHERE (currency = $1 OR currency = 'ALL')
          AND $2 >= min_amount AND $2 <= max_amount
        ORDER BY required_approvals DESC LIMIT 1`,
       [upCurrency, decAmount.toNumber()]
     );
-
     let policy = policyRes.rows[0];
+
+    // ── 4. USD-Value Tier (safety override) ─────────────────────────────────
+    // Always apply the STRICTER of: DB token-amount policy OR USD-value tier.
+    let usdTier, usdRequiredApprovals, usdManualReview;
+
+    if (estimatedUsdValue.gt(perTxCeilingUsd) || estimatedUsdValue.gt(10000)) {
+      usdTier              = 'DUAL_ADMIN';
+      usdRequiredApprovals = 2;
+      usdManualReview      = true;
+    } else if (estimatedUsdValue.gt(2500)) {
+      usdTier              = 'SINGLE_ADMIN';
+      usdRequiredApprovals = 1;
+      usdManualReview      = true;
+    } else if (estimatedUsdValue.gt(500)) {
+      usdTier              = 'AUTO_REVIEW';
+      usdRequiredApprovals = 0;
+      usdManualReview      = true;
+    } else {
+      usdTier              = 'AUTO_LOW';
+      usdRequiredApprovals = 0;
+      usdManualReview      = false;
+    }
+
     if (!policy) {
-      // Default conservative policy if outside pre-seeded ranges
+      // No DB policy matched — use USD tier as fallback
       policy = {
-        tier: decAmount.gt(10000) ? 'DUAL_ADMIN' : (decAmount.gt(1000) ? 'SINGLE_ADMIN' : 'AUTO_LOW'),
-        required_approvals: decAmount.gt(10000) ? 2 : (decAmount.gt(1000) ? 1 : 0),
+        tier: usdTier,
+        required_approvals: usdRequiredApprovals,
         requires_2fa: true,
-        requires_manual_review: decAmount.gt(1000)
+        requires_manual_review: usdManualReview,
+      };
+    } else if (usdRequiredApprovals > (policy.required_approvals || 0)) {
+      // USD tier is stricter than DB policy — upgrade
+      policy = {
+        ...policy,
+        tier: usdTier,
+        required_approvals: usdRequiredApprovals,
+        requires_manual_review: true,
       };
     }
 
-    // 3. 2FA Verification Enforcement
+    // ── 5. 2FA Enforcement ───────────────────────────────────────────────────
     if (policy.requires_2fa && !user2FAVerified) {
-      throw new Error("2FA_REQUIRED: 2FA verification is mandatory for crypto withdrawals.");
+      throw new Error('2FA_REQUIRED: 2FA verification is mandatory for crypto withdrawals.');
     }
 
-    // 4. Daily Velocity Limit Check (e.g. max 5 withdrawals per day)
+    // ── 6. Daily Velocity Limit (max 5 withdrawals / 24h) ───────────────────
     const velocityRes = await pool.query(
       `SELECT COUNT(*) FROM public.crypto_transactions
-       WHERE user_id = $1 AND type = 'WITHDRAWAL' AND created_at > NOW() - INTERVAL '24 hours'`,
+       WHERE user_id = $1 AND type = 'WITHDRAWAL'
+         AND created_at > NOW() - INTERVAL '24 hours'`,
       [userId]
     );
-
     const dailyCount = parseInt(velocityRes.rows[0].count, 10);
-    if (dailyCount >= 10) {
-      throw new Error("VELOCITY_LIMIT_EXCEEDED: Maximum daily withdrawal count reached (10 txs/24h).");
+    if (dailyCount >= 5) {
+      throw new Error('VELOCITY_LIMIT_EXCEEDED: Maximum daily withdrawal count reached (5 txs/24h).');
     }
 
-    const requiredApprovals = policy.required_approvals;
-    const approvalStatus = requiredApprovals > 0 ? 'PENDING_APPROVAL' : 'NOT_REQUIRED';
-    const txStatus = requiredApprovals > 0 ? 'PENDING_APPROVAL' : 'PENDING';
+    // ── 7. Daily USD Volume Cap ($25K/day — above that → SINGLE_ADMIN min) ──
+    const dailyVolumeRes = await pool.query(
+      `SELECT COALESCE(SUM(amount), 0) as total
+       FROM public.crypto_transactions
+       WHERE user_id = $1 AND type = 'WITHDRAWAL'
+         AND created_at > NOW() - INTERVAL '24 hours'
+         AND status NOT IN ('CANCELLED', 'FAILED')`,
+      [userId]
+    );
+    const dailyTokenVolume = new Decimal(dailyVolumeRes.rows[0].total || 0);
+    const dailyUsdVolumeTotal = dailyTokenVolume.mul(priceUsd).plus(estimatedUsdValue);
 
-    logger.info(`[CryptoRiskEngine] Evaluated withdrawal: Amt: ${decAmount.toString()} ${upCurrency}, Tier: ${policy.tier}, Approvals Required: ${requiredApprovals}`);
+    if (dailyUsdVolumeTotal.gt(25000) && (policy.required_approvals || 0) < 1) {
+      policy.tier = 'SINGLE_ADMIN';
+      policy.required_approvals = 1;
+      policy.requires_manual_review = true;
+      logger.warn(
+        `[CryptoRiskEngine] Daily USD volume cap triggered for user ${userId}: ~$${dailyUsdVolumeTotal.toFixed(2)} cumulative`
+      );
+    }
+
+    const requiredApprovals = policy.required_approvals || 0;
+    const approvalStatus    = requiredApprovals > 0 ? 'PENDING_APPROVAL' : 'NOT_REQUIRED';
+    const txStatus          = requiredApprovals > 0 ? 'PENDING_APPROVAL' : 'PENDING';
+
+    logger.info(
+      `[CryptoRiskEngine] Evaluated withdrawal: Amt: ${decAmount.toString()} ${upCurrency}` +
+      ` (~$${estimatedUsdValue.toFixed(2)} USD), Tier: ${policy.tier}, Approvals Required: ${requiredApprovals}`
+    );
 
     return {
       allowed: true,
@@ -78,7 +166,8 @@ class CryptoRiskEngine {
       requiredApprovals,
       approvalStatus,
       txStatus,
-      requiresManualReview: policy.requires_manual_review
+      requiresManualReview: policy.requires_manual_review || false,
+      estimatedUsdValue: estimatedUsdValue.toFixed(2),
     };
   }
 
@@ -90,7 +179,7 @@ class CryptoRiskEngine {
     const upAction = String(action).toUpperCase();
 
     if (!['APPROVED', 'REJECTED'].includes(upAction)) {
-      throw new Error("INVALID_APPROVAL_ACTION");
+      throw new Error('INVALID_APPROVAL_ACTION');
     }
 
     try {
@@ -100,12 +189,12 @@ class CryptoRiskEngine {
         `SELECT * FROM public.crypto_transactions WHERE id = $1 FOR UPDATE`,
         [transactionId]
       );
-      if (txRes.rows.length === 0) throw new Error("TRANSACTION_NOT_FOUND");
+      if (txRes.rows.length === 0) throw new Error('TRANSACTION_NOT_FOUND');
       const tx = txRes.rows[0];
 
       if (tx.approval_status === 'APPROVED' || tx.status === 'COMPLETED') {
         await client.query('COMMIT');
-        return { success: true, transaction: tx, message: "Transaction already finalized." };
+        return { success: true, transaction: tx, message: 'Transaction already finalized.' };
       }
 
       // Record approval log
@@ -167,18 +256,18 @@ class CryptoRiskEngine {
   async updateWalletState(userId, currency, newState, adminId = null, reason = null) {
     const upState = String(newState).toUpperCase();
     if (!['ACTIVE', 'FROZEN', 'REVIEW', 'SUSPENDED', 'CLOSED'].includes(upState)) {
-      throw new Error("INVALID_WALLET_STATE");
+      throw new Error('INVALID_WALLET_STATE');
     }
 
     const res = await pool.query(
-      `UPDATE public.crypto_wallets 
+      `UPDATE public.crypto_wallets
        SET status = $1, version = version + 1, updated_at = NOW()
        WHERE user_id = $2 AND currency = $3
        RETURNING *`,
       [upState, userId, String(currency).toUpperCase()]
     );
 
-    if (res.rows.length === 0) throw new Error("WALLET_NOT_FOUND");
+    if (res.rows.length === 0) throw new Error('WALLET_NOT_FOUND');
 
     await pool.query(
       `INSERT INTO public.crypto_audit_logs (user_id, action, entity_type, entity_id, details)
