@@ -130,8 +130,10 @@ async function processFincraWebhook(headers, rawBody, parsedBody) {
 async function handleDepositSuccessful(payload) {
   const data           = payload.data || payload;
   const fincraRef      = data.reference   || data.id;
-  const amount         = parseFloat(data.amount || 0);
-  const currency       = (data.currency  || "NGN").toUpperCase();
+  // Fincra collection webhooks use 'sourceAmount' (what user sent) and 'amountReceived' (after fees).
+  // Credit the user with sourceAmount (what they paid), or amountReceived, or destinationAmount.
+  const amount         = parseFloat(data.sourceAmount || data.amount || data.amountReceived || data.destinationAmount || 0);
+  const currency       = (data.sourceCurrency || data.currency || data.destinationCurrency || "NGN").toUpperCase();
   const accountNumber  = data.accountNumber || 
                          data.account_number || 
                          data.virtualAccount?.accountNumber || 
@@ -243,6 +245,67 @@ async function handleDepositSuccessful(payload) {
     if (manualAmountMatch) {
       userId = manualAmountMatch.user_id;
       logger.info(`[Fincra/webhook] Resolved user ${userId} via manual_deposits amount match (${amount} ${currency}).`);
+    }
+  }
+
+  // Fallback 4: Extract NS-XXXXXX reference from description/narration field
+  // In shared virtual account mode, the user's deposit reference (e.g., NS-22YWA8D)
+  // is embedded in the bank transfer narration/description, not in Fincra's reference field.
+  if (!userId) {
+    const narration = data.description || data.narration || data.remark || '';
+    const nsRefMatch = narration.match(/NS[-_ ]?([A-Z0-9]{6,12})/i);
+    if (nsRefMatch) {
+      const extractedRef = `NS-${nsRefMatch[1].toUpperCase()}`;
+      logger.info(`[Fincra/webhook] Extracted reference ${extractedRef} from narration.`);
+
+      // Search transactions by this extracted reference
+      const { data: txMatch } = await supabase
+        .from("transactions")
+        .select("user_id, id, status, wallet_credit_status")
+        .or(`reference_id.eq.${extractedRef},metadata->>display_ref.eq.${extractedRef}`)
+        .maybeSingle();
+
+      if (txMatch) {
+        if (txMatch.status === 'COMPLETED' && txMatch.wallet_credit_status === 'WALLET_CREDITED') {
+          logger.info(`[Fincra/webhook] Transaction ${extractedRef} already credited. Skipping.`);
+          return { handled: true, status: 'SUCCESSFUL', reason: 'Already credited' };
+        }
+        userId = txMatch.user_id;
+        logger.info(`[Fincra/webhook] Resolved user ${userId} via narration reference match (${extractedRef}).`);
+      } else {
+        // Check manual_deposits
+        const { data: manualMatch } = await supabase
+          .from("manual_deposits")
+          .select("user_id")
+          .eq("reference", extractedRef)
+          .maybeSingle();
+        if (manualMatch) {
+          userId = manualMatch.user_id;
+          logger.info(`[Fincra/webhook] Resolved user ${userId} via manual_deposits narration match (${extractedRef}).`);
+        }
+      }
+    }
+  }
+
+  // Fallback 5: Match by customerName against profiles (last resort for shared virtual accounts)
+  if (!userId) {
+    const customerName = data.customerName || data.senderAccountName || data.customer?.name;
+    if (customerName) {
+      const nameParts = customerName.trim().split(/\s+/).filter(p => p.length > 1);
+      if (nameParts.length >= 2) {
+        // Search profiles by full_name (case-insensitive ILIKE match)
+        const { data: profileMatch } = await supabase
+          .from("profiles")
+          .select("id")
+          .ilike("full_name", `%${nameParts.join('%')}%`)
+          .limit(1)
+          .maybeSingle();
+
+        if (profileMatch) {
+          userId = profileMatch.id;
+          logger.info(`[Fincra/webhook] Resolved user ${userId} via customerName profile match (${customerName}).`);
+        }
+      }
     }
   }
 
