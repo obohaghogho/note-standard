@@ -509,20 +509,32 @@ router.post('/:id/reply', requireAuth, async (req, res) => {
       .from('statuses').select('*').eq('id', req.params.id).eq('is_deleted', false).single();
     if (!status) return res.status(404).json({ error: 'Not found' });
 
-    // Find or create direct conversation
+    // Find or create direct conversation (MUST exclude support chats)
     const { data: myConvs } = await supabase
       .from('conversation_members').select('conversation_id').eq('user_id', req.user.id);
     const myConvIds = (myConvs || []).map(r => r.conversation_id);
 
     let convId = null;
     if (myConvIds.length > 0) {
-      const { data: shared } = await supabase
-        .from('conversation_members')
-        .select('conversation_id')
-        .in('conversation_id', myConvIds)
-        .eq('user_id', status.user_id)
-        .limit(1).maybeSingle();
-      convId = shared?.conversation_id || null;
+      // Filter to only regular direct conversations — exclude support chats
+      const { data: directConvs } = await supabase
+        .from('conversations')
+        .select('id')
+        .in('id', myConvIds)
+        .eq('type', 'direct')
+        .or('chat_type.is.null,chat_type.neq.support');
+
+      const directConvIds = (directConvs || []).map(r => r.id);
+
+      if (directConvIds.length > 0) {
+        const { data: shared } = await supabase
+          .from('conversation_members')
+          .select('conversation_id')
+          .in('conversation_id', directConvIds)
+          .eq('user_id', status.user_id)
+          .limit(1).maybeSingle();
+        convId = shared?.conversation_id || null;
+      }
     }
 
     if (!convId) {
@@ -553,6 +565,32 @@ router.post('/:id/reply', requireAuth, async (req, res) => {
 
     if (rpcError) throw rpcError;
     const msg = rpcData.message;
+
+    // Store status context as message metadata (WhatsApp-style status reply card)
+    const { data: statusOwnerProfile } = await supabase
+      .from('profiles')
+      .select('full_name, username, avatar_url')
+      .eq('id', status.user_id)
+      .single();
+
+    const statusMetadata = {
+      status_reply: {
+        status_id: status.id,
+        media_url: status.media_url || null,
+        media_thumbnail: status.media_thumbnail || null,
+        media_type: status.type,
+        status_content: status.content || null,
+        bg_color: status.bg_color || null,
+        bg_gradient: status.bg_gradient || null,
+        poster_name: statusOwnerProfile?.full_name || statusOwnerProfile?.username || 'User',
+        poster_avatar: statusOwnerProfile?.avatar_url || null,
+      }
+    };
+
+    await supabase
+      .from('messages')
+      .update({ metadata: statusMetadata })
+      .eq('id', msg.id);
 
     // Stamp authoritative last-message pointer on the conversation to update chatlist preview and ordering
     await supabase

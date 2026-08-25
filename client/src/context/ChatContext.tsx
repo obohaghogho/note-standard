@@ -58,6 +58,19 @@ export interface Message {
         storage_path: string;
         metadata: Record<string, unknown>;
     };
+    metadata?: {
+        status_reply?: {
+            status_id: string;
+            media_url?: string;
+            media_thumbnail?: string;
+            media_type?: string;
+            status_content?: string;
+            bg_color?: string;
+            bg_gradient?: string;
+            poster_name?: string;
+            poster_avatar?: string;
+        };
+    };
 }
 
 export interface Conversation {

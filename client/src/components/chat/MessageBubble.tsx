@@ -181,6 +181,83 @@ const MessageBubble = memo(({
                     </div>
                 )}
 
+                {/* WhatsApp-style Status Reply Card */}
+                {msg.metadata?.status_reply && (
+                    <div 
+                        className="mb-2 rounded-xl overflow-hidden border border-white/10"
+                        style={{
+                            background: msg.metadata.status_reply.bg_gradient 
+                                || msg.metadata.status_reply.bg_color 
+                                || 'rgba(0,0,0,0.15)',
+                        }}
+                    >
+                        {/* Status media preview */}
+                        {msg.metadata.status_reply.media_url && ['image', 'gif'].includes(msg.metadata.status_reply.media_type || '') && (
+                            <div className="relative w-full max-h-[200px] overflow-hidden">
+                                <img 
+                                    src={msg.metadata.status_reply.media_thumbnail || msg.metadata.status_reply.media_url}
+                                    alt="Status" 
+                                    className="w-full h-full object-cover"
+                                    style={{ maxHeight: '200px' }}
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                            </div>
+                        )}
+                        {msg.metadata.status_reply.media_url && msg.metadata.status_reply.media_type === 'video' && (
+                            <div className="relative w-full max-h-[200px] overflow-hidden bg-black/30 flex items-center justify-center" style={{ minHeight: '120px' }}>
+                                {msg.metadata.status_reply.media_thumbnail ? (
+                                    <img 
+                                        src={msg.metadata.status_reply.media_thumbnail}
+                                        alt="Video status" 
+                                        className="w-full h-full object-cover"
+                                        style={{ maxHeight: '200px' }}
+                                    />
+                                ) : (
+                                    <div className="flex items-center justify-center py-8">
+                                        <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
+                                        </div>
+                                    </div>
+                                )}
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                                <div className="absolute top-2 right-2 bg-black/40 rounded-full p-1 backdrop-blur-sm">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
+                                </div>
+                            </div>
+                        )}
+                        {/* Text-only status with background color */}
+                        {!msg.metadata.status_reply.media_url && msg.metadata.status_reply.status_content && (
+                            <div 
+                                className="px-3 py-4 text-center text-sm text-white/90 font-medium leading-relaxed"
+                                style={{ 
+                                    background: msg.metadata.status_reply.bg_gradient 
+                                        || msg.metadata.status_reply.bg_color 
+                                        || '#1a1a2e',
+                                    minHeight: '60px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                }}
+                            >
+                                <p className="line-clamp-3">{msg.metadata.status_reply.status_content}</p>
+                            </div>
+                        )}
+                        {/* Status context label */}
+                        <div className="px-3 py-2 flex items-center gap-2" style={{ background: 'rgba(0,0,0,0.25)' }}>
+                            <div className="w-5 h-5 rounded-full overflow-hidden bg-white/20 flex-shrink-0">
+                                {msg.metadata.status_reply.poster_avatar ? (
+                                    <img src={msg.metadata.status_reply.poster_avatar} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-[10px] text-white/60">👤</div>
+                                )}
+                            </div>
+                            <span className="text-[11px] text-white/70 font-medium truncate">
+                                Replied to <span className="text-white/90 font-semibold">{msg.metadata.status_reply.poster_name || 'status'}</span>'s status
+                            </span>
+                        </div>
+                    </div>
+                )}
+
                 {msg.attachment && msg.type !== 'audio' && (
                     <div className="mb-2 rounded-lg overflow-hidden border border-black/20 bg-black/10">
                         {msg.type === 'image' ? (
