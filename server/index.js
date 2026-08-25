@@ -126,6 +126,24 @@ server.listen(PORT, "0.0.0.0", async () => {
 
   // ✅ Workers are launched — mark workers ready
   bootManager.setService("workers", true);
+
+  // ── Keep-Alive Self-Ping (Prevents Render Free Tier Sleep) ────────────────
+  // Render free tier spins down after 15 minutes of inactivity, causing
+  // Fincra/Paystack webhooks to fail silently. This pings every 13 minutes.
+  const serverUrl = env.SERVER_URL || env.BACKEND_URL || `http://localhost:${PORT}`;
+  if (env.NODE_ENV === "production" || process.env.RENDER) {
+    const KEEP_ALIVE_INTERVAL = 13 * 60 * 1000; // 13 minutes
+    setInterval(() => {
+      const url = `${serverUrl}/api/system/health`;
+      const client = url.startsWith("https") ? https : http;
+      client.get(url, (res) => {
+        logger.info(`[KeepAlive] Self-ping: ${res.statusCode}`);
+      }).on("error", (err) => {
+        logger.warn(`[KeepAlive] Self-ping failed: ${err.message}`);
+      });
+    }, KEEP_ALIVE_INTERVAL);
+    logger.info(`[KeepAlive] Self-ping enabled (every 13m) → ${serverUrl}/api/system/health`);
+  }
   
   // 3. Full async boot sequence
   setImmediate(async () => {
