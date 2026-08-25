@@ -251,55 +251,65 @@ async function handleDepositSuccessful(payload) {
   // Fallback 4: Extract NS-XXXXXX reference from description/narration field
   // In shared virtual account mode, the user's deposit reference (e.g., NS-22YWA8D)
   // is embedded in the bank transfer narration/description, not in Fincra's reference field.
+  // CHALLENGE: Narrations often concatenate without spaces: "NS 22YWA8DFINCRA JOSSY..."
+  // so we can't reliably regex-extract the exact ref. Instead, we grab the raw string
+  // after "NS" and try progressively shorter substrings against the DB.
   if (!userId) {
     const narration = data.description || data.narration || data.remark || '';
-    const nsRefMatch = narration.match(/NS[-_ ]?([A-Z0-9]{6,12})/i);
-    if (nsRefMatch) {
-      const extractedRef = `NS-${nsRefMatch[1].toUpperCase()}`;
-      logger.info(`[Fincra/webhook] Extracted reference ${extractedRef} from narration.`);
+    const nsRawMatch = narration.match(/NS[-_ ]?([A-Z0-9]+)/i);
+    if (nsRawMatch) {
+      const rawCapture = nsRawMatch[1].toUpperCase();
+      logger.info(`[Fincra/webhook] Raw NS capture from narration: ${rawCapture}`);
 
-      // Search transactions by this extracted reference
-      const { data: txMatch } = await supabase
-        .from("transactions")
-        .select("user_id, id, status, wallet_credit_status")
-        .or(`reference_id.eq.${extractedRef},metadata->>display_ref.eq.${extractedRef}`)
-        .maybeSingle();
+      // Try progressively shorter substrings (8 chars down to 5) until DB match
+      for (let len = Math.min(rawCapture.length, 8); len >= 5 && !userId; len--) {
+        const candidateRef = `NS-${rawCapture.substring(0, len)}`;
 
-      if (txMatch) {
-        if (txMatch.status === 'COMPLETED' && txMatch.wallet_credit_status === 'WALLET_CREDITED') {
-          logger.info(`[Fincra/webhook] Transaction ${extractedRef} already credited. Skipping.`);
-          return { handled: true, status: 'SUCCESSFUL', reason: 'Already credited' };
+        const { data: txMatch } = await supabase
+          .from("transactions")
+          .select("user_id, id, status, wallet_credit_status")
+          .or(`reference_id.eq.${candidateRef},metadata->>display_ref.eq.${candidateRef}`)
+          .maybeSingle();
+
+        if (txMatch) {
+          // Always extract the user_id — this webhook is for a NEW deposit,
+          // even if the matched transaction is already completed
+          userId = txMatch.user_id;
+          logger.info(`[Fincra/webhook] Resolved user ${userId} via narration reference match (${candidateRef}, len=${len}).`);
+          break;
         }
-        userId = txMatch.user_id;
-        logger.info(`[Fincra/webhook] Resolved user ${userId} via narration reference match (${extractedRef}).`);
-      } else {
-        // Check manual_deposits
+
+        // Also check manual_deposits
         const { data: manualMatch } = await supabase
           .from("manual_deposits")
           .select("user_id")
-          .eq("reference", extractedRef)
+          .eq("reference", candidateRef)
           .maybeSingle();
         if (manualMatch) {
           userId = manualMatch.user_id;
-          logger.info(`[Fincra/webhook] Resolved user ${userId} via manual_deposits narration match (${extractedRef}).`);
+          logger.info(`[Fincra/webhook] Resolved user ${userId} via manual_deposits narration match (${candidateRef}, len=${len}).`);
+          break;
         }
       }
     }
   }
 
   // Fallback 5: Match by customerName against profiles (last resort for shared virtual accounts)
+  // Fincra sends names like "OBOH AGHOGHO JOSSY" but profile might be "Aghogho jossy oboh"
+  // Match each name part individually to handle different name orders
   if (!userId) {
     const customerName = data.customerName || data.senderAccountName || data.customer?.name;
     if (customerName) {
       const nameParts = customerName.trim().split(/\s+/).filter(p => p.length > 1);
       if (nameParts.length >= 2) {
-        // Search profiles by full_name (case-insensitive ILIKE match)
-        const { data: profileMatch } = await supabase
-          .from("profiles")
-          .select("id")
-          .ilike("full_name", `%${nameParts.join('%')}%`)
-          .limit(1)
-          .maybeSingle();
+        // Build AND condition: each name part must appear somewhere in full_name
+        // Use the two longest name parts for matching (most distinctive)
+        const sortedParts = nameParts.sort((a, b) => b.length - a.length).slice(0, 2);
+        let query = supabase.from("profiles").select("id");
+        for (const part of sortedParts) {
+          query = query.ilike("full_name", `%${part}%`);
+        }
+        const { data: profileMatch } = await query.limit(1).maybeSingle();
 
         if (profileMatch) {
           userId = profileMatch.id;
