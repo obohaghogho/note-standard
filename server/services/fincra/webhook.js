@@ -172,7 +172,7 @@ async function handleDepositSuccessful(payload) {
     }
   }
 
-  // Fallback: Resolve user by customer/merchant reference or narration
+  // Fallback 1: Resolve user by customer/merchant reference or narration
   if (!userId) {
     const searchRef = data.customerReference || data.merchantReference || data.reference || data.narration;
     if (searchRef) {
@@ -184,7 +184,7 @@ async function handleDepositSuccessful(payload) {
 
       if (txMatch) {
         if (txMatch.status === 'COMPLETED' || txMatch.wallet_credit_status === 'WALLET_CREDITED' || txMatch.payment_status === 'WALLET_CREDITED') {
-          logger.info(`[Fincra/webhook] Transaction ${searchRef} already credited via IdempotentLedgerCreditService. Skipping double credit.`);
+          logger.info(`[Fincra/webhook] Transaction ${searchRef} already credited. Skipping double credit.`);
           return { handled: true, status: 'SUCCESSFUL', reason: 'Already credited' };
         }
         userId = txMatch.user_id;
@@ -204,8 +204,50 @@ async function handleDepositSuccessful(payload) {
     }
   }
 
+  // Fallback 2: Match by amount + currency + recent time window against pending deposits.
+  // This catches transfers where Fincra doesn't return the user's reference in any field.
+  if (!userId && amount > 0) {
+    const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(); // 48-hour window
+    const { data: amountMatch } = await supabase
+      .from("transactions")
+      .select("user_id, id, reference_id, status")
+      .eq("type", "DEPOSIT")
+      .eq("currency", currency)
+      .eq("amount", amount)
+      .in("status", ["PENDING", "PROCESSING"])
+      .gte("created_at", cutoff)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (amountMatch) {
+      userId = amountMatch.user_id;
+      logger.info(`[Fincra/webhook] Resolved user ${userId} via amount+currency+time window match (${amount} ${currency}, tx: ${amountMatch.id}).`);
+    }
+  }
+
+  // Fallback 3: Match by amount + currency in manual_deposits table
+  if (!userId && amount > 0) {
+    const cutoff48h = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    const { data: manualAmountMatch } = await supabase
+      .from("manual_deposits")
+      .select("user_id, reference")
+      .eq("currency", currency)
+      .eq("amount", amount)
+      .eq("status", "pending")
+      .gte("created_at", cutoff48h)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (manualAmountMatch) {
+      userId = manualAmountMatch.user_id;
+      logger.info(`[Fincra/webhook] Resolved user ${userId} via manual_deposits amount match (${amount} ${currency}).`);
+    }
+  }
+
   if (!userId) {
-    logger.warn(`[Fincra/webhook] No wallet link or transaction reference found for account ${accountNumber || 'N/A'} (${currency}).`);
+    logger.warn(`[Fincra/webhook] No wallet link or transaction reference found for account ${accountNumber || 'N/A'} (${currency}). Amount: ${amount}`);
     return { handled: false, reason: `Unknown virtual account or reference: ${accountNumber || fincraRef}` };
   }
 
@@ -274,8 +316,8 @@ async function handleDepositSuccessful(payload) {
 
   let isSettled = policy.deposit_settles_instantly || data.settlement_status === 'settled';
 
-  // ── INTEGRATE IDEMPOTENT LEDGER CREDIT SERVICE ────────────────────────────
-  const IdempotentLedgerCreditService = require("../payment/IdempotentLedgerCreditService");
+  // ── CREDIT VIA AUTHORITATIVE DepositCreditEngine ────────────────────────────
+  const DepositCreditEngine = require("../payment/DepositCreditEngine");
   const searchRef = data.customerReference || data.merchantReference || data.reference || data.narration || fincraRef;
 
   let { data: primaryTx } = await supabase
@@ -305,21 +347,21 @@ async function handleDepositSuccessful(payload) {
     primaryTx = newTx;
   }
 
-  // Idempotently credit wallet via authoritative credit engine
+  // Idempotently credit wallet via the single authoritative engine
   let creditRes = null;
   try {
-    creditRes = await IdempotentLedgerCreditService.creditWallet({
+    creditRes = await DepositCreditEngine.credit({
       transactionId: primaryTx?.id || null,
       reference: searchRef,
-      providerTransactionId: fincraRef,
       amount,
       currency,
       userId,
-      source: "FINCRA_WEBHOOK"
+      providerTxId: fincraRef,
+      source: "FINCRA_WEBHOOK",
     });
-    logger.info(`[Fincra/webhook] IdempotentLedgerCreditService result: ${JSON.stringify(creditRes)}`);
+    logger.info(`[Fincra/webhook] DepositCreditEngine result: ${JSON.stringify(creditRes)}`);
   } catch (creditErr) {
-    logger.error(`[Fincra/webhook] IdempotentLedgerCreditService error: ${creditErr.message}`);
+    logger.error(`[Fincra/webhook] DepositCreditEngine error: ${creditErr.message}`);
   }
 
   await supabase.from("fincra_transactions")
@@ -332,7 +374,7 @@ async function handleDepositSuccessful(payload) {
     details: { fincraRef, amount, currency, status: 'AVAILABLE' },
   });
 
-  logger.info(`[Fincra/webhook] ✅ Deposit processed via IdempotentLedgerCreditService: ${amount} ${currency} for user ${userId}.`);
+  logger.info(`[Fincra/webhook] ✅ Deposit processed via DepositCreditEngine: ${amount} ${currency} for user ${userId}.`);
 
   return { handled: true, status: 'SUCCESSFUL', creditRes };
 }

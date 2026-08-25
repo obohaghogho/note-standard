@@ -543,19 +543,48 @@ exports.submitDepositProof = async (req, res) => {
       console.warn("[WalletController] Manual deposit sync warning:", mErr.message);
     }
 
-    // 3. IF provider payment was already confirmed, trigger idempotent credit
-    const IdempotentLedgerCreditService = require("../services/payment/IdempotentLedgerCreditService");
+    // 3. ALWAYS attempt idempotent credit via DepositCreditEngine.
+    // CRITICAL FIX: The old code only credited when payment_status === 'PAYMENT_CONFIRMED',
+    // but bank transfers are always created with 'PAYMENT_PENDING', so the credit was NEVER
+    // triggered by receipt upload. The DepositCreditEngine has its own idempotency guards
+    // (SELECT FOR UPDATE, ledger idempotency key), so calling it is always safe.
+    const DepositCreditEngine = require("../services/payment/DepositCreditEngine");
     let creditResult = null;
 
-    if (tx?.payment_status === "PAYMENT_CONFIRMED" || tx?.status === "SUCCESS") {
-      creditResult = await IdempotentLedgerCreditService.creditWallet({
-        transactionId: tx.id,
-        reference,
-        amount: depositAmount,
-        currency: reqCurrency,
-        userId,
-        source: "USER_RECEIPT_UPLOAD"
-      });
+    if (tx && tx.status !== 'COMPLETED' && tx.wallet_credit_status !== 'WALLET_CREDITED') {
+      try {
+        // First update the transaction to PAYMENT_CONFIRMED so confirm_deposit RPC
+        // allows the state transition (it requires PENDING/PROCESSING/FAILED status).
+        if (tx.payment_status === 'PAYMENT_PENDING') {
+          await supabase
+            .from('transactions')
+            .update({
+              payment_status: 'PAYMENT_CONFIRMED',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', tx.id);
+        }
+
+        creditResult = await DepositCreditEngine.credit({
+          transactionId: tx.id,
+          reference,
+          amount: depositAmount,
+          currency: reqCurrency,
+          userId,
+          source: 'USER_RECEIPT_UPLOAD',
+          auditMeta: { proof_url: req.body.proof_url },
+        });
+
+        if (creditResult.credited) {
+          console.log(`[WalletController] ✅ Wallet credited via receipt upload for ${reference}`);
+        } else if (creditResult.alreadyCredited) {
+          console.log(`[WalletController] Idempotency hit on receipt upload for ${reference}`);
+        } else if (creditResult.error) {
+          console.error(`[WalletController] Credit engine error for ${reference}: ${creditResult.error}`);
+        }
+      } catch (creditErr) {
+        console.error(`[WalletController] Credit attempt failed for ${reference}:`, creditErr.message);
+      }
     }
 
     res.json({
@@ -807,32 +836,69 @@ exports.getDepositStatus = async (req, res) => {
       return res.status(404).json({ error: "Transaction not found" });
     }
 
-    // Proactively verify pending/failed paystack transactions in case webhook was missed.
+    // Proactively verify pending/failed transactions in case webhook was missed.
     // Uses the unified DepositCreditEngine for all credit operations.
-    if (["PENDING", "FAILED"].includes(tx.status) && tx.provider === "paystack") {
-      try {
-        const PaystackProvider = require("../services/payment/providers/PaystackProvider");
-        const provider = new PaystackProvider();
-        const verifyResult = await provider.verifyPayment(tx.reference_id);
-        
-        if (verifyResult.status === "success") {
-          const DepositCreditEngine = require("../services/payment/DepositCreditEngine");
+    if (["PENDING", "FAILED"].includes(tx.status)) {
+      const DepositCreditEngine = require("../services/payment/DepositCreditEngine");
+
+      // ── Path A: Paystack card deposits — verify directly with Paystack API ──
+      if (tx.provider === "paystack") {
+        try {
+          const PaystackProvider = require("../services/payment/providers/PaystackProvider");
+          const provider = new PaystackProvider();
+          const verifyResult = await provider.verifyPayment(tx.reference_id);
+          
+          if (verifyResult.status === "success") {
+            const creditResult = await DepositCreditEngine.credit({
+              transactionId: tx.id,
+              reference:     tx.reference_id,
+              providerTxId:  verifyResult.data?.reference || tx.reference_id,
+              source:        'DEPOSIT_STATUS_PROACTIVE_PAYSTACK',
+            });
+            if (creditResult.credited || creditResult.alreadyCredited) {
+              return res.json({ status: "COMPLETED", walletCredited: true });
+            }
+          }
+        } catch (pollErr) {
+          console.error("[WalletController] Paystack proactive verify failed:", pollErr.message);
+        }
+      }
+
+      // ── Path B: Fincra bank transfer deposits — check receipt + attempt credit ──
+      if (tx.provider === "fincra" && (tx.receipt_status === 'UPLOADED' || tx.metadata?.proof_url)) {
+        try {
+          // The user uploaded a receipt, so the transfer likely happened.
+          // Attempt credit via DepositCreditEngine (idempotent, safe to retry).
+          if (tx.payment_status === 'PAYMENT_PENDING') {
+            await supabase
+              .from('transactions')
+              .update({ payment_status: 'PAYMENT_CONFIRMED', updated_at: new Date().toISOString() })
+              .eq('id', tx.id);
+          }
+
           const creditResult = await DepositCreditEngine.credit({
             transactionId: tx.id,
-            reference:     tx.reference_id,
-            providerTxId:  verifyResult.data?.reference || tx.reference_id,
-            source:        'WALLET_CONTROLLER_PROACTIVE',
+            reference:     tx.reference_id || tx.metadata?.display_ref,
+            amount:        tx.amount,
+            currency:      tx.currency,
+            userId:        tx.user_id,
+            source:        'DEPOSIT_STATUS_PROACTIVE_FINCRA',
           });
           if (creditResult.credited || creditResult.alreadyCredited) {
-            return res.json({ status: "COMPLETED" });
+            return res.json({ status: "COMPLETED", walletCredited: true });
           }
+        } catch (fincraErr) {
+          console.error("[WalletController] Fincra proactive credit failed:", fincraErr.message);
         }
-      } catch (pollErr) {
-        console.error("[WalletController] Proactive verify failed:", pollErr.message);
       }
     }
     
-    res.json({ status: tx.status });
+    res.json({
+      status: tx.status,
+      paymentStatus: tx.payment_status,
+      receiptStatus: tx.receipt_status,
+      walletCreditStatus: tx.wallet_credit_status,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
