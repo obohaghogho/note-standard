@@ -85,67 +85,29 @@ class WebhookService {
       }
       logger.info(`[WebhookService] Amount verified. Reference: ${reference}`);
 
-      // 6. Credit wallet immediately using FiatWalletService.fundWallet
-      const idempotencyKey = `paystack_webhook_${reference}`;
-      const ledgerTxId = await FiatWalletService.fundWallet(
-        txRecord.user_id,
-        txRecord.currency,
-        txRecord.amount,
-        idempotencyKey,
-        { provider: "paystack", reference, webhook: true }
-      );
-      logger.info(`[WebhookService] Wallet credited successfully. Ledger Tx ID: ${ledgerTxId}. Reference: ${reference}`);
-
-      // 7. Update transaction status to COMPLETED
-      await supabase
-        .from("transactions")
-        .update({ status: "COMPLETED", updated_at: new Date().toISOString() })
-        .eq("id", txRecord.id);
-      logger.info(`[WebhookService] Ledger updated (Transaction status set to COMPLETED). Reference: ${reference}`);
-
-      // 8. Create audit log
-      try {
-        await AuditLogService.log({
-          user_id: txRecord.user_id,
-          action: "fiat_deposit_webhook",
+      // 6. Credit wallet via the SINGLE authoritative DepositCreditEngine
+      const DepositCreditEngine = require("./payment/DepositCreditEngine");
+      const creditResult = await DepositCreditEngine.credit({
+        transactionId: txRecord.id,
+        reference,
+        amount: txRecord.amount,
+        currency: txRecord.currency,
+        userId: txRecord.user_id,
+        providerTxId: event.data.id ? String(event.data.id) : null,
+        source: 'PAYSTACK_WEBHOOK',
+        auditMeta: {
           ip: req.headers["x-forwarded-for"] || req.socket?.remoteAddress || 'unknown',
           device: req.headers["user-agent"],
-          provider: "paystack",
-          reference,
-          amount: txRecord.amount,
-          currency: txRecord.currency,
-          ledger_id: ledgerTxId,
-          webhook_id: event.data.id
-        });
-        logger.info(`[WebhookService] Audit log created. Reference: ${reference}`);
-      } catch (auditErr) {
-        logger.error(`[WebhookService] Non-blocking audit log failure: ${auditErr.message}`);
-      }
+          webhook_id: event.data.id,
+        },
+      });
 
-      // 9. Send optional realtime notification and wallet update (wrapped to protect payment path)
-      try {
-        await createNotification({
-          receiverId: txRecord.user_id,
-          type: "wallet_deposit",
-          title: "Deposit Successful",
-          message: `Your deposit of ${txRecord.amount} ${txRecord.currency} was successful.`,
-          link: "/dashboard/wallet",
-        });
-        logger.info(`[WebhookService] Realtime notification created. Reference: ${reference}`);
-      } catch (notifErr) {
-        logger.warn(`[WebhookService] Non-blocking push notification queue failed: ${notifErr.message}`);
-      }
-
-      try {
-        await realtime.emitToUser(txRecord.user_id, "wallet_update", {
-          currency: txRecord.currency,
-          amount: txRecord.amount,
-          type: "deposit",
-          status: "COMPLETED"
-        });
-        logger.info(`[WebhookService] Realtime wallet_update emitted. Reference: ${reference}`);
-      } catch (realtimeErr) {
-        logger.warn(`[WebhookService] Non-blocking realtime emit failed: ${realtimeErr.message}`);
+      if (creditResult.error) {
+        logger.error(`[WebhookService] DepositCreditEngine returned error for ${reference}: ${creditResult.error}`);
+      } else if (creditResult.credited) {
+        logger.info(`[WebhookService] ✅ Wallet credited via DepositCreditEngine. Reference: ${reference}`);
+      } else if (creditResult.alreadyCredited) {
+        logger.info(`[WebhookService] Idempotency hit via DepositCreditEngine (already credited). Reference: ${reference}`);
       }
 
       logger.info(`[WebhookService] Finished processing successfully. Reference: ${reference}`);

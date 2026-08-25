@@ -30,40 +30,8 @@ const webhookLimiter = rateLimit({
 
 const WebhookService = require("../services/WebhookService");
 
-// ── Safe proactive-credit helper
-// Uses an idempotency key so concurrent polls never double-credit a wallet.
-// This replaces the previous dangerous singleton monkey-patch pattern:
-//   WebhookService.verifySignature = () => true  ← race condition
-async function safeProactiveCredit(tx) {
-  const FiatWalletService = require("../services/FiatWalletService");
-  const AuditLogService   = require("../services/AuditLogService");
-  const idempotencyKey = `paystack_proactive_${tx.reference_id}_${tx.id}`;
-
-  const ledgerTxId = await FiatWalletService.fundWallet(
-    tx.user_id,
-    tx.currency,
-    tx.amount,
-    idempotencyKey,
-    { provider: "paystack", reference: tx.reference_id, proactive: true }
-  );
-
-  await supabase
-    .from("transactions")
-    .update({ status: "COMPLETED", updated_at: new Date().toISOString() })
-    .eq("id", tx.id);
-
-  AuditLogService.log({
-    user_id:   tx.user_id,
-    action:    "fiat_deposit_proactive_verify",
-    provider:  "paystack",
-    reference: tx.reference_id,
-    amount:    tx.amount,
-    currency:  tx.currency,
-    ledger_id: ledgerTxId
-  }).catch(err => logger.warn("[safeProactiveCredit] Audit log failed:", err.message));
-
-  return ledgerTxId;
-}
+// REMOVED: safeProactiveCredit helper — replaced by DepositCreditEngine
+// All proactive credit attempts now go through the unified engine.
 
 // ─── Provider Webhooks ────────────────────────────────────────
 
@@ -141,8 +109,7 @@ router.post("/crypto", (req, res) => res.status(200).json({ received: true, stat
 router.post("/anchor", async (req, res) => {
   try {
     const AnchorProvider = require("../services/payment/providers/AnchorProvider");
-    const FiatWalletService = require("../services/FiatWalletService");
-    const AuditLogService = require("../services/AuditLogService");
+    const DepositCreditEngine = require("../services/payment/DepositCreditEngine");
 
     const provider = new AnchorProvider();
 
@@ -161,35 +128,21 @@ router.post("/anchor", async (req, res) => {
     logger.info(`[AnchorWebhook] Event received: type=${parsed.type} status=${parsed.status} ref=${parsed.reference}`);
 
     if (parsed.type === "DEPOSIT" && parsed.status === "success" && parsed.reference) {
-      // Find transaction by reference
-      const { data: tx } = await supabase
-        .from("transactions")
-        .select("*")
-        .eq("reference_id", parsed.reference)
-        .maybeSingle();
+      // Credit via the unified DepositCreditEngine
+      const creditResult = await DepositCreditEngine.credit({
+        reference:    parsed.reference,
+        amount:       parsed.amount,
+        currency:     parsed.currency,
+        providerTxId: parsed.transactionId,
+        source:       'ANCHOR_WEBHOOK',
+      });
 
-      if (tx && ["PENDING", "FAILED"].includes(tx.status)) {
-        const idempotencyKey = `anchor_webhook_${parsed.reference}_${tx.id}`;
-        await FiatWalletService.fundWallet(
-          tx.user_id,
-          parsed.currency,
-          parsed.amount,
-          idempotencyKey,
-          { provider: "anchor", reference: parsed.reference }
-        );
-        await supabase
-          .from("transactions")
-          .update({ status: "COMPLETED", updated_at: new Date().toISOString() })
-          .eq("id", tx.id);
-
-        AuditLogService.log({
-          user_id: tx.user_id,
-          action: "anchor_deposit_webhook",
-          provider: "anchor",
-          reference: parsed.reference,
-          amount: parsed.amount,
-          currency: parsed.currency,
-        }).catch((err) => logger.warn("[AnchorWebhook] Audit log failed:", err.message));
+      if (creditResult.error) {
+        logger.error(`[AnchorWebhook] DepositCreditEngine error: ${creditResult.error}`);
+      } else if (creditResult.credited) {
+        logger.info(`[AnchorWebhook] ✅ Wallet credited via DepositCreditEngine. Ref: ${parsed.reference}`);
+      } else if (creditResult.alreadyCredited) {
+        logger.info(`[AnchorWebhook] Idempotency hit. Ref: ${parsed.reference}`);
       }
     }
   } catch (err) {
@@ -290,16 +243,23 @@ router.get("/status/:reference", async (req, res) => {
       return res.status(404).json({ error: "Deposit not found" });
     }
 
-    // Proactively verify pending/failed transactions with paymentService for all providers (Fincra, Paystack, etc.)
+    // Proactively verify pending/failed transactions via the unified DepositCreditEngine
+    // NOTE: Previously this called paymentService.verifyPaymentStatus which had a side-effect
+    // of triggering finalizeTransaction → confirm_deposit. This created a shadow credit path
+    // from a GET endpoint. Now we use the authoritative engine.
     if (["PENDING", "FAILED"].includes(tx.status)) {
       try {
-        const paymentService = require("../services/payment/paymentService");
-        const verifyResult = await paymentService.verifyPaymentStatus(tx.reference_id || reference);
-        if (verifyResult.status === "COMPLETED" || verifyResult.status === "SUCCESS") {
+        const DepositCreditEngine = require("../services/payment/DepositCreditEngine");
+        const creditResult = await DepositCreditEngine.credit({
+          transactionId: tx.id,
+          reference:     tx.reference_id || reference,
+          source:        'STATUS_POLL_PROACTIVE',
+        });
+        if (creditResult.credited || creditResult.alreadyCredited) {
           tx.status = "COMPLETED";
         }
       } catch (pollErr) {
-        logger.error(`[WebhookStatus] Proactive verify failed for ${reference}: ${pollErr.message}`);
+        logger.error(`[WebhookStatus] Proactive credit failed for ${reference}: ${pollErr.message}`);
       }
     }
 

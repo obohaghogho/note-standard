@@ -85,6 +85,9 @@ class WebhookGateway {
       }
 
       // ─── 5. HTTP 200 ACK ──────────────────────────────────────────────
+      // SAFETY: The webhook payload is already persisted in webhook_logs (step 4)
+      // before we ACK. If the process crashes after ACK, the reconciliation worker
+      // can recover from webhook_logs where processed=false.
       res.status(200).json({ received: true, eventId });
 
       // ─── 6. Background Processing (non-blocking) ──────────────────────
@@ -95,23 +98,38 @@ class WebhookGateway {
             `webhook:${name}:${eventId}`,
             'webhook',
             async () => {
-              // Dispatch to business logic via event bus
+              // For deposit/collection events, use the unified DepositCreditEngine
+              const eventType = (event.type || '').toLowerCase();
+              const isDeposit = ['deposit', 'collection', 'charge.success', 'payment.success',
+                'collection_successful', 'payment_successful'].some(t => eventType.includes(t));
+
+              if (isDeposit && event.reference) {
+                const DepositCreditEngine = require('./DepositCreditEngine');
+                const creditResult = await DepositCreditEngine.credit({
+                  reference:    event.reference,
+                  amount:       event.amount,
+                  currency:     event.currency,
+                  providerTxId: event.providerTransactionId || eventId,
+                  source:       `WEBHOOK_GATEWAY_${name.toUpperCase()}`,
+                });
+
+                if (creditResult.error) {
+                  logger.error(`[WebhookGateway] DepositCreditEngine error for ${eventId}: ${creditResult.error}`);
+                } else if (creditResult.credited) {
+                  logger.info(`[WebhookGateway] ✅ Wallet credited via DepositCreditEngine for ${eventId}`);
+                } else if (creditResult.alreadyCredited) {
+                  logger.info(`[WebhookGateway] Idempotency hit for deposit ${eventId}`);
+                }
+              }
+
+              // Emit to event bus for non-deposit listeners (analytics, etc.)
               PaymentEventBus.emit(`webhook.${event.type || 'unknown'}`, {
                 provider: name,
                 event,
                 raw: req.body,
               });
 
-              // Also dispatch generic 'webhook.received' for catch-all listeners
               PaymentEventBus.emit('webhook.received', { provider: name, event, raw: req.body });
-
-              // Load paymentService for legacy webhook action compatibility
-              try {
-                const paymentService = require('./paymentService');
-                await paymentService.executeWebhookAction(event, req.body, name);
-              } catch (svcErr) {
-                logger.error(`[WebhookGateway] paymentService dispatch error: ${svcErr.message}`);
-              }
 
               return { processed: true };
             }
