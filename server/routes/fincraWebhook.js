@@ -25,14 +25,35 @@ router.post(
   "/",
   express.raw({ type: "application/json" }),
   async (req, res) => {
-    const rawBody    = req.body instanceof Buffer ? req.body.toString("utf8") : req.body;
+    // ── Body Resolution ─────────────────────────────────────────────────
+    // express.json() in app.js may have ALREADY parsed the body before this
+    // route runs. In that case:
+    //   - req.body = parsed JS object (NOT Buffer)
+    //   - req.rawBody = original Buffer (saved by express.json's verify callback)
+    // If express.raw() captured it first (unlikely given mount order):
+    //   - req.body = Buffer
+    let rawBody;
     let parsedBody;
 
-    try {
-      parsedBody = JSON.parse(rawBody);
-    } catch (parseErr) {
-      logger.warn("[Fincra/webhookRoute] Failed to parse webhook body as JSON.");
-      return res.status(400).json({ error: "Invalid JSON body" });
+    if (req.body instanceof Buffer) {
+      // express.raw() captured it — ideal case
+      rawBody = req.body.toString("utf8");
+      try { parsedBody = JSON.parse(rawBody); } catch { 
+        return res.status(400).json({ error: "Invalid JSON body" }); 
+      }
+    } else if (typeof req.body === 'object' && req.body !== null) {
+      // express.json() already parsed — most common case in production
+      parsedBody = req.body;
+      // Use the raw Buffer saved by express.json()'s verify callback for HMAC
+      rawBody = req.rawBody instanceof Buffer ? req.rawBody.toString("utf8") : JSON.stringify(parsedBody);
+    } else if (typeof req.body === 'string') {
+      rawBody = req.body;
+      try { parsedBody = JSON.parse(rawBody); } catch {
+        return res.status(400).json({ error: "Invalid JSON body" });
+      }
+    } else {
+      logger.warn("[Fincra/webhookRoute] No parseable body found.", { bodyType: typeof req.body });
+      return res.status(400).json({ error: "No body received" });
     }
 
     logger.info(`[Fincra/webhookRoute] Incoming webhook event: ${parsedBody.event || parsedBody.type || "unknown"}`);
