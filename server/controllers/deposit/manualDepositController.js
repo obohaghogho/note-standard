@@ -138,6 +138,21 @@ class ManualDepositController {
                 p_override_reason: null
               });
               logger.info(`[ManualDeposit] Wallet credited ${amount} ${currency} for user ${req.user.id}`);
+
+              // Emit live balance update via Socket.io to instantly refresh user frontend UI
+              try {
+                const realtimeService = require("../../services/realtimeService");
+                if (realtimeService && typeof realtimeService.emitToUser === 'function') {
+                  realtimeService.emitToUser(req.user.id, "balance_updated", {
+                    currency: currency.toUpperCase(),
+                    amount: parseFloat(amount),
+                    walletId: wallet.id,
+                    type: "DEPOSIT"
+                  });
+                }
+              } catch (sockErr) {
+                logger.warn("[ManualDeposit] Realtime balance_updated socket notify warning:", sockErr.message);
+              }
             }
           }
         } catch (creditErr) {
