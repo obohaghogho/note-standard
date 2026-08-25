@@ -44,11 +44,11 @@ router.post("/paystack", WebhookService.processPaystackWebhook.bind(WebhookServi
 /**
  * POST /webhooks/grey
  * Direct Grey Settlement Webhook Handler
+ * Handles BOTH payouts (withdrawals) AND deposits (collections/incoming transfers).
  */
 router.post("/grey", webhookLimiter, async (req, res) => {
   try {
     const GreySettlementProvider = require('../services/settlement/GreySettlementProvider');
-    const WithdrawalWorkflowService = require('../services/treasury/WithdrawalWorkflowService');
     const greyProvider = new GreySettlementProvider();
 
     const isValid = await greyProvider.verifyWebhookSignature(req.headers, req.body);
@@ -57,25 +57,292 @@ router.post("/grey", webhookLimiter, async (req, res) => {
     }
 
     const payload = req.body || {};
-    const eventType = payload.event || payload.event_type || 'payout.completed';
-    const reference = payload.reference || payload.data?.reference;
-    const providerRef = payload.id || payload.data?.id;
-
+    const eventType = payload.event || payload.event_type || 'unknown';
     const eventTypeStr = String(eventType).toLowerCase().trim();
 
-    if (['transaction success', 'transaction_success', 'payout.completed', 'payout.successful', 'transfer.success', 'success'].includes(eventTypeStr)) {
+    logger.info(`[Grey Webhook] Received event: ${eventTypeStr}`);
+
+    // ── PAYOUT EVENTS ────────────────────────────────────────────
+    const PAYOUT_SUCCESS_EVENTS = [
+      'transaction success', 'transaction_success', 'payout.completed',
+      'payout.successful', 'transfer.success', 'success'
+    ];
+    const PAYOUT_FAILED_EVENTS = [
+      'transaction failed', 'transaction_failed', 'payout.failed',
+      'payout.rejected', 'transfer.failed', 'failed'
+    ];
+
+    if (PAYOUT_SUCCESS_EVENTS.includes(eventTypeStr)) {
+      const WithdrawalWorkflowService = require('../services/treasury/WithdrawalWorkflowService');
+      const reference = payload.reference || payload.data?.reference;
+      const providerRef = payload.id || payload.data?.id;
       await WithdrawalWorkflowService.finalizeSuccessfulSettlement(reference, providerRef);
-    } else if (['transaction failed', 'transaction_failed', 'payout.failed', 'payout.rejected', 'transfer.failed', 'failed'].includes(eventTypeStr)) {
-      const reason = payload.reason || payload.data?.reason || 'Provider payout failed';
-      await WithdrawalWorkflowService.rollbackFailedWithdrawal(reference, reason, 'REJECTED');
+      return res.status(200).json({ success: true, message: "Grey payout webhook processed" });
     }
 
-    return res.status(200).json({ success: true, message: "Grey webhook processed successfully" });
+    if (PAYOUT_FAILED_EVENTS.includes(eventTypeStr)) {
+      const WithdrawalWorkflowService = require('../services/treasury/WithdrawalWorkflowService');
+      const reference = payload.reference || payload.data?.reference;
+      const reason = payload.reason || payload.data?.reason || 'Provider payout failed';
+      await WithdrawalWorkflowService.rollbackFailedWithdrawal(reference, reason, 'REJECTED');
+      return res.status(200).json({ success: true, message: "Grey payout failure processed" });
+    }
+
+    // ── DEPOSIT / COLLECTION EVENTS ─────────────────────────────
+    const DEPOSIT_EVENTS = [
+      'transaction.received', 'deposit.completed', 'deposit.successful',
+      'collection.successful', 'transfer.received', 'credit',
+      'ach.received', 'wire.received', 'inbound_transfer.completed'
+    ];
+
+    if (DEPOSIT_EVENTS.includes(eventTypeStr)) {
+      const result = await handleGreyDepositWebhook(payload);
+      return res.status(200).json({ success: true, ...result });
+    }
+
+    // ── UNKNOWN EVENT — still return 200 to prevent retries ─────
+    logger.info(`[Grey Webhook] Unhandled event type: ${eventTypeStr}. Acknowledged.`);
+    return res.status(200).json({ success: true, message: "Grey webhook acknowledged (unhandled event type)" });
+
   } catch (err) {
-    logger.error(`[Grey Webhook] Processing error: ${err.message}`);
-    return res.status(500).json({ success: false, error: err.message });
+    logger.error(`[Grey Webhook] Processing error: ${err.message}`, err);
+    // Return 200 to prevent Grey from retrying on server errors
+    return res.status(200).json({ success: false, error: err.message });
   }
 });
+
+/**
+ * Handle Grey deposit/collection webhook.
+ * Resolves user from memo/narration NS- reference, user_bank_references table,
+ * or customerName profile match. Then credits wallet via DepositCreditEngine.
+ */
+async function handleGreyDepositWebhook(payload) {
+  const data = payload.data || payload;
+  const greyRef = data.reference || data.id || data.transaction_id;
+  const amount = parseFloat(data.amount || data.source_amount || data.net_amount || 0);
+  const currency = (data.currency || data.source_currency || 'USD').toUpperCase();
+  const senderName = data.sender_name || data.customer_name || data.counterparty_name || data.narration || '';
+  const memo = data.memo || data.narration || data.description || data.remark || '';
+  const rail = (data.rail || data.type || data.channel || 'ACH').toUpperCase();
+
+  logger.info(`[Grey Webhook/Deposit] Incoming: ${amount} ${currency} via ${rail} (ref: ${greyRef}, sender: ${senderName})`);
+
+  if (!greyRef || !amount) {
+    logger.warn("[Grey Webhook/Deposit] Missing required fields (ref/amount). Skipping.");
+    return { handled: false, reason: "Missing required fields" };
+  }
+
+  // ── Idempotency: check if this Grey reference was already processed ────
+  const { data: existingLog } = await supabase
+    .from("transactions")
+    .select("id, status, wallet_credit_status")
+    .eq("provider_reference", greyRef)
+    .eq("provider", "grey")
+    .maybeSingle();
+
+  if (existingLog && existingLog.wallet_credit_status === 'WALLET_CREDITED') {
+    logger.info(`[Grey Webhook/Deposit] Already processed: ${greyRef}. Skipping.`);
+    return { handled: true, reason: "Already processed" };
+  }
+
+  // ── User Resolution ─────────────────────────────────────────────────────
+  let userId = null;
+
+  // Strategy 1: Extract NS-XXXXXXX from memo/narration via progressive DB matching
+  if (!userId) {
+    const searchText = `${memo} ${senderName} ${data.description || ''}`;
+    const nsRawMatch = searchText.match(/NS[-_ ]?([A-Z0-9]+)/i);
+    if (nsRawMatch) {
+      const rawCapture = nsRawMatch[1].toUpperCase();
+      logger.info(`[Grey Webhook/Deposit] Raw NS capture: ${rawCapture}`);
+
+      for (let len = Math.min(rawCapture.length, 8); len >= 5 && !userId; len--) {
+        const candidateRef = `NS-${rawCapture.substring(0, len)}`;
+
+        // Check transactions table
+        const { data: txMatch } = await supabase
+          .from("transactions")
+          .select("user_id")
+          .or(`reference_id.eq.${candidateRef},metadata->>display_ref.eq.${candidateRef}`)
+          .maybeSingle();
+
+        if (txMatch) {
+          userId = txMatch.user_id;
+          logger.info(`[Grey Webhook/Deposit] Resolved user ${userId} via narration ref (${candidateRef}).`);
+          break;
+        }
+
+        // Check user_bank_references table
+        const { data: refMatch } = await supabase
+          .from("user_bank_references")
+          .select("user_id")
+          .eq("reference", candidateRef)
+          .eq("is_active", true)
+          .maybeSingle();
+
+        if (refMatch) {
+          userId = refMatch.user_id;
+          logger.info(`[Grey Webhook/Deposit] Resolved user ${userId} via bank reference (${candidateRef}).`);
+          break;
+        }
+
+        // Check manual_deposits
+        const { data: manualMatch } = await supabase
+          .from("manual_deposits")
+          .select("user_id")
+          .eq("reference", candidateRef)
+          .maybeSingle();
+        if (manualMatch) {
+          userId = manualMatch.user_id;
+          logger.info(`[Grey Webhook/Deposit] Resolved user ${userId} via manual_deposits (${candidateRef}).`);
+          break;
+        }
+      }
+    }
+  }
+
+  // Strategy 2: Match by user_bank_references for Grey provider
+  if (!userId && memo) {
+    const { data: refMatch } = await supabase
+      .from("user_bank_references")
+      .select("user_id")
+      .eq("provider", "grey")
+      .eq("is_active", true)
+      .ilike("reference", `%${memo.trim().substring(0, 20)}%`)
+      .maybeSingle();
+    if (refMatch) {
+      userId = refMatch.user_id;
+      logger.info(`[Grey Webhook/Deposit] Resolved user ${userId} via user_bank_references memo match.`);
+    }
+  }
+
+  // Strategy 3: Match by sender name against profiles
+  if (!userId && senderName) {
+    const nameParts = senderName.trim().split(/\s+/).filter(p => p.length > 1);
+    if (nameParts.length >= 2) {
+      const sortedParts = nameParts.sort((a, b) => b.length - a.length).slice(0, 2);
+      let query = supabase.from("profiles").select("id");
+      for (const part of sortedParts) {
+        query = query.ilike("full_name", `%${part}%`);
+      }
+      const { data: profileMatch } = await query.limit(1).maybeSingle();
+      if (profileMatch) {
+        userId = profileMatch.id;
+        logger.info(`[Grey Webhook/Deposit] Resolved user ${userId} via sender name profile match (${senderName}).`);
+      }
+    }
+  }
+
+  // Strategy 4: Amount + currency match against PENDING deposits in recent window
+  if (!userId && amount > 0) {
+    const cutoff = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString(); // 72h for ACH
+    const { data: amountMatch } = await supabase
+      .from("transactions")
+      .select("user_id, id, reference_id")
+      .eq("type", "DEPOSIT")
+      .eq("currency", currency)
+      .eq("amount", amount)
+      .in("status", ["PENDING", "PROCESSING"])
+      .gte("created_at", cutoff)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (amountMatch) {
+      userId = amountMatch.user_id;
+      logger.info(`[Grey Webhook/Deposit] Resolved user ${userId} via amount+currency match (${amount} ${currency}).`);
+    }
+  }
+
+  if (!userId) {
+    logger.warn(`[Grey Webhook/Deposit] Could not resolve user for deposit ${greyRef} (${amount} ${currency}). Sender: ${senderName}, Memo: ${memo}`);
+    return { handled: false, reason: `Could not resolve user. Sender: ${senderName}, Memo: ${memo}` };
+  }
+
+  // ── Get or create wallet ────────────────────────────────────────────
+  let { data: wallet } = await supabase
+    .from("wallets_v6")
+    .select("id, balance, available_balance")
+    .eq("user_id", userId)
+    .eq("currency", currency)
+    .maybeSingle();
+
+  if (!wallet) {
+    logger.info(`[Grey Webhook/Deposit] No ${currency} wallet for user ${userId}. Auto-creating...`);
+    try {
+      const walletService = require("../services/walletService");
+      wallet = await walletService.createWallet(userId, currency, 'native');
+    } catch {
+      const { data: insertedWallet } = await supabase
+        .from("wallets_v6")
+        .insert({ user_id: userId, currency, balance: 0, available_balance: 0, pending_balance: 0 })
+        .select("id, balance, available_balance")
+        .single();
+      wallet = insertedWallet;
+    }
+  }
+
+  if (!wallet) {
+    logger.error(`[Grey Webhook/Deposit] Wallet creation failed for user ${userId} (${currency}).`);
+    return { handled: false, reason: "Wallet not found" };
+  }
+
+  // ── Create or find transaction ──────────────────────────────────────
+  let { data: primaryTx } = await supabase
+    .from("transactions")
+    .select("id, reference_id, wallet_credit_status")
+    .or(`provider_reference.eq.${greyRef}`)
+    .maybeSingle();
+
+  if (!primaryTx) {
+    const { data: newTx } = await supabase
+      .from("transactions")
+      .insert({
+        user_id: userId,
+        wallet_id: wallet.id,
+        amount,
+        currency,
+        type: "DEPOSIT",
+        status: "PENDING",
+        reference_id: `GREY-DEP-${greyRef}`,
+        provider_reference: greyRef,
+        provider: "grey",
+        payment_status: "PAYMENT_CONFIRMED",
+        wallet_credit_status: "WALLET_CREDIT_PENDING",
+        display_label: `${currency} ${rail} Deposit`,
+        metadata: {
+          provider: "grey",
+          channel: rail,
+          sender_name: senderName,
+          memo,
+          payload: data
+        }
+      })
+      .select("id, reference_id")
+      .single();
+    primaryTx = newTx;
+  }
+
+  // ── Credit via DepositCreditEngine ──────────────────────────────────
+  const DepositCreditEngine = require("../services/payment/DepositCreditEngine");
+  let creditRes = null;
+  try {
+    creditRes = await DepositCreditEngine.credit({
+      transactionId: primaryTx?.id || null,
+      reference: primaryTx?.reference_id || `GREY-DEP-${greyRef}`,
+      amount,
+      currency,
+      userId,
+      providerTxId: greyRef,
+      source: "GREY_WEBHOOK",
+    });
+    logger.info(`[Grey Webhook/Deposit] ✅ Credited ${amount} ${currency} to user ${userId}. Result: ${JSON.stringify(creditRes)}`);
+  } catch (creditErr) {
+    logger.error(`[Grey Webhook/Deposit] DepositCreditEngine error: ${creditErr.message}`);
+  }
+
+  return { handled: true, status: 'SUCCESSFUL', amount, currency, userId, creditRes };
+}
 
 /**
  * POST /webhooks/flutterwave
