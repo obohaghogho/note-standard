@@ -124,41 +124,8 @@ function sanitiseOrigin(rawOrigin, fallback) {
   return rawOrigin;
 }
 
-// ── Shared helper: safely credit a wallet for a verified Paystack payment
-// This replaces the previous dangerous global singleton monkey-patch.
-async function safeProactiveCredit(tx, verifyResult) {
-  const FiatWalletService = require('../services/FiatWalletService');
-  const AuditLogService   = require('../services/AuditLogService');
-  const idempotencyKey = `paystack_proactive_${tx.reference_id}_${tx.id}`;
-
-  // Credit the wallet atomically (idempotency key prevents double-credit)
-  const ledgerTxId = await FiatWalletService.fundWallet(
-    tx.user_id,
-    tx.currency,
-    tx.amount,
-    idempotencyKey,
-    { provider: 'paystack', reference: tx.reference_id, proactive: true }
-  );
-
-  // Mark the transaction COMPLETED
-  await supabase
-    .from('transactions')
-    .update({ status: 'COMPLETED', updated_at: new Date().toISOString() })
-    .eq('id', tx.id);
-
-  // Fire-and-forget audit log
-  AuditLogService.log({
-    user_id:   tx.user_id,
-    action:    'fiat_deposit_proactive_verify',
-    provider:  'paystack',
-    reference: tx.reference_id,
-    amount:    tx.amount,
-    currency:  tx.currency,
-    ledger_id: ledgerTxId
-  }).catch(err => console.warn('[safeProactiveCredit] Audit log failed:', err.message));
-
-  return ledgerTxId;
-}
+// REMOVED: safeProactiveCredit helper — replaced by DepositCreditEngine
+// All proactive credit attempts now go through the unified engine.
 
 exports.depositCard = async (req, res, next) => {
   try {
@@ -841,11 +808,7 @@ exports.getDepositStatus = async (req, res) => {
     }
 
     // Proactively verify pending/failed paystack transactions in case webhook was missed.
-    // BUG FIX: replaced the previous global singleton monkey-patch
-    // (WebhookService.verifySignature = () => true) which was a race condition
-    // that could cause double-credits or silent failures under concurrent requests.
-    // Now uses safeProactiveCredit() which calls FiatWalletService.fundWallet directly
-    // with an idempotency key that prevents any double-credit.
+    // Uses the unified DepositCreditEngine for all credit operations.
     if (["PENDING", "FAILED"].includes(tx.status) && tx.provider === "paystack") {
       try {
         const PaystackProvider = require("../services/payment/providers/PaystackProvider");
@@ -853,8 +816,16 @@ exports.getDepositStatus = async (req, res) => {
         const verifyResult = await provider.verifyPayment(tx.reference_id);
         
         if (verifyResult.status === "success") {
-          await safeProactiveCredit(tx, verifyResult);
-          return res.json({ status: "COMPLETED" });
+          const DepositCreditEngine = require("../services/payment/DepositCreditEngine");
+          const creditResult = await DepositCreditEngine.credit({
+            transactionId: tx.id,
+            reference:     tx.reference_id,
+            providerTxId:  verifyResult.data?.reference || tx.reference_id,
+            source:        'WALLET_CONTROLLER_PROACTIVE',
+          });
+          if (creditResult.credited || creditResult.alreadyCredited) {
+            return res.json({ status: "COMPLETED" });
+          }
         }
       } catch (pollErr) {
         console.error("[WalletController] Proactive verify failed:", pollErr.message);

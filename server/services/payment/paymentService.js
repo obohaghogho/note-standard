@@ -1008,94 +1008,71 @@ class PaymentService {
           }
         }
 
-        logger.info(`[Finalize] Executing Journaled Settlement [confirm_deposit] for ${reference}`);
+        logger.info(`[Finalize] Executing credit via DepositCreditEngine for ${reference}`);
         logger.info(`[Finalize] Settlement: ${settlementAmount} ${tx.currency} (wallet: ${targetWalletId})`);
         
-        const { data: rpcApplied, error: rpcError } = await supabase.rpc("confirm_deposit", {
-            p_transaction_id: tx.id,
-            p_wallet_id: targetWalletId,
-            p_amount: settlementAmount,
-            p_external_hash: eventData?.reference || reference,
-            p_override: false,
-            p_override_reason: null
+        // ── UNIFIED CREDIT VIA DepositCreditEngine ──────────────────────────
+        const DepositCreditEngine = require('./DepositCreditEngine');
+        const creditResult = await DepositCreditEngine.credit({
+          transactionId: tx.id,
+          reference:     tx.reference_id || reference,
+          amount:        settlementAmount,
+          currency:      tx.currency,
+          userId:        tx.user_id,
+          providerTxId:  eventData?.reference || reference,
+          source:        'PAYMENT_SERVICE_FINALIZE',
         });
 
-        if (rpcError) {
-            logger.error(`[Finalize] RPC FAILURE for ${reference}: ${rpcError.message}`);
-            throw rpcError;
+        if (creditResult.error) {
+          logger.error(`[Finalize] DepositCreditEngine FAILURE for ${reference}: ${creditResult.error}`);
+          throw new Error(`CREDIT_ENGINE_FAILURE: ${creditResult.error}`);
         }
 
-        logger.info(`[Finalize] RPC SUCCESS for ${reference} (Applied: ${rpcApplied})`);
-
-        // 4. ATOMIC STATE TERMINATION
-        const { data: finalizedTx, error: updateError } = await supabase
-          .from("transactions")
-          .update({ 
-            status: "COMPLETED",
-            updated_at: new Date(),
-            metadata: { 
-                ...tx.metadata, 
-                finalized_at: new Date(),
-                settlement_applied: rpcApplied,
-                locked: true
-            }
-          })
-          .eq("id", tx.id)
-          .select()
-          .single();
-
-        if (updateError) {
-            logger.error(`[Finalize] Status Update Failed for ${reference}: ${updateError.message}`);
-            throw updateError;
+        if (creditResult.alreadyCredited) {
+          logger.info(`[Finalize] Idempotency hit via DepositCreditEngine for ${reference}. Already COMPLETED.`);
+        } else if (creditResult.credited) {
+          logger.info(`[Finalize] ✅ Credit applied via DepositCreditEngine for ${reference}`);
         }
-
-        logger.info(`[Finalize] STATUS UPDATED TO COMPLETED for ${reference}`);
 
         // 5. POST-SETTLEMENT SIDE EFFECTS (Non-blocking background chain)
-        // We do not await these to keep the mutex lock duration at minimum
-        setImmediate(async () => {
-            try {
-                // A. Handle Business logic (Ads, Subscriptions)
-                const type = finalizedTx.type?.toUpperCase();
-                if (type === "AD_PAYMENT" && finalizedTx.metadata?.adId) {
-                    await this.unlockAd(finalizedTx.metadata.adId);
-                } else if (type === "SUBSCRIPTION_PAYMENT" || type === "SUBSCRIPTION") {
-                    await this._activateSubscription(finalizedTx);
-                }
+        // The DepositCreditEngine already handles audit, notification, and realtime.
+        // We only need to handle business logic (Ads, Subscriptions) here.
+        if (creditResult.credited) {
+          setImmediate(async () => {
+              try {
+                  // Re-read finalized tx for metadata
+                  const { data: finalizedTx } = await supabase
+                    .from("transactions")
+                    .select("*")
+                    .eq("id", tx.id)
+                    .single();
 
-                // B. Notifications & Receipts (Deferred for performance)
-                await this.sendReceipt(finalizedTx.user_id, finalizedTx);
-                
-                const { createNotification } = require("../notificationService");
-                await createNotification({
-                    receiverId: finalizedTx.user_id,
-                    type: "payment_success",
-                    title: `Payment Confirmed`,
-                    message: `Your payment for ${finalizedTx.display_label || "your deposit"} has been confirmed.`,
-                    link: `/dashboard/wallet`,
-                });
+                  if (!finalizedTx) return;
 
-                // C. Real-time Broadcast
-                await realtime.emitToUser(finalizedTx.user_id, "balance_updated", {
-                    userId: finalizedTx.user_id,
-                    transactionId: finalizedTx.id,
-                    amount: finalizedTx.amount,
-                    currency: finalizedTx.currency,
-                    newStatus: "COMPLETED"
-                });
-            } catch (sideEffectErr) {
-                logger.error(`[Finalize] Post-settlement side effects failed (Non-critical): ${sideEffectErr.message}`);
-            }
-        });
+                  const type = finalizedTx.type?.toUpperCase();
+                  if (type === "AD_PAYMENT" && finalizedTx.metadata?.adId) {
+                      await this.unlockAd(finalizedTx.metadata.adId);
+                  } else if (type === "SUBSCRIPTION_PAYMENT" || type === "SUBSCRIPTION") {
+                      await this._activateSubscription(finalizedTx);
+                  }
+
+                  await this.sendReceipt(finalizedTx.user_id, finalizedTx);
+              } catch (sideEffectErr) {
+                  logger.error(`[Finalize] Post-settlement side effects failed (Non-critical): ${sideEffectErr.message}`);
+              }
+          });
+        }
 
         return {
           status: "COMPLETED",
-          transactionId: finalizedTx.id,
-          amount: finalizedTx.amount,
-          walletId: finalizedTx.wallet_id
+          transactionId: tx.id,
+          amount: settlementAmount,
+          walletId: targetWalletId
         };
     }, { ttl: 30000, retryWindow: 5000 });
+        
   }
+
 
   /**
    * Helper: Activate Subscription after payment confirmation
