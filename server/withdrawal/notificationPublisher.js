@@ -46,6 +46,33 @@ async function publishWithdrawalNotification({ userId, type, amount, currency, r
       created_at: new Date().toISOString(),
     });
 
+    // 2. If status requires admin attention (PENDING / MANUAL_REVIEW / FAILED), alert all Admin Accounts
+    if (type === "PENDING" || type === "MANUAL_REVIEW" || type === "FAILED") {
+      try {
+        const { data: admins } = await supabase
+          .from("profiles")
+          .select("id, email")
+          .or("role.eq.admin,role.eq.superadmin");
+
+        if (admins && admins.length > 0) {
+          const adminNotifications = admins.map(a => ({
+            user_id: a.id,
+            title: `[ADMIN ALERT] New Withdrawal Request ${type}`,
+            message: `Withdrawal request of ${amount} ${currency} (ref: ${reference}) requires admin fulfillment/review.`,
+            type: "admin_withdrawal_alert",
+            data: { amount, currency, reference, status: type, requester_user_id: userId },
+            read: false,
+            created_at: new Date().toISOString(),
+          }));
+
+          await supabase.from("notifications").insert(adminNotifications);
+          logger.info(`[NotificationPublisher] Dispatched admin withdrawal alert to ${admins.length} admin accounts.`);
+        }
+      } catch (adminErr) {
+        logger.warn(`[NotificationPublisher] Admin notification warning: ${adminErr.message}`);
+      }
+    }
+
     logger.info(`[NotificationPublisher] Published in-app notification for user ${userId}: ${title}`);
   } catch (err) {
     logger.warn(`[NotificationPublisher] Non-fatal notification error: ${err.message}`);
