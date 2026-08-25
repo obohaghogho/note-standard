@@ -551,6 +551,43 @@ class ManualDepositController {
           logger.error(`[ManualDeposit] Auto-reconcile failed for item ${deposit.id}:`, itemErr.message);
         }
       }
+      // Step 2: Auto-reconcile any pending DEPOSIT transactions sitting in transactions table
+      const { data: pendingTxs } = await serviceSupabase
+        .from("transactions")
+        .select("*")
+        .eq("type", "DEPOSIT")
+        .eq("status", "PENDING");
+
+      if (pendingTxs && pendingTxs.length > 0) {
+        const walletService = require("../../services/walletService");
+        for (const pTx of pendingTxs) {
+          try {
+            const wallet = await walletService.createWallet(pTx.user_id, pTx.currency, 'native');
+            if (wallet) {
+              await serviceSupabase.rpc("confirm_deposit", {
+                p_transaction_id: pTx.id,
+                p_wallet_id: wallet.id,
+                p_amount: pTx.amount,
+                p_external_hash: null,
+                p_override: true,
+                p_override_reason: "Auto-reconciliation of pending deposit transaction"
+              });
+              await serviceSupabase
+                .from("transactions")
+                .update({
+                  status: "COMPLETED",
+                  metadata: { ...(pTx.metadata || {}), auto_reconciled: true, completed_at: new Date().toISOString() }
+                })
+                .eq("id", pTx.id);
+              logger.info(`[ManualDeposit] Auto-reconciled pending transaction ${pTx.id} for user ${pTx.user_id}`);
+              count++;
+            }
+          } catch (txErr) {
+            logger.error(`[ManualDeposit] Failed auto-reconcile for pending tx ${pTx.id}:`, txErr.message);
+          }
+        }
+      }
+
       return { reconciledCount: count };
     } catch (err) {
       logger.error("[ManualDeposit] autoReconcilePendingDeposits Error:", err.message);
