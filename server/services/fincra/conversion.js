@@ -16,6 +16,7 @@ const { FINCRA_TX_STATUS, FINCRA_TX_TYPES, FINCRA_CURRENCIES } = require("./cons
 const { FincraApiError } = require("./errors");
 const logger = require("../../utils/logger");
 const { v4: uuidv4 } = require("uuid");
+const complianceGate = require("../../withdrawal/complianceGate");
 
 const ALLOWED_FIAT_CURRENCIES = new Set([
   FINCRA_CURRENCIES.NGN,
@@ -81,6 +82,17 @@ async function generateFincraQuote({ sourceCurrency, destinationCurrency, amount
 async function executeFincraConversion({ quoteReference, userId, sourceCurrency, destinationCurrency, amount }) {
   assertFiatOnly(sourceCurrency);
   assertFiatOnly(destinationCurrency);
+
+  // Pre-Execution Compliance Gate for Fincra Conversions
+  const complianceRes = await complianceGate.evaluateConversion({
+    userId,
+    amount: parseFloat(amount),
+    currency: sourceCurrency,
+  });
+
+  if (!complianceRes.allowed) {
+    throw new Error(`${complianceRes.errorCode}: ${complianceRes.reason}`);
+  }
 
   const reference = `FIN_CONV_${uuidv4()}`;
   const { instance, businessId } = getFincraClient();

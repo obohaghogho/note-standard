@@ -61,10 +61,9 @@ async function checkDailyLimit(userId, userPlan = "FREE", requestedAmount = 0) {
       totalUsed,
     };
   } catch (err) {
-    console.error("[LimitCheck] Error checking daily limit:", err);
-    // Fail safe: allow if check fails? Or block?
-    // Better to allow and let the provider/manual review catch it than block legitimate users due to DB glitch.
-    return { allowed: true, remaining: 999999, limit: 999999, totalUsed: 0 };
+    logger.error(`[LimitCheck] Error checking daily limit for user ${userId}: ${err.message}`);
+    // Fail-closed enforcement: return allowed: false to prevent unauthorized financial execution
+    return { allowed: false, remaining: 0, limit: 0, totalUsed: 0, error: err.message };
   }
 }
 

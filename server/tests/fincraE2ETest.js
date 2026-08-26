@@ -152,6 +152,9 @@ async function phaseB_virtualAccount() {
   }
 
   const user = users;
+  // Ensure test user profile has verified KYC status and active status for E2E testing
+  await supabase.from("profiles").update({ is_verified: true, kyc_level: 1, kyc_status: "VERIFIED", status: "active" }).eq("id", user.id);
+
   const nameParts = (user.full_name || "Test User").trim().split(" ");
   const firstName = nameParts[0] || "Test";
   const lastName  = nameParts.slice(1).join(" ") || "User";

@@ -13,6 +13,7 @@ const { acquireWithdrawalLock } = require("./redisLock");
 const { WITHDRAWAL_STATES, assertTransition } = require("./stateMachine");
 const { recordAuditLog }     = require("./auditLogger");
 const logger                 = require("../utils/logger");
+const complianceGate         = require("./complianceGate");
 
 // Ensure FincraProvider is registered
 registry.register(new FincraProvider());
@@ -66,6 +67,19 @@ class PayoutEngine {
       // ── STEP 2: State Machine Check (CREATED -> VALIDATED) ─────────────────
       assertTransition(WITHDRAWAL_STATES.CREATED, WITHDRAWAL_STATES.VALIDATED);
 
+      // ── STEP 2.5: Server-Side Pre-Execution Compliance Gate ───────────────
+      const complianceRes = await complianceGate.evaluatePayout({
+        userId,
+        amount,
+        currency,
+        ipAddress: ip,
+        correlationId: correlation_id,
+      });
+
+      if (!complianceRes.allowed) {
+        throw new Error(`${complianceRes.errorCode}: ${complianceRes.reason}`);
+      }
+
       // Mask Account Number for Audit & Security
       const accountNumberMasked = accountNumber.length > 4 
         ? `${accountNumber.substring(0, 2)}****${accountNumber.substring(accountNumber.length - 2)}`
@@ -73,8 +87,8 @@ class PayoutEngine {
 
       // Calculate Fee (Fixed NGN 50 flat fee or server rule)
       const fee = 50.00;
-      const riskScore = 15; // Low risk default
-      const riskRoute = riskScore > 50 ? "MANUAL_REVIEW" : "AUTO";
+      const riskScore = complianceRes.riskScore || 0;
+      const riskRoute = complianceRes.status === "MANUAL_REVIEW" || complianceRes.isHold ? "MANUAL_REVIEW" : "AUTO";
 
       // ── STEP 3: Check Merchant Balance Pre-Check & Treasury Routing ─────────
       const provider = registry.getPrimary();
