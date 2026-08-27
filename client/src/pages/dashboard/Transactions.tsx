@@ -178,7 +178,7 @@ export const Transactions: React.FC = () => {
     const safeTransactions = Array.isArray(transactions) ? transactions : [];
     
     // Currencies extracted from real data plus common defaults for the dropdown
-    const currencies = ['ALL', 'USD', 'NGN', 'EUR', 'GBP', 'BTC', 'ETH', 'USDT'];
+    const currencies = ['ALL', 'NGN', 'USD', 'GHS', 'BTC', 'ETH', 'USDT', 'USDC'];
     const statuses = ['ALL', 'COMPLETED', 'PENDING', 'FAILED'];
     const types = ['ALL', 'DEPOSIT', 'WITHDRAWAL', 'TRANSFER', 'SWAP'];
 

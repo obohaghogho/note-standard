@@ -301,7 +301,7 @@ export const Billing = () => {
                 </div>
 
                 <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl p-1 self-start md:self-auto">
-                    {['USD', 'EUR', 'GBP', 'NGN'].map(cur => (
+                    {['NGN', 'USD', 'GHS'].map(cur => (
                         <button
                             key={cur}
                             onClick={() => setCurrency(cur)}

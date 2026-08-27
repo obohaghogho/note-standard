@@ -689,7 +689,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                         >
                             <span className="text-xs text-purple-400 font-medium ml-1 block">Pay With Fiat</span>
                             <div className="flex flex-wrap gap-2 justify-start sm:justify-between">
-                                {['USD', 'EUR', 'GBP', 'NGN'].map(fiat => (
+                                {['NGN', 'USD', 'GHS'].map(fiat => (
                                     <button
                                         key={fiat}
                                         onClick={() => setPaymentFiat(fiat)}
@@ -702,7 +702,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                                         <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] ${
                                             paymentFiat === fiat ? 'bg-white/20' : 'bg-white/5'
                                         }`}>
-                                            {fiat === 'NGN' ? '₦' : (fiat === 'EUR' ? '€' : (fiat === 'GBP' ? '£' : '$'))}
+                                            {fiat === 'NGN' ? '₦' : (fiat === 'GHS' ? 'GH₵' : '$')}
                                         </div>
                                         {fiat}
                                     </button>

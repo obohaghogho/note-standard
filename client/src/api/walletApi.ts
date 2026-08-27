@@ -318,7 +318,7 @@ export const walletApi = {
         api.get('/wallet/exchange-rates').catch(() => ({ data: { rates: {} } })),
       ]);
       const allWallets: any[] = wallets.data || [];
-      const fiatCodes = ['NGN', 'USD', 'EUR', 'GBP'];
+      const fiatCodes = ['NGN', 'USD', 'GHS'];
       const cryptoCodes = ['BTC', 'ETH', 'USDT', 'USDC'];
       return {
         fiatWallets: allWallets.filter(w => fiatCodes.includes(w.currency?.toUpperCase())),

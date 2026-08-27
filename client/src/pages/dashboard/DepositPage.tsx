@@ -18,9 +18,9 @@ const DepositPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const currencies = [
+    { label: "Nigerian Naira (NGN)", value: "NGN" },
     { label: "US Dollar (USD)", value: "USD" },
-    { label: "British Pound (GBP)", value: "GBP" },
-    { label: "Euro (EUR)", value: "EUR" },
+    { label: "Ghanaian Cedi (GHS)", value: "GHS" },
   ];
 
   const handleInitiate = async (e: React.FormEvent) => {

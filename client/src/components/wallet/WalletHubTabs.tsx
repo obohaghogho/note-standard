@@ -10,7 +10,7 @@ interface WalletHubTabsProps {
 }
 
 const TABS: { id: TabId; label: string; icon: React.ElementType; description: string }[] = [
-  { id: 'fiat', label: 'Fiat Banking', icon: Landmark, description: 'NGN, USD, EUR, GBP' },
+  { id: 'fiat', label: 'Fiat Banking', icon: Landmark, description: 'NGN, USD, GHS' },
   { id: 'digital', label: 'Digital Currency', icon: Coins, description: 'USDT, USDC, CNGN (Fincra)' },
   { id: 'crypto', label: 'On-Chain Crypto', icon: Bitcoin, description: 'BTC, ETH (NOWPayments)' },
   { id: 'exchange', label: 'Exchange Hub', icon: ArrowRightLeft, description: 'Convert, Buy, Sell, Swap' },
