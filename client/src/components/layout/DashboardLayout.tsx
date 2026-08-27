@@ -76,10 +76,11 @@ export function DashboardLayout() {
                 {/* Create Note Button (Desktop & Tablet) */}
                 <button
                     onClick={() => setIsCreateNoteModalOpen(true)}
-                    className="ml-2 sm:ml-4 px-3 sm:px-4 py-2 bg-primary hover:bg-primary/90 text-white text-xs sm:text-sm font-semibold rounded-lg transition-all shadow-lg shadow-primary/20 flex items-center gap-1.5 sm:gap-2 min-h-[40px]"
+                    className="ml-2 sm:ml-4 px-2.5 sm:px-4 py-2 bg-primary hover:bg-primary/90 text-white text-xs sm:text-sm font-semibold rounded-lg transition-all shadow-lg shadow-primary/20 flex items-center gap-1.5 sm:gap-2 min-h-[40px] min-w-[40px] justify-center"
+                    title={t('common.create_note')}
                 >
                     <Plus size={18} />
-                    <span className="inline">{t('common.create_note')}</span>
+                    <span className="hidden sm:inline">{t('common.create_note')}</span>
                 </button>
 
                 <div className="flex-1" />
@@ -121,7 +122,7 @@ export function DashboardLayout() {
             
             <main
                 className={cn(
-                    "flex-1 transition-all duration-300 min-w-0 flex flex-col h-full relative",
+                    "flex-1 transition-all duration-300 min-w-0 flex flex-col h-full relative w-full max-w-full overflow-x-hidden",
                     !isChatActiveOnMobile && "pb-safe lg:ml-[16rem]",
                     isChatActiveOnMobile && "absolute inset-0 z-[60] bg-gray-950 m-0 p-0 lg:relative lg:inset-auto lg:z-0 lg:bg-transparent lg:ml-[16rem] overflow-hidden"
                 )}
@@ -129,8 +130,8 @@ export function DashboardLayout() {
                 {renderHeader()}
 
                 <div className={cn(
-                    "flex-1 min-h-0 w-full flex flex-col min-w-0 relative h-full",
-                    isChatActiveOnMobile ? "p-0 overflow-hidden" : "p-3 sm:p-4 md:p-8 max-w-7xl mx-auto overflow-y-auto pb-20 lg:pb-8"
+                    "flex-1 min-h-0 w-full flex flex-col min-w-0 relative h-full max-w-full overflow-x-hidden",
+                    isChatActiveOnMobile ? "p-0 overflow-hidden" : "p-3 sm:p-4 md:p-8 max-w-7xl mx-auto overflow-y-auto overflow-x-hidden pb-20 lg:pb-8"
                 )}>
                     <ErrorBoundary fallback={
                         <div className="p-8 text-center bg-red-500/10 rounded-xl border border-red-500/20 m-4">

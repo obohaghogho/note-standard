@@ -292,7 +292,7 @@ export const Billing = () => {
     const teamPercent = teamLimit === Infinity ? 0 : (teamMembersCount > 0 ? 100 : 0);
 
     return (
-        <div className="space-y-8 max-w-6xl mx-auto px-4 py-8 text-white min-h-screen">
+        <div className="space-y-8 max-w-6xl mx-auto px-2 sm:px-4 py-4 sm:py-8 text-white min-h-screen w-full max-w-full overflow-x-hidden">
             {/* Top Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="space-y-1">

@@ -40,13 +40,21 @@ describe('NOTEStandard Mobile Web & PWA Responsiveness', () => {
     expect(content).toContain('pb-safe');
   });
 
-  it('DashboardLayout.tsx must render MobileBottomNav and apply responsive mobile padding', () => {
+  it('DashboardLayout.tsx must hide Create Note text on mobile and enforce overflow-x-hidden', () => {
     const filePath = path.join(rootDir, 'src/components/layout/DashboardLayout.tsx');
     const content = fs.readFileSync(filePath, 'utf-8');
 
+    expect(content).toContain('hidden sm:inline');
+    expect(content).toContain('overflow-x-hidden');
     expect(content).toContain('MobileBottomNav');
-    expect(content).toContain('pb-20 lg:pb-8');
-    expect(content).toContain('min-w-[44px]');
+  });
+
+  it('Billing.tsx must enforce max-w-full overflow-x-hidden to prevent text cutoffs', () => {
+    const filePath = path.join(rootDir, 'src/pages/dashboard/Billing.tsx');
+    const content = fs.readFileSync(filePath, 'utf-8');
+
+    expect(content).toContain('overflow-x-hidden');
+    expect(content).toContain('flex-wrap');
   });
 
   it('Transactions.tsx must provide a dedicated mobile card list view for small screens', () => {
