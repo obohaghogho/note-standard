@@ -85,30 +85,9 @@ class WebhookService {
       }
       logger.info(`[WebhookService] Amount verified. Reference: ${reference}`);
 
-      // 6. Credit wallet via the SINGLE authoritative DepositCreditEngine
-      const DepositCreditEngine = require("./payment/DepositCreditEngine");
-      const creditResult = await DepositCreditEngine.credit({
-        transactionId: txRecord.id,
-        reference,
-        amount: txRecord.amount,
-        currency: txRecord.currency,
-        userId: txRecord.user_id,
-        providerTxId: event.data.id ? String(event.data.id) : null,
-        source: 'PAYSTACK_WEBHOOK',
-        auditMeta: {
-          ip: req.headers["x-forwarded-for"] || req.socket?.remoteAddress || 'unknown',
-          device: req.headers["user-agent"],
-          webhook_id: event.data.id,
-        },
-      });
-
-      if (creditResult.error) {
-        logger.error(`[WebhookService] DepositCreditEngine returned error for ${reference}: ${creditResult.error}`);
-      } else if (creditResult.credited) {
-        logger.info(`[WebhookService] ✅ Wallet credited via DepositCreditEngine. Reference: ${reference}`);
-      } else if (creditResult.alreadyCredited) {
-        logger.info(`[WebhookService] Idempotency hit via DepositCreditEngine (already credited). Reference: ${reference}`);
-      }
+      // 6. Finalize transaction & execute subscription activation / wallet settlement authoritatively
+      const finalizeResult = await paymentService.finalizeTransaction(reference, event.data);
+      logger.info(`[WebhookService] ✅ Transaction finalized via paymentService. Reference: ${reference}, Status: ${finalizeResult?.status}`);
 
       logger.info(`[WebhookService] Finished processing successfully. Reference: ${reference}`);
       return res.status(200).send("OK");

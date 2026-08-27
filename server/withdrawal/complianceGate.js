@@ -115,10 +115,10 @@ class ComplianceGate {
       };
     }
 
-    // ── 4. Daily Withdrawal Limit Enforcement ──────────────────────────────
-    let dailyLimit;
+    // ── 4. Unified Cross-Rail Daily Withdrawal Limit Enforcement (Normalized to USD) ──────
+    let dailyLimitUsd;
     if (profile.daily_withdrawal_limit !== null && profile.daily_withdrawal_limit !== undefined) {
-      dailyLimit = parseFloat(profile.daily_withdrawal_limit);
+      dailyLimitUsd = parseFloat(profile.daily_withdrawal_limit);
     } else {
       const { data: limitSetting } = await supabase
         .from("admin_settings")
@@ -128,35 +128,90 @@ class ComplianceGate {
 
       const limitsMap = limitSetting?.value || { FREE: 1000, PRO: 10000, BUSINESS: 50000 };
       const effectivePlan = String(profile.plan_tier || "FREE").toUpperCase();
-      dailyLimit = limitsMap[effectivePlan] || limitsMap.FREE || 1000;
+      dailyLimitUsd = limitsMap[effectivePlan] || limitsMap.FREE || 1000;
     }
 
+    const fxService = require("../services/fxService");
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-    const { data: txs, error: txErr } = await supabase
+    // 4a. Fetch transactions across both Fincra and standard rails
+    const { data: fincraTxs } = await supabase
       .from("fincra_transactions")
-      .select("amount")
+      .select("amount, currency, metadata")
       .eq("user_id", userId)
       .in("status", ["COMPLETED", "PROCESSING", "RESERVED"])
       .gte("created_at", twentyFourHoursAgo);
 
-    let total24hUsed = 0;
-    if (!txErr && txs) {
-      total24hUsed = txs.reduce((sum, tx) => sum + (parseFloat(tx.amount) || 0), 0);
+    const { data: standardTxs } = await supabase
+      .from("transactions")
+      .select("amount, currency, metadata")
+      .eq("user_id", userId)
+      .in("status", ["COMPLETED", "PROCESSING"])
+      .in("type", ["WITHDRAWAL", "payout", "withdrawal"])
+      .gte("created_at", twentyFourHoursAgo);
+
+    const allTxs = [...(fincraTxs || []), ...(standardTxs || [])];
+    let total24hUsdUsed = 0;
+    const seenRefs = new Set();
+
+    for (const tx of allTxs) {
+      const ref = tx.reference_id || tx.reference || tx.metadata?.fincra_reference || tx.metadata?.transaction_reference || tx.id;
+      if (ref) {
+        if (seenRefs.has(ref)) continue;
+        seenRefs.add(ref);
+      }
+
+      const rawAmt = parseFloat(tx.amount) || 0;
+      const curr = (tx.currency || "USD").toUpperCase();
+      if (rawAmt <= 0) continue;
+
+      if (tx.metadata?.usd_amount) {
+        total24hUsdUsed += parseFloat(tx.metadata.usd_amount) || 0;
+      } else if (tx.metadata?.usdAmount) {
+        total24hUsdUsed += parseFloat(tx.metadata.usdAmount) || 0;
+      } else if (curr === "USD") {
+        total24hUsdUsed += rawAmt;
+      } else {
+        try {
+          const conv = await fxService.convert(rawAmt, curr, "USD", true);
+          if (!conv || isNaN(conv.amount) || conv.amount <= 0) {
+            throw new Error(`INVALID_FX_RESULT_${curr}`);
+          }
+          total24hUsdUsed += conv.amount;
+        } catch (err) {
+          const staticRates = { NGN: 1 / 1600, GHS: 1 / 15, EUR: 1.08, GBP: 1.27 };
+          total24hUsdUsed += rawAmt * (staticRates[curr] || 1);
+        }
+      }
     }
 
-    if (numAmount + total24hUsed > dailyLimit) {
-      logger.warn(`[ComplianceGate] Limit exceeded for user ${userId}: requested ${numAmount}, used 24h: ${total24hUsed}, limit: ${dailyLimit}`);
+    // 4b. Normalize current requested payout to USD equivalent
+    let requestedUsdAmount = numAmount;
+    if (upCurrency !== "USD") {
+      try {
+        const conv = await fxService.convert(numAmount, upCurrency, "USD", true);
+        if (!conv || isNaN(conv.amount) || conv.amount <= 0) {
+          throw new Error(`INVALID_FX_RESULT_${upCurrency}`);
+        }
+        requestedUsdAmount = conv.amount;
+      } catch (err) {
+        const staticRates = { NGN: 1 / 1600, GHS: 1 / 15, EUR: 1.08, GBP: 1.27 };
+        requestedUsdAmount = numAmount * (staticRates[upCurrency] || 1);
+      }
+    }
+
+    if (requestedUsdAmount + total24hUsdUsed > dailyLimitUsd) {
+      logger.warn(`[ComplianceGate] Limit exceeded for user ${userId}: requested $${requestedUsdAmount.toFixed(2)} USD (${numAmount} ${upCurrency}), used 24h: $${total24hUsdUsed.toFixed(2)} USD, limit: $${dailyLimitUsd} USD`);
       await recordAuditLog({
         action: "PAYOUT_COMPLIANCE_REJECTED",
         userId,
-        details: { correlationId, reason: "LIMIT_EXCEEDED", requested: numAmount, used24h: total24hUsed, dailyLimit },
+        details: { correlationId, reason: "LIMIT_EXCEEDED", requestedUsd: requestedUsdAmount, used24hUsd: total24hUsdUsed, dailyLimitUsd },
       }).catch(() => {});
 
       return {
         allowed: false,
         errorCode: "LIMIT_EXCEEDED",
-        reason: `Withdrawal amount (${numAmount} ${upCurrency}) exceeds daily withdrawal limit of ${dailyLimit}.`,
+        reason: `Withdrawal amount (${numAmount} ${upCurrency} / $${requestedUsdAmount.toFixed(2)} USD) exceeds cumulative 24h daily limit of $${dailyLimitUsd} USD.`,
       };
     }
 
@@ -280,38 +335,83 @@ class ComplianceGate {
       };
     }
 
-    // ── 4. Daily Cumulative Conversion Limit Check ─────────────────────────
-    let dailyLimit = 10000; // Default daily conversion limit USD equivalent
+    // ── 4. Daily Cumulative Conversion Limit Check (Normalized to USD) ─────────────────
+    let dailyLimitUsd = 10000; // Default daily conversion limit USD equivalent
     if (profile.daily_withdrawal_limit) {
-      dailyLimit = parseFloat(profile.daily_withdrawal_limit);
+      dailyLimitUsd = parseFloat(profile.daily_withdrawal_limit);
     }
 
+    const fxService = require("../services/fxService");
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: convTxs } = await supabase
       .from("fincra_transactions")
-      .select("amount")
+      .select("amount, currency, metadata")
       .eq("user_id", userId)
       .in("type", ["conversion", "CONVERSION"])
       .in("status", ["PROCESSING", "CONVERSION_PROCESSING", "CONVERSION_SUCCESSFUL", "NGN_SETTLED", "OTC_FUNDING_PENDING", "FINCRA_BALANCE_CONFIRMED", "QUOTE_RECEIVED", "CONVERSION_SUBMITTED", "PENDING", "SUCCESSFUL"])
       .gte("created_at", twentyFourHoursAgo);
 
-    let total24hUsed = 0;
+    let total24hUsdUsed = 0;
+    const seenConvRefs = new Set();
     if (convTxs && convTxs.length > 0) {
-      total24hUsed = convTxs.reduce((sum, tx) => sum + (parseFloat(tx.amount) || 0), 0);
+      for (const tx of convTxs) {
+        const ref = tx.reference || tx.reference_id || tx.metadata?.fincra_reference || tx.metadata?.idempotencyKey || tx.id;
+        if (ref) {
+          if (seenConvRefs.has(ref)) continue;
+          seenConvRefs.add(ref);
+        }
+
+        const rawAmt = parseFloat(tx.amount) || 0;
+        const curr = (tx.currency || "USDT").toUpperCase();
+        if (rawAmt <= 0) continue;
+
+        if (tx.metadata?.usd_amount) {
+          total24hUsdUsed += parseFloat(tx.metadata.usd_amount) || 0;
+        } else if (tx.metadata?.usdAmount) {
+          total24hUsdUsed += parseFloat(tx.metadata.usdAmount) || 0;
+        } else if (curr === "USD" || curr === "USDT" || curr === "USDC") {
+          total24hUsdUsed += rawAmt;
+        } else {
+          try {
+            const conv = await fxService.convert(rawAmt, curr, "USD", true);
+            if (!conv || isNaN(conv.amount) || conv.amount <= 0) {
+              throw new Error(`INVALID_FX_RESULT_${curr}`);
+            }
+            total24hUsdUsed += conv.amount;
+          } catch (err) {
+            const staticRates = { NGN: 1 / 1600, GHS: 1 / 15, EUR: 1.08, GBP: 1.27 };
+            total24hUsdUsed += rawAmt * (staticRates[curr] || 1);
+          }
+        }
+      }
     }
 
-    if (numAmount + total24hUsed > dailyLimit) {
-      logger.warn(`[ComplianceGate] Conversion limit exceeded for user ${userId}: requested ${numAmount}, 24h used: ${total24hUsed}, limit: ${dailyLimit}`);
+    let requestedUsdAmount = numAmount;
+    if (upCurrency !== "USD" && upCurrency !== "USDT" && upCurrency !== "USDC") {
+      try {
+        const conv = await fxService.convert(numAmount, upCurrency, "USD", true);
+        if (!conv || isNaN(conv.amount) || conv.amount <= 0) {
+          throw new Error(`INVALID_FX_RESULT_${upCurrency}`);
+        }
+        requestedUsdAmount = conv.amount;
+      } catch (err) {
+        const staticRates = { NGN: 1 / 1600, GHS: 1 / 15, EUR: 1.08, GBP: 1.27 };
+        requestedUsdAmount = numAmount * (staticRates[upCurrency] || 1);
+      }
+    }
+
+    if (requestedUsdAmount + total24hUsdUsed > dailyLimitUsd) {
+      logger.warn(`[ComplianceGate] Conversion limit exceeded for user ${userId}: requested $${requestedUsdAmount.toFixed(2)} USD (${numAmount} ${upCurrency}), 24h used: $${total24hUsdUsed.toFixed(2)} USD, limit: $${dailyLimitUsd} USD`);
       await recordAuditLog({
         action: "CONVERSION_COMPLIANCE_REJECTED",
         userId,
-        details: { reason: "LIMIT_EXCEEDED", requested: numAmount, used24h: total24hUsed, dailyLimit },
+        details: { reason: "LIMIT_EXCEEDED", requestedUsd: requestedUsdAmount, used24hUsd: total24hUsdUsed, dailyLimitUsd },
       }).catch(() => {});
 
       return {
         allowed: false,
         errorCode: "LIMIT_EXCEEDED",
-        reason: `Conversion amount (${numAmount} ${upCurrency}) exceeds cumulative 24h limit of ${dailyLimit}.`,
+        reason: `Conversion amount (${numAmount} ${upCurrency} / $${requestedUsdAmount.toFixed(2)} USD) exceeds cumulative 24h limit of $${dailyLimitUsd} USD.`,
       };
     }
 

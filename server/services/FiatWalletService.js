@@ -62,6 +62,12 @@ class FiatWalletService {
       throw new Error("BTC and ETH wallets must use CryptoWalletService (NowPayments on-chain custody).");
     }
 
+    // Block disabled normal fiat wallet currencies (EUR, GBP, CAD, etc.)
+    const DISABLED_NORMAL_FIAT_CURRENCIES = new Set(["EUR", "GBP", "CAD", "AUD", "NZD", "JPY"]);
+    if (DISABLED_NORMAL_FIAT_CURRENCIES.has(upCurrency)) {
+      throw new Error(`CURRENCY_NOT_ACTIVE: ${upCurrency} is not an active normal fiat wallet currency.`);
+    }
+
     // Block coming-soon currencies from creating transactions
     if (FINCRA_COMING_SOON_SET.has(upCurrency)) {
       throw new Error(`CURRENCY_NOT_AVAILABLE: ${upCurrency} will become available after provider approval. Deposits and withdrawals are not yet enabled.`);

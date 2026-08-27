@@ -1034,33 +1034,27 @@ class PaymentService {
           logger.info(`[Finalize] ✅ Credit applied via DepositCreditEngine for ${reference}`);
         }
 
-        // 5. POST-SETTLEMENT SIDE EFFECTS (Non-blocking background chain)
-        // The DepositCreditEngine already handles audit, notification, and realtime.
-        // We only need to handle business logic (Ads, Subscriptions) here.
-        if (creditResult.credited) {
-          setImmediate(async () => {
-              try {
-                  // Re-read finalized tx for metadata
-                  const { data: finalizedTx } = await supabase
-                    .from("transactions")
-                    .select("*")
-                    .eq("id", tx.id)
-                    .single();
+        // 5. POST-SETTLEMENT SIDE EFFECTS (Synchronous activation & business logic)
+        if (creditResult.credited || creditResult.alreadyCredited) {
+          try {
+            const { data: finalizedTx } = await supabase
+              .from("transactions")
+              .select("*")
+              .eq("id", tx.id)
+              .single();
 
-                  if (!finalizedTx) return;
-
-                  const type = finalizedTx.type?.toUpperCase();
-                  if (type === "AD_PAYMENT" && finalizedTx.metadata?.adId) {
-                      await this.unlockAd(finalizedTx.metadata.adId);
-                  } else if (type === "SUBSCRIPTION_PAYMENT" || type === "SUBSCRIPTION") {
-                      await this._activateSubscription(finalizedTx);
-                  }
-
-                  await this.sendReceipt(finalizedTx.user_id, finalizedTx);
-              } catch (sideEffectErr) {
-                  logger.error(`[Finalize] Post-settlement side effects failed (Non-critical): ${sideEffectErr.message}`);
+            if (finalizedTx) {
+              const type = finalizedTx.type?.toUpperCase();
+              if (type === "AD_PAYMENT" && finalizedTx.metadata?.adId) {
+                await this.unlockAd(finalizedTx.metadata.adId);
+              } else if (type === "SUBSCRIPTION_PAYMENT" || type === "SUBSCRIPTION") {
+                await this._activateSubscription(finalizedTx);
               }
-          });
+              await this.sendReceipt(finalizedTx.user_id, finalizedTx).catch(() => {});
+            }
+          } catch (sideEffectErr) {
+            logger.error(`[Finalize] Post-settlement side effects failed (Non-critical): ${sideEffectErr.message}`);
+          }
         }
 
         return {
@@ -1082,13 +1076,30 @@ class PaymentService {
     const newPlan = metadata.plan || "PRO";
     const planTier = newPlan.toLowerCase();
     const now = new Date();
-    const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    // Check if user has an active subscription for legitimate renewal extension
+    const { data: existingSub } = await supabase
+      .from("subscriptions")
+      .select("end_date, status, plan_tier, start_date")
+      .eq("user_id", tx.user_id)
+      .maybeSingle();
+
+    let startDate = now;
+    let endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    if (existingSub && existingSub.status === "active" && existingSub.end_date && new Date(existingSub.end_date) > now) {
+      if (existingSub.plan_tier?.toLowerCase() === planTier) {
+        const currentEnd = new Date(existingSub.end_date);
+        endDate = new Date(currentEnd.getTime() + 30 * 24 * 60 * 60 * 1000);
+        startDate = new Date(existingSub.start_date || now.toISOString());
+      }
+    }
 
     const subData = {
       plan_tier: planTier,
       plan_type: newPlan.toUpperCase(),
       status: "active",
-      start_date: now.toISOString(),
+      start_date: startDate.toISOString(),
       end_date: endDate.toISOString(),
       charged_amount_ngn: tx.amount,
     };

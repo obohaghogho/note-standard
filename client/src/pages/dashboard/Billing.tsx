@@ -38,6 +38,7 @@ export const Billing = () => {
     const [teamMembersCount, setTeamMembersCount] = useState<number>(0);
     const [billingHistory, setBillingHistory] = useState<BillingRecord[]>([]);
     const [historyLoading, setHistoryLoading] = useState(true);
+    const [planUsage, setPlanUsage] = useState<any>(null);
 
     const fetchingRef = useRef(false);
     const isMounted = useRef(true);
@@ -165,17 +166,23 @@ export const Billing = () => {
             const token = sessionData.session?.access_token;
             if (!token) return; 
 
-            // Fetch Exchange Rate
+            // Fetch Exchange Rate & Usage
             try {
-                const rateResponse = await fetch(`${API_URL}/api/subscription/rate`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const [rateResponse, usageResponse] = await Promise.all([
+                    fetch(`${API_URL}/api/subscription/rate`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                    fetch(`${API_URL}/api/subscription/usage`, { headers: { 'Authorization': `Bearer ${token}` } })
+                ]);
                 const rateData = await rateResponse.json();
+                const usageData = await usageResponse.json();
+
                 if (rateData.rate && isMounted.current) {
                     setExchangeRate(rateData.rate);
                 }
+                if (usageData && isMounted.current) {
+                    setPlanUsage(usageData);
+                }
             } catch (err) {
-                console.error('Failed to fetch exchange rate', err);
+                console.error('Failed to fetch subscription status/usage', err);
             }
             
             return { success: true };
