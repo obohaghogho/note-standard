@@ -496,6 +496,26 @@ export const walletApi = {
     const response = await api.post('/admin/reconciliation/reconcile-withdrawal', data);
     return response.data;
   },
+
+  /** GET /api/kyc/my-request — fetch current user KYC request status */
+  async getKycStatus(): Promise<{ success: boolean; activeRequest: any; kycLevel: number }> {
+    const response = await api.get('/kyc/my-request');
+    return response.data;
+  },
+
+  /** POST /api/kyc/submit — submit KYC verification request for Tier 2 or Tier 3 */
+  async submitKyc(data: any): Promise<{ success: boolean; message: string; activeRequest: any }> {
+    const response = await api.post('/kyc/submit', data);
+    return response.data;
+  },
+
+  /** POST /api/kyc/documents/upload — upload KYC document file */
+  async uploadKycDocument(formData: FormData): Promise<{ success: boolean; storagePath: string; fileName: string }> {
+    const response = await api.post('/kyc/documents/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
 };
 
 export default walletApi;

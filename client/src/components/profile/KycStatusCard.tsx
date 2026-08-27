@@ -4,6 +4,7 @@ import { ShieldCheck, CheckCircle2, Lock, ArrowRight, Smartphone, Building2, Glo
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import { toast } from 'react-hot-toast';
+import api from '../../api/axiosInstance';
 import { walletApi } from '../../api/walletApi';
 import { supabase } from '../../lib/supabaseSafe';
 
@@ -57,7 +58,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
   const fetchKycStatus = async () => {
     try {
       setFetchingKycStatus(true);
-      const res = await walletApi.get('/kyc/my-request');
+      const res = await api.get('/kyc/my-request');
       if (res.data?.activeRequest) {
         setActiveKycRequest(res.data.activeRequest);
       } else {
@@ -101,7 +102,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
       formData.append('file', file);
       formData.append('documentType', documentType);
 
-      const res = await walletApi.post('/kyc/documents/upload', formData, {
+      const res = await api.post('/kyc/documents/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
@@ -185,7 +186,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
     setLoading(true);
     try {
       // Server-Authoritative KYC Submission for Tier 2
-      await walletApi.post('/kyc/submit', {
+      await api.post('/kyc/submit', {
         requestedTier: 2,
         bvn: bvnInput,
         dob: dobInput,
@@ -226,7 +227,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
     setLoading(true);
     try {
       // Server-Authoritative KYC Submission (PENDING_REVIEW)
-      await walletApi.post('/kyc/submit', {
+      await api.post('/kyc/submit', {
         requestedTier: 3,
         governmentIdStoragePath,
         utilityBillStoragePath,
