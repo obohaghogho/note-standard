@@ -212,11 +212,12 @@ export const WithdrawalOtpModal: React.FC<WithdrawalOtpModalProps> = ({
 
               {/* OTP Input */}
               <div className="space-y-2">
-                <label className="block text-xs font-medium text-gray-300">
+                <label htmlFor="withdrawal-otp-input" className="block text-xs font-medium text-gray-300">
                   Enter 6-Digit Verification Code
                 </label>
                 <div className="relative">
                   <input
+                    id="withdrawal-otp-input"
                     type="text"
                     maxLength={6}
                     value={otp}

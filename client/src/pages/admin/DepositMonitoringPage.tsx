@@ -218,8 +218,9 @@ export const DepositMonitoringPage: React.FC = () => {
             Select customer user ID to credit. This will post correlated Treasury and Customer Liability double-entry journals.
           </p>
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-gray-300">Customer User ID</label>
+            <label htmlFor="assign-user-id-input" className="block text-xs font-semibold text-gray-300">Customer User ID</label>
             <input
+              id="assign-user-id-input"
               type="text"
               placeholder="Enter User ID (e.g. usr_16step_master)"
               value={assignUserId}

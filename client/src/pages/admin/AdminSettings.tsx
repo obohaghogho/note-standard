@@ -144,7 +144,7 @@ export const AdminSettings = () => {
                                     onChange={(e) => setSettings(prev => ({ ...prev, maintenance_mode: e.target.checked }))}
                                     autoComplete="off"
                                 />
-                                <label htmlFor="maintenance"></label>
+                                <label htmlFor="maintenance" aria-label="Toggle maintenance mode"></label>
                                 <span className="toggle-status">{settings.maintenance_mode ? 'Enabled' : 'Disabled'}</span>
                             </div>
                         </div>

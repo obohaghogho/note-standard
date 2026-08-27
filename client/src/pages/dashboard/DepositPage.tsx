@@ -82,7 +82,7 @@ const DepositPage: React.FC = () => {
             
             <form onSubmit={handleInitiate} className="space-y-6">
               <div className="space-y-3">
-                <label className="block text-sm font-bold text-slate-600 dark:text-slate-300 ml-1">Choose Currency</label>
+                <label htmlFor="depositCurrency" className="block text-sm font-bold text-slate-600 dark:text-slate-300 ml-1">Choose Currency</label>
                 <select
                   id="depositCurrency"
                   name="currency"
@@ -97,10 +97,11 @@ const DepositPage: React.FC = () => {
               </div>
 
               <div className="space-y-3">
-                <label className="block text-sm font-bold text-slate-600 dark:text-slate-300 ml-1">Deposit Amount</label>
+                <label htmlFor="deposit-amount-input" className="block text-sm font-bold text-slate-600 dark:text-slate-300 ml-1">Deposit Amount</label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">{currency}</span>
                   <Input
+                    id="deposit-amount-input"
                     type="number"
                     placeholder="0.00"
                     value={amount}

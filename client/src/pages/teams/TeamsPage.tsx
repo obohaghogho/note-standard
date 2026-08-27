@@ -444,8 +444,9 @@ export function TeamsPage() {
             <h2 className="text-xl font-black text-white uppercase tracking-tight italic pl-1">New Workspace</h2>
             <form onSubmit={handleCreateTeam} className="space-y-4 mt-6">
               <div className="space-y-1">
-                <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest pl-1">Workspace Title</label>
+                <label htmlFor="workspace-title-input" className="text-[9px] font-black text-gray-500 uppercase tracking-widest pl-1">Workspace Title</label>
                 <input
+                  id="workspace-title-input"
                   type="text"
                   value={newTeamName}
                   onChange={(e) => setNewTeamName(e.target.value)}
@@ -455,8 +456,9 @@ export function TeamsPage() {
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest pl-1">Description</label>
+                <label htmlFor="workspace-desc-input" className="text-[9px] font-black text-gray-500 uppercase tracking-widest pl-1">Description</label>
                 <textarea
+                  id="workspace-desc-input"
                   value={newTeamDescription}
                   onChange={(e) => setNewTeamDescription(e.target.value)}
                   placeholder="Outline key hub goals..."

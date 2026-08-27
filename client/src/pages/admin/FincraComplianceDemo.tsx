@@ -803,8 +803,9 @@ export default function FincraComplianceDemo() {
                     <div className="space-y-3 text-xs">
                         <div className="grid grid-cols-3 gap-2">
                             <div>
-                                <label className="text-[11px] text-slate-400 block mb-1">Gross Amount (₦)</label>
+                                <label htmlFor="calc-gross-amount" className="text-[11px] text-slate-400 block mb-1">Gross Amount (₦)</label>
                                 <input
+                                    id="calc-gross-amount"
                                     type="number"
                                     value={grossAmount}
                                     onChange={(e) => setGrossAmount(Number(e.target.value))}
@@ -812,8 +813,9 @@ export default function FincraComplianceDemo() {
                                 />
                             </div>
                             <div>
-                                <label className="text-[11px] text-slate-400 block mb-1">Provider Fee (₦)</label>
+                                <label htmlFor="calc-provider-fee" className="text-[11px] text-slate-400 block mb-1">Provider Fee (₦)</label>
                                 <input
+                                    id="calc-provider-fee"
                                     type="number"
                                     value={providerFee}
                                     onChange={(e) => setProviderFee(Number(e.target.value))}
@@ -821,8 +823,9 @@ export default function FincraComplianceDemo() {
                                 />
                             </div>
                             <div>
-                                <label className="text-[11px] text-slate-400 block mb-1">Platform Fee (₦)</label>
+                                <label htmlFor="calc-platform-fee" className="text-[11px] text-slate-400 block mb-1">Platform Fee (₦)</label>
                                 <input
+                                    id="calc-platform-fee"
                                     type="number"
                                     value={platformFee}
                                     onChange={(e) => setPlatformFee(Number(e.target.value))}

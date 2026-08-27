@@ -446,7 +446,7 @@ export const UserManagement = () => {
                     </div>
 
                     <div className="form-group space-y-1.5">
-                        <label className="block text-xs font-semibold text-gray-300">Daily Deposit Limit (USD)</label>
+                        <label htmlFor="daily-limit-input" className="block text-xs font-semibold text-gray-300">Daily Deposit Limit (USD)</label>
                         <div className="relative">
                             <input
                                 id="daily-limit-input"

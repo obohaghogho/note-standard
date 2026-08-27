@@ -572,8 +572,9 @@ export const BetaFeedbackDashboard: React.FC = () => {
                   {detailSubTab === 'postmortem' && (
                     <form onSubmit={handleSavePostmortem} className="space-y-3 text-xs">
                       <div>
-                        <label className="text-slate-400 font-semibold block mb-1">Root Cause Analysis *</label>
+                        <label htmlFor="postmortem-root-cause" className="text-slate-400 font-semibold block mb-1">Root Cause Analysis *</label>
                         <textarea
+                          id="postmortem-root-cause"
                           required
                           rows={2}
                           value={postmortemRootCause}
@@ -583,8 +584,9 @@ export const BetaFeedbackDashboard: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="text-slate-400 font-semibold block mb-1">Technical Solution & Fix *</label>
+                        <label htmlFor="postmortem-solution" className="text-slate-400 font-semibold block mb-1">Technical Solution & Fix *</label>
                         <textarea
+                          id="postmortem-solution"
                           required
                           rows={2}
                           value={postmortemSolution}
