@@ -36,7 +36,7 @@ export const FeedLayout: React.FC<FeedLayoutProps> = ({
 
       {/* Floating Action Button */}
       {fab && (
-        <div className="fixed bottom-6 right-6 lg:bottom-10 lg:right-10 z-50">
+        <div className="fixed bottom-20 right-4 lg:bottom-10 lg:right-10 z-50">
           {fab}
         </div>
       )}

@@ -266,7 +266,7 @@ export const EnterpriseFeedbackModal: React.FC = () => {
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-4 py-2.5 rounded-full bg-slate-900/90 text-amber-400 border border-amber-500/40 shadow-xl shadow-amber-500/10 backdrop-blur-md hover:border-amber-400 text-xs font-semibold tracking-wide transition-all group"
+        className="fixed bottom-36 right-4 sm:bottom-36 sm:right-4 lg:bottom-6 lg:right-28 z-40 flex items-center gap-2 px-4 py-2.5 rounded-full bg-slate-900/90 text-amber-400 border border-amber-500/40 shadow-xl shadow-amber-500/10 backdrop-blur-md hover:border-amber-400 text-xs font-semibold tracking-wide transition-all group"
         aria-label="Submit Enterprise Feedback"
       >
         <span className="relative flex h-2 w-2">

@@ -419,9 +419,9 @@
 }
 
 /* Responsive */
-@media (max-width: 480px) {
+@media (max-width: 768px) {
     .chat-widget {
-        bottom: 160px; /* Moved up to strongly clear iOS native bars, chat inputs, and the scroll-down button */
+        bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
         right: 16px;
         left: auto;
     }

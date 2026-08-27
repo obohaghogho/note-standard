@@ -699,7 +699,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         }}>
             {children}
             {showPermissionBanner && (
-                <div className="fixed bottom-4 left-3 right-3 sm:left-auto sm:right-5 sm:max-w-sm z-50 bg-gray-950/95 backdrop-blur-xl border border-blue-500/30 p-4 rounded-2xl shadow-2xl flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-5 duration-300">
+                <div className="fixed bottom-20 left-3 right-3 sm:left-auto sm:right-5 sm:max-w-sm sm:bottom-4 z-50 bg-gray-950/95 backdrop-blur-xl border border-blue-500/30 p-4 rounded-2xl shadow-2xl flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-5 duration-300">
                     <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2 text-blue-400 font-semibold text-sm">
                             <Bell size={18} />
