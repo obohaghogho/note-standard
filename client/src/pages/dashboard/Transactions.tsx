@@ -271,9 +271,10 @@ export const Transactions: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Table Section */}
+                {/* Table & Mobile Card Section */}
                 <div className="bg-[#111] border border-white/5 rounded-3xl overflow-hidden flex flex-col flex-1 min-h-0 min-w-0">
-                    <div className="overflow-x-auto overflow-y-auto flex-1 h-full min-w-0 overscroll-x-none">
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block overflow-x-auto overflow-y-auto flex-1 h-full min-w-0 overscroll-x-none">
                         <table className="w-full text-left border-collapse min-w-[800px] table-fixed">
                             <thead>
                                 <tr className="border-b border-white/5 text-[10px] uppercase font-bold text-gray-500 tracking-widest">
@@ -364,6 +365,68 @@ export const Transactions: React.FC = () => {
                         </table>
                     </div>
 
+                    {/* Mobile Card View (< md) */}
+                    <div className="md:hidden overflow-y-auto flex-1 p-3 space-y-3">
+                        {loading ? (
+                            Array.from({ length: 4 }).map((_, i) => (
+                                <div key={`skel-mob-${i}`} className="p-4 rounded-2xl bg-white/5 animate-pulse space-y-2">
+                                    <div className="h-4 bg-white/10 rounded w-1/3" />
+                                    <div className="h-3 bg-white/10 rounded w-1/2" />
+                                </div>
+                            ))
+                        ) : filteredTransactions.length === 0 ? (
+                            <div className="p-8 text-center text-gray-500 text-sm">No transactions found.</div>
+                        ) : (
+                            filteredTransactions.map((tx) => (
+                                <div
+                                    key={`mob-${tx.id}`}
+                                    onClick={() => setSelectedTx(tx)}
+                                    className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-white/10 active:scale-[0.98] transition-all space-y-3 cursor-pointer"
+                                >
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className={cn(
+                                                "w-9 h-9 rounded-full flex items-center justify-center shrink-0",
+                                                tx.type.includes('IN') || tx.type === 'DEPOSIT' ? "bg-green-500/10 text-green-400" :
+                                                tx.type === 'SWAP' ? "bg-purple-500/10 text-purple-400" : "bg-red-500/10 text-red-400"
+                                            )}>
+                                                {tx.type.includes('IN') || tx.type === 'DEPOSIT' ? <ArrowDownLeft size={16} /> :
+                                                 tx.type.includes('SWAP') ? <ArrowRight size={16} /> : <ArrowUpRight size={16} />}
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="font-bold text-xs truncate">{tx.display_label || tx.type.replace(/_/g, ' ')}</p>
+                                                <p className="text-[10px] text-gray-500 font-mono">#{tx.id.substring(0, 8)}</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                            <p className={cn(
+                                                "font-black text-sm",
+                                                tx.type.includes('IN') || tx.type === 'DEPOSIT' ? "text-green-400" : "text-white"
+                                            )}>
+                                                {tx.type.includes('IN') || tx.type === 'DEPOSIT' ? '+' : '-'} {formatCurrency(tx.amount, tx.currency)}
+                                            </p>
+                                            <p className="text-[10px] text-gray-500">{new Date(tx.created_at).toLocaleDateString()}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between text-[10px] pt-2 border-t border-white/5">
+                                        <span className={cn(
+                                            "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider border",
+                                            getStatusStyles(tx.status)
+                                        )}>
+                                            {getStatusIcon(tx.status)}
+                                            {tx.status}
+                                        </span>
+                                        <span className="text-gray-400 font-mono">
+                                            {tx.fee > 0 ? `Fee: ${formatCurrency(tx.fee, tx.currency)}` : 'No Fee'}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+
                     {/* Pagination */}
                     {totalPages > 1 && (
                         <div className="p-6 border-t border-white/5 flex items-center justify-between">
@@ -409,7 +472,6 @@ export const Transactions: React.FC = () => {
                         </div>
                     )}
                 </div>
-            </div>
 
             {selectedTx && <TransactionDetailModal tx={selectedTx} onClose={() => setSelectedTx(null)} />}
         </div>

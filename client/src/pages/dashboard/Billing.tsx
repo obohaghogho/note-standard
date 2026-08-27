@@ -300,7 +300,7 @@ export const Billing = () => {
                     <p className="text-gray-400 font-light">Manage your subscription, workspace usage limits, and invoices.</p>
                 </div>
 
-                <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl p-1 self-start md:self-auto">
+                <div className="flex items-center flex-wrap gap-2 bg-white/5 border border-white/10 rounded-2xl p-1 self-start md:self-auto">
                     {['NGN', 'USD', 'GHS'].map(cur => (
                         <button
                             key={cur}

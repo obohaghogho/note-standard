@@ -16,6 +16,8 @@ import { ErrorBoundary } from 'react-error-boundary';
 
 import { preloadCoreDashboardRoutes } from '../../utils/routePreloader';
 
+import { MobileBottomNav } from './MobileBottomNav';
+
 export function DashboardLayout() {
     const { t } = useTranslation();
     const location = useLocation();
@@ -59,13 +61,14 @@ export function DashboardLayout() {
         
         return (
             <header className={cn(
-                "pt-safe min-h-[4rem] border-b border-white/10 px-4 bg-black/40 backdrop-blur-md sticky top-0 z-40 flex items-center",
+                "pt-safe min-h-[4rem] border-b border-white/10 px-4 bg-black/40 backdrop-blur-md sticky top-0 z-40 flex items-center justify-between",
                 "md:flex"
             )}>
                 {/* Mobile Menu Toggle */}
                 <button 
                     onClick={() => setIsMobileMenuOpen(true)}
-                    className="p-2 -ml-2 text-gray-400 hover:text-white lg:hidden"
+                    className="p-2 -ml-2 text-gray-400 hover:text-white lg:hidden min-w-[44px] min-h-[44px] flex items-center justify-center"
+                    aria-label="Open menu"
                 >
                     <Menu size={24} />
                 </button>
@@ -73,21 +76,21 @@ export function DashboardLayout() {
                 {/* Create Note Button (Desktop & Tablet) */}
                 <button
                     onClick={() => setIsCreateNoteModalOpen(true)}
-                        className="ml-4 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-all shadow-lg shadow-primary/20 flex items-center gap-2"
+                    className="ml-2 sm:ml-4 px-3 sm:px-4 py-2 bg-primary hover:bg-primary/90 text-white text-xs sm:text-sm font-semibold rounded-lg transition-all shadow-lg shadow-primary/20 flex items-center gap-1.5 sm:gap-2 min-h-[40px]"
                 >
                     <Plus size={18} />
-                    <span className="hidden sm:inline">{t('common.create_note')}</span>
+                    <span className="inline">{t('common.create_note')}</span>
                 </button>
 
                 <div className="flex-1" />
 
                 {/* Right-side Utilities */}
-                <div className="flex items-center gap-2 md:gap-4">
+                <div className="flex items-center gap-1.5 sm:gap-3 md:gap-4">
                     <NotificationBell />
                     <LanguageSelector />
                     <button 
                         onClick={() => navigate('/dashboard/settings')}
-                        className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs ring-1 ring-primary/20 hover:bg-primary/30 transition-colors"
+                        className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs ring-1 ring-primary/20 hover:bg-primary/30 transition-colors min-w-[36px] min-h-[36px]"
                         title={t('common.settings')}
                     >
                         {user?.email?.[0]?.toUpperCase() || '?'}
@@ -127,7 +130,7 @@ export function DashboardLayout() {
 
                 <div className={cn(
                     "flex-1 min-h-0 w-full flex flex-col min-w-0 relative h-full",
-                    isChatActiveOnMobile ? "p-0 overflow-hidden" : "p-4 md:p-8 max-w-7xl mx-auto overflow-y-auto"
+                    isChatActiveOnMobile ? "p-0 overflow-hidden" : "p-3 sm:p-4 md:p-8 max-w-7xl mx-auto overflow-y-auto pb-20 lg:pb-8"
                 )}>
                     <ErrorBoundary fallback={
                         <div className="p-8 text-center bg-red-500/10 rounded-xl border border-red-500/20 m-4">
@@ -142,6 +145,8 @@ export function DashboardLayout() {
                     </ErrorBoundary>
                 </div>
             </main>
+
+            {!isChatActiveOnMobile && <MobileBottomNav />}
 
             <CreateNoteModal
                 isOpen={isCreateNoteModalOpen}
