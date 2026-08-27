@@ -364,16 +364,20 @@ router.patch("/:id/status", requireAdmin, async (req, res) => {
     });
 
     // Admin audit trail logging
-    await supabase.from('system_alerts').insert({
-      alert_type: 'ad_moderation_audit',
-      message: `Admin ${req.user.id} updated ad ${id} status to ${status}`,
-      metadata: {
-        admin_id: req.user.id,
-        ad_id: id,
-        new_status: status,
-        updated_at: new Date().toISOString()
-      }
-    }).catch(e => console.error('[AdAudit] Audit log error:', e.message));
+    try {
+      await supabase.from('system_alerts').insert({
+        alert_type: 'ad_moderation_audit',
+        message: `Admin ${req.user.id} updated ad ${id} status to ${status}`,
+        metadata: {
+          admin_id: req.user.id,
+          ad_id: id,
+          new_status: status,
+          updated_at: new Date().toISOString()
+        }
+      });
+    } catch (e) {
+      console.error('[AdAudit] Audit log error:', e.message);
+    }
 
     res.json(data);
   } catch (error) {

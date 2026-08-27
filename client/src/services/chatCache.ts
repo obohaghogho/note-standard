@@ -1,4 +1,4 @@
-import { Message, Conversation } from '../stores/chatStore';
+import type { Message, Conversation } from '../stores/chatStore';
 
 const DB_NAME = 'NoteStandardChatDB';
 const DB_VERSION = 1;
