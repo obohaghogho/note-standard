@@ -204,6 +204,13 @@ exports.getSubscriptionStatus = async (req, res) => {
           .update({ plan_tier: "free" })
           .eq("id", userId);
 
+        // Auto-pause active ad campaigns upon entitlement expiration
+        await supabase
+          .from("ads")
+          .update({ status: "paused" })
+          .eq("user_id", userId)
+          .eq("status", "approved");
+
         // Return the downgraded state
         return res.json({ subscription: { ...data, status: "expired", plan_tier: "free", plan_type: "FREE" } });
       }
@@ -316,30 +323,30 @@ exports.createAdCheckoutSession = async (req, res) => {
       true,
     );
     const finalAmount = Math.round(ngnAmount * 100) / 100;
-    const reference = require("uuid").v4();
 
-    const callbackUrl = `${
-      process.env.CLIENT_URL || "https://notestandard.com"
-    }/dashboard/settings?wallet_topup=true&reference=${reference}`;
-
-    const metadata = {
+    const PaymentService = require("../services/payment/paymentService");
+    const initResult = await PaymentService.initializePayment(
       userId,
-      type: "wallet_topup",
-      usdAmount,
-      exchangeRate: rate,
-    };
-
-    const provider = PaymentFactory.getProviderByName("paystack");
-    const result = await provider.initialize({
       email,
-      amount: finalAmount,
-      currency: "NGN",
-      reference,
-      callbackUrl,
-      metadata,
-    });
+      finalAmount,
+      "NGN",
+      {
+        type: "wallet_topup",
+        display_label: "Ad Wallet Top-Up",
+        usdAmount,
+        exchangeRate: rate,
+      },
+      {
+        provider: "paystack",
+        gatewayAmount: finalAmount,
+        gatewayCurrency: "NGN",
+        callbackUrl: getCallbackUrl("/dashboard/settings", {
+          wallet_topup: "true",
+        }, "paystack")
+      }
+    );
 
-    res.json({ url: result.checkoutUrl || result.url });
+    res.json({ url: initResult.checkoutUrl || initResult.url, reference: initResult.reference });
   } catch (error) {
     console.error("Error creating ad checkout session:", error);
     res.status(500).json({ error: "Failed to create ad checkout session" });
@@ -349,50 +356,70 @@ exports.createAdCheckoutSession = async (req, res) => {
 exports.syncAdPayment = async (req, res) => {
   try {
     const { reference } = req.body;
+    const userId = req.user.id;
 
     if (!reference) {
       return res.status(400).json({ error: "Reference required" });
     }
 
-    const provider = PaymentFactory.getProviderByName("paystack");
-    const verification = await provider.verify(reference);
+    const PaymentService = require("../services/payment/paymentService");
 
-    if (
-      verification.success &&
-      verification.metadata?.type === "wallet_topup"
-    ) {
-      const usdAmount = verification.metadata.usdAmount;
-      const userId = verification.metadata.userId;
+    // Fetch transaction to verify ownership and type
+    const { data: tx, error: txErr } = await supabase
+      .from("transactions")
+      .select("*")
+      .or(`reference_id.eq.${reference},provider_reference.eq.${reference}`)
+      .maybeSingle();
 
+    if (txErr || !tx) {
+      return res.status(404).json({ error: "Transaction not found" });
+    }
+
+    if (tx.user_id !== userId) {
+      return res.status(403).json({ error: "Unauthorized transaction access" });
+    }
+
+    const txType = (tx.type || tx.metadata?.type || "").toLowerCase();
+    if (txType !== "wallet_topup") {
+      return res.status(400).json({ error: "Transaction is not a wallet top-up" });
+    }
+
+    // Early idempotency hit: if already COMPLETED in DB, finalize instantly
+    if (["COMPLETED", "SUCCESS"].includes((tx.status || "").toUpperCase())) {
+      const result = await PaymentService.finalizeTransaction(reference);
       const { data: profile } = await supabase
         .from("profiles")
         .select("ad_wallet_balance")
         .eq("id", userId)
         .single();
-        
-      const currentBalance = Number(profile.ad_wallet_balance || 0);
 
-      await supabase
+      return res.json({ success: true, newBalance: Number(profile?.ad_wallet_balance || 0), status: result.status });
+    }
+
+    // Verify payment status with provider
+    let verification = { success: false };
+    try {
+      const provider = PaymentFactory.getProviderByName("paystack");
+      verification = await provider.verify(reference);
+    } catch (verErr) {
+      console.warn(`[SyncAdPayment] Provider verification warning for ${reference}: ${verErr.message}`);
+    }
+
+    if (verification.success || verification.status === "success") {
+      const result = await PaymentService.finalizeTransaction(reference, verification.raw || verification);
+      const { data: profile } = await supabase
         .from("profiles")
-        .update({ ad_wallet_balance: currentBalance + Number(usdAmount) })
-        .eq("id", userId);
+        .select("ad_wallet_balance")
+        .eq("id", userId)
+        .single();
 
-      await supabase
-        .from("wallet_transactions")
-        .insert({
-          user_id: userId,
-          amount: usdAmount,
-          type: "deposit",
-          metadata: { reference }
-        });
-
-      res.json({ success: true, newBalance: currentBalance + Number(usdAmount) });
+      return res.json({ success: true, newBalance: Number(profile?.ad_wallet_balance || 0), status: result.status });
     } else {
-      res.json({ success: false });
+      return res.json({ success: false, message: "Payment not completed" });
     }
   } catch (error) {
     console.error("Error syncing ad payment:", error);
-    res.status(500).json({ error: "Sync failed" });
+    return res.status(500).json({ error: "Sync failed", details: error.message });
   }
 };
 
@@ -447,6 +474,13 @@ exports.cancelSubscription = async (req, res) => {
       .from("profiles")
       .update({ plan_tier: "free" })
       .eq("id", userId);
+
+    // Auto-pause active ad campaigns upon subscription cancellation
+    await supabase
+      .from("ads")
+      .update({ status: "paused" })
+      .eq("user_id", userId)
+      .eq("status", "approved");
 
     // Invalidate Entitlement Cache immediately
     const planService = require("../services/planService");

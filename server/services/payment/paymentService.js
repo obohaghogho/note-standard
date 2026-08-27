@@ -1045,8 +1045,8 @@ class PaymentService {
 
             if (finalizedTx) {
               const type = finalizedTx.type?.toUpperCase();
-              if (type === "AD_PAYMENT" && finalizedTx.metadata?.adId) {
-                await this.unlockAd(finalizedTx.metadata.adId);
+              if (type === "WALLET_TOPUP" || type === "AD_PAYMENT" || finalizedTx.metadata?.type === "wallet_topup") {
+                await this._creditAdWallet(finalizedTx);
               } else if (type === "SUBSCRIPTION_PAYMENT" || type === "SUBSCRIPTION") {
                 await this._activateSubscription(finalizedTx);
               }
@@ -1067,6 +1067,48 @@ class PaymentService {
         
   }
 
+
+  /**
+   * Helper: Credit Ad Wallet after payment confirmation
+   */
+  async _creditAdWallet(tx) {
+    const userId = tx.user_id;
+    const usdAmount = Number(tx.metadata?.usdAmount || tx.amount || 0);
+
+    if (!userId || usdAmount <= 0) {
+      logger.warn(`[PaymentService] Skipped _creditAdWallet for tx ${tx.id}: invalid userId or amount`);
+      return;
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("ad_wallet_balance")
+      .eq("id", userId)
+      .single();
+
+    const currentBalance = Number(profile?.ad_wallet_balance || 0);
+    const newBalance = currentBalance + usdAmount;
+
+    await supabase
+      .from("profiles")
+      .update({ ad_wallet_balance: newBalance })
+      .eq("id", userId);
+
+    try {
+      await supabase
+        .from("wallet_transactions")
+        .insert({
+          user_id: userId,
+          amount: usdAmount,
+          type: "deposit",
+          metadata: { reference: tx.reference_id, transaction_id: tx.id }
+        });
+    } catch (err) {
+      logger.warn(`[PaymentService] wallet_transactions insert warning: ${err.message}`);
+    }
+
+    logger.info(`[PaymentService] ✅ Authoritatively credited $${usdAmount} to ad_wallet_balance for user ${userId} (New balance: $${newBalance})`);
+  }
 
   /**
    * Helper: Activate Subscription after payment confirmation

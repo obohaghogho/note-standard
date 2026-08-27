@@ -90,12 +90,17 @@ class PaystackProvider extends PaymentProvider {
         amount: data.amount / 100,
         currency: data.currency,
         metadata: data.metadata,
-        customer: data.customer
+        customer: data.customer,
+        raw: data
       };
     } catch (error) {
       logger.error(`[PaystackProvider] Verify error for ${reference}`, error.response?.data || error.message);
       throw new Error(`Paystack Verification Failed: ${error.message}`);
     }
+  }
+
+  async verify(reference) {
+    return this.verifyPayment(reference);
   }
 
   async cancelSubscription(subscriptionCode) {

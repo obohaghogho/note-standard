@@ -305,6 +305,43 @@ router.patch("/:id/status", requireAdmin, async (req, res) => {
       return res.status(400).json({ error: "Invalid status" });
     }
 
+    // Fetch existing ad details to verify advertiser ownership and wallet balance
+    const { data: existingAd, error: fetchErr } = await supabase
+      .from("ads")
+      .select("id, user_id, status")
+      .eq("id", id)
+      .single();
+
+    if (fetchErr || !existingAd) {
+      return res.status(404).json({ error: "Ad not found" });
+    }
+
+    // State transition guard: Unpaid ads ('pending_payment') cannot become 'approved'
+    // unless the advertiser has positive settled ad wallet funding.
+    if (status === "approved") {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("ad_wallet_balance, status")
+        .eq("id", existingAd.user_id)
+        .single();
+
+      const adBalance = Number(profile?.ad_wallet_balance || 0);
+
+      if (existingAd.status === "pending_payment" && adBalance <= 0) {
+        return res.status(400).json({
+          error: "UNPAID_AD_APPROVAL_BLOCKED",
+          message: "Cannot approve ad: Advertiser has no settled ad wallet balance. Payment/top-up required.",
+        });
+      }
+
+      if (adBalance <= 0) {
+        return res.status(400).json({
+          error: "INSUFFICIENT_AD_FUNDS",
+          message: "Cannot approve ad: Advertiser ad wallet balance is $0.00.",
+        });
+      }
+    }
+
     const { data, error } = await supabase
       .from("ads")
       .update({ status })
@@ -347,7 +384,7 @@ router.patch("/:id/status", requireAdmin, async (req, res) => {
 
 const subscriptionController = require("../controllers/subscriptionController");
 
-// Create Ad (Pro Only) -> Now starts as pending_payment
+// Create Ad (Pro/Business + KYC Tier 1+ Required) -> Starts as pending_payment
 router.post("/", requireAuth, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -367,28 +404,68 @@ router.post("/", requireAuth, async (req, res) => {
       tier  // Patch B: 'basic' | 'boost' | 'premium' — optional, safe default
     } = req.body;
 
-    // Patch B: Resolve advertiser_value from tier if flag is enabled
-    const TIER_VALUES = { basic: 5, boost: 15, premium: 30 };
-    const resolvedAdvertiserValue = flags.ENABLE_ADVERTISER_TIERS
-      ? (TIER_VALUES[tier] || 5)
-      : 5; // Default legacy value — no behavior change when flag is OFF
+    // 1. Hardened CPC validation: cpc_bid must be finite, numeric, and > 0
+    const parsedCpc = cpc_bid !== undefined ? parseFloat(cpc_bid) : 0.05;
+    if (isNaN(parsedCpc) || !isFinite(parsedCpc) || parsedCpc <= 0) {
+      return res.status(400).json({
+        error: "INVALID_CPC_BID",
+        message: "cpc_bid must be a finite positive number greater than 0.",
+      });
+    }
 
-    // Check if user is Pro
+    // Validate budget caps if provided
+    if (max_views && (isNaN(parseInt(max_views)) || parseInt(max_views) <= 0)) {
+      return res.status(400).json({ error: "INVALID_MAX_VIEWS", message: "max_views must be a positive integer." });
+    }
+    if (max_clicks && (isNaN(parseInt(max_clicks)) || parseInt(max_clicks) <= 0)) {
+      return res.status(400).json({ error: "INVALID_MAX_CLICKS", message: "max_clicks must be a positive integer." });
+    }
+
+    // 2. KYC Enforcement: kyc_level >= 1 and is_verified === true required
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("kyc_level, is_verified, status")
+      .eq("id", userId)
+      .single();
+
+    if (!profile || Number(profile.kyc_level || 0) < 1 || !profile.is_verified) {
+      return res.status(403).json({
+        error: "KYC_REQUIRED",
+        message: "Identity verification (KYC Tier 1+) is required to create ad campaigns.",
+        kyc_level: profile?.kyc_level || 0,
+      });
+    }
+
+    if (["restricted", "frozen"].includes((profile.status || "").toLowerCase())) {
+      return res.status(403).json({
+        error: "ACCOUNT_RESTRICTED",
+        message: "Restricted or frozen accounts cannot create ad campaigns.",
+      });
+    }
+
+    // 3. Check if user has active paid subscription plan
     const { data: subscription, error: subError } = await supabase
       .from("subscriptions")
       .select("plan_tier, status")
       .eq("user_id", userId)
       .maybeSingle();
 
-    // Allow if plan is a paid tier and status is active
-    const isPaidPlan = subscription && ['pro', 'team', 'business', 'enterprise'].includes(subscription.plan_tier) &&
+    const isPaidPlan = subscription &&
+      ["pro", "team", "business", "enterprise"].includes((subscription.plan_tier || "").toLowerCase()) &&
       subscription.status === "active";
 
     if (!isPaidPlan) {
       return res.status(403).json({
-        error: "Only Pro or Business users can create advertisements.",
+        error: "PRO_PLAN_REQUIRED",
+        message: "Only Pro or Business users can create advertisements.",
       });
     }
+
+    // Patch B: Resolve advertiser_value from tier if flag is enabled
+    const TIER_VALUES = { basic: 5, boost: 15, premium: 30 };
+    const resolvedAdvertiserValue = flags.ENABLE_ADVERTISER_TIERS
+      ? (TIER_VALUES[tier] || 5)
+      : 5;
 
     // Create Ad with status 'pending_payment'
     const { data, error } = await supabase
@@ -397,14 +474,14 @@ router.post("/", requireAuth, async (req, res) => {
         user_id: userId,
         title,
         content,
-        image_url: image_url || media_url, // Fallback if old client sends media_url
-        link_url: link_url || destination_url, // Fallback if old client sends destination_url
+        image_url: image_url || media_url,
+        link_url: link_url || destination_url,
         start_date: start_date || new Date().toISOString(),
         end_date: end_date || null,
         max_views:         max_views ? parseInt(max_views) : null,
         max_clicks:         max_clicks ? parseInt(max_clicks) : null,
-        cpc_bid:            cpc_bid ? parseFloat(cpc_bid) : 0.05,
-        advertiser_value:   resolvedAdvertiserValue, // Patch B: tier-resolved value
+        cpc_bid:            parsedCpc,
+        advertiser_value:   resolvedAdvertiserValue,
         tags:               tags || [],
         status:             "pending_payment",
       })
@@ -567,7 +644,7 @@ router.post("/:id/track", async (req, res) => {
           } else if (newBalance !== null && newBalance <= 0) {
             // Auto-pause campaigns when wallet is empty
             await supabase.from('ads')
-              .update({ status: 'paused_funds' })
+              .update({ status: 'paused' })
               .eq('user_id', adDetails.user_id)
               .eq('status', 'approved');
 
