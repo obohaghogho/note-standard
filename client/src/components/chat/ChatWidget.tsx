@@ -31,11 +31,6 @@ import { useKeyboardLayout } from '../../hooks/useKeyboardLayout';
 export const ChatWidget = () => {
     const location = useLocation();
     const { session, user, isPro, isBusiness } = useAuth();
-
-    // Hide support chat widget on Community Feed to unblock Create Post button
-    if (location.pathname === '/dashboard/feed' || location.pathname.startsWith('/dashboard/feed/')) {
-        return null;
-    }
     const { socket, connected } = useSocket();
     const { 
         startCall, callState, acceptCall, rejectCall, endCall, 
@@ -361,12 +356,12 @@ export const ChatWidget = () => {
         });
     };
 
-    const location = useLocation();
-
     // Hide the widget in the chat rooms (both user and admin) to avoid UI clutter
     const isChatRoom = location.pathname.startsWith('/dashboard/chat') || 
                        location.pathname.startsWith('/admin/chats') ||
-                       location.pathname.startsWith('/dashboard/teams');
+                       location.pathname.startsWith('/dashboard/teams') ||
+                       location.pathname === '/dashboard/feed' ||
+                       location.pathname.startsWith('/dashboard/feed/');
 
     if (!user || (!isOpen && isKeyboardOpen) || isChatRoom) return null;
 
