@@ -679,82 +679,132 @@ export const Billing = () => {
                             <p className="text-xs font-light mt-1">Your payment and subscription history is currently empty.</p>
                         </div>
                     ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left text-sm border-collapse min-w-[700px]" role="table">
-                                <thead>
-                                    <tr className="border-b border-white/5 text-gray-500 text-[10px] uppercase font-bold tracking-widest bg-white/[0.01]">
-                                        <th className="py-4 px-6">Invoice Number</th>
-                                        <th className="py-4 px-4">Billing Date</th>
-                                        <th className="py-4 px-4">Provider</th>
-                                        <th className="py-4 px-4 text-right">Amount Charged</th>
-                                        <th className="py-4 px-4 text-center">Status</th>
-                                        <th className="py-4 px-6 text-right">Invoice Receipt</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-white/5 font-light">
-                                    {billingHistory.map((record) => {
-                                        const date = new Date(record.created_at).toLocaleDateString('en-US', {
-                                            year: 'numeric',
-                                            month: 'short',
-                                            day: 'numeric'
-                                        });
-                                        const upperStatus = (record.status || '').toUpperCase();
-                                        
-                                        return (
-                                            <tr key={record.id} className="hover:bg-white/[0.01] transition-colors">
-                                                <td className="py-4 px-6 font-mono text-xs font-semibold text-gray-300">
-                                                    NS-INV-{record.id.substring(0, 8).toUpperCase()}
-                                                </td>
-                                                <td className="py-4 px-4 text-gray-300 text-xs">
-                                                    {date}
-                                                </td>
-                                                <td className="py-4 px-4 capitalize text-gray-400 text-xs">
-                                                    {record.provider}
-                                                </td>
-                                                <td className="py-4 px-4 text-right font-mono font-bold text-xs text-white">
-                                                    {formatCurrency(record.amount, record.currency)}
-                                                </td>
-                                                <td className="py-4 px-4 text-center">
-                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${upperStatus === 'SUCCESS' || upperStatus === 'SUCCESSFUL' || upperStatus === 'COMPLETED' ? 'text-green-400 bg-green-500/10 border-green-500/20' : (upperStatus === 'FAILED' ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20')}`}>
-                                                        {upperStatus === 'SUCCESS' || upperStatus === 'SUCCESSFUL' || upperStatus === 'COMPLETED' ? 'Paid' : upperStatus}
-                                                    </span>
-                                                </td>
-                                                <td className="py-4 px-6 text-right">
-                                                    {record.transactionId && (upperStatus === 'SUCCESS' || upperStatus === 'SUCCESSFUL' || upperStatus === 'COMPLETED') ? (
-                                                        <button
-                                                            onClick={() => {
-                                                                toast.promise(walletApi.downloadInvoice(record.transactionId!), {
-                                                                    loading: 'Generating Receipt...',
-                                                                    success: 'Receipt downloaded!',
-                                                                    error: 'Failed to download receipt'
-                                                                });
-                                                            }}
-                                                            className="inline-flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 font-semibold transition-colors border border-purple-500/20 hover:border-purple-500/40 bg-purple-500/5 hover:bg-purple-500/10 px-3 py-1 rounded-xl"
-                                                        >
-                                                            <FileText size={12} /> Receipt
-                                                        </button>
-                                                    ) : (
-                                                        <span className="text-gray-600 text-xs italic">—</span>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
+                        <>
+                            {/* Desktop Table View */}
+                            <div className="hidden md:block overflow-x-auto">
+                                <table className="w-full text-left text-sm border-collapse min-w-[700px]" role="table">
+                                    <thead>
+                                        <tr className="border-b border-white/5 text-gray-500 text-[10px] uppercase font-bold tracking-widest bg-white/[0.01]">
+                                            <th className="py-4 px-6">Invoice Number</th>
+                                            <th className="py-4 px-4">Billing Date</th>
+                                            <th className="py-4 px-4">Provider</th>
+                                            <th className="py-4 px-4 text-right">Amount Charged</th>
+                                            <th className="py-4 px-4 text-center">Status</th>
+                                            <th className="py-4 px-6 text-right">Invoice Receipt</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-white/5 font-light">
+                                        {billingHistory.map((record) => {
+                                            const date = new Date(record.created_at).toLocaleDateString('en-US', {
+                                                year: 'numeric',
+                                                month: 'short',
+                                                day: 'numeric'
+                                            });
+                                            const upperStatus = (record.status || '').toUpperCase();
+
+                                            return (
+                                                <tr key={record.id} className="hover:bg-white/[0.01] transition-colors">
+                                                    <td className="py-4 px-6 font-mono text-xs font-semibold text-gray-300">
+                                                        NS-INV-{record.id.substring(0, 8).toUpperCase()}
+                                                    </td>
+                                                    <td className="py-4 px-4 text-gray-300 text-xs">
+                                                        {date}
+                                                    </td>
+                                                    <td className="py-4 px-4 capitalize text-gray-400 text-xs">
+                                                        {record.provider}
+                                                    </td>
+                                                    <td className="py-4 px-4 text-right font-mono font-bold text-xs text-white">
+                                                        {formatCurrency(record.amount, record.currency)}
+                                                    </td>
+                                                    <td className="py-4 px-4 text-center">
+                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${upperStatus === 'SUCCESS' || upperStatus === 'SUCCESSFUL' || upperStatus === 'COMPLETED' ? 'text-green-400 bg-green-500/10 border-green-500/20' : (upperStatus === 'FAILED' ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20')}`}>
+                                                            {upperStatus === 'SUCCESS' || upperStatus === 'SUCCESSFUL' || upperStatus === 'COMPLETED' ? 'Paid' : upperStatus}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-4 px-6 text-right">
+                                                        {record.transactionId && (upperStatus === 'SUCCESS' || upperStatus === 'SUCCESSFUL' || upperStatus === 'COMPLETED') ? (
+                                                            <button
+                                                                onClick={() => {
+                                                                    toast.promise(walletApi.downloadInvoice(record.transactionId!), {
+                                                                        loading: 'Generating Receipt...',
+                                                                        success: 'Receipt downloaded!',
+                                                                        error: 'Failed to download receipt'
+                                                                    });
+                                                                }}
+                                                                className="inline-flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 font-semibold transition-colors border border-purple-500/20 hover:border-purple-500/40 bg-purple-500/5 hover:bg-purple-500/10 px-3 py-1 rounded-xl"
+                                                            >
+                                                                <FileText size={12} /> Receipt
+                                                            </button>
+                                                        ) : (
+                                                            <span className="text-gray-600 text-xs italic">—</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Mobile Card List View (< md) */}
+                            <div className="md:hidden divide-y divide-white/5 p-3 space-y-3">
+                                {billingHistory.map((record) => {
+                                    const date = new Date(record.created_at).toLocaleDateString('en-US', {
+                                        year: 'numeric',
+                                        month: 'short',
+                                        day: 'numeric'
+                                    });
+                                    const upperStatus = (record.status || '').toUpperCase();
+                                    const isPaid = upperStatus === 'SUCCESS' || upperStatus === 'SUCCESSFUL' || upperStatus === 'COMPLETED';
+
+                                    return (
+                                        <div key={`mob-inv-${record.id}`} className="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-3">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div>
+                                                    <p className="font-mono text-xs font-bold text-white">NS-INV-{record.id.substring(0, 8).toUpperCase()}</p>
+                                                    <p className="text-[10px] text-gray-400 mt-0.5">{date} • <span className="capitalize">{record.provider}</span></p>
+                                                </div>
+                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${isPaid ? 'text-green-400 bg-green-500/10 border-green-500/20' : (upperStatus === 'FAILED' ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20')}`}>
+                                                    {isPaid ? 'Paid' : upperStatus}
+                                                </span>
+                                            </div>
+
+                                            <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                                                <span className="font-mono font-black text-sm text-white">{formatCurrency(record.amount, record.currency)}</span>
+                                                {record.transactionId && isPaid && (
+                                                    <button
+                                                        onClick={() => {
+                                                            toast.promise(walletApi.downloadInvoice(record.transactionId!), {
+                                                                loading: 'Generating Receipt...',
+                                                                success: 'Receipt downloaded!',
+                                                                error: 'Failed to download receipt'
+                                                            });
+                                                        }}
+                                                        className="inline-flex items-center gap-1.5 text-xs text-purple-400 font-semibold border border-purple-500/20 bg-purple-500/5 px-3 py-1 rounded-xl"
+                                                    >
+                                                        <FileText size={12} /> Receipt
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </>
                     )}
                 </div>
             </Card>
 
             {/* Secure Payment details note */}
-            <div className="flex items-start gap-4 p-5 rounded-2xl bg-white/[0.02] border border-white/5">
-                <div className="p-2 bg-purple-500/10 rounded-xl text-purple-400 border border-purple-500/20 shrink-0">
-                    <ShieldCheck size={20} />
+            <div className="flex items-start gap-4 p-4 sm:p-6 rounded-2xl bg-white/[0.02] border border-white/5 mb-16 sm:mb-6">
+                <div className="p-2.5 bg-purple-500/10 rounded-xl text-purple-400 border border-purple-500/20 shrink-0 mt-0.5">
+                    <ShieldCheck size={22} />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1.5 flex-1 min-w-0 pr-8 sm:pr-0">
                     <h4 className="font-bold text-sm text-white flex items-center gap-2">Secure payment operations</h4>
-                    <p className="text-xs text-gray-400 font-light leading-relaxed">NoteStandard uses institutional banking partners for credit card and bank transfer transactions. We do not store or process your sensitive billing credentials. Subscription transactions are verified cryptographically via secure webhooks and logged immutably on the institutional ledger.</p>
+                    <p className="text-xs text-gray-400 font-light leading-relaxed break-words">
+                        NoteStandard uses institutional banking partners for credit card and bank transfer transactions. We do not store or process your sensitive billing credentials. Subscription transactions are verified cryptographically via secure webhooks and logged immutably on the institutional ledger.
+                    </p>
                 </div>
             </div>
 

@@ -49,12 +49,14 @@ describe('NOTEStandard Mobile Web & PWA Responsiveness', () => {
     expect(content).toContain('MobileBottomNav');
   });
 
-  it('Billing.tsx must enforce max-w-full overflow-x-hidden to prevent text cutoffs', () => {
+  it('Billing.tsx must enforce max-w-full overflow-x-hidden, break-words, and mobile invoice cards', () => {
     const filePath = path.join(rootDir, 'src/pages/dashboard/Billing.tsx');
     const content = fs.readFileSync(filePath, 'utf-8');
 
     expect(content).toContain('overflow-x-hidden');
     expect(content).toContain('flex-wrap');
+    expect(content).toContain('break-words');
+    expect(content).toContain('md:hidden');
   });
 
   it('Transactions.tsx must provide a dedicated mobile card list view for small screens', () => {
