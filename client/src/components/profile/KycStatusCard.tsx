@@ -95,25 +95,17 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
     }
     setLoading(true);
     try {
-      // Provision/upgrade NGN Virtual Account with BVN
-      await walletApi.createVirtualAccount('NGN', {
+      // Server-Authoritative KYC Submission for Tier 2
+      await walletApi.post('/kyc/submit', {
+        requestedTier: 2,
         bvn: bvnInput,
         dob: dobInput,
-        phone: phone
       });
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase
-          .from('profiles')
-          .update({ kyc_level: Math.max(kycLevel || 0, 2) })
-          .eq('id', user.id);
-      }
 
       if (onPhoneUpdated) {
         onPhoneUpdated(phone);
       }
-      toast.success('Tier 2 Verification Submitted! Virtual Account Activated.');
+      toast.success('Your Tier 2 verification request has been submitted for compliance review.');
       setShowTier2Modal(false);
     } catch (err: any) {
       toast.error(err.response?.data?.error || err.message || 'Failed to complete Tier 2 verification');
@@ -125,37 +117,24 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
   const handleTier3Submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!idCardUrl || !utilityBillUrl) {
-      toast.error('Government ID Card and Utility Bill URLs are required for Tier 3 verification');
+      toast.error('Government ID Card and Utility Bill documents or paths are required for Tier 3 verification');
       return;
     }
     setLoading(true);
     try {
-      await walletApi.createVirtualAccount('USD', {
-        dob: dobInput,
+      // Server-Authoritative KYC Submission (PENDING_REVIEW)
+      await walletApi.post('/kyc/submit', {
+        requestedTier: 3,
+        governmentIdStoragePath: idCardUrl,
+        utilityBillStoragePath: utilityBillUrl,
+        residentialAddress: { address },
         occupation,
-        address,
-        documentUrls: {
-          idCard: idCardUrl,
-          utilityBill: utilityBillUrl
-        }
       });
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase
-          .from('profiles')
-          .update({
-            kyc_level: 3,
-            id_card_url: idCardUrl,
-            utility_bill_url: utilityBillUrl
-          })
-          .eq('id', user.id);
-      }
 
       if (onPhoneUpdated) {
         onPhoneUpdated(phone);
       }
-      toast.success('Tier 3 Verification Submitted! USD/EUR/GBP accounts unlocked.');
+      toast.success('Your Tier 3 verification request has been submitted for compliance review.');
       setShowTier3Modal(false);
     } catch (err: any) {
       toast.error(err.response?.data?.error || err.message || 'Failed to submit Tier 3 verification');
@@ -478,7 +457,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
               </button>
             </div>
             <p className="text-xs text-gray-300 leading-relaxed">
-              Upload your Government ID and Utility Bill to unlock international USD, EUR, and GBP virtual accounts with unlimited daily limits.
+              Upload your Government ID and Utility Bill to unlock international USD, EUR, and GBP virtual accounts according to your plan limits.
             </p>
             <form onSubmit={handleTier3Submit} className="space-y-4">
               <div>

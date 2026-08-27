@@ -200,4 +200,105 @@ const requireAdmin = async (req, res, next) => {
   }
 };
 
-module.exports = { requireAuth, requireAdmin };
+/**
+ * Granular OTC Operator Permission Middleware
+ * Requires explicit 'can_confirm_otc_funding' permission or 'finance_operator' role.
+ * Fail-closed: Audits and returns 403 HTTP Forbidden if unauthorized.
+ */
+const requireOtcOperatorPermission = async (req, res, next) => {
+  try {
+    const user = req.user;
+    const { transactionReference, otcReference, evidenceReference } = req.body || {};
+
+    if (!user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    // Fetch complete user profile permissions
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("id, role, status, can_confirm_otc_funding, permissions")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    const isAuthorized =
+      profile?.can_confirm_otc_funding === true ||
+      profile?.permissions?.can_confirm_otc_funding === true ||
+      profile?.role === "finance_operator";
+
+    if (!isAuthorized) {
+      // Audit log denied attempt
+      try {
+        const { recordFincraAudit } = require("../services/fincra/audit");
+        await recordFincraAudit({
+          action: "OTC_FUNDING_CONFIRMATION_DENIED",
+          userId: user.id,
+          details: {
+            operatorId: user.id,
+            transactionReference,
+            otcReference,
+            evidenceReference,
+            result: "DENIED_UNAUTHORIZED",
+            reason: "User lacks can_confirm_otc_funding permission.",
+          },
+        });
+      } catch (auditErr) {
+        console.error("Audit log error on permission denied:", auditErr.message);
+      }
+
+      return res.status(403).json({
+        error: "FORBIDDEN_PERMISSION_DENIED: Explicit 'can_confirm_otc_funding' permission required.",
+      });
+    }
+
+    req.userProfile = profile;
+    next();
+  } catch (err) {
+    console.error("requireOtcOperatorPermission error:", err);
+    return res.status(500).json({ error: "Auth permission check failure" });
+  }
+};
+
+/**
+ * Granular KYC Compliance Reviewer Permission Middleware
+ * Requires explicit 'can_review_kyc' permission or 'admin' role.
+ */
+const requireKycReviewerPermission = async (req, res, next) => {
+  try {
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("id, role, plan_tier, can_review_kyc")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    const isAuthorized =
+      profile?.can_review_kyc === true ||
+      profile?.role === "admin" ||
+      profile?.role === "compliance_officer" ||
+      profile?.plan_tier === "admin";
+
+    if (!isAuthorized) {
+      return res.status(403).json({
+        error: "FORBIDDEN_PERMISSION_DENIED: Explicit 'can_review_kyc' compliance permission required.",
+      });
+    }
+
+    req.userProfile = profile;
+    next();
+  } catch (err) {
+    console.error("requireKycReviewerPermission error:", err);
+    return res.status(500).json({ error: "Auth permission check failure" });
+  }
+};
+
+module.exports = {
+  requireAuth,
+  requireAdmin,
+  requireOtcOperatorPermission,
+  requireKycReviewerPermission,
+};

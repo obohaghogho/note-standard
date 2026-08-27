@@ -107,6 +107,10 @@ async function processFincraWebhook(headers, rawBody, parsedBody) {
       result = await handleConversionSuccessful(parsedBody);
       break;
 
+    case FINCRA_EVENTS.CONVERSION_FAILED:
+      result = await handleConversionFailed(parsedBody);
+      break;
+
     default:
       logger.info(`[Fincra/webhook] Unhandled event type: ${eventType}`);
       result = { handled: false, eventType };
@@ -510,26 +514,42 @@ async function handlePayoutFailed(payload) {
 
 /**
  * Handle Fincra conversion.successful.
- * Updates fincra_transactions status and credits destination wallet.
+ * Delegates to fincraOtcFundingService for atomic NGN credit and crypto reservation settlement.
  */
 async function handleConversionSuccessful(payload) {
   const data        = payload.data || payload;
   const fincraRef   = data.reference || data.id;
   const customerRef = data.customerReference || data.customer_reference;
 
-  logger.info(`[Fincra/webhook] Conversion successful: ${fincraRef}`);
+  logger.info(`[Fincra/webhook] Processing conversion.successful: ${fincraRef}`);
 
-  await supabase.from("fincra_transactions")
-    .update({ status: FINCRA_TX_STATUS.SUCCESSFUL, fincra_reference: fincraRef })
-    .or(`reference.eq.${customerRef},fincra_reference.eq.${fincraRef}`);
-
-  await recordFincraAudit({
-    action: "CONVERSION_SUCCESSFUL",
-    userId: null,
-    details: { fincraRef, customerRef },
+  const fincraOtcFundingService = require("./fincraOtcFundingService");
+  return await fincraOtcFundingService.handleConversionSuccess({
+    fincraRef,
+    customerRef,
+    rawPayload: payload,
   });
+}
 
-  return { handled: true, fincraRef };
+/**
+ * Handle Fincra conversion.failed.
+ * Delegates to fincraOtcFundingService to safely release reserved crypto balance.
+ */
+async function handleConversionFailed(payload) {
+  const data        = payload.data || payload;
+  const fincraRef   = data.reference || data.id;
+  const customerRef = data.customerReference || data.customer_reference;
+  const reason      = data.reason || data.message || "Conversion failed";
+
+  logger.warn(`[Fincra/webhook] Processing conversion.failed: ${fincraRef}`);
+
+  const fincraOtcFundingService = require("./fincraOtcFundingService");
+  return await fincraOtcFundingService.handleConversionFailure({
+    fincraRef,
+    customerRef,
+    reason,
+  });
 }
 
 module.exports = { processFincraWebhook };
+

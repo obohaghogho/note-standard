@@ -60,14 +60,51 @@ const FINCRA_ALL_FIAT_SET = new Set([...FINCRA_SUPPORTED_SET, ...FINCRA_COMING_S
 // FAILED     → Fincra or internal failure, no balance change.
 // REVERSED   → Fund reservation reversed, balance returned to user.
 const FINCRA_TX_STATUS = Object.freeze({
-  CREATED:    "CREATED",
-  PENDING:    "PENDING",
-  RESERVED:   "RESERVED",
-  PROCESSING: "PROCESSING",
-  SUCCESSFUL: "SUCCESSFUL",
-  FAILED:     "FAILED",
-  REVERSED:   "REVERSED",
+  CREATED:                  "CREATED",
+  REQUESTED:                "REQUESTED",
+  CRYPTO_RESERVED:          "CRYPTO_RESERVED",
+  OTC_FUNDING_PENDING:      "OTC_FUNDING_PENDING",
+  OTC_FUNDED:               "OTC_FUNDED",
+  FINCRA_BALANCE_CONFIRMED: "FINCRA_BALANCE_CONFIRMED",
+  QUOTE_REQUESTED:          "QUOTE_REQUESTED",
+  QUOTE_RECEIVED:           "QUOTE_RECEIVED",
+  CONVERSION_SUBMITTED:     "CONVERSION_SUBMITTED",
+  PENDING:                  "PENDING",
+  RESERVED:                 "RESERVED",
+  PROCESSING:               "PROCESSING",
+  CONVERSION_PROCESSING:    "CONVERSION_PROCESSING",
+  SUCCESSFUL:               "SUCCESSFUL",
+  CONVERSION_SUCCESSFUL:    "CONVERSION_SUCCESSFUL",
+  NGN_SETTLED:              "NGN_SETTLED",
+  FAILED:                   "FAILED",
+  CONVERSION_FAILED:        "CONVERSION_FAILED",
+  FUNDING_FAILED:           "FUNDING_FAILED",
+  RECONCILIATION_REQUIRED:  "RECONCILIATION_REQUIRED",
+  CANCELLED:                "CANCELLED",
+  REVERSED:                 "REVERSED",
 });
+
+// Supported crypto assets for Fincra OTC conversion
+const SUPPORTED_CRYPTO_CONVERSION_ASSETS = Object.freeze({
+  USDT: "USDT",
+  USDC: "USDC",
+});
+
+const SUPPORTED_CRYPTO_CONVERSION_SET = new Set(Object.values(SUPPORTED_CRYPTO_CONVERSION_ASSETS));
+
+// Explicit allowed conversion pairs (Source-Destination)
+// USDT -> NGN and USDC -> NGN are the explicit supported crypto conversion pairs.
+// Fiat conversion pairs (NGN ↔ USD ↔ EUR) remain supported as before.
+const ALLOWED_CONVERSION_PAIRS = new Set([
+  "USDT-NGN",
+  "USDC-NGN",
+  "NGN-USD",
+  "USD-NGN",
+  "NGN-EUR",
+  "EUR-NGN",
+  "USD-EUR",
+  "EUR-USD",
+]);
 
 // Fincra transaction types
 const FINCRA_TX_TYPES = Object.freeze({
@@ -107,6 +144,9 @@ module.exports = {
   FINCRA_SUPPORTED_SET,
   FINCRA_COMING_SOON_SET,
   FINCRA_ALL_FIAT_SET,
+  SUPPORTED_CRYPTO_CONVERSION_ASSETS,
+  SUPPORTED_CRYPTO_CONVERSION_SET,
+  ALLOWED_CONVERSION_PAIRS,
   FINCRA_TX_STATUS,
   FINCRA_TX_TYPES,
   FINCRA_EVENTS,
@@ -116,4 +156,5 @@ module.exports = {
   FINCRA_MAX_RETRIES,
   FINCRA_RETRY_DELAY_MS,
 };
+
 

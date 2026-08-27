@@ -121,7 +121,7 @@
         "tier2_limit": "Daily Limit: 500,000 NGN",
         "tier2_desc": "Enter your BVN or NIN to activate your dedicated NGN virtual bank account.",
         "tier3_title": "Tier 3: Enterprise FX",
-        "tier3_limit": "Daily Limit: Unlimited",
+        "tier3_limit": "Daily Limit: Plan-Based",
         "tier3_desc": "Upload ID Card and Utility Bill proof of address to unlock USD/EUR/GBP accounts.",
         "edit_phone": "Edit Phone Number",
         "add_phone": "Add Phone Number for Tier 1",

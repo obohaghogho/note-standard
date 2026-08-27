@@ -193,7 +193,7 @@ export const KycVerificationScreen: React.FC<KycVerificationScreenProps> = ({ na
     }
   };
 
-  // Tier 3 Submit (Document URLs & Forex Account Provisioning)
+  // Tier 3 Submit (Document Uploads & Server-Authoritative Compliance Request)
   const handleTier3Submit = async () => {
     if (!idCardUrl || !utilityBillUrl) {
       Alert.alert('Missing Documents', 'Please upload both Government ID Card and Utility Bill.');
@@ -202,21 +202,17 @@ export const KycVerificationScreen: React.FC<KycVerificationScreenProps> = ({ na
 
     try {
       setSubmitting(true);
-      const res = await apiClient.post('/wallet/virtual-account', {
-        currency: 'USD',
-        dob: dobInput.trim(),
-        address: addressInput.trim(),
+      const res = await apiClient.post('/kyc/submit', {
+        requestedTier: 3,
+        governmentIdStoragePath: idCardUrl,
+        utilityBillStoragePath: utilityBillUrl,
+        residentialAddress: { address: addressInput.trim() },
         occupation: occupationInput.trim(),
-        documentUrls: {
-          idCard: idCardUrl,
-          utilityBill: utilityBillUrl,
-        },
       });
 
-      if (res.data?.success || res.data?.account) {
-        await refreshProfile();
+      if (res.data?.success) {
         await fetchAuthoritativeKycStatus();
-        Alert.alert('Tier 3 Verification Submitted', 'Forex bank accounts (USD/EUR/GBP) unlocked and under review!');
+        Alert.alert('Tier 3 Verification Submitted', 'Your Tier 3 verification request has been submitted for compliance review.');
         setShowTier3Modal(false);
       } else {
         throw new Error(res.data?.error || 'Verification request failed.');

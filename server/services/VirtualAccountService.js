@@ -109,6 +109,13 @@ class VirtualAccountService {
     };
 
     if (isFcy) {
+      // Server-Authoritative Tier Check: Must be approved Tier 3
+      if (!profile.kyc_level || profile.kyc_level < 3) {
+        const err = new Error(`KYC_TIER_REQUIRED: Provisioning a virtual ${upperCurrency} account requires server-approved Tier 3 KYC status. Current level: ${profile.kyc_level || 0}`);
+        err.code = "KYC_TIER_REQUIRED";
+        throw err;
+      }
+
       // International KYC: requires documents (ID Card + Utility Bill)
       const idCard = kycData.documentUrls?.idCard || profile.id_card_url || profile.metadata?.document_urls?.id_card;
       const utilityBill = kycData.documentUrls?.utilityBill || profile.utility_bill_url || profile.metadata?.document_urls?.utility_bill;
