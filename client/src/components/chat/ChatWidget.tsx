@@ -29,7 +29,13 @@ import toast from 'react-hot-toast';
 import { useKeyboardLayout } from '../../hooks/useKeyboardLayout';
 
 export const ChatWidget = () => {
+    const location = useLocation();
     const { session, user, isPro, isBusiness } = useAuth();
+
+    // Hide support chat widget on Community Feed to unblock Create Post button
+    if (location.pathname === '/dashboard/feed' || location.pathname.startsWith('/dashboard/feed/')) {
+        return null;
+    }
     const { socket, connected } = useSocket();
     const { 
         startCall, callState, acceptCall, rejectCall, endCall, 

@@ -12,7 +12,7 @@ import { toast } from 'react-hot-toast';
 import { AdManager } from '../../components/ads/AdManager';
 import { adService } from '../../services/ads';
 import { Toggle } from '../../components/common/Toggle';
-import { User, Camera, Save, Loader2, Megaphone, BadgeCheck, Shield, Lock, Download, Trash2, Activity as ActivityIcon, MessageSquare, Globe, Phone } from 'lucide-react';
+import { User, Camera, Save, Loader2, Megaphone, BadgeCheck, Shield, Lock, Download, Trash2, Activity as ActivityIcon, MessageSquare, Globe, Phone, Mail, CheckCircle2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { UserBadge } from '../../components/common/UserBadge';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
@@ -1001,7 +1001,7 @@ export default function Settings() {
 
             {
                 activeTab === 'security' && (
-                    <Card variant="glass" className="p-4 sm:p-6 min-w-0">
+                    <Card variant="glass" className="p-4 sm:p-6 min-w-0 pb-12 mb-16">
                         <div className="flex items-center gap-3 mb-6">
                             <div className="p-2 bg-primary/10 rounded-lg">
                                 <Shield className="text-primary" size={24} />
@@ -1047,9 +1047,19 @@ export default function Settings() {
                                 </Button>
                             </div>
 
-                            <div className="p-4 rounded-xl border border-white/10 bg-white/5 opacity-60">
-                                <h3 className="text-lg font-medium mb-1">Authenticated Email</h3>
-                                <p className="text-sm text-gray-400">{user?.email}</p>
+                            <div className="p-4 sm:p-5 rounded-xl border border-white/10 bg-white/5 space-y-2">
+                                <div className="flex items-center justify-between gap-2 flex-wrap">
+                                    <h3 className="text-base sm:text-lg font-medium text-white flex items-center gap-2">
+                                        <Mail size={18} className="text-blue-400" />
+                                        Authenticated Email
+                                    </h3>
+                                    <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] sm:text-xs font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                                        <CheckCircle2 size={12} /> Verified Primary
+                                    </span>
+                                </div>
+                                <p className="text-sm text-gray-300 font-mono break-all font-medium pt-1">
+                                    {user?.email || profile?.email || authProfile?.email || 'Not connected'}
+                                </p>
                             </div>
                         </div>
                     </Card>

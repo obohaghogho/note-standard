@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   MessageSquarePlus, 
@@ -67,7 +68,13 @@ const CATEGORIES: Array<{
 ];
 
 export const EnterpriseFeedbackModal: React.FC = () => {
+  const location = useLocation();
   const { user } = useAuth();
+
+  // Hide feedback widget on Community Feed to unblock Create Post button
+  if (location.pathname === '/dashboard/feed' || location.pathname.startsWith('/dashboard/feed/')) {
+    return null;
+  }
   const { selectedWallet } = useWallet();
   const { activeConversationId } = useChat();
 

@@ -250,7 +250,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24 sm:pb-16">
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-blue-900/40 via-purple-900/30 to-black/60 border border-blue-500/20 rounded-2xl p-5 sm:p-6 backdrop-blur-xl relative overflow-hidden">
         <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -461,9 +461,9 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
             </div>
           </div>
 
-          <div className="pt-4">
+          <div className="pt-4 pb-2">
             {currentTier >= 3 ? (
-              <div className="text-xs text-purple-400 font-medium flex items-center gap-1">
+              <div className="text-xs text-purple-400 font-medium flex items-center gap-1 min-h-[44px]">
                 <CheckCircle2 size={14} /> Tier 3 {t('kyc.active', 'Active')}
               </div>
             ) : isTier3Pending ? (
@@ -471,7 +471,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                 variant="outline"
                 size="sm"
                 disabled
-                className="w-full text-xs font-semibold border-amber-500/30 text-amber-300 opacity-60 cursor-not-allowed"
+                className="w-full text-xs font-semibold border-amber-500/30 text-amber-300 opacity-60 cursor-not-allowed min-h-[44px] py-2.5"
               >
                 Verification Pending Review
               </Button>
@@ -479,7 +479,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
               <Button
                 variant="outline"
                 size="sm"
-                className="w-full text-xs font-semibold border-purple-500/30 hover:bg-purple-500/10 text-purple-300"
+                className="w-full text-xs font-semibold border-purple-500/30 hover:bg-purple-500/10 text-purple-300 min-h-[44px] py-2.5"
                 onClick={() => setShowTier3Modal(true)}
               >
                 {isTier3Rejected ? 'Resubmit Tier 3 Documents' : t('kyc.upgrade_tier3', 'Upgrade to Tier 3')} <ChevronRight size={14} className="ml-1" />
