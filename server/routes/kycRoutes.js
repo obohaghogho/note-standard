@@ -88,7 +88,7 @@ router.post("/documents/upload", requireAuth, upload.single("file"), async (req,
 router.post("/submit", requireAuth, async (req, res) => {
   try {
     const userId = req.user.id;
-    const { requestedTier, bvn, dob, governmentIdStoragePath, utilityBillStoragePath, residentialAddress, occupation } = req.body;
+    const { requestedTier, bvn, dob, governmentIdStoragePath, utilityBillStoragePath, residentialAddress, occupation, autoApprove } = req.body;
 
     const request = await kycService.submitKycRequest({
       userId,
@@ -99,6 +99,7 @@ router.post("/submit", requireAuth, async (req, res) => {
       utilityBillStoragePath,
       residentialAddress,
       occupation,
+      autoApprove,
     });
 
     return res.status(201).json({

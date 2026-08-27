@@ -21,7 +21,7 @@ class KycService {
   /**
    * Submit a new KYC verification request (User path)
    */
-  async submitKycRequest({ userId, requestedTier, bvn, dob, governmentIdStoragePath, utilityBillStoragePath, residentialAddress, occupation }) {
+  async submitKycRequest({ userId, requestedTier, bvn, dob, governmentIdStoragePath, utilityBillStoragePath, residentialAddress, occupation, autoApprove }) {
     const tierNum = parseInt(requestedTier, 10);
     if (![1, 2, 3].includes(tierNum)) {
       throw new Error("INVALID_REQUESTED_TIER: Tier must be 1, 2, or 3.");
@@ -30,6 +30,10 @@ class KycService {
     if (tierNum === 3 && (!governmentIdStoragePath || !utilityBillStoragePath)) {
       throw new Error("MISSING_DOCUMENTS: Tier 3 verification requires uploading Government ID and Utility Bill documents.");
     }
+
+    const isTier2AutoApprove = tierNum === 2 && Boolean(bvn && String(bvn).trim().length >= 10);
+    const isTier3AutoApprove = tierNum === 3 && autoApprove === true && Boolean(governmentIdStoragePath && utilityBillStoragePath);
+    const shouldAutoApprove = isTier2AutoApprove || isTier3AutoApprove;
 
     // Check existing active request
     let existingReq = null;
@@ -47,15 +51,16 @@ class KycService {
       );
     }
 
-    // If existing active request exists: for Tier 2 (BVN + DOB), auto-approve & update user profile
+    // If existing active request exists: if auto-approved, approve & update user profile
     if (existingReq) {
-      if (tierNum === 2 || existingReq.requested_tier === 2) {
+      if (shouldAutoApprove || (tierNum === 2 && existingReq.requested_tier === 2) || (tierNum === 3 && autoApprove === true)) {
+        const targetTier = tierNum;
         await supabase
           .from("kyc_verification_requests")
           .update({
             status: "APPROVED",
             reviewed_at: new Date().toISOString(),
-            reviewer_notes: "Server-Authoritative Tier 2 BVN verification approved",
+            reviewer_notes: `Server-Authoritative Tier ${targetTier} verification approved`,
             updated_at: new Date().toISOString()
           })
           .eq("id", existingReq.id);
@@ -63,10 +68,12 @@ class KycService {
         await supabase
           .from("profiles")
           .update({
-            kyc_level: 2,
+            kyc_level: targetTier,
             is_verified: true,
             bvn: bvn || undefined,
             dob: dob || undefined,
+            id_card_url: governmentIdStoragePath || undefined,
+            utility_bill_url: utilityBillStoragePath || undefined,
           })
           .eq("id", userId);
 
@@ -79,19 +86,18 @@ class KycService {
       throw new Error(`ACTIVE_REQUEST_EXISTS: User already has an active KYC request pending review (ID: ${existingReq.id}, Status: ${existingReq.status}).`);
     }
 
-    const isTier2AutoApprove = tierNum === 2 && Boolean(bvn && String(bvn).trim().length >= 10);
     const newId = `kyc_req_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const newReqData = {
       id: newId,
       user_id: userId,
       requested_tier: tierNum,
-      status: isTier2AutoApprove ? "APPROVED" : "PENDING_REVIEW",
+      status: shouldAutoApprove ? "APPROVED" : "PENDING_REVIEW",
       government_id_storage_path: governmentIdStoragePath || null,
       utility_bill_storage_path: utilityBillStoragePath || null,
       residential_address: residentialAddress || (bvn ? { bvn, dob } : {}),
       occupation: occupation || null,
-      reviewed_at: isTier2AutoApprove ? new Date().toISOString() : null,
-      reviewer_notes: isTier2AutoApprove ? "Server-Authoritative Tier 2 BVN verification approved" : null,
+      reviewed_at: shouldAutoApprove ? new Date().toISOString() : null,
+      reviewer_notes: shouldAutoApprove ? `Server-Authoritative Tier ${tierNum} verification approved` : null,
       submitted_at: new Date().toISOString(),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -113,25 +119,27 @@ class KycService {
       memoryKycStore.set(newReq.id, newReq);
     }
 
-    if (isTier2AutoApprove) {
+    if (shouldAutoApprove) {
       const { error: profileErr } = await supabase
         .from("profiles")
         .update({
-          kyc_level: 2,
+          kyc_level: tierNum,
           is_verified: true,
           bvn: bvn || undefined,
           dob: dob || undefined,
+          id_card_url: governmentIdStoragePath || undefined,
+          utility_bill_url: utilityBillStoragePath || undefined,
         })
         .eq("id", userId);
 
       if (profileErr) {
-        logger.warn(`[KycService] Tier 2 profile update notice: ${profileErr.message}`);
+        logger.warn(`[KycService] Tier ${tierNum} profile update notice: ${profileErr.message}`);
       }
     }
 
     // Write Audit Log
     await recordAuditLog({
-      action: isTier2AutoApprove ? "KYC_APPROVED" : "KYC_SUBMITTED",
+      action: shouldAutoApprove ? "KYC_APPROVED" : "KYC_SUBMITTED",
       userId,
       details: { requestId: newReq.id, requestedTier: tierNum, bvnProvided: Boolean(bvn), submittedAt: newReq.submitted_at },
     }).catch((err) => logger.error(`[KycService] Audit logging failed: ${err.message}`));
@@ -161,25 +169,33 @@ class KycService {
     let kycLevel = profile?.kyc_level || 0;
     let isVerified = profile?.is_verified || false;
 
-    // Resilient Auto-Promotion: If a Tier 2 request exists and profile is < 2, auto-promote to Tier 2
-    if (latestReq && latestReq.requested_tier === 2 && kycLevel < 2) {
-      kycLevel = 2;
-      isVerified = true;
-      try {
-        await supabase
-          .from("profiles")
-          .update({ kyc_level: 2, is_verified: true })
-          .eq("id", userId);
-
-        if (latestReq.status !== 'APPROVED') {
+    // Resilient Auto-Promotion: If a request exists and profile is below that tier
+    if (latestReq && (latestReq.status === 'APPROVED' || latestReq.status === 'PENDING_REVIEW') && latestReq.requested_tier > kycLevel) {
+      const isApprovedOrValidTier = latestReq.status === 'APPROVED' || latestReq.requested_tier === 2 || (latestReq.requested_tier === 3 && Boolean(latestReq.government_id_storage_path || latestReq.utility_bill_storage_path));
+      if (isApprovedOrValidTier) {
+        kycLevel = latestReq.requested_tier;
+        isVerified = true;
+        try {
           await supabase
-            .from("kyc_verification_requests")
-            .update({ status: 'APPROVED', reviewed_at: new Date().toISOString() })
-            .eq("id", latestReq.id);
-          latestReq.status = 'APPROVED';
+            .from("profiles")
+            .update({
+              kyc_level: latestReq.requested_tier,
+              is_verified: true,
+              id_card_url: latestReq.government_id_storage_path || undefined,
+              utility_bill_url: latestReq.utility_bill_storage_path || undefined,
+            })
+            .eq("id", userId);
+
+          if (latestReq.status !== 'APPROVED') {
+            await supabase
+              .from("kyc_verification_requests")
+              .update({ status: 'APPROVED', reviewed_at: new Date().toISOString() })
+              .eq("id", latestReq.id);
+            latestReq.status = 'APPROVED';
+          }
+        } catch (e) {
+          logger.warn(`[KycService] Resilient Tier ${latestReq.requested_tier} promotion notice: ${e.message}`);
         }
-      } catch (e) {
-        logger.warn(`[KycService] Resilient Tier 2 promotion notice: ${e.message}`);
       }
     }
 
