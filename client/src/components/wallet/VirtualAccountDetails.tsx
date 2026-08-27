@@ -15,19 +15,8 @@ export function VirtualAccountDetails({ currency, onAccountCreated }: VirtualAcc
   const [actionLoading, setActionLoading] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  // KYC Form State
+  // KYC Prompt State
   const [showKycForm, setShowKycForm] = useState(false);
-  const [idCardUrl, setIdCardUrl] = useState('');
-  const [utilityBillUrl, setUtilityBillUrl] = useState('');
-  const [dob, setDob] = useState('1995-01-01');
-  const [occupation, setOccupation] = useState('Software Developer');
-  const [address, setAddress] = useState({
-    street: '123 Financial Way',
-    city: 'Lagos',
-    state: 'Lagos State',
-    country: 'NG',
-    postalCode: '100001',
-  });
 
   const isFcy = ['USD', 'EUR', 'GBP', 'CAD', 'AUD'].includes(currency);
 
@@ -73,25 +62,7 @@ export function VirtualAccountDetails({ currency, onAccountCreated }: VirtualAcc
     if (e) e.preventDefault();
     try {
       setActionLoading(true);
-      
-      let kycData: any = {};
-      if (isFcy) {
-        if (!idCardUrl || !utilityBillUrl) {
-          toast.error('ID Card and Utility Bill URLs are required for international accounts');
-          return;
-        }
-        kycData = {
-          dob,
-          occupation,
-          address,
-          documentUrls: {
-            idCard: idCardUrl,
-            utilityBill: utilityBillUrl,
-          },
-        };
-      }
-
-      const res = await walletApi.createVirtualAccount(currency, kycData);
+      const res = await walletApi.createVirtualAccount(currency, {});
       setAccount(res.account);
       setStatus(res.account.status);
       setShowKycForm(false);
@@ -99,9 +70,9 @@ export function VirtualAccountDetails({ currency, onAccountCreated }: VirtualAcc
       toast.success(`Virtual account provisioned successfully!`);
     } catch (err: any) {
       const errMsg = err.response?.data?.error || err.message;
-      if (err.response?.data?.code === 'MISSING_KYC_DOCUMENTS' || errMsg.includes('MISSING_KYC_DOCUMENTS')) {
+      if (err.response?.data?.code === 'MISSING_KYC_DOCUMENTS' || (typeof errMsg === 'string' && errMsg.includes('MISSING_KYC_DOCUMENTS'))) {
         setShowKycForm(true);
-        toast.error('KYC documentation is required to open this account.');
+        toast.error('Tier 3 KYC verification is required to open this account.');
       } else {
         toast.error(errMsg || 'Failed to provision virtual account');
       }
@@ -147,140 +118,36 @@ export function VirtualAccountDetails({ currency, onAccountCreated }: VirtualAcc
     );
   }
 
-  // --- 2. RENDER KYC FORM IF REQUESTED/REQUIRED ---
+  // --- 2. RENDER KYC REQUIREMENT PROMPT IF REQUIRED ---
   if (showKycForm) {
     return (
-      <form onSubmit={handleProvision} className="bg-gray-950 border border-white/10 rounded-2xl p-6 mt-4 space-y-4">
-        <div className="flex items-center gap-3 mb-2 pb-2 border-b border-white/5">
-          <Upload className="text-indigo-400" size={20} />
-          <div>
-            <h4 className="text-white font-bold text-base">KYC Document Verification</h4>
-            <p className="text-gray-500 text-xs">Banking partner compliance requirement for international {currency} funding</p>
-          </div>
+      <div className="bg-gray-950 border border-purple-500/20 rounded-2xl p-6 mt-4 text-center space-y-4">
+        <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mx-auto mb-2">
+          <Upload className="text-purple-400" size={24} />
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="va-id-card-url" className="block text-gray-400 text-xs font-semibold mb-1 cursor-pointer">ID Card URL</label>
-            <input
-              id="va-id-card-url"
-              name="idCardUrl"
-              type="url"
-              required
-              placeholder="https://example.com/id-card.jpg"
-              value={idCardUrl}
-              onChange={(e) => setIdCardUrl(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500 transition-colors"
-            />
-          </div>
-          <div>
-            <label htmlFor="va-utility-bill-url" className="block text-gray-400 text-xs font-semibold mb-1 cursor-pointer">Utility Bill URL</label>
-            <input
-              id="va-utility-bill-url"
-              name="utilityBillUrl"
-              type="url"
-              required
-              placeholder="https://example.com/utility-bill.jpg"
-              value={utilityBillUrl}
-              onChange={(e) => setUtilityBillUrl(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500 transition-colors"
-            />
-          </div>
-          <div>
-            <label htmlFor="va-dob" className="block text-gray-400 text-xs font-semibold mb-1 cursor-pointer">Date of Birth</label>
-            <input
-              id="va-dob"
-              name="dob"
-              type="date"
-              required
-              value={dob}
-              onChange={(e) => setDob(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500 transition-colors"
-            />
-          </div>
-          <div>
-            <label htmlFor="va-occupation" className="block text-gray-400 text-xs font-semibold mb-1 cursor-pointer">Occupation</label>
-            <input
-              id="va-occupation"
-              name="occupation"
-              type="text"
-              required
-              value={occupation}
-              onChange={(e) => setOccupation(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500 transition-colors"
-            />
-          </div>
+        <div>
+          <h4 className="text-white font-bold text-base">Tier 3 Verification Required</h4>
+          <p className="text-gray-400 text-xs max-w-md mx-auto mt-1 leading-relaxed">
+            International {currency} accounts require verified Government ID and Proof of Address documents. Please complete Tier 3 verification in your settings.
+          </p>
         </div>
-
-        <div className="space-y-2 pt-2">
-          <h5 className="text-white text-xs font-bold uppercase tracking-wider text-gray-500">Billing Address</h5>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <input
-              id="va-street"
-              name="street"
-              type="text"
-              placeholder="Street"
-              value={address.street}
-              onChange={(e) => setAddress({ ...address, street: e.target.value })}
-              className="md:col-span-2 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"
-            />
-            <input
-              id="va-city"
-              name="city"
-              type="text"
-              placeholder="City"
-              value={address.city}
-              onChange={(e) => setAddress({ ...address, city: e.target.value })}
-              className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"
-            />
-            <input
-              id="va-state"
-              name="state"
-              type="text"
-              placeholder="State"
-              value={address.state}
-              onChange={(e) => setAddress({ ...address, state: e.target.value })}
-              className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"
-            />
-            <input
-              id="va-country"
-              name="country"
-              type="text"
-              placeholder="Country Code (e.g. CA, AU)"
-              value={address.country}
-              onChange={(e) => setAddress({ ...address, country: e.target.value })}
-              className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"
-            />
-            <input
-              id="va-postal-code"
-              name="postalCode"
-              type="text"
-              placeholder="Postal Code"
-              value={address.postalCode}
-              onChange={(e) => setAddress({ ...address, postalCode: e.target.value })}
-              className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-3 pt-4 border-t border-white/5">
+        <div className="flex justify-center gap-3 pt-2">
           <button
             type="button"
             onClick={() => setShowKycForm(false)}
-            className="px-4 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl text-xs font-semibold"
+            className="px-4 py-2.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl text-xs font-semibold"
           >
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={actionLoading}
-            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 disabled:opacity-50"
+          <a
+            href="/dashboard/settings?tab=kyc"
+            className="px-6 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-xs flex items-center gap-2 transition-colors"
           >
-            {actionLoading && <RefreshCw className="animate-spin" size={12} />}
-            Submit & Provision Account
-          </button>
+            Complete Tier 3 Verification
+            <ArrowRight size={14} />
+          </a>
         </div>
-      </form>
+      </div>
     );
   }
 

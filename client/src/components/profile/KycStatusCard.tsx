@@ -38,15 +38,103 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
     setPhoneInput(initialPhone);
   }, [initialPhone]);
 
-  // Tier 3 inputs
-  const [idCardUrl, setIdCardUrl] = useState('');
-  const [utilityBillUrl, setUtilityBillUrl] = useState('');
+  // Active request state from server
+  const [activeKycRequest, setActiveKycRequest] = useState<any>(null);
+  const [fetchingKycStatus, setFetchingKycStatus] = useState(false);
+
+  // Tier 3 file upload state
+  const [governmentIdStoragePath, setGovernmentIdStoragePath] = useState('');
+  const [utilityBillStoragePath, setUtilityBillStoragePath] = useState('');
+  const [governmentIdFileName, setGovernmentIdFileName] = useState('');
+  const [utilityBillFileName, setUtilityBillFileName] = useState('');
+  const [uploadingGovId, setUploadingGovId] = useState(false);
+  const [uploadingUtility, setUploadingUtility] = useState(false);
+
   const [address, setAddress] = useState('');
   const [occupation, setOccupation] = useState('');
+
+  // Fetch authoritative user KYC status & active request
+  const fetchKycStatus = async () => {
+    try {
+      setFetchingKycStatus(true);
+      const res = await walletApi.get('/kyc/my-request');
+      if (res.data?.activeRequest) {
+        setActiveKycRequest(res.data.activeRequest);
+      } else {
+        setActiveKycRequest(null);
+      }
+    } catch (err) {
+      console.error('[KycStatusCard] Failed to fetch KYC status:', err);
+    } finally {
+      setFetchingKycStatus(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchKycStatus();
+  }, []);
 
   // Determine current active tier
   const hasPhone = Boolean(phone && phone.trim().length >= 8);
   const currentTier = kycLevel >= 3 ? 3 : (kycLevel === 2 || Boolean(initialPhone && isVerified) ? 2 : (hasPhone || kycLevel >= 1 ? 1 : 0));
+
+  const isTier3Pending = activeKycRequest?.requested_tier === 3 && ['PENDING_REVIEW', 'UNDER_REVIEW'].includes(activeKycRequest?.status);
+  const isTier3Rejected = activeKycRequest?.requested_tier === 3 && ['REJECTED', 'RESUBMISSION_REQUIRED'].includes(activeKycRequest?.status);
+
+  // Authenticated file upload handler
+  const handleFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    documentType: 'government_id' | 'utility_bill'
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const isGovId = documentType === 'government_id';
+    if (isGovId) {
+      setUploadingGovId(true);
+    } else {
+      setUploadingUtility(true);
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('documentType', documentType);
+
+      const res = await walletApi.post('/kyc/documents/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      if (res.data?.success && res.data?.storagePath) {
+        if (isGovId) {
+          setGovernmentIdStoragePath(res.data.storagePath);
+          setGovernmentIdFileName(file.name);
+          toast.success('Government ID uploaded successfully.');
+        } else {
+          setUtilityBillStoragePath(res.data.storagePath);
+          setUtilityBillFileName(file.name);
+          toast.success('Utility Bill uploaded successfully.');
+        }
+      } else {
+        throw new Error(res.data?.error || 'Document upload failed.');
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || err.message || 'Failed to upload document.');
+      if (isGovId) {
+        setGovernmentIdStoragePath('');
+        setGovernmentIdFileName('');
+      } else {
+        setUtilityBillStoragePath('');
+        setUtilityBillFileName('');
+      }
+    } finally {
+      if (isGovId) {
+        setUploadingGovId(false);
+      } else {
+        setUploadingUtility(false);
+      }
+    }
+  };
 
   const handleTier1Submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,11 +148,11 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User session not found');
 
+      // Update phone on profile without client-side kyc_level self-promotion
       const { error } = await supabase
         .from('profiles')
         .update({
-          phone: cleanedPhone,
-          kyc_level: Math.max(kycLevel || 0, 1)
+          phone: cleanedPhone
         })
         .eq('id', user.id);
 
@@ -80,6 +168,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
       }
       toast.success('Phone number saved! Tier 1 Verification active.');
       setShowTier1Modal(false);
+      await fetchKycStatus();
     } catch (err: any) {
       toast.error(err.message || 'Failed to save phone number');
     } finally {
@@ -107,6 +196,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
       }
       toast.success('Your Tier 2 verification request has been submitted for compliance review.');
       setShowTier2Modal(false);
+      await fetchKycStatus();
     } catch (err: any) {
       toast.error(err.response?.data?.error || err.message || 'Failed to complete Tier 2 verification');
     } finally {
@@ -116,19 +206,32 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
 
   const handleTier3Submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!idCardUrl || !utilityBillUrl) {
-      toast.error('Government ID Card and Utility Bill documents or paths are required for Tier 3 verification');
+    if (!governmentIdStoragePath) {
+      toast.error('Please upload your Government ID document.');
       return;
     }
+    if (!utilityBillStoragePath) {
+      toast.error('Please upload your Utility Bill document.');
+      return;
+    }
+    if (!address.trim()) {
+      toast.error('Please enter your residential address.');
+      return;
+    }
+    if (!occupation.trim()) {
+      toast.error('Please enter your occupation.');
+      return;
+    }
+
     setLoading(true);
     try {
       // Server-Authoritative KYC Submission (PENDING_REVIEW)
       await walletApi.post('/kyc/submit', {
         requestedTier: 3,
-        governmentIdStoragePath: idCardUrl,
-        utilityBillStoragePath: utilityBillUrl,
-        residentialAddress: { address },
-        occupation,
+        governmentIdStoragePath,
+        utilityBillStoragePath,
+        residentialAddress: { address: address.trim() },
+        occupation: occupation.trim(),
       });
 
       if (onPhoneUpdated) {
@@ -136,6 +239,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
       }
       toast.success('Your Tier 3 verification request has been submitted for compliance review.');
       setShowTier3Modal(false);
+      await fetchKycStatus();
     } catch (err: any) {
       toast.error(err.response?.data?.error || err.message || 'Failed to submit Tier 3 verification');
     } finally {
@@ -288,7 +392,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
 
         {/* TIER 3 CARD */}
         <div className={`relative rounded-2xl border p-5 transition-all flex flex-col justify-between ${
-          currentTier >= 3 ? 'bg-purple-950/20 border-purple-500/30' : 'bg-white/5 border-white/10 hover:border-white/20'
+          currentTier >= 3 ? 'bg-purple-950/20 border-purple-500/30' : (isTier3Pending ? 'bg-amber-950/20 border-amber-500/30' : 'bg-white/5 border-white/10 hover:border-white/20')
         }`}>
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -304,9 +408,17 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
               <span className={`text-xs px-2.5 py-1 rounded-full font-bold border ${
                 currentTier >= 3 
                   ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' 
-                  : 'bg-white/5 text-gray-400 border-white/10'
+                  : (isTier3Pending 
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                      : (isTier3Rejected
+                          ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                          : 'bg-white/5 text-gray-400 border-white/10'))
               }`}>
-                {currentTier >= 3 ? t('common.verified', 'VERIFIED') : 'LOCKED'}
+                {currentTier >= 3 
+                  ? t('common.verified', 'VERIFIED') 
+                  : (isTier3Pending 
+                      ? 'PENDING REVIEW' 
+                      : (isTier3Rejected ? 'REJECTED' : 'LOCKED'))}
               </span>
             </div>
 
@@ -317,12 +429,33 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 size={14} className={currentTier >= 3 ? 'text-purple-400' : 'text-gray-500'} />
-                <span>Requires Photo ID & Utility Bill</span>
+                <span>Requires Photo ID & Utility Bill Upload</span>
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 size={14} className={currentTier >= 3 ? 'text-purple-400' : 'text-gray-500'} />
                 <span>High-Volume Cross Border Transfers</span>
               </div>
+
+              {isTier3Pending && (
+                <div className="mt-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center gap-2">
+                  <Clock size={14} className="shrink-0 animate-spin" />
+                  <span>Your Tier 3 verification application is currently under compliance review.</span>
+                </div>
+              )}
+
+              {isTier3Rejected && (
+                <div className="mt-2 p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <AlertCircle size={14} className="shrink-0 text-rose-400" />
+                    <span>Application Rejected</span>
+                  </div>
+                  {activeKycRequest?.rejection_reason && (
+                    <p className="text-rose-200 text-[11px] leading-relaxed">
+                      Reason: {activeKycRequest.rejection_reason}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -331,6 +464,15 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
               <div className="text-xs text-purple-400 font-medium flex items-center gap-1">
                 <CheckCircle2 size={14} /> Tier 3 {t('kyc.active', 'Active')}
               </div>
+            ) : isTier3Pending ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled
+                className="w-full text-xs font-semibold border-amber-500/30 text-amber-300 opacity-60 cursor-not-allowed"
+              >
+                Verification Pending Review
+              </Button>
             ) : (
               <Button
                 variant="outline"
@@ -338,7 +480,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                 className="w-full text-xs font-semibold border-purple-500/30 hover:bg-purple-500/10 text-purple-300"
                 onClick={() => setShowTier3Modal(true)}
               >
-                {t('kyc.upgrade_tier3', 'Upgrade to Tier 3')} <ChevronRight size={14} className="ml-1" />
+                {isTier3Rejected ? 'Resubmit Tier 3 Documents' : t('kyc.upgrade_tier3', 'Upgrade to Tier 3')} <ChevronRight size={14} className="ml-1" />
               </Button>
             )}
           </div>
@@ -457,29 +599,53 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
               </button>
             </div>
             <p className="text-xs text-gray-300 leading-relaxed">
-              Upload your Government ID and Utility Bill to unlock international USD, EUR, and GBP virtual accounts according to your plan limits.
+              Upload your Government ID and Utility Bill documents to unlock international USD, EUR, and GBP virtual accounts according to your plan limits.
             </p>
             <form onSubmit={handleTier3Submit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-300 mb-1">Government ID Document URL</label>
-                <Input
-                  type="url"
-                  placeholder="https://... (International Passport, Driver's License)"
-                  value={idCardUrl}
-                  onChange={(e) => setIdCardUrl(e.target.value)}
-                  required
-                />
+              {/* Government ID File Input */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-gray-300">
+                  Government ID (Passport, Driver's License, National ID)
+                </label>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 bg-white/5 border border-white/10 rounded-xl">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    onChange={(e) => handleFileUpload(e, 'government_id')}
+                    disabled={uploadingGovId || loading}
+                    className="text-xs text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-600/30 file:text-purple-200 hover:file:bg-purple-600/40 cursor-pointer"
+                  />
+                  {uploadingGovId && <span className="text-xs text-purple-400 animate-pulse">Uploading...</span>}
+                  {!uploadingGovId && governmentIdStoragePath && (
+                    <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
+                      <CheckCircle2 size={14} /> ✓ Uploaded ({governmentIdFileName || 'ID Document'})
+                    </span>
+                  )}
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-300 mb-1">Proof of Address / Utility Bill URL</label>
-                <Input
-                  type="url"
-                  placeholder="https://... (Utility Bill, Bank Statement)"
-                  value={utilityBillUrl}
-                  onChange={(e) => setUtilityBillUrl(e.target.value)}
-                  required
-                />
+
+              {/* Utility Bill File Input */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-gray-300">
+                  Proof of Address / Utility Bill (Utility Bill, Bank Statement)
+                </label>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 bg-white/5 border border-white/10 rounded-xl">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    onChange={(e) => handleFileUpload(e, 'utility_bill')}
+                    disabled={uploadingUtility || loading}
+                    className="text-xs text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-600/30 file:text-purple-200 hover:file:bg-purple-600/40 cursor-pointer"
+                  />
+                  {uploadingUtility && <span className="text-xs text-purple-400 animate-pulse">Uploading...</span>}
+                  {!uploadingUtility && utilityBillStoragePath && (
+                    <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
+                      <CheckCircle2 size={14} /> ✓ Uploaded ({utilityBillFileName || 'Utility Bill'})
+                    </span>
+                  )}
+                </div>
               </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-300 mb-1">Residential Address</label>
@@ -502,11 +668,16 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                   />
                 </div>
               </div>
+
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="ghost" type="button" onClick={() => setShowTier3Modal(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={loading} className="bg-purple-600 hover:bg-purple-500 text-white">
+                <Button 
+                  type="submit" 
+                  disabled={loading || uploadingGovId || uploadingUtility || !governmentIdStoragePath || !utilityBillStoragePath} 
+                  className="bg-purple-600 hover:bg-purple-500 text-white disabled:opacity-50"
+                >
                   {loading ? 'Submitting...' : 'Submit Tier 3 Upgrade'}
                 </Button>
               </div>
