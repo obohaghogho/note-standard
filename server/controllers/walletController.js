@@ -1641,5 +1641,112 @@ exports.withdraw = async (req, res, next) => {
   }
 };
 
+/**
+ * GET /api/wallet/limits
+ * Returns user dynamic deposit and withdrawal daily limits, 24h usage, remaining allowance,
+ * and next tier info based on user's KYC tier and plan tier.
+ */
+exports.getLimits = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .select("id, kyc_level, is_verified, plan_tier, daily_deposit_limit, daily_withdrawal_limit")
+      .eq("id", userId)
+      .single();
+
+    if (error || !profile) {
+      return res.status(404).json({ error: "Profile not found" });
+    }
+
+    const currentTier = profile.kyc_level || 0;
+    const planTier = String(profile.plan_tier || "FREE").toUpperCase();
+
+    // Standard Tier Limits (USD equivalents)
+    // Tier 0: Unverified (Deposit: 50, Withdrawal: 0)
+    // Tier 1: Phone Verified (Deposit: 500, Withdrawal: 200)
+    // Tier 2: BVN / NIN Verified (Deposit: 5000, Withdrawal: 2500)
+    // Tier 3: Full Compliance (Deposit: 50000, Withdrawal: 25000)
+    const tierDepositLimits = { 0: 50, 1: 500, 2: 5000, 3: 50000 };
+    const tierWithdrawalLimits = { 0: 0, 1: 200, 2: 2500, 3: 25000 };
+
+    let depositLimit = tierDepositLimits[currentTier] ?? 50;
+    let withdrawalLimit = tierWithdrawalLimits[currentTier] ?? 0;
+
+    // Apply custom profile overrides if specified
+    if (profile.daily_deposit_limit !== null && profile.daily_deposit_limit !== undefined) {
+      depositLimit = parseFloat(profile.daily_deposit_limit);
+    }
+    if (profile.daily_withdrawal_limit !== null && profile.daily_withdrawal_limit !== undefined) {
+      withdrawalLimit = parseFloat(profile.daily_withdrawal_limit);
+    }
+
+    // Daily limit overall (for mobile card, dailyLimit represents max daily transaction limit)
+    const dailyLimit = Math.max(depositLimit, withdrawalLimit);
+
+    // Calculate 24h usage
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    const [txDepositsRes, txWithdrawalsRes, fincraTxsRes] = await Promise.all([
+      supabase
+        .from("transactions")
+        .select("amount, currency")
+        .eq("user_id", userId)
+        .eq("status", "COMPLETED")
+        .in("type", ["DEPOSIT", "FUNDING", "Digital Assets Purchase"])
+        .gte("created_at", twentyFourHoursAgo),
+
+      supabase
+        .from("transactions")
+        .select("amount, currency")
+        .eq("user_id", userId)
+        .in("status", ["COMPLETED", "PROCESSING"])
+        .in("type", ["WITHDRAWAL", "payout", "withdrawal"])
+        .gte("created_at", twentyFourHoursAgo),
+
+      supabase
+        .from("fincra_transactions")
+        .select("amount, currency")
+        .eq("user_id", userId)
+        .in("status", ["COMPLETED", "PROCESSING", "RESERVED"])
+        .gte("created_at", twentyFourHoursAgo)
+    ]);
+
+    const deposits = txDepositsRes.data || [];
+    const withdrawals = [...(txWithdrawalsRes.data || []), ...(fincraTxsRes.data || [])];
+
+    const usedDepositToday = deposits.reduce((sum, tx) => sum + (parseFloat(tx.amount) || 0), 0);
+    const usedWithdrawalToday = withdrawals.reduce((sum, tx) => sum + (parseFloat(tx.amount) || 0), 0);
+    const usedToday = usedWithdrawalToday; // For daily withdrawal card tracking
+
+    const remainingDepositToday = Math.max(0, depositLimit - usedDepositToday);
+    const remainingWithdrawalToday = Math.max(0, withdrawalLimit - usedWithdrawalToday);
+    const remainingToday = remainingWithdrawalToday;
+
+    const nextTier = currentTier < 3 ? currentTier + 1 : undefined;
+    const nextTierLimit = nextTier !== undefined ? (tierWithdrawalLimits[nextTier] || 25000) : undefined;
+
+    res.json({
+      success: true,
+      currentTier,
+      tierName: `Tier ${currentTier}`,
+      planTier,
+      dailyLimit,
+      depositLimit,
+      withdrawalLimit,
+      usedToday: Math.round(usedToday * 100) / 100,
+      remainingToday: Math.round(remainingToday * 100) / 100,
+      usedDepositToday: Math.round(usedDepositToday * 100) / 100,
+      remainingDepositToday: Math.round(remainingDepositToday * 100) / 100,
+      nextTier,
+      nextTierLimit,
+      currencySymbol: "$"
+    });
+  } catch (err) {
+    console.error("[WalletController] getLimits Error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
 
 

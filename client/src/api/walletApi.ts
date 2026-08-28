@@ -516,6 +516,26 @@ export const walletApi = {
     });
     return response.data;
   },
+  /** GET /api/wallet/limits — fetch dynamic deposit & withdrawal daily limits per KYC tier */
+  async getLimits(): Promise<{
+    success: boolean;
+    currentTier: number;
+    tierName: string;
+    planTier: string;
+    dailyLimit: number;
+    depositLimit: number;
+    withdrawalLimit: number;
+    usedToday: number;
+    remainingToday: number;
+    usedDepositToday: number;
+    remainingDepositToday: number;
+    nextTier?: number;
+    nextTierLimit?: number;
+    currencySymbol: string;
+  }> {
+    const response = await api.get('/wallet/limits');
+    return response.data;
+  },
 };
 
 export default walletApi;

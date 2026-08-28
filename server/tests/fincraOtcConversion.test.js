@@ -82,16 +82,21 @@ async function runTests() {
       daily_withdrawal_limit: 50000.00,
     }).eq("id", testUserId);
 
-    // Clean any old test wallets & transactions for testUserId
+    // Clean any old test transactions for testUserId
     await supabase.from("fincra_transactions").delete().eq("user_id", testUserId);
-    await supabase.from("wallets_store").delete().eq("user_id", testUserId);
 
-    // Insert test user wallets in wallets_store
-    await supabase.from("wallets_store").insert([
-      { user_id: testUserId, currency: "USDT", available_balance: 1000.0, pending_balance: 0, balance: 1000.0, network: "NATIVE", address: `usdt_${testUserId}` },
-      { user_id: testUserId, currency: "USDC", available_balance: 1000.0, pending_balance: 0, balance: 1000.0, network: "NATIVE", address: `usdc_${testUserId}` },
-      { user_id: testUserId, currency: "NGN",  available_balance: 0.0,    pending_balance: 0, balance: 0.0,    network: "NATIVE", address: `ngn_${testUserId}` },
-    ]);
+    // Ensure test user wallets exist with 1000.0 available balance
+    await supabase.from("wallets_store").update({ available_balance: 1000.0, balance: 1000.0, pending_balance: 0 }).eq("user_id", testUserId).in("currency", ["USDT", "USDC"]);
+    await supabase.from("wallets_store").update({ available_balance: 0.0, balance: 0.0, pending_balance: 0 }).eq("user_id", testUserId).eq("currency", "NGN");
+
+    const { data: existingUsdt } = await supabase.from("wallets_store").select("id").eq("user_id", testUserId).eq("currency", "USDT").maybeSingle();
+    if (!existingUsdt) {
+      await supabase.from("wallets_store").insert([
+        { user_id: testUserId, currency: "USDT", available_balance: 1000.0, pending_balance: 0, balance: 1000.0, network: "NATIVE", address: `usdt_${testUserId}` },
+        { user_id: testUserId, currency: "USDC", available_balance: 1000.0, pending_balance: 0, balance: 1000.0, network: "NATIVE", address: `usdc_${testUserId}` },
+        { user_id: testUserId, currency: "NGN",  available_balance: 0.0,    pending_balance: 0, balance: 0.0,    network: "NATIVE", address: `ngn_${testUserId}` },
+      ]);
+    }
 
     // -------------------------------------------------------------------------
     // TEST 1: USDT → NGN Happy Path Initiation

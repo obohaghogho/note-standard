@@ -10,10 +10,10 @@ const logger = require("./logger");
  */
 async function checkDailyLimit(userId, userPlan = "FREE", requestedAmount = 0) {
   try {
-    // 1. Fetch user profile for custom override
+    // 1. Fetch user profile for custom override & kyc_level
     const { data: profile } = await supabase
       .from("profiles")
-      .select("plan_tier, daily_deposit_limit")
+      .select("plan_tier, kyc_level, daily_deposit_limit")
       .eq("id", userId)
       .single();
 
@@ -22,6 +22,9 @@ async function checkDailyLimit(userId, userPlan = "FREE", requestedAmount = 0) {
       userLimit = parseFloat(profile.daily_deposit_limit);
       logger.info(`[LimitCheck] Using custom daily deposit limit for user ${userId}: ${userLimit}`);
     } else {
+      const tierDepositLimits = { 0: 50, 1: 500, 2: 5000, 3: 50000 };
+      const kycTierLimit = tierDepositLimits[profile?.kyc_level || 0] ?? 50;
+
       // Fallback to plan limits from admin_settings
       const { data: limitSetting } = await supabase
         .from("admin_settings")
@@ -33,7 +36,9 @@ async function checkDailyLimit(userId, userPlan = "FREE", requestedAmount = 0) {
         { FREE: 1000, PRO: 10000, BUSINESS: 50000 };
       
       const effectivePlan = profile?.plan_tier || userPlan || "FREE";
-      userLimit = limits[effectivePlan] || limits.FREE;
+      const planLimit = limits[effectivePlan] || limits.FREE;
+
+      userLimit = Math.max(kycTierLimit, planLimit);
     }
 
     // 2. Fetch total transactions for today (last 24h)

@@ -15,16 +15,32 @@ const getUserWithRetry = async (token, maxAttempts = 2) => {
   if (!token || token === "undefined" || token === "null" || token.length < 10) {
     return { 
       data: { user: null }, 
-      error: { status: 401, message: "Malformated or missing token" } 
+      error: { status: 401, message: "Malformed or missing token" }
     };
+  }
+
+  // 1b. Fast Local Pre-validation: Check JWT expiration date to avoid 503 timeouts on expired tokens
+  try {
+    const parts = token.split('.');
+    if (parts.length === 3) {
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+      if (payload && payload.exp && (payload.exp * 1000) < Date.now()) {
+        return {
+          data: { user: null },
+          error: { status: 401, message: "JWT token expired" }
+        };
+      }
+    }
+  } catch (e) {
+    // Ignore parse failure, proceed to Supabase verification
   }
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      // 4-second timeout per Supabase auth call
+      // 8-second timeout per Supabase auth call
       const authPromise = supabase.auth.getUser(token);
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject({ status: 503, message: "Supabase auth request timed out (4000ms)" }), 4000)
+        setTimeout(() => reject({ status: 503, message: "Supabase auth request timed out (8000ms)" }), 8000)
       );
 
       const { data, error } = await Promise.race([authPromise, timeoutPromise]);

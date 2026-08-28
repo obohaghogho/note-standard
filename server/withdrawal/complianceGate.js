@@ -120,6 +120,9 @@ class ComplianceGate {
     if (profile.daily_withdrawal_limit !== null && profile.daily_withdrawal_limit !== undefined) {
       dailyLimitUsd = parseFloat(profile.daily_withdrawal_limit);
     } else {
+      const tierWithdrawalLimits = { 0: 0, 1: 200, 2: 2500, 3: 25000 };
+      const kycTierLimit = tierWithdrawalLimits[profile.kyc_level || 0] ?? 0;
+
       const { data: limitSetting } = await supabase
         .from("admin_settings")
         .select("value")
@@ -128,7 +131,9 @@ class ComplianceGate {
 
       const limitsMap = limitSetting?.value || { FREE: 1000, PRO: 10000, BUSINESS: 50000 };
       const effectivePlan = String(profile.plan_tier || "FREE").toUpperCase();
-      dailyLimitUsd = limitsMap[effectivePlan] || limitsMap.FREE || 1000;
+      const planLimit = limitsMap[effectivePlan] || limitsMap.FREE || 1000;
+
+      dailyLimitUsd = Math.max(kycTierLimit, planLimit);
     }
 
     const fxService = require("../services/fxService");

@@ -17,6 +17,7 @@ router.use(requireAuth);
 router.use(apiLimiter);
 
 // Wallet Endpoints
+router.get("/limits", walletController.getLimits);
 router.get("/capabilities", walletController.getCapabilities);
 router.get("/capabilities/:currency", walletController.getCurrencyCapabilities);
 router.get("/user-reference", walletController.getUserBankReference);

@@ -363,6 +363,33 @@ class DepositCreditEngine {
       logger.warn(`[DepositCreditEngine] Notification warning: ${e.message}`);
     }
 
+    // Email notification on wallet credit
+    try {
+      const sendgridEmailService = require('../sendgridEmailService');
+      let userEmail = tx.user_email || tx.email;
+      if (!userEmail && userId) {
+        const { data: userProfile } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('id', userId)
+          .maybeSingle();
+        userEmail = userProfile?.email;
+      }
+
+      if (userEmail) {
+        await sendgridEmailService.sendDepositApprovedEmail(userEmail, {
+          amount,
+          currency,
+          reference: tx.reference_id || tx.id,
+        });
+        logger.info(`[DepositCreditEngine] Deposit confirmation email dispatched to ${userEmail} for ${amount} ${currency}`);
+      } else {
+        logger.warn(`[DepositCreditEngine] User email not found for user ${userId}, unable to send deposit confirmation email`);
+      }
+    } catch (e) {
+      logger.warn(`[DepositCreditEngine] Email notification warning: ${e.message}`);
+    }
+
     // Realtime event
     try {
       const realtime = getRealtimeService();

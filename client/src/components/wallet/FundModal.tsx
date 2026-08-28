@@ -74,15 +74,51 @@ export const FundModal: React.FC<FundModalProps> = ({
     const [targetCurrency, setTargetCurrency] = useState<string>('USDT');
     const [targetNetwork] = useState<string>('native');
 
-    const DAILY_LIMITS = {
-        FREE: 1000,
-        PRO: 10000,
-        BUSINESS: 50000
-    };
-    const MAX_PER_TRANSACTION = 4000;
+    const [serverLimits, setServerLimits] = useState<{
+        currentTier: number;
+        depositLimit: number;
+        withdrawalLimit: number;
+        usedDepositToday: number;
+        remainingDepositToday: number;
+    } | null>(null);
 
-    const userPlan = (subscription?.plan_tier || 'FREE').toUpperCase() as keyof typeof DAILY_LIMITS;
-    const dailyLimit = subscription?.daily_deposit_limit || DAILY_LIMITS[userPlan] || DAILY_LIMITS.FREE;
+    useEffect(() => {
+        if (isOpen) {
+            walletApi.getLimits()
+                .then(data => {
+                    if (data && data.success) {
+                        setServerLimits({
+                            currentTier: data.currentTier,
+                            depositLimit: data.depositLimit,
+                            withdrawalLimit: data.withdrawalLimit,
+                            usedDepositToday: data.usedDepositToday,
+                            remainingDepositToday: data.remainingDepositToday,
+                        });
+                    }
+                })
+                .catch(() => {});
+        }
+    }, [isOpen]);
+
+    // Format dynamic daily deposit limit in local currency
+    const getFormattedDailyDepositLimit = (payCurrency: string) => {
+        const rawUsdLimit = serverLimits?.depositLimit || 5000;
+        const cur = payCurrency.toUpperCase();
+        if (cur === 'NGN') return (rawUsdLimit * 1500).toLocaleString();
+        if (cur === 'GHS') return (rawUsdLimit * 15).toLocaleString();
+        return rawUsdLimit.toLocaleString();
+    };
+
+    // Format single transaction max limit in local currency
+    const getFormattedTransactionMax = (payCurrency: string) => {
+        const cur = payCurrency.toUpperCase();
+        if (currencyCap?.maxDeposit) {
+            return currencyCap.maxDeposit.toLocaleString();
+        }
+        if (cur === 'NGN') return (500000).toLocaleString(); // 500,000 NGN max single transaction
+        if (cur === 'GHS') return (20000).toLocaleString();  // 20,000 GHS max single transaction
+        return (5000).toLocaleString();                     // 5,000 USD max single transaction
+    };
 
     const isCrypto = activeCurrency === 'BTC' || activeCurrency === 'ETH' || activeCurrency.startsWith('USDT') || activeCurrency.startsWith('USDC');
     const isFiat = !isCrypto; 
@@ -742,15 +778,15 @@ export const FundModal: React.FC<FundModalProps> = ({
                                     </div>
                                     <div className="flex justify-between items-center mt-2 px-1">
                                         <div className="flex flex-col">
-                                            <span className="text-[10px] text-gray-500">Daily Limit: {dailyLimit.toLocaleString()} {effectivePayCurrency}</span>
-                                            <span className="text-[10px] text-gray-500">Transaction Max: {MAX_PER_TRANSACTION.toLocaleString()} {effectivePayCurrency}</span>
+                                            <span className="text-[10px] text-gray-500">Daily Limit: {getFormattedDailyDepositLimit(effectivePayCurrency)} {effectivePayCurrency}</span>
+                                            <span className="text-[10px] text-gray-500">Transaction Max: {getFormattedTransactionMax(effectivePayCurrency)} {effectivePayCurrency}</span>
                                         </div>
-                                        <button 
-                                            onClick={() => setIsRequestingLimit(true)}
-                                            className="text-[10px] text-primary hover:text-primary-dark font-bold underline"
+                                        <a
+                                            href="/dashboard/settings?tab=kyc"
+                                            className="text-[10px] text-purple-400 hover:text-purple-300 font-bold flex items-center gap-1 underline"
                                         >
-                                            Request Increase
-                                        </button>
+                                            Upgrade Tier {serverLimits?.currentTier !== undefined ? `(Tier ${serverLimits.currentTier})` : ''}
+                                        </a>
                                     </div>
                                 </div>
                                 <div className="p-3 bg-purple-950/20 border border-purple-500/30 rounded-xl text-[11px] text-purple-300 flex items-start gap-2.5 mb-4 leading-relaxed">
@@ -787,13 +823,16 @@ export const FundModal: React.FC<FundModalProps> = ({
                                         </span>
                                     </div>
                                     <div className="flex justify-between items-center mt-2 px-1">
-                                        <span className="text-[10px] text-gray-500">Daily Limit: {dailyLimit.toLocaleString()} {effectivePayCurrency}</span>
-                                        <button 
-                                            onClick={() => setIsRequestingLimit(true)}
-                                            className="text-[10px] text-primary hover:text-primary-dark font-bold underline"
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] text-gray-500">Daily Limit: {getFormattedDailyDepositLimit(effectivePayCurrency)} {effectivePayCurrency}</span>
+                                            <span className="text-[10px] text-gray-500">Transaction Max: {getFormattedTransactionMax(effectivePayCurrency)} {effectivePayCurrency}</span>
+                                        </div>
+                                        <a
+                                            href="/dashboard/settings?tab=kyc"
+                                            className="text-[10px] text-purple-400 hover:text-purple-300 font-bold flex items-center gap-1 underline"
                                         >
-                                            Request Increase
-                                        </button>
+                                            Upgrade Tier {serverLimits?.currentTier !== undefined ? `(Tier ${serverLimits.currentTier})` : ''}
+                                        </a>
                                     </div>
                                 </div>
                                 {effectivePayCurrency === 'NGN' && (

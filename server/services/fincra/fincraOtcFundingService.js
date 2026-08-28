@@ -171,14 +171,24 @@ class FincraOtcFundingService {
       }
 
       // 4. Fetch & Lock User Crypto Wallet in wallets_store (Auto-provision if missing)
-      let { data: wallet, error: walletErr } = await supabase
+      let { data: walletCandidates } = await supabase
         .from("wallets_store")
-        .select("id, balance, pending_balance, available_balance")
+        .select("id, balance, pending_balance, available_balance, address, network")
         .eq("user_id", userId)
         .eq("currency", upSource)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order("available_balance", { ascending: false });
+
+      let wallet = (walletCandidates || []).find((w) => {
+        const addr = String(w.address || "").toUpperCase();
+        const net = String(w.network || "").toUpperCase();
+        return !addr.startsWith("SYSTEM_") &&
+               !addr.startsWith("SETTLEMENT_") &&
+               !addr.startsWith("FX_POOL_") &&
+               !addr.startsWith("TREASURY_") &&
+               !addr.startsWith("REVENUE_") &&
+               net !== "SYSTEM" &&
+               net !== "INTERNAL_SYSTEM";
+      });
 
       if (!wallet) {
         logger.info(`[FincraOtcService] Auto-provisioning ${upSource} wallet for user ${userId}`);
