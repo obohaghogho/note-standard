@@ -61,7 +61,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, isOwner }
   return (
     <div className="relative flex flex-col w-full bg-gray-950">
       {/* Cover Banner */}
-      <div className="relative h-44 sm:h-56 md:h-64 min-h-[160px] w-full bg-gradient-to-br from-indigo-950 via-purple-950 to-gray-950 group">
+      <div className="relative h-36 sm:h-52 md:h-64 min-h-[140px] w-full bg-gradient-to-br from-indigo-950 via-purple-950 to-gray-950 overflow-hidden group">
         {profile.cover_url ? (
           <SecureImage src={profile.cover_url} alt="Cover" className="w-full h-full object-cover" />
         ) : (
@@ -76,37 +76,37 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, isOwner }
             <Camera size={14} /> Edit Cover
           </button>
         )}
-
-        {/* Avatar Anchored inside Cover Banner */}
-        <div className="absolute -bottom-14 sm:-bottom-18 left-4 sm:left-8 z-20">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.4, type: 'spring', stiffness: 200, damping: 20 }}
-            className="relative group shrink-0"
-          >
-            <div className={`w-28 h-28 sm:w-36 sm:h-36 rounded-full border-[5px] border-gray-950 bg-gradient-to-br ${avatarBg} overflow-hidden shadow-2xl flex items-center justify-center text-4xl sm:text-5xl font-black text-white relative`}>
-              {profile.avatar_url ? (
-                <SecureImage src={profile.avatar_url} alt={profile.username} className="w-full h-full object-cover" />
-              ) : (
-                <span>{getInitials(profile.full_name, profile.username)}</span>
-              )}
-              
-              {isOwner && (
-                <button 
-                  onClick={() => handleEditClick('avatar')}
-                  className="absolute inset-0 bg-black/50 hover:bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <Camera size={24} className="text-white" />
-                </button>
-              )}
-            </div>
-          </motion.div>
-        </div>
       </div>
 
-      {/* Profile Info Summary with top padding for avatar space */}
-      <div className="px-4 sm:px-8 pt-16 sm:pt-20 pb-4 flex flex-col gap-3">
+      {/* Avatar Container Row */}
+      <div className="px-4 sm:px-8 flex items-end justify-between -mt-12 sm:-mt-18 relative z-20 pointer-events-none">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.4, type: 'spring', stiffness: 200, damping: 20 }}
+          className="relative group shrink-0 pointer-events-auto"
+        >
+          <div className={`w-24 h-24 sm:w-36 sm:h-36 rounded-full border-4 sm:border-[5px] border-gray-950 bg-gradient-to-br ${avatarBg} overflow-hidden shadow-2xl flex items-center justify-center text-3xl sm:text-5xl font-black text-white relative`}>
+            {profile.avatar_url ? (
+              <SecureImage src={profile.avatar_url} alt={profile.username} className="w-full h-full object-cover" />
+            ) : (
+              <span>{getInitials(profile.full_name, profile.username)}</span>
+            )}
+            
+            {isOwner && (
+              <button 
+                onClick={() => handleEditClick('avatar')}
+                className="absolute inset-0 bg-black/50 hover:bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <Camera size={22} className="text-white" />
+              </button>
+            )}
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Profile Info Summary */}
+      <div className="px-4 sm:px-8 pt-3 pb-4 flex flex-col gap-3">
         <div>
           <h1 className="text-2xl sm:text-3xl font-black text-white flex flex-wrap items-center gap-2 tracking-tight leading-tight break-words">
             {profile.full_name || profile.username}

@@ -85,10 +85,18 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
   const [suggestedUsers, setSuggestedUsers] = useState<any[]>([]);
   const [trendingNotes, setTrendingNotes] = useState<any[]>([]);
   
+  const modalRef = useRef<HTMLDivElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
   const isSelf = currentUser?.id === profile?.id;
+
+  useEffect(() => {
+    if (modalRef.current) {
+      modalRef.current.scrollTop = 0;
+    }
+    setScrolled(false);
+  }, [userId, username]);
 
   useEffect(() => {
     let isMounted = true;
@@ -297,16 +305,16 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const y = e.currentTarget.scrollTop;
-    if (y > 200 && !scrolled) setScrolled(true);
-    if (y <= 200 && scrolled) setScrolled(false);
+    if (y > 60 && !scrolled) setScrolled(true);
+    if (y <= 60 && scrolled) setScrolled(false);
   };
 
   useEffect(() => {
     if (isPage) {
       const handleWindowScroll = () => {
         const y = window.scrollY;
-        if (y > 200 && !scrolled) setScrolled(true);
-        if (y <= 200 && scrolled) setScrolled(false);
+        if (y > 60 && !scrolled) setScrolled(true);
+        if (y <= 60 && scrolled) setScrolled(false);
       };
       window.addEventListener('scroll', handleWindowScroll);
       return () => window.removeEventListener('scroll', handleWindowScroll);
@@ -421,14 +429,14 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
     <div className="flex flex-col w-full bg-gray-950 border-x sm:border border-white/10 sm:rounded-3xl shadow-2xl relative min-h-screen sm:min-h-0">
       
       {/* Top Navigation Overlay & Sticky Header */}
-      <div className={`absolute sm:fixed sm:absolute top-0 left-0 right-0 z-40 transition-all duration-300 ${scrolled ? 'bg-gray-950/90 backdrop-blur-xl border-b border-white/10 py-3' : 'bg-transparent py-4'}`}>
+      <div className={`sticky top-0 left-0 right-0 z-40 transition-all duration-300 pt-[env(safe-area-inset-top,8px)] ${scrolled ? 'bg-gray-950/95 backdrop-blur-xl border-b border-white/10 py-2.5' : 'bg-gradient-to-b from-black/80 via-black/40 to-transparent py-3'}`}>
         <div className="px-4 flex items-center gap-4">
           {isPage ? (
-            <button onClick={() => navigate(-1)} className={`p-2.5 rounded-full transition-all shadow-lg shrink-0 ${scrolled ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-black/40 hover:bg-black/60 text-white backdrop-blur-md'}`}>
+            <button onClick={() => navigate(-1)} className={`p-2 rounded-full transition-all shadow-lg shrink-0 ${scrolled ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-black/50 hover:bg-black/70 text-white backdrop-blur-md border border-white/10'}`}>
               <ArrowLeft size={18} />
             </button>
           ) : onClose ? (
-            <button onClick={onClose} className={`p-2.5 rounded-full transition-all shadow-lg shrink-0 ${scrolled ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-black/40 hover:bg-black/60 text-white backdrop-blur-md'}`}>
+            <button onClick={onClose} className={`p-2 rounded-full transition-all shadow-lg shrink-0 ${scrolled ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-black/50 hover:bg-black/70 text-white backdrop-blur-md border border-white/10'}`}>
               <X size={18} />
             </button>
           ) : null}
@@ -685,9 +693,10 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-0 sm:p-4 overflow-y-auto pt-[env(safe-area-inset-top,0px)]">
+    <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-0 sm:p-4 overflow-hidden">
       <div 
-        className="w-full max-w-2xl min-h-screen sm:min-h-0 sm:max-h-[90vh] overflow-y-auto overflow-x-hidden scrollbar-hide relative bg-gray-950 sm:rounded-3xl"
+        ref={modalRef}
+        className="w-full max-w-2xl h-full sm:h-auto sm:max-h-[90vh] overflow-y-auto overflow-x-hidden scrollbar-hide relative bg-gray-950 sm:rounded-3xl"
         onScroll={handleScroll}
       >
         {MainContent}
