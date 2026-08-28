@@ -806,10 +806,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 setConversations(prev => {
                     const existingMap = new Map(filteredServerData.map(c => [c.id, c]));
                     
-                    // Retain only optimistic in-flight local creations not yet on server
+                    // Retain active conversation & optimistic in-flight local creations not yet in server snapshot
                     prev.forEach(p => {
-                        if (!existingMap.has(p.id) && !tombstones.has(p.id) && p.id.startsWith('temp-')) {
-                            existingMap.set(p.id, p);
+                        if (!existingMap.has(p.id) && !tombstones.has(p.id)) {
+                            if (p.id === activeConversationIdRef.current || p.id.startsWith('temp-')) {
+                                existingMap.set(p.id, p);
+                            }
                         }
                     });
 

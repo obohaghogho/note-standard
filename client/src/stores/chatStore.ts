@@ -174,15 +174,20 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   },
 
   setConversations: (conversations) => {
-    const conversationsById: Record<string, Conversation> = {};
-    const conversationIds: string[] = [];
+    set((state) => {
+      const conversationsById: Record<string, Conversation> = { ...state.conversationsById };
+      const conversationIdsSet = new Set(state.conversationIds);
 
-    conversations.forEach((conv) => {
-      conversationsById[conv.id] = conv;
-      conversationIds.push(conv.id);
+      conversations.forEach((conv) => {
+        conversationsById[conv.id] = conv;
+        conversationIdsSet.add(conv.id);
+      });
+
+      return {
+        conversationsById,
+        conversationIds: Array.from(conversationIdsSet),
+      };
     });
-
-    set({ conversationsById, conversationIds });
   },
 
   upsertConversation: (conversation) => {
