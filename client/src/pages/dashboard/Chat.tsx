@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ErrorBoundary } from '../../components/common/ErrorBoundary';
 import ChatWindow from '../../components/chat/ChatWindow';
 import ConversationList from '../../components/chat/ConversationList';
