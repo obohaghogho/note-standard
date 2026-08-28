@@ -52,7 +52,12 @@ const ChatWindow: React.FC = () => {
     const { setIsSettingsOpen, setIsGalleryOpen } = useChatTheme();
 
     const currentMessages = useMemo(() => activeConversationId ? messages[activeConversationId] || [] : [], [messages, activeConversationId]);
-    const activeConversation = useMemo(() => conversations.find(c => c.id === activeConversationId), [conversations, activeConversationId]);
+    const activeConversation = useMemo(() => {
+        if (!activeConversationId) return undefined;
+        const found = conversations.find(c => c.id === activeConversationId);
+        if (found) return found;
+        return useChatStore.getState().conversationsById[activeConversationId];
+    }, [conversations, activeConversationId]);
 
     // ── WhatsApp-Style Selection System ──────────────────────
     const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
@@ -748,7 +753,7 @@ const ChatWindow: React.FC = () => {
         );
     }
 
-    if (loading) {
+    if (loading && !activeConversation) {
         return (
             <div className="flex-grow flex items-center justify-center h-full bg-crystal text-gray-400 relative">
                 <div className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-none z-0" />
