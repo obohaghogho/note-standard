@@ -61,53 +61,52 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, isOwner }
   return (
     <div className="relative flex flex-col w-full bg-gray-950">
       {/* Cover Banner */}
-      <div className="relative h-40 sm:h-52 md:h-64 min-h-[140px] w-full bg-gradient-to-br from-indigo-900 via-purple-900 to-gray-900 overflow-hidden group">
+      <div className="relative h-44 sm:h-56 md:h-64 min-h-[160px] w-full bg-gradient-to-br from-indigo-950 via-purple-950 to-gray-950 group">
         {profile.cover_url ? (
           <SecureImage src={profile.cover_url} alt="Cover" className="w-full h-full object-cover" />
         ) : (
-          <div className="absolute inset-0 opacity-60 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-600/40 via-purple-600/30 to-gray-950" />
+          <div className="absolute inset-0 opacity-70 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-600/40 via-purple-600/30 to-gray-950" />
         )}
         
         {isOwner && (
           <button 
             onClick={() => handleEditClick('banner')}
-            className="absolute top-4 right-4 bg-black/60 hover:bg-black/80 backdrop-blur-md text-white px-3.5 py-1.5 rounded-full font-bold text-xs flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity border border-white/20 shadow-lg"
+            className="absolute top-4 right-4 bg-black/60 hover:bg-black/80 backdrop-blur-md text-white px-3.5 py-1.5 rounded-full font-bold text-xs flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity border border-white/20 shadow-lg z-20"
           >
             <Camera size={14} /> Edit Cover
           </button>
         )}
+
+        {/* Avatar Anchored inside Cover Banner */}
+        <div className="absolute -bottom-14 sm:-bottom-18 left-4 sm:left-8 z-20">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.4, type: 'spring', stiffness: 200, damping: 20 }}
+            className="relative group shrink-0"
+          >
+            <div className={`w-28 h-28 sm:w-36 sm:h-36 rounded-full border-[5px] border-gray-950 bg-gradient-to-br ${avatarBg} overflow-hidden shadow-2xl flex items-center justify-center text-4xl sm:text-5xl font-black text-white relative`}>
+              {profile.avatar_url ? (
+                <SecureImage src={profile.avatar_url} alt={profile.username} className="w-full h-full object-cover" />
+              ) : (
+                <span>{getInitials(profile.full_name, profile.username)}</span>
+              )}
+              
+              {isOwner && (
+                <button 
+                  onClick={() => handleEditClick('avatar')}
+                  className="absolute inset-0 bg-black/50 hover:bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <Camera size={24} className="text-white" />
+                </button>
+              )}
+            </div>
+          </motion.div>
+        </div>
       </div>
 
-      {/* Avatar & Info Container */}
-      <div className="px-4 sm:px-8 pb-4 -mt-14 sm:-mt-20 relative z-10 flex flex-col sm:flex-row gap-4 items-start sm:items-end justify-between">
-        {/* Avatar */}
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.4, type: 'spring', stiffness: 200, damping: 20 }}
-          className="relative group shrink-0"
-        >
-          <div className={`w-28 h-28 sm:w-36 sm:h-36 rounded-full border-[5px] border-gray-950 bg-gradient-to-br ${avatarBg} overflow-hidden shadow-2xl flex items-center justify-center text-4xl sm:text-5xl font-black text-white relative`}>
-            {profile.avatar_url ? (
-              <SecureImage src={profile.avatar_url} alt={profile.username} className="w-full h-full object-cover" />
-            ) : (
-              <span>{getInitials(profile.full_name, profile.username)}</span>
-            )}
-            
-            {isOwner && (
-              <button 
-                onClick={() => handleEditClick('avatar')}
-                className="absolute inset-0 bg-black/50 hover:bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <Camera size={24} className="text-white" />
-              </button>
-            )}
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Profile Info Summary */}
-      <div className="px-4 sm:px-8 pt-0 pb-4 flex flex-col gap-3">
+      {/* Profile Info Summary with top padding for avatar space */}
+      <div className="px-4 sm:px-8 pt-16 sm:pt-20 pb-4 flex flex-col gap-3">
         <div>
           <h1 className="text-2xl sm:text-3xl font-black text-white flex flex-wrap items-center gap-2 tracking-tight leading-tight break-words">
             {profile.full_name || profile.username}
