@@ -16,6 +16,8 @@ import { useWebRTC } from '../../context/WebRTCContext';
 import { WhatsAppMediaPicker } from './WhatsAppMediaPicker';
 import { VoiceRecorder } from './VoiceRecorder';
 import { API_URL } from '../../lib/api';
+import api from '../../api/axiosInstance';
+import { useChatStore } from '../../stores/chatStore';
 import toast from 'react-hot-toast';
 import { MediaPreviewModal } from './MediaPreviewModal';
 import { MentionSuggestions } from './MentionSuggestions';
@@ -740,6 +742,23 @@ const ChatWindow: React.FC = () => {
             </div>
         );
     }
+
+    // Self-healing fallback: If activeConversationId is set but missing from chatStore, fetch and upsert it
+    useEffect(() => {
+        if (activeConversationId && !activeConversation) {
+            let isMounted = true;
+            api.get(`/chat/conversations/${activeConversationId}`)
+                .then(res => {
+                    if (isMounted && res.data?.conversation) {
+                        useChatStore.getState().upsertConversation(res.data.conversation);
+                    }
+                })
+                .catch(err => {
+                    console.warn('[ChatWindow] Self-healing fetch failed:', err?.message);
+                });
+            return () => { isMounted = false; };
+        }
+    }, [activeConversationId, activeConversation]);
 
     // Secondary guard: activeConversationId is set but not yet in the conversations
     // list (happens immediately after an account switch while the new account's

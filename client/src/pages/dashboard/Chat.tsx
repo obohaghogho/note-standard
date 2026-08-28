@@ -107,11 +107,13 @@ function ChatContent() {
         }
     }, [activeConversationId, searchParams, setSearchParams]);
 
+    const isNavigatingToChat = !!(activeConversationId || searchParams.get('id') || searchParams.get('username') || searchParams.get('user') || searchParams.get('userId'));
+
     return (
         <div className="flex h-full bg-gray-950 shadow-none rounded-none md:border md:border-gray-800 md:rounded-2xl overflow-hidden md:shadow-2xl relative">
             {/* Sidebar - Keeps state mounted always, uses CSS to hide on mobile when chat is active */}
             <div 
-                className={`${activeConversationId ? 'hidden md:flex' : 'flex'} w-full md:w-80 h-full border-r border-gray-800 flex-col bg-gray-950 absolute md:relative inset-0 md:inset-auto z-10 transition-none`}
+                className={`${isNavigatingToChat ? 'hidden md:flex' : 'flex'} w-full md:w-80 h-full border-r border-gray-800 flex-col bg-gray-950 absolute md:relative inset-0 md:inset-auto z-10 transition-none`}
             >
                 {/* Header with Safe Area Handling */}
                 <div className="pt-safe flex-shrink-0 bg-gray-950/80 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20">
@@ -150,7 +152,7 @@ function ChatContent() {
 
             {/* Main Area - Keeps state mounted always, uses CSS to hide on mobile when NO chat is active */}
             <div 
-                className={`${activeConversationId ? 'flex' : 'hidden md:flex'} flex-1 flex flex-col min-w-0 relative z-20 h-full transition-none`}
+                className={`${isNavigatingToChat ? 'flex' : 'hidden md:flex'} flex-1 flex flex-col min-w-0 relative z-20 h-full transition-none`}
             >
                 <ChatWindow />
             </div>

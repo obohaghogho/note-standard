@@ -2790,19 +2790,26 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         try {
             const cleanUsername = String(username).trim().replace(/^@/, '');
             const res = await api.post('/chat/conversations', { participants: [cleanUsername], type: 'direct' });
-            const id = res.data?.conversation?.id;
+            const conv = res.data?.conversation;
+            const id = conv?.id;
             if (!id) {
                 throw new Error(res.data?.error || 'Invalid server response');
             }
+
+            // Immediately populate conversation into Zustand chatStore so activeConversation is found instantly
+            if (conv) {
+                useChatStore.getState().upsertConversation(conv);
+            }
+
             // Clear tombstones for newly created conversation & peer members so explicit new chat can be established
             deletedConversationIdsRef.current.delete(id);
-            const members = res.data?.conversation?.members || [];
+            const members = conv?.members || [];
             members.forEach((m: { user_id?: string; profile?: { id?: string } }) => {
                 const pId = m.user_id || m.profile?.id;
                 if (pId) deletedPeerIdsRef.current.delete(pId);
             });
 
-            const clearedAt = res.data?.conversation?.membership?.cleared_at;
+            const clearedAt = conv?.membership?.cleared_at;
             if (clearedAt) {
                 clearedAtMapRef.current.set(id, clearedAt);
             }
@@ -2822,7 +2829,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             delete messagesCachedAtRef.current[id];
 
             setActiveConversationId(id);
-            loadConversations();
+            loadConversations().catch(() => {});
             return id;
         } catch (err: any) {
             console.error('[ChatContext] startConversation error:', err);
