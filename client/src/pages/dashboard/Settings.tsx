@@ -409,7 +409,7 @@ export default function Settings() {
         .toUpperCase();
 
     return (
-        <div className="space-y-6 max-w-4xl w-full min-w-0">
+        <div className="space-y-6 max-w-4xl w-full min-w-0 pb-28 sm:pb-32">
             <div className="space-y-1 flex justify-between items-start">
                 <div>
                     <h1 className="text-3xl font-bold">{t('settings.title', 'Settings')}</h1>
@@ -919,9 +919,13 @@ export default function Settings() {
                             </div>
 
                             {/* Save Button */}
-                            <div className="pt-4 border-t border-white/10">
-                                <Button onClick={handleSave} loading={saving} className="w-full sm:w-auto gap-2">
-                                    <Save size={16} />
+                            <div className="pt-6 mt-6 border-t border-white/10 flex justify-end">
+                                <Button 
+                                    onClick={handleSave} 
+                                    loading={saving} 
+                                    className="w-full sm:w-auto gap-2 bg-primary hover:bg-primary/90 text-white font-bold py-3 px-6 rounded-xl shadow-lg shadow-primary/20 transition-all active:scale-95"
+                                >
+                                    <Save size={18} />
                                     Save Changes
                                 </Button>
                             </div>

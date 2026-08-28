@@ -18,6 +18,7 @@ import {
     Bell,
     Wallet,
     ShieldAlert,
+    ShieldCheck,
     ArrowRight
 } from 'lucide-react';
 import { API_URL } from '../../lib/api';
@@ -395,6 +396,10 @@ export const AdminDashboard = () => {
                                 {(stats?.openChats || 0) > 0 && (
                                     <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">{stats?.openChats}</span>
                                 )}
+                            </Link>
+                            <Link to="/admin/kyc-compliance" className="p-3.5 rounded-xl bg-gray-900/60 border border-gray-800 flex items-center gap-3 text-sm font-semibold text-gray-200 hover:text-white hover:border-purple-500/40 transition-colors min-h-[48px]">
+                                <ShieldCheck size={20} className="text-purple-400 shrink-0" />
+                                <span>KYC & Verification Queue</span>
                             </Link>
                             <Link to="/admin/users" className="p-3.5 rounded-xl bg-gray-900/60 border border-gray-800 flex items-center gap-3 text-sm font-semibold text-gray-200 hover:text-white hover:border-indigo-500/40 transition-colors min-h-[48px]">
                                 <Users size={20} className="text-indigo-400 shrink-0" />

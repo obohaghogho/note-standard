@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ShieldCheck, CheckCircle, XCircle, RefreshCw, FileText, ExternalLink, AlertCircle } from 'lucide-react';
+import api from '../../api/axiosInstance';
+import { API_URL } from '../../lib/api';
 
 interface KycRequest {
   id: string;
@@ -30,18 +32,23 @@ export const KycReviewPanel: React.FC = () => {
   const [processing, setProcessing] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  const resolveDocumentUrl = (url?: string) => {
+    if (!url) return undefined;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    const cleanUrl = url.startsWith('/') ? url : `/${url}`;
+    return `${API_URL}${cleanUrl}`;
+  };
+
   const fetchPendingRequests = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/kyc/admin/pending', {
-        headers: { 'Content-Type': 'application/json' },
-      });
-      const data = await res.json();
-      if (data.success) {
-        setRequests(data.requests || []);
+      const res = await api.get('/kyc/admin/pending');
+      if (res.data?.success) {
+        setRequests(res.data.requests || []);
       }
     } catch (err: any) {
       console.error('Failed to fetch pending KYC requests:', err);
+      setFeedback({ type: 'error', message: err.response?.data?.error || err.message || 'Failed to fetch pending KYC requests.' });
     } finally {
       setLoading(false);
     }
@@ -53,13 +60,13 @@ export const KycReviewPanel: React.FC = () => {
 
   const handleSelectRequest = async (reqId: string) => {
     try {
-      const res = await fetch(`/api/kyc/admin/${reqId}`);
-      const data = await res.json();
-      if (data.success) {
-        setSelectedReq(data.request);
+      const res = await api.get(`/kyc/admin/${reqId}`);
+      if (res.data?.success) {
+        setSelectedReq(res.data.request);
       }
     } catch (err: any) {
       console.error('Failed to fetch request detail:', err);
+      setFeedback({ type: 'error', message: err.response?.data?.error || err.message || 'Failed to fetch request detail.' });
     }
   };
 
@@ -73,28 +80,22 @@ export const KycReviewPanel: React.FC = () => {
     setProcessing(true);
     setFeedback(null);
     try {
-      const endpoint = `/api/kyc/admin/${selectedReq.id}/${action}`;
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          reason: rejectionReason,
-          notes: reviewerNotes,
-        }),
+      const res = await api.post(`/kyc/admin/${selectedReq.id}/${action}`, {
+        reason: rejectionReason,
+        notes: reviewerNotes,
       });
-      const data = await res.json();
 
-      if (data.success) {
-        setFeedback({ type: 'success', message: data.message });
+      if (res.data?.success) {
+        setFeedback({ type: 'success', message: res.data.message });
         setSelectedReq(null);
         setRejectionReason('');
         setReviewerNotes('');
         fetchPendingRequests();
       } else {
-        throw new Error(data.error || 'Action failed.');
+        throw new Error(res.data?.error || 'Action failed.');
       }
     } catch (err: any) {
-      setFeedback({ type: 'error', message: err.message });
+      setFeedback({ type: 'error', message: err.response?.data?.error || err.message || 'Action failed.' });
     } finally {
       setProcessing(false);
     }
@@ -191,7 +192,7 @@ export const KycReviewPanel: React.FC = () => {
                   <div className="flex flex-col gap-2">
                     {selectedReq.signedGovIdUrl ? (
                       <a
-                        href={selectedReq.signedGovIdUrl}
+                        href={resolveDocumentUrl(selectedReq.signedGovIdUrl)}
                         target="_blank"
                         rel="noreferrer"
                         className="flex items-center justify-between p-2.5 bg-neutral-900 border border-white/10 rounded-lg text-xs hover:border-purple-400 text-purple-300 transition"
@@ -205,7 +206,7 @@ export const KycReviewPanel: React.FC = () => {
 
                     {selectedReq.signedUtilityBillUrl ? (
                       <a
-                        href={selectedReq.signedUtilityBillUrl}
+                        href={resolveDocumentUrl(selectedReq.signedUtilityBillUrl)}
                         target="_blank"
                         rel="noreferrer"
                         className="flex items-center justify-between p-2.5 bg-neutral-900 border border-white/10 rounded-lg text-xs hover:border-purple-400 text-purple-300 transition"

@@ -82,6 +82,85 @@ router.post("/documents/upload", requireAuth, upload.single("file"), async (req,
 });
 
 /**
+ * GET /api/kyc/documents/stream
+ * Secure stream/download endpoint for viewing uploaded KYC documents
+ */
+router.get("/documents/stream", requireAuth, async (req, res) => {
+  try {
+    const storagePath = req.query.path;
+    if (!storagePath) {
+      return res.status(400).json({ error: "MISSING_PATH: Storage path parameter is required." });
+    }
+
+    // Verify permission: Must be owner of document or compliance reviewer/admin
+    const userId = req.user.id;
+    const isOwner = storagePath.includes(`kyc/${userId}/`);
+    let isReviewer = false;
+
+    if (!isOwner) {
+      try {
+        const supabase = require("../config/database");
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role, plan_tier, can_review_kyc")
+          .eq("id", userId)
+          .maybeSingle();
+
+        isReviewer = Boolean(
+          profile?.can_review_kyc ||
+          profile?.role === "admin" ||
+          profile?.role === "compliance_officer" ||
+          profile?.plan_tier === "admin"
+        );
+      } catch (e) {}
+    }
+
+    if (!isOwner && !isReviewer) {
+      return res.status(403).json({ error: "UNAUTHORIZED_DOCUMENT_ACCESS: Access to document denied." });
+    }
+
+    const supabase = require("../config/database");
+    
+    // Download document from Supabase storage
+    const { data: blobData, error: downloadErr } = await supabase.storage
+      .from("kyc-documents")
+      .download(storagePath);
+
+    if (downloadErr || !blobData) {
+      // Fallback: Create 15-minute signed URL and redirect
+      const { data: signedData } = await supabase.storage
+        .from("kyc-documents")
+        .createSignedUrl(storagePath, 900);
+
+      if (signedData?.signedUrl) {
+        return res.redirect(signedData.signedUrl);
+      }
+
+      throw new Error(`DOCUMENT_DOWNLOAD_FAILED: ${downloadErr?.message || 'File not found in storage'}`);
+    }
+
+    const arrayBuffer = await blobData.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    
+    const ext = path.extname(storagePath).toLowerCase();
+    const contentTypeMap = {
+      ".pdf": "application/pdf",
+      ".png": "image/png",
+      ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".webp": "image/webp",
+    };
+    
+    res.setHeader("Content-Type", contentTypeMap[ext] || "application/octet-stream");
+    res.setHeader("Content-Disposition", `inline; filename="${path.basename(storagePath)}"`);
+    return res.send(buffer);
+  } catch (err) {
+    logger.error(`[KycRoutes] Stream document error: ${err.message}`);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * POST /api/kyc/submit
  * Submit a new KYC verification request (status: PENDING_REVIEW)
  */

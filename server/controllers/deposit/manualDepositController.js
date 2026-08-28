@@ -199,27 +199,40 @@ class ManualDepositController {
 
   /**
    * GET /api/deposit/admin/pending (ADMIN ONLY)
-   * Fetches pending manual deposits from BOTH legacy table and unified transactions table.
+   * Fetches manual deposits from BOTH legacy table and unified transactions table.
+   * Supports optional status query parameter: 'all' | 'pending' | 'approved' | 'rejected'
    */
   async getPendingDeposits(req, res) {
     try {
-      // 1. Fetch from legacy manual_deposits table
-      const { data: legacy, error: legacyError } = await supabase
-        .from("manual_deposits")
-        .select("id, user_id, amount, currency, reference, proof_url, status, admin_notes, created_at, updated_at")
-        .eq("status", "pending")
-        .order("created_at", { ascending: true });
+      const statusFilter = (req.query.status || "all").toLowerCase();
 
+      // 1. Fetch from legacy manual_deposits table
+      let legacyQuery = supabase
+        .from("manual_deposits")
+        .select("id, user_id, amount, currency, reference, proof_url, status, admin_notes, created_at, updated_at");
+
+      if (statusFilter !== "all") {
+        legacyQuery = legacyQuery.eq("status", statusFilter);
+      }
+
+      const { data: legacy, error: legacyError } = await legacyQuery.order("created_at", { ascending: false });
       if (legacyError) throw legacyError;
 
       // 2. Fetch from unified transactions table (New Flow)
-      const { data: unified, error: unifiedError } = await supabase
+      let unifiedQuery = supabase
         .from("transactions")
         .select("id, user_id, amount, currency, reference_id, metadata, status, type, created_at, updated_at")
-        .eq("status", "PROCESSING")
-        .eq("type", "DEPOSIT")
-        .order("created_at", { ascending: true });
+        .eq("type", "DEPOSIT");
 
+      if (statusFilter === "pending") {
+        unifiedQuery = unifiedQuery.eq("status", "PROCESSING");
+      } else if (statusFilter === "approved") {
+        unifiedQuery = unifiedQuery.eq("status", "COMPLETED");
+      } else if (statusFilter === "rejected") {
+        unifiedQuery = unifiedQuery.in("status", ["FAILED", "REJECTED", "CANCELLED"]);
+      }
+
+      const { data: unified, error: unifiedError } = await unifiedQuery.order("created_at", { ascending: false });
       if (unifiedError) throw unifiedError;
 
       // Extract unique user IDs
@@ -247,28 +260,36 @@ class ManualDepositController {
       }));
 
       // 3. Normalize unified transactions to match ManualDeposit interface for UI
-      const normalizedUnified = (unified || []).map(tx => ({
-        id: tx.id,
-        isUnified: true, // Flag for approval logic
-        user_id: tx.user_id,
-        amount: tx.amount,
-        currency: tx.currency,
-        reference: tx.metadata?.display_ref || tx.reference_id || tx.id,
-        proof_url: tx.metadata?.proof_url,
-        status: "pending",
-        admin_notes: tx.metadata?.status_note,
-        created_at: tx.created_at,
-        updated_at: tx.updated_at,
-        profile: profilesMap[tx.user_id]
-      }));
+      const normalizedUnified = (unified || []).map(tx => {
+        let normStatus = "pending";
+        if (tx.status === "COMPLETED") normStatus = "approved";
+        else if (["FAILED", "REJECTED", "CANCELLED"].includes(tx.status)) normStatus = "rejected";
 
-      // Combine both sources
-      const allPending = [...legacyWithProfiles, ...normalizedUnified];
+        return {
+          id: tx.id,
+          isUnified: true, // Flag for approval logic
+          user_id: tx.user_id,
+          amount: tx.amount,
+          currency: tx.currency,
+          reference: tx.metadata?.display_ref || tx.metadata?.reference || tx.reference_id || tx.id,
+          proof_url: tx.metadata?.proof_url || tx.metadata?.receipt_url,
+          status: normStatus,
+          admin_notes: tx.metadata?.admin_notes || tx.metadata?.status_note,
+          created_at: tx.created_at,
+          updated_at: tx.updated_at,
+          profile: profilesMap[tx.user_id]
+        };
+      });
+
+      // Combine both sources and sort newest first
+      const allDeposits = [...legacyWithProfiles, ...normalizedUnified].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
       
-      res.json(allPending);
+      res.json(allDeposits);
     } catch (err) {
-      logger.error("[ManualDeposit] Admin Pending Error:", err.message);
-      res.status(500).json({ error: "Failed to fetch pending deposits" });
+      logger.error("[ManualDeposit] Admin Fetch Deposits Error:", err.message);
+      res.status(500).json({ error: "Failed to fetch manual deposits" });
     }
   }
 

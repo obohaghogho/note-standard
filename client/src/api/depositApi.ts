@@ -271,10 +271,10 @@ const depositApi = {
   // ─── Admin ──────────────────────────────────────────────────
 
   /**
-   * Admin: Fetch all pending deposits.
+   * Admin: Fetch manual deposits (All, Pending, Approved, or Rejected).
    */
-  getAdminPending: async (): Promise<ManualDeposit[]> => {
-    const response = await axiosInstance.get("/deposit/admin/pending");
+  getAdminPending: async (status: string = "all"): Promise<ManualDeposit[]> => {
+    const response = await axiosInstance.get(`/deposit/admin/pending?status=${encodeURIComponent(status)}`);
     return response.data;
   },
 

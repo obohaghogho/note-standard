@@ -1628,14 +1628,66 @@ exports.getPendingWithdrawals = async (req, res) => {
   try {
     const serviceSupabase = getServiceSupabase();
     
-    const { data, error } = await serviceSupabase
+    // Explicitly specify the foreign key constraint to avoid PostgREST PGRST201 ambiguity
+    let { data, error } = await serviceSupabase
       .from("fincra_transactions")
-      .select("*, profile:profiles(email, full_name)")
+      .select("*, profile:profiles!fincra_transactions_user_id_fkey(email, full_name, username)")
       .or("manual_review_status.eq.PENDING,reconciliation_status.in.(WITHDRAWAL_STUCK,PROVIDER_PAYOUT_FAILED,PROVIDER_SUCCESS_INTERNAL_SETTLEMENT_MISSING,MANUAL_REVIEW_REQUIRED),status.in.(MANUAL_REVIEW,MANUAL_PENDING)")
       .order("created_at", { ascending: false });
 
+    // Fallback if foreign key constraint name differs
+    if (error) {
+      logger.warn("[Admin] Primary pending withdrawals join failed, trying user_id fallback join:", error.message);
+      const fallback = await serviceSupabase
+        .from("fincra_transactions")
+        .select("*")
+        .or("manual_review_status.eq.PENDING,reconciliation_status.in.(WITHDRAWAL_STUCK,PROVIDER_PAYOUT_FAILED,PROVIDER_SUCCESS_INTERNAL_SETTLEMENT_MISSING,MANUAL_REVIEW_REQUIRED),status.in.(MANUAL_REVIEW,MANUAL_PENDING)")
+        .order("created_at", { ascending: false });
+      
+      data = fallback.data || [];
+      error = fallback.error;
+    }
+
     if (error) throw error;
-    res.json(data || []);
+
+    // Fetch profile mapping manually if any item is missing profile
+    const missingUserIds = Array.from(
+      new Set((data || []).filter(w => !w.profile && w.user_id).map(w => w.user_id))
+    );
+
+    let profilesMap = {};
+    if (missingUserIds.length > 0) {
+      const { data: profiles } = await serviceSupabase
+        .from("profiles")
+        .select("id, email, full_name, username")
+        .in("id", missingUserIds);
+      
+      if (profiles) {
+        profiles.forEach(p => { profilesMap[p.id] = p; });
+      }
+    }
+
+    const normalizedData = (data || []).map(w => {
+      const meta = w.metadata || {};
+      const profile = w.profile || profilesMap[w.user_id] || null;
+      const destination = {
+        bank_name: w.bank_name || meta.bank_name || meta.bankName || w.bank_code || 'N/A Bank',
+        account_number: meta.accountNumber || meta.account_number || w.account_number_masked || 'N/A',
+        account_name: w.account_name || meta.accountName || meta.account_name || 'N/A Beneficiary',
+        iban: w.iban || meta.iban,
+        sort_code: w.sort_code || meta.sort_code || meta.sortCode,
+        routing_number: w.routing_number || meta.routing_number || meta.routingNumber,
+        swift_code: w.swift_code || meta.swift_code || meta.swiftCode,
+      };
+
+      return {
+        ...w,
+        profile,
+        destination,
+      };
+    });
+
+    res.json(normalizedData);
   } catch (err) {
     logger.error("[Admin] Error fetching pending withdrawals:", err.message);
     res.status(500).json({ error: "Failed to fetch pending withdrawals" });

@@ -21,6 +21,7 @@ const routeImports: Record<string, () => Promise<unknown>> = {
   // Admin Routes
   '/admin': () => import('../pages/admin/AdminDashboard'),
   '/admin/users': () => import('../pages/admin/UserManagement'),
+  '/admin/kyc-compliance': () => import('../pages/admin/KycCompliancePage'),
   '/admin/chats': () => import('../pages/admin/AdminChat'),
   '/admin/audit-logs': () => import('../pages/admin/AuditLogs'),
   '/admin/reconciliation': () => import('../pages/admin/ReconciliationDashboard').then(m => ({ default: m.ReconciliationDashboard })),

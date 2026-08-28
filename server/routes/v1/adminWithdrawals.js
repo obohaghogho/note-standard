@@ -37,7 +37,7 @@ router.get("/pending", async (req, res, next) => {
   try {
     const { data, error } = await supabase
       .from("fincra_transactions")
-      .select("*, profile:profiles(email, full_name)")
+      .select("*, profile:profiles!fincra_transactions_user_id_fkey(email, full_name)")
       .eq("status", "MANUAL_REVIEW")
       .order("created_at", { ascending: false });
 

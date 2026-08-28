@@ -146,6 +146,7 @@ export const AdminLayout = () => {
         { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
         { to: '/admin/beta-feedback', icon: Sparkles, label: 'Beta Feedback' },
         { to: '/admin/users', icon: Users, label: 'Users' },
+        { to: '/admin/kyc-compliance', icon: ShieldCheck, label: 'KYC & Verification' },
         { to: '/admin/crypto-treasury', icon: Coins, label: 'Crypto Treasury' },
         { to: '/admin/payment-capabilities', icon: Landmark, label: 'Payment Rails' },
         { to: '/admin/collection-accounts', icon: Landmark, label: 'Collection Accounts' },
