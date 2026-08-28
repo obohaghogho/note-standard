@@ -42,6 +42,8 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
   // Active request state from server
   const [activeKycRequest, setActiveKycRequest] = useState<any>(null);
   const [fetchingKycStatus, setFetchingKycStatus] = useState(false);
+  const [serverKycLevel, setServerKycLevel] = useState<number | null>(null);
+  const [serverIsVerified, setServerIsVerified] = useState<boolean | null>(null);
 
   // Tier 3 file upload state
   const [governmentIdStoragePath, setGovernmentIdStoragePath] = useState('');
@@ -59,6 +61,12 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
     try {
       setFetchingKycStatus(true);
       const res = await api.get('/kyc/my-request');
+      if (typeof res.data?.kycLevel === 'number') {
+        setServerKycLevel(res.data.kycLevel);
+      }
+      if (typeof res.data?.isVerified === 'boolean') {
+        setServerIsVerified(res.data.isVerified);
+      }
       if (res.data?.activeRequest) {
         setActiveKycRequest(res.data.activeRequest);
       } else {
@@ -76,8 +84,10 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
   }, []);
 
   // Determine current active tier
+  const effectiveKycLevel = serverKycLevel !== null ? serverKycLevel : kycLevel;
+  const effectiveIsVerified = serverIsVerified !== null ? serverIsVerified : isVerified;
   const hasPhone = Boolean(phone && phone.trim().length >= 8);
-  const currentTier = kycLevel >= 3 ? 3 : (kycLevel === 2 || Boolean(initialPhone && isVerified) ? 2 : (hasPhone || kycLevel >= 1 ? 1 : 0));
+  const currentTier = effectiveKycLevel >= 3 ? 3 : (effectiveKycLevel === 2 || Boolean(initialPhone && effectiveIsVerified) ? 2 : (hasPhone || effectiveKycLevel >= 1 ? 1 : 0));
 
   const isTier3Pending = activeKycRequest?.requested_tier === 3 && ['PENDING_REVIEW', 'UNDER_REVIEW'].includes(activeKycRequest?.status);
   const isTier3Rejected = activeKycRequest?.requested_tier === 3 && ['REJECTED', 'RESUBMISSION_REQUIRED'].includes(activeKycRequest?.status);

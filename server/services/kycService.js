@@ -11,6 +11,7 @@
 
 'use strict';
 
+const crypto = require("crypto");
 const supabase = require("../config/database");
 const logger = require("../utils/logger");
 const { recordAuditLog } = require("../withdrawal/auditLogger");
@@ -65,16 +66,17 @@ class KycService {
           })
           .eq("id", existingReq.id);
 
+        const profileUpdates = {
+          kyc_level: targetTier,
+          is_verified: true,
+          updated_at: new Date().toISOString(),
+        };
+        if (governmentIdStoragePath) profileUpdates.id_card_url = governmentIdStoragePath;
+        if (utilityBillStoragePath) profileUpdates.utility_bill_url = utilityBillStoragePath;
+
         await supabase
           .from("profiles")
-          .update({
-            kyc_level: targetTier,
-            is_verified: true,
-            bvn: bvn || undefined,
-            dob: dob || undefined,
-            id_card_url: governmentIdStoragePath || undefined,
-            utility_bill_url: utilityBillStoragePath || undefined,
-          })
+          .update(profileUpdates)
           .eq("id", userId);
 
         existingReq.status = "APPROVED";
@@ -86,7 +88,7 @@ class KycService {
       throw new Error(`ACTIVE_REQUEST_EXISTS: User already has an active KYC request pending review (ID: ${existingReq.id}, Status: ${existingReq.status}).`);
     }
 
-    const newId = `kyc_req_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const newId = crypto.randomUUID();
     const newReqData = {
       id: newId,
       user_id: userId,
@@ -120,16 +122,17 @@ class KycService {
     }
 
     if (shouldAutoApprove) {
+      const profileUpdates = {
+        kyc_level: tierNum,
+        is_verified: true,
+        updated_at: new Date().toISOString(),
+      };
+      if (governmentIdStoragePath) profileUpdates.id_card_url = governmentIdStoragePath;
+      if (utilityBillStoragePath) profileUpdates.utility_bill_url = utilityBillStoragePath;
+
       const { error: profileErr } = await supabase
         .from("profiles")
-        .update({
-          kyc_level: tierNum,
-          is_verified: true,
-          bvn: bvn || undefined,
-          dob: dob || undefined,
-          id_card_url: governmentIdStoragePath || undefined,
-          utility_bill_url: utilityBillStoragePath || undefined,
-        })
+        .update(profileUpdates)
         .eq("id", userId);
 
       if (profileErr) {
