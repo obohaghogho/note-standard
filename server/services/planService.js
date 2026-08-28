@@ -83,7 +83,10 @@ class PlanService {
           effectiveTier = (sub.plan_tier || "free").toLowerCase();
           expiresAt = sub.end_date || null;
         } else {
-          logger.info(`[PlanService] Subscription for user ${userId} expired on ${sub.end_date}. Defaulting to free tier.`);
+          logger.info(`[PlanService] Subscription for user ${userId} expired on ${sub.end_date}. Defaulting to free tier and syncing database state.`);
+          this.syncExpiredSubscription(userId).catch(err => {
+            logger.warn(`[PlanService] Non-critical background sub expiration sync error for ${userId}: ${err.message}`);
+          });
         }
       }
 
@@ -99,6 +102,36 @@ class PlanService {
     } catch (err) {
       logger.error(`[PlanService] Failed to resolve effective plan for user ${userId}: ${err.message}`);
       return this.getPlanConfig("free");
+    }
+  }
+
+  /**
+   * Authoritatively sync expired subscription and profile states in database to 'free'
+   */
+  async syncExpiredSubscription(userId) {
+    if (!userId) return;
+
+    try {
+      await supabase
+        .from("subscriptions")
+        .update({ status: "expired", plan_tier: "free", plan_type: "FREE" })
+        .eq("user_id", userId)
+        .eq("status", "active");
+
+      await supabase
+        .from("profiles")
+        .update({ plan_tier: "free" })
+        .eq("id", userId);
+
+      await supabase
+        .from("ads")
+        .update({ status: "paused" })
+        .eq("user_id", userId)
+        .eq("status", "approved");
+
+      this.invalidateEntitlementCache(userId);
+    } catch (err) {
+      logger.error(`[PlanService] Error in syncExpiredSubscription for ${userId}: ${err.message}`);
     }
   }
 

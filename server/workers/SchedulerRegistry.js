@@ -86,6 +86,15 @@ class SchedulerRegistry {
         return { status: 'SUCCESS', replayedCount: 0 };
       }
     });
+
+    this.registerJob('subscriptionExpirationJob', {
+      schedule: '0 * * * *', // Hourly
+      timeoutMs: 60000,
+      handler: async (ctx) => {
+        const worker = require('./subscriptionExpirationWorker');
+        return await worker.processExpiredSubscriptions();
+      }
+    });
   }
 
   getJob(jobName) {

@@ -685,7 +685,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-0 sm:p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-0 sm:p-4 overflow-y-auto pt-[env(safe-area-inset-top,0px)]">
       <div 
         className="w-full max-w-2xl min-h-screen sm:min-h-0 sm:max-h-[90vh] overflow-y-auto overflow-x-hidden scrollbar-hide relative bg-gray-950 sm:rounded-3xl"
         onScroll={handleScroll}
