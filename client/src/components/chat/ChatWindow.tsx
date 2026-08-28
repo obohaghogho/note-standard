@@ -718,6 +718,23 @@ const ChatWindow: React.FC = () => {
         return member?.profile?.username || member?.profile?.full_name || 'Member';
     }, [user?.id, activeConversation?.members]);
 
+    // Self-healing fallback: If activeConversationId is set but missing from chatStore, fetch and upsert it
+    useEffect(() => {
+        if (activeConversationId && !activeConversation) {
+            let isMounted = true;
+            api.get(`/chat/conversations/${activeConversationId}`)
+                .then(res => {
+                    if (isMounted && res.data?.conversation) {
+                        useChatStore.getState().upsertConversation(res.data.conversation);
+                    }
+                })
+                .catch(err => {
+                    console.warn('[ChatWindow] Self-healing fetch failed:', err?.message);
+                });
+            return () => { isMounted = false; };
+        }
+    }, [activeConversationId, activeConversation]);
+
     if (!activeConversationId) {
         return (
             <div className="flex-grow flex flex-col items-center justify-center h-full text-gray-400 bg-crystal relative p-6">
@@ -742,23 +759,6 @@ const ChatWindow: React.FC = () => {
             </div>
         );
     }
-
-    // Self-healing fallback: If activeConversationId is set but missing from chatStore, fetch and upsert it
-    useEffect(() => {
-        if (activeConversationId && !activeConversation) {
-            let isMounted = true;
-            api.get(`/chat/conversations/${activeConversationId}`)
-                .then(res => {
-                    if (isMounted && res.data?.conversation) {
-                        useChatStore.getState().upsertConversation(res.data.conversation);
-                    }
-                })
-                .catch(err => {
-                    console.warn('[ChatWindow] Self-healing fetch failed:', err?.message);
-                });
-            return () => { isMounted = false; };
-        }
-    }, [activeConversationId, activeConversation]);
 
     // Secondary guard: activeConversationId is set but not yet in the conversations
     // list (happens immediately after an account switch while the new account's
