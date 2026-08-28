@@ -36,6 +36,7 @@ function ChatContent() {
     const { activeConversationId, setActiveConversationId, startConversation, isConversationDeleted } = useChat();
     const { openMobileMenu } = useOutletContext<{ openMobileMenu?: () => void }>() || {};
     const { user, authReady } = useAuth();
+    const initiatingRef = useRef<string | null>(null);
 
     // Effect 1: Sync URL → activeConversationId (URL drives state on navigation/deep-link)
     useEffect(() => {
@@ -77,6 +78,8 @@ function ChatContent() {
                 setActiveConversationId(id);
             }
         } else if (username) {
+            if (initiatingRef.current === username) return;
+            initiatingRef.current = username;
             const initiateChat = async () => {
                 try {
                     const newId = await startConversation(username);
@@ -85,6 +88,8 @@ function ChatContent() {
                     }
                 } catch (err) {
                     console.error('Failed to auto-start chat:', err);
+                } finally {
+                    initiatingRef.current = null;
                 }
             };
             initiateChat();

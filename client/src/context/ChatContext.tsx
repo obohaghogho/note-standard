@@ -2796,9 +2796,14 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 throw new Error(res.data?.error || 'Invalid server response');
             }
 
-            // Immediately populate conversation into Zustand chatStore so activeConversation is found instantly
+            // Immediately populate conversation into Zustand chatStore AND ChatContext state so activeConversation is found instantly everywhere
             if (conv) {
                 useChatStore.getState().upsertConversation(conv);
+                setConversations(prev => {
+                    const exists = prev.some(c => c.id === conv.id);
+                    if (exists) return prev.map(c => c.id === conv.id ? { ...c, ...conv } : c);
+                    return [conv, ...prev];
+                });
             }
 
             // Clear tombstones for newly created conversation & peer members so explicit new chat can be established
