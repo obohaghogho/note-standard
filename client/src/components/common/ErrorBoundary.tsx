@@ -31,20 +31,26 @@ export class ErrorBoundary extends Component<Props, State> {
     componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
         console.error('ErrorBoundary caught an error:', error, errorInfo);
         
-        // Handle chunk load errors (often due to new deployments)
+        // Handle chunk load errors (often due to new deployments on mobile/PWA)
         const isChunkLoadError = 
             error.name === 'ChunkLoadError' || 
-            error.message.includes('Failed to fetch dynamically imported module') ||
-            error.message.includes('Loading chunk');
+            error.message?.includes('Failed to fetch dynamically imported module') ||
+            error.message?.includes('Loading chunk') ||
+            error.message?.includes('Importing a module script failed') ||
+            error.message?.includes('error loading dynamically imported module');
 
         if (isChunkLoadError) {
-            // Check if we've already tried reloading to avoid infinite loops
+            console.warn('[ErrorBoundary] Detected stale PWA chunk load error. Force updating PWA cache...');
             const hasReloaded = sessionStorage.getItem('last_chunk_load_error_reload');
             const now = Date.now();
             
-            // If we haven't reloaded in the last 10 seconds, reload.
-            if (!hasReloaded || (now - parseInt(hasReloaded)) > 10000) {
+            if (!hasReloaded || (now - parseInt(hasReloaded)) > 5000) {
                 sessionStorage.setItem('last_chunk_load_error_reload', now.toString());
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.getRegistrations().then(regs => {
+                        regs.forEach(r => r.update());
+                    }).catch(() => {});
+                }
                 window.location.reload();
                 return;
             }

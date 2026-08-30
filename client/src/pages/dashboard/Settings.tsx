@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { UserBadge } from '../../components/common/UserBadge';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { KycStatusCard } from '../../components/profile/KycStatusCard';
+import { ErrorBoundary } from '../../components/common/ErrorBoundary';
 
 export default function Settings() {
     const { t, i18n } = useTranslation();
@@ -936,17 +937,31 @@ export default function Settings() {
 
             {
                 activeTab === 'kyc' && (
-                    <KycStatusCard 
-                        userEmail={user?.email || ''}
-                        phone={String(phone || profile?.phone || authProfile?.phone || '')}
-                        isVerified={Boolean(authProfile?.is_verified)}
-                        kycLevel={typeof authProfile?.kyc_level === 'number' ? authProfile.kyc_level : (parseInt(String(authProfile?.kyc_level || 0), 10) || ((phone || profile?.phone || authProfile?.phone) ? 1 : 0))}
-                        onPhoneUpdated={(newPhone) => {
-                            setPhone(newPhone);
-                            setProfile(prev => prev ? { ...prev, phone: newPhone } : null);
-                            refreshProfile();
-                        }}
-                    />
+                    <ErrorBoundary fallback={
+                        <div className="bg-gray-900/80 border border-purple-500/30 rounded-2xl p-6 text-center space-y-4 my-4 backdrop-blur-md">
+                            <h3 className="text-base font-bold text-purple-300">Identity Verification Status</h3>
+                            <p className="text-xs text-gray-300">Your mobile app cache was updated. Please tap below to refresh your identity verification dashboard.</p>
+                            <Button 
+                                onClick={() => window.location.reload()} 
+                                size="sm" 
+                                className="bg-purple-600 hover:bg-purple-500 text-white font-semibold px-5 py-2.5 rounded-xl shadow-lg"
+                            >
+                                Refresh Verification Status
+                            </Button>
+                        </div>
+                    }>
+                        <KycStatusCard 
+                            userEmail={user?.email || ''}
+                            phone={String(phone || profile?.phone || authProfile?.phone || '')}
+                            isVerified={Boolean(authProfile?.is_verified)}
+                            kycLevel={typeof authProfile?.kyc_level === 'number' ? authProfile.kyc_level : (parseInt(String(authProfile?.kyc_level || 0), 10) || ((phone || profile?.phone || authProfile?.phone) ? 1 : 0))}
+                            onPhoneUpdated={(newPhone) => {
+                                setPhone(newPhone);
+                                setProfile(prev => prev ? { ...prev, phone: newPhone } : null);
+                                refreshProfile();
+                            }}
+                        />
+                    </ErrorBoundary>
                 )
             }
 
