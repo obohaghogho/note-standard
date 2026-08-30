@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Status (Stories) Route â€” NoteStandard
  * Mirrors WhatsApp-style 24-hour status updates.
  * Uses Supabase (service role) for data and realtimeService for push events.
@@ -467,6 +467,7 @@ router.post('/:id/view', requireAuth, async (req, res) => {
 });
 
 // â”€â”€ POST /api/status/:id/react â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── POST /api/status/:id/react ─────────────────────────────────────────────
 router.post('/:id/react', requireAuth, async (req, res) => {
   try {
     const { emoji } = req.body;
@@ -478,6 +479,7 @@ router.post('/:id/react', requireAuth, async (req, res) => {
     if (!emoji) {
       await supabase.from('status_reactions').delete()
         .eq('status_id', status.id).eq('user_id', req.user.id);
+      return res.json({ success: true });
     } else {
       await supabase.from('status_reactions').upsert(
         { status_id: status.id, user_id: req.user.id, emoji },
@@ -486,15 +488,152 @@ router.post('/:id/react', requireAuth, async (req, res) => {
     }
 
     const { data: reactor } = await supabase
-      .from('profiles').select('id, full_name, avatar_url').eq('id', req.user.id).single();
+      .from('profiles').select('id, full_name, username, avatar_url').eq('id', req.user.id).single();
 
     realtime.emitToUser(status.user_id, 'status:reaction', {
       status_id: status.id,
-      reactor: { id: reactor?.id, display_name: reactor?.full_name, avatar_url: reactor?.avatar_url },
+      reactor: { id: reactor?.id, display_name: reactor?.full_name || reactor?.username, avatar_url: reactor?.avatar_url },
       emoji,
     });
 
-    res.json({ success: true });
+    // ── Find or Create Direct Conversation for Chat Room Delivery ──
+    let convId = null;
+    const { data: myConvs } = await supabase
+      .from('conversation_members').select('conversation_id').eq('user_id', req.user.id);
+    const myConvIds = (myConvs || []).map(r => r.conversation_id);
+
+    if (myConvIds.length > 0) {
+      const { data: directConvs } = await supabase
+        .from('conversations')
+        .select('id')
+        .in('id', myConvIds)
+        .eq('type', 'direct')
+        .or('chat_type.is.null,chat_type.neq.support');
+
+      const directConvIds = (directConvs || []).map(r => r.id);
+
+      if (directConvIds.length > 0) {
+        const { data: shared } = await supabase
+          .from('conversation_members')
+          .select('conversation_id')
+          .in('conversation_id', directConvIds)
+          .eq('user_id', status.user_id)
+          .limit(1).maybeSingle();
+        convId = shared?.conversation_id || null;
+      }
+    }
+
+    if (!convId) {
+      const { data: newConv, error: newConvError } = await supabase
+        .from('conversations').insert({ type: 'direct' }).select('id').single();
+      if (newConvError) throw newConvError;
+
+      convId = newConv.id;
+      const memberInserts = [{ conversation_id: convId, user_id: req.user.id }];
+      if (req.user.id !== status.user_id) {
+        memberInserts.push({ conversation_id: convId, user_id: status.user_id });
+      }
+      const { error: membersError } = await supabase.from('conversation_members').insert(memberInserts);
+      if (membersError) throw membersError;
+    }
+
+    // Send emoji reaction message into chat conversation room
+    const crypto = require('crypto');
+    const { data: rpcData, error: rpcError } = await supabase.rpc('rpc_send_message', {
+      p_conversation_id: convId,
+      p_sender_id: req.user.id,
+      p_content: emoji,
+      p_type: 'text',
+      p_event_id: crypto.randomUUID(),
+      p_original_language: 'en',
+      p_attachment_id: null,
+      p_reply_to_id: null
+    });
+
+    if (!rpcError && rpcData?.message) {
+      const msg = rpcData.message;
+
+      const { data: statusOwnerProfile } = await supabase
+        .from('profiles')
+        .select('full_name, username, avatar_url')
+        .eq('id', status.user_id)
+        .single();
+
+      const statusMetadata = {
+        status_reply: {
+          status_id: status.id,
+          media_url: status.media_url || null,
+          media_thumbnail: status.media_thumbnail || null,
+          media_type: status.type,
+          status_content: status.content || null,
+          bg_color: status.bg_color || null,
+          bg_gradient: status.bg_gradient || null,
+          poster_name: statusOwnerProfile?.full_name || statusOwnerProfile?.username || 'User',
+          poster_avatar: statusOwnerProfile?.avatar_url || null,
+          reaction_emoji: emoji
+        }
+      };
+
+      await supabase
+        .from('messages')
+        .update({ metadata: statusMetadata })
+        .eq('id', msg.id);
+
+      await supabase
+        .from('conversations')
+        .update({
+          last_message_id: msg.id,
+          last_message_at: msg.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', convId);
+
+      const { data: hydratedMessage } = await supabase
+        .from('messages')
+        .select('*, sender:profiles(id, username, full_name, avatar_url)')
+        .eq('id', msg.id)
+        .single();
+
+      const { data: members } = await supabase
+        .from('conversation_members')
+        .select('user_id')
+        .eq('conversation_id', convId);
+
+      if (members && members.length > 0) {
+        const userIds = members.map(m => m.user_id);
+        const finalMsg = hydratedMessage ? { ...hydratedMessage, metadata: statusMetadata } : msg;
+        await realtime.emitToUsers(userIds, 'chat:message', finalMsg);
+
+        const { data: convFull } = await supabase
+          .from('conversations')
+          .select('id, type, updated_at, last_message_at, conversation_members(user_id, role, profiles(id, username, full_name, avatar_url))')
+          .eq('id', convId)
+          .single();
+
+        if (convFull) {
+          const newConvPayload = {
+            ...convFull,
+            lastMessage: {
+              id: msg.id,
+              content: emoji,
+              sender_id: req.user.id,
+              created_at: msg.created_at || new Date().toISOString(),
+              type: 'text',
+            },
+            members: (convFull.conversation_members || []).map((m) => ({
+              user_id: m.user_id,
+              role: m.role,
+              profile: Array.isArray(m.profiles) ? m.profiles[0] : m.profiles,
+            })),
+            unreadCount: 1,
+          };
+          delete newConvPayload.conversation_members;
+          await realtime.emitToUsers(userIds, 'chat:new_conversation', newConvPayload);
+        }
+      }
+    }
+
+    res.json({ success: true, conversation_id: convId });
   } catch (err) {
     logger.error('[Status] React error', { error: err.message });
     res.status(500).json({ error: 'Failed to react' });

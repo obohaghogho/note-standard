@@ -252,7 +252,8 @@ const MessageBubble = memo(({
                                 )}
                             </div>
                             <span className="text-[11px] text-white/70 font-medium truncate">
-                                Replied to <span className="text-white/90 font-semibold">{msg.metadata.status_reply.poster_name || 'status'}</span>'s status
+                                {msg.metadata.status_reply.reaction_emoji ? `Reacted ${msg.metadata.status_reply.reaction_emoji} to ` : 'Replied to '} 
+                                <span className="text-white/90 font-semibold">{msg.metadata.status_reply.poster_name || 'status'}</span>'s status
                             </span>
                         </div>
                     </div>

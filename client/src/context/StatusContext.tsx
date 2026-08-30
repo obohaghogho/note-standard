@@ -81,7 +81,7 @@ interface StatusContextValue {
   openCreator: () => void;
   closeCreator: () => void;
   markViewed: (statusId: string) => Promise<void>;
-  react: (statusId: string, emoji: string) => Promise<void>;
+  react: (statusId: string, emoji: string) => Promise<string | undefined>;
   reply: (statusId: string, content: string) => Promise<string>;
   createStatus: (payload: Record<string, unknown>) => Promise<void>;
   deleteStatus: (statusId: string) => Promise<void>;
@@ -213,7 +213,8 @@ export const StatusProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   const react = useCallback(async (statusId: string, emoji: string) => {
-    await api.post(`/status/${statusId}/react`, { emoji });
+    const { data } = await api.post(`/status/${statusId}/react`, { emoji });
+    return data.conversation_id as string | undefined;
   }, []);
 
   const reply = useCallback(async (statusId: string, content: string) => {

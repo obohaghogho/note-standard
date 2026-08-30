@@ -231,8 +231,11 @@ export default function StatusViewer() {
   const handleReact = async (emoji: string) => {
     if (!status) return;
     try {
-      await react(status.id, emoji);
-      toast.success(emoji);
+      const convId = await react(status.id, emoji);
+      toast.success(`Sent ${emoji}`);
+      if (convId) {
+        setActiveConversationId(convId);
+      }
     } catch (e) {
       console.error(e);
     }
