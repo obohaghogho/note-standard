@@ -85,15 +85,22 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
     fetchKycStatus();
   }, []);
 
+  const isTier3Pending = activeKycRequest?.requested_tier === 3 && ['PENDING_REVIEW', 'UNDER_REVIEW'].includes(activeKycRequest?.status);
+  const isTier3Rejected = activeKycRequest?.requested_tier === 3 && ['REJECTED', 'RESUBMISSION_REQUIRED'].includes(activeKycRequest?.status);
+  
+  const isTier2Pending = activeKycRequest?.requested_tier === 2 && ['PENDING_REVIEW', 'UNDER_REVIEW'].includes(activeKycRequest?.status);
+  const isTier2Rejected = activeKycRequest?.requested_tier === 2 && ['REJECTED', 'RESUBMISSION_REQUIRED'].includes(activeKycRequest?.status);
+
   // Determine current active tier
   const numKycLevel = typeof serverKycLevel === 'number' ? serverKycLevel : (typeof kycLevel === 'number' ? kycLevel : (parseInt(String(kycLevel || 0), 10) || 0));
   const effectiveKycLevel = numKycLevel;
   const effectiveIsVerified = serverIsVerified !== null ? serverIsVerified : Boolean(isVerified);
   const hasPhone = Boolean(phone && typeof phone === 'string' && phone.trim().length >= 8);
-  const currentTier = effectiveKycLevel >= 3 ? 3 : (effectiveKycLevel === 2 || Boolean(initialPhone && effectiveIsVerified) ? 2 : (hasPhone || effectiveKycLevel >= 1 ? 1 : 0));
 
-  const isTier3Pending = activeKycRequest?.requested_tier === 3 && ['PENDING_REVIEW', 'UNDER_REVIEW'].includes(activeKycRequest?.status);
-  const isTier3Rejected = activeKycRequest?.requested_tier === 3 && ['REJECTED', 'RESUBMISSION_REQUIRED'].includes(activeKycRequest?.status);
+  const isTier3Active = effectiveKycLevel >= 3 && !isTier3Rejected;
+  const isTier2Active = (effectiveKycLevel >= 2 || Boolean(initialPhone && effectiveIsVerified)) && !isTier2Rejected;
+
+  const currentTier = isTier3Active ? 3 : (isTier2Active ? 2 : (hasPhone || effectiveKycLevel >= 1 ? 1 : 0));
 
   // Authenticated file upload handler
   const handleFileUpload = async (
@@ -363,35 +370,52 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                 </div>
               </div>
               <span className={`text-xs px-2.5 py-1 rounded-full font-bold border ${
-                currentTier >= 2 
+                isTier2Active 
                   ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' 
-                  : 'bg-white/5 text-gray-400 border-white/10'
+                  : (isTier2Pending 
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                      : (isTier2Rejected 
+                          ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                          : 'bg-white/5 text-gray-400 border-white/10'))
               }`}>
-                {currentTier >= 2 ? t('common.verified', 'VERIFIED') : 'LOCKED'}
+                {isTier2Active 
+                  ? t('common.verified', 'VERIFIED') 
+                  : (isTier2Pending 
+                      ? 'PENDING REVIEW'
+                      : (isTier2Rejected ? 'REJECTED' : 'LOCKED'))}
               </span>
             </div>
 
             <div className="space-y-2 pt-2 border-t border-white/5 text-xs text-gray-300">
               <div className="flex items-center gap-2">
-                <CheckCircle2 size={14} className={currentTier >= 2 ? 'text-blue-400' : 'text-gray-500'} />
+                <CheckCircle2 size={14} className={isTier2Active ? 'text-blue-400' : 'text-gray-500'} />
                 <span>Dedicated NGN Virtual Bank Account</span>
               </div>
               <div className="flex items-center gap-2">
-                <CheckCircle2 size={14} className={currentTier >= 2 ? 'text-blue-400' : 'text-gray-500'} />
+                <CheckCircle2 size={14} className={isTier2Active ? 'text-blue-400' : 'text-gray-500'} />
                 <span>Requires BVN or NIN Verification</span>
               </div>
               <div className="flex items-center gap-2">
-                <CheckCircle2 size={14} className={currentTier >= 2 ? 'text-blue-400' : 'text-gray-500'} />
+                <CheckCircle2 size={14} className={isTier2Active ? 'text-blue-400' : 'text-gray-500'} />
                 <span>Instant Bank Payouts & Crypto Swaps</span>
               </div>
             </div>
           </div>
 
           <div className="pt-4">
-            {currentTier >= 2 ? (
+            {isTier2Active ? (
               <div className="text-xs text-blue-400 font-medium flex items-center gap-1">
                 <CheckCircle2 size={14} /> Tier 2 {t('kyc.active', 'Active')}
               </div>
+            ) : isTier2Pending ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled
+                className="w-full text-xs font-semibold border-amber-500/30 text-amber-300 opacity-60 cursor-not-allowed py-2.5"
+              >
+                Verification Pending Review
+              </Button>
             ) : (
               <Button
                 variant="outline"
@@ -399,7 +423,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                 className="w-full text-xs font-semibold border-blue-500/30 hover:bg-blue-500/10 text-blue-300"
                 onClick={() => setShowTier2Modal(true)}
               >
-                {t('kyc.upgrade_tier2', 'Upgrade to Tier 2')} <ChevronRight size={14} className="ml-1" />
+                {isTier2Rejected ? 'Resubmit Tier 2 Data' : t('kyc.upgrade_tier2', 'Upgrade to Tier 2')} <ChevronRight size={14} className="ml-1" />
               </Button>
             )}
           </div>
@@ -407,7 +431,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
 
         {/* TIER 3 CARD */}
         <div className={`relative rounded-2xl border p-5 transition-all flex flex-col justify-between ${
-          currentTier >= 3 ? 'bg-purple-950/20 border-purple-500/30' : (isTier3Pending ? 'bg-amber-950/20 border-amber-500/30' : 'bg-white/5 border-white/10 hover:border-white/20')
+          isTier3Active ? 'bg-purple-950/20 border-purple-500/30' : (isTier3Pending ? 'bg-amber-950/20 border-amber-500/30' : (isTier3Rejected ? 'bg-rose-950/20 border-rose-500/30' : 'bg-white/5 border-white/10 hover:border-white/20'))
         }`}>
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -421,7 +445,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                 </div>
               </div>
               <span className={`text-xs px-2.5 py-1 rounded-full font-bold border ${
-                currentTier >= 3 
+                isTier3Active 
                   ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' 
                   : (isTier3Pending 
                       ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
@@ -429,7 +453,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                           ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
                           : 'bg-white/5 text-gray-400 border-white/10'))
               }`}>
-                {currentTier >= 3 
+                {isTier3Active 
                   ? t('common.verified', 'VERIFIED') 
                   : (isTier3Pending 
                       ? 'PENDING REVIEW' 
@@ -439,15 +463,15 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
 
             <div className="space-y-2 pt-2 border-t border-white/5 text-xs text-gray-300">
               <div className="flex items-center gap-2">
-                <CheckCircle2 size={14} className={currentTier >= 3 ? 'text-purple-400' : 'text-gray-500'} />
+                <CheckCircle2 size={14} className={isTier3Active ? 'text-purple-400' : 'text-gray-500'} />
                 <span>USD / EUR / GBP Foreign Accounts</span>
               </div>
               <div className="flex items-center gap-2">
-                <CheckCircle2 size={14} className={currentTier >= 3 ? 'text-purple-400' : 'text-gray-500'} />
+                <CheckCircle2 size={14} className={isTier3Active ? 'text-purple-400' : 'text-gray-500'} />
                 <span>Requires Photo ID & Utility Bill Upload</span>
               </div>
               <div className="flex items-center gap-2">
-                <CheckCircle2 size={14} className={currentTier >= 3 ? 'text-purple-400' : 'text-gray-500'} />
+                <CheckCircle2 size={14} className={isTier3Active ? 'text-purple-400' : 'text-gray-500'} />
                 <span>High-Volume Cross Border Transfers</span>
               </div>
 
@@ -475,7 +499,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
           </div>
 
           <div className="pt-4 pb-2">
-            {currentTier >= 3 ? (
+            {isTier3Active ? (
               <div className="text-xs text-purple-400 font-medium flex items-center gap-1 min-h-[44px]">
                 <CheckCircle2 size={14} /> Tier 3 {t('kyc.active', 'Active')}
               </div>

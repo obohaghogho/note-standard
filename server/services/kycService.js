@@ -194,6 +194,21 @@ class KycService {
       }
     }
 
+    // Sync Rejected / Resubmission Status: If latest request is rejected or resubmission_required, ensure profile kyc_level is downgraded
+    if (latestReq && ['REJECTED', 'RESUBMISSION_REQUIRED'].includes(latestReq.status) && kycLevel >= latestReq.requested_tier) {
+      kycLevel = Math.max(0, latestReq.requested_tier - 1);
+      try {
+        await supabase
+          .from("profiles")
+          .update({
+            kyc_level: kycLevel
+          })
+          .eq("id", userId);
+      } catch (e) {
+        logger.warn(`[KycService] Resilient Tier ${latestReq.requested_tier} downgrade sync notice: ${e.message}`);
+      }
+    }
+
     return {
       kycLevel,
       isVerified,
@@ -479,6 +494,13 @@ class KycService {
         .select()
         .single();
       if (!reqErr && data) updatedReq = data;
+
+      // Ensure user profile kyc_level is downgraded to tier - 1 upon rejection
+      const targetTier = Math.max(0, (req.requested_tier || 3) - 1);
+      await supabase
+        .from("profiles")
+        .update({ kyc_level: targetTier })
+        .eq("id", req.user_id);
     } catch (e) {}
 
     memoryKycStore.set(requestId, updatedReq);
@@ -585,6 +607,13 @@ class KycService {
         .select()
         .single();
       if (!reqErr && data) updatedReq = data;
+
+      // Ensure user profile kyc_level is downgraded to tier - 1 upon rejection
+      const targetTier = Math.max(0, (req.requested_tier || 3) - 1);
+      await supabase
+        .from("profiles")
+        .update({ kyc_level: targetTier })
+        .eq("id", req.user_id);
     } catch (e) {}
 
     memoryKycStore.set(requestId, updatedReq);
