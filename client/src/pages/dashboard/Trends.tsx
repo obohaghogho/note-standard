@@ -212,7 +212,7 @@ export const Trends = () => {
         labels,
         datasets: [
             {
-                label: 'Global Notes Created (Anonymized)',
+                label: 'Global Notes Created',
                 data: stats?.map(s => s.total_notes_created),
                 borderColor: 'rgb(59, 130, 246)',
                 backgroundColor: 'rgba(59, 130, 246, 0.5)',
@@ -225,7 +225,7 @@ export const Trends = () => {
         labels,
         datasets: [
             {
-                label: 'Active Contributor Count',
+                label: 'Active Contributors',
                 data: stats?.map(s => s.total_active_users),
                 borderColor: 'rgb(168, 85, 247)',
                 backgroundColor: 'rgba(168, 85, 247, 0.5)',
@@ -267,15 +267,15 @@ export const Trends = () => {
     };
 
     return (
-        <div className="space-y-4 sm:space-y-6 max-w-6xl mx-auto px-3 sm:px-6 py-2 sm:py-4 pb-36 sm:pb-16 min-w-0 overflow-x-hidden">
+        <div className="space-y-4 sm:space-y-6 max-w-6xl mx-auto px-2 sm:px-6 py-2 sm:py-4 pb-36 sm:pb-16 min-w-0 overflow-x-hidden w-full max-w-full">
             {/* Header banner */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 min-w-0 w-full">
                 <div className="min-w-0 flex-1">
-                    <h1 className="text-xl sm:text-3xl font-bold flex items-center gap-2.5 sm:gap-3 text-white tracking-tight truncate">
+                    <h1 className="text-xl sm:text-3xl font-bold flex items-center gap-2 sm:gap-3 text-white tracking-tight leading-snug">
                         <TrendingUp className="text-primary shrink-0" size={24} />
-                        <span className="truncate">Community Trends</span>
+                        <span className="break-words">Community Trends</span>
                     </h1>
-                    <p className="text-xs sm:text-sm text-gray-400 mt-1 leading-relaxed">Real-time intelligence from the Note Standard community.</p>
+                    <p className="text-xs sm:text-sm text-gray-400 mt-1 leading-relaxed break-words">Real-time intelligence from the Note Standard community.</p>
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3 flex-wrap shrink-0">
                     {connected && (
@@ -292,37 +292,55 @@ export const Trends = () => {
             </div>
 
             {/* Navigation Tabs */}
-            <div className="relative border-b border-white/10 -mx-3 px-3 sm:mx-0 sm:px-0">
-                <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto pb-px scroll-smooth snap-x snap-mandatory text-xs sm:text-sm font-medium">
+            <div className="relative border-b border-white/10 -mx-2 px-2 sm:mx-0 sm:px-0">
+                <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto no-scrollbar pb-px scroll-smooth snap-x snap-mandatory text-xs sm:text-sm font-medium">
                     <button
                         onClick={() => setActiveTab('overview')}
-                        className={`pb-2.5 pt-1.5 px-3 rounded-t-lg relative shrink-0 snap-start transition-colors whitespace-nowrap ${activeTab === 'overview' ? 'text-primary font-semibold' : 'text-gray-400 hover:text-white'}`}
+                        className={`pb-2.5 pt-1.5 px-2.5 sm:px-3 rounded-t-lg relative shrink-0 snap-start transition-colors whitespace-nowrap ${activeTab === 'overview' ? 'text-primary font-semibold' : 'text-gray-400 hover:text-white'}`}
                     >
-                        <span className="flex items-center gap-1.5"><FileText size={15} /> Analytics Overview</span>
+                        <span className="flex items-center gap-1.5">
+                            <FileText size={15} />
+                            <span className="hidden sm:inline">Analytics Overview</span>
+                            <span className="sm:hidden">Overview</span>
+                        </span>
                         {activeTab === 'overview' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
                     </button>
                     <button
                         onClick={() => setActiveTab('feed')}
-                        className={`pb-2.5 pt-1.5 px-3 rounded-t-lg relative shrink-0 snap-start transition-colors whitespace-nowrap ${activeTab === 'feed' ? 'text-primary font-semibold' : 'text-gray-400 hover:text-white'}`}
+                        className={`pb-2.5 pt-1.5 px-2.5 sm:px-3 rounded-t-lg relative shrink-0 snap-start transition-colors whitespace-nowrap ${activeTab === 'feed' ? 'text-primary font-semibold' : 'text-gray-400 hover:text-white'}`}
                     >
-                        <span className="flex items-center gap-1.5"><BookOpen size={15} /> Trending Feed</span>
+                        <span className="flex items-center gap-1.5">
+                            <BookOpen size={15} />
+                            <span className="hidden sm:inline">Trending Feed</span>
+                            <span className="sm:hidden">Feed</span>
+                        </span>
                         {activeTab === 'feed' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
                     </button>
                     <button
                         onClick={() => setActiveTab('briefing')}
-                        className={`pb-2.5 pt-1.5 px-3 rounded-t-lg relative shrink-0 snap-start transition-colors whitespace-nowrap ${activeTab === 'briefing' ? 'text-primary font-semibold' : 'text-gray-400 hover:text-white'}`}
+                        className={`pb-2.5 pt-1.5 px-2.5 sm:px-3 rounded-t-lg relative shrink-0 snap-start transition-colors whitespace-nowrap ${activeTab === 'briefing' ? 'text-primary font-semibold' : 'text-gray-400 hover:text-white'}`}
                     >
-                        <span className="flex items-center gap-1.5"><Sparkles size={15} /> AI Daily Briefing</span>
+                        <span className="flex items-center gap-1.5">
+                            <Sparkles size={15} />
+                            <span className="hidden sm:inline">AI Daily Briefing</span>
+                            <span className="sm:hidden">AI Briefing</span>
+                        </span>
                         {activeTab === 'briefing' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
                     </button>
                     <button
                         onClick={() => setActiveTab('discover')}
-                        className={`pb-2.5 pt-1.5 px-3 rounded-t-lg relative shrink-0 snap-start transition-colors whitespace-nowrap ${activeTab === 'discover' ? 'text-primary font-semibold' : 'text-gray-400 hover:text-white'}`}
+                        className={`pb-2.5 pt-1.5 px-2.5 sm:px-3 rounded-t-lg relative shrink-0 snap-start transition-colors whitespace-nowrap ${activeTab === 'discover' ? 'text-primary font-semibold' : 'text-gray-400 hover:text-white'}`}
                     >
-                        <span className="flex items-center gap-1.5"><Users size={15} /> Discover Suggested</span>
+                        <span className="flex items-center gap-1.5">
+                            <Users size={15} />
+                            <span className="hidden sm:inline">Discover Suggested</span>
+                            <span className="sm:hidden">Discover</span>
+                        </span>
                         {activeTab === 'discover' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
                     </button>
                 </div>
+                {/* Scroll indicator gradient overlay for mobile */}
+                <div className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-[#0a0a0a]/80 to-transparent pointer-events-none sm:hidden" />
             </div>
 
             {/* TAB CONTENTS */}
@@ -340,11 +358,11 @@ export const Trends = () => {
                                     options={{
                                         responsive: true,
                                         maintainAspectRatio: false,
-                                        layout: { padding: { left: 0, right: 16, top: 4, bottom: 4 } },
+                                        layout: { padding: { left: 0, right: 8, top: 4, bottom: 4 } },
                                         plugins: {
                                             legend: {
                                                 position: 'bottom',
-                                                labels: { color: '#9ca3af', font: { size: 9 }, boxWidth: 6, padding: 6 }
+                                                labels: { color: '#9ca3af', font: { size: 10 }, boxWidth: 8, padding: 8 }
                                             }
                                         },
                                         scales: {
@@ -367,11 +385,11 @@ export const Trends = () => {
                                     options={{
                                         responsive: true,
                                         maintainAspectRatio: false,
-                                        layout: { padding: { left: 0, right: 16, top: 4, bottom: 4 } },
+                                        layout: { padding: { left: 0, right: 8, top: 4, bottom: 4 } },
                                         plugins: {
                                             legend: {
                                                 position: 'bottom',
-                                                labels: { color: '#9ca3af', font: { size: 9 }, boxWidth: 6, padding: 6 }
+                                                labels: { color: '#9ca3af', font: { size: 10 }, boxWidth: 8, padding: 8 }
                                             }
                                         },
                                         scales: {
@@ -406,7 +424,7 @@ export const Trends = () => {
             )}
 
             {activeTab === 'feed' && (
-                <div className="space-y-4 sm:space-y-6 max-w-3xl mx-auto">
+                <div className="space-y-4 sm:space-y-6 max-w-3xl mx-auto min-w-0 w-full">
                     {loadingPosts ? (
                         <div className="flex justify-center py-12 sm:py-20">
                             <Loader2 className="animate-spin text-primary" size={32} />
@@ -416,7 +434,7 @@ export const Trends = () => {
                             No trending posts found in the community yet. Check back later!
                         </Card>
                     ) : (
-                        <div className="space-y-4 sm:space-y-6">
+                        <div className="space-y-4 sm:space-y-6 min-w-0 w-full">
                             {trendingPosts.map(post => (
                                 <UniversalPostCard key={post.id} post={post} />
                             ))}
@@ -426,24 +444,24 @@ export const Trends = () => {
             )}
 
             {activeTab === 'briefing' && (
-                <div className="max-w-4xl mx-auto">
+                <div className="max-w-4xl mx-auto min-w-0 w-full">
                     {loadingBriefing ? (
                         <div className="flex justify-center py-12 sm:py-20">
                             <Loader2 className="animate-spin text-primary" size={32} />
                         </div>
                     ) : (
-                        <Card variant="glass" className="p-4 sm:p-8 overflow-hidden bg-gradient-to-br from-white/5 to-white/[0.02]">
+                        <Card variant="glass" className="p-3.5 sm:p-8 overflow-hidden bg-gradient-to-br from-white/5 to-white/[0.02] min-w-0 w-full">
                             <div className="flex flex-wrap items-center justify-between gap-3 mb-4 sm:mb-6">
-                                <h3 className="text-lg sm:text-xl font-bold flex items-center gap-2 text-white">
+                                <h3 className="text-base sm:text-xl font-bold flex items-center gap-2 text-white min-w-0">
                                     <Sparkles className="text-primary shrink-0" size={20} />
-                                    <span>Community Intelligence Briefing</span>
+                                    <span className="break-words">Community Intelligence Briefing</span>
                                 </h3>
                                 <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-green-400 font-bold bg-green-500/10 px-2.5 py-1 rounded-md border border-green-500/20 shrink-0">
                                     <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
                                     AI SYNCED
                                 </div>
                             </div>
-                            <div className="prose dark:prose-invert max-w-none text-xs sm:text-sm leading-relaxed text-gray-300 whitespace-pre-wrap font-sans bg-black/20 p-4 sm:p-6 rounded-xl border border-white/5 shadow-inner">
+                            <div className="prose dark:prose-invert max-w-none text-xs sm:text-sm leading-relaxed text-gray-300 whitespace-pre-wrap font-sans bg-black/20 p-3.5 sm:p-6 rounded-xl border border-white/5 shadow-inner break-words [overflow-wrap:anywhere] min-w-0">
                                 {briefing || "The AI is currently analyzing note tags and community posts. Please check back shortly!"}
                             </div>
                         </Card>
@@ -452,15 +470,15 @@ export const Trends = () => {
             )}
 
             {activeTab === 'discover' && (
-                <div className="space-y-6 sm:space-y-8">
+                <div className="space-y-6 sm:space-y-8 min-w-0 w-full">
                     {loadingDiscover ? (
                         <div className="flex justify-center py-12 sm:py-20">
                             <Loader2 className="animate-spin text-primary" size={32} />
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 min-w-0 w-full">
                             {/* Suggested Creators */}
-                            <Card variant="glass" className="p-4 sm:p-6">
+                            <Card variant="glass" className="p-3.5 sm:p-6 min-w-0 w-full">
                                 <h3 className="text-base sm:text-lg font-bold mb-3 sm:mb-4 flex items-center gap-2">
                                     <Users className="text-purple-400 shrink-0" size={18} />
                                     <span>Suggested Creators</span>
@@ -468,10 +486,10 @@ export const Trends = () => {
                                 {creators.length === 0 ? (
                                     <p className="text-xs sm:text-sm text-gray-500 py-4 text-center">No creators to recommend.</p>
                                 ) : (
-                                    <div className="space-y-3 sm:space-y-4">
+                                    <div className="space-y-3 sm:space-y-4 min-w-0 w-full">
                                         {creators.map(creator => (
-                                            <div key={creator.id} className="flex items-center justify-between gap-3 p-2 hover:bg-white/5 rounded-xl transition-colors min-w-0">
-                                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                            <div key={creator.id} className="flex items-center justify-between gap-2.5 p-2 hover:bg-white/5 rounded-xl transition-colors min-w-0 w-full">
+                                                <div className="flex items-center gap-2.5 min-w-0 flex-1">
                                                     <img
                                                         src={creator.avatar_url || `https://ui-avatars.com/api/?name=${creator.username}&background=6366f1&color=fff`}
                                                         alt={creator.username}
@@ -485,7 +503,7 @@ export const Trends = () => {
                                                 <Button
                                                     onClick={() => handleFollow(creator.id)}
                                                     variant={followingState[creator.id] ? 'secondary' : 'primary'}
-                                                    className="px-3 py-1 text-xs h-8 shrink-0"
+                                                    className="px-2.5 py-1 text-xs h-8 shrink-0 min-w-[72px]"
                                                 >
                                                     {followingState[creator.id] ? 'Following' : 'Follow'}
                                                 </Button>
@@ -496,7 +514,7 @@ export const Trends = () => {
                             </Card>
 
                             {/* Suggested Communities/Spaces */}
-                            <Card variant="glass" className="p-4 sm:p-6">
+                            <Card variant="glass" className="p-3.5 sm:p-6 min-w-0 w-full">
                                 <h3 className="text-base sm:text-lg font-bold mb-3 sm:mb-4 flex items-center gap-2">
                                     <TrendingUp className="text-blue-400 shrink-0" size={18} />
                                     <span>Trending Spaces</span>
@@ -504,10 +522,10 @@ export const Trends = () => {
                                 {spaces.length === 0 ? (
                                     <p className="text-xs sm:text-sm text-gray-500 py-4 text-center">No spaces currently trending.</p>
                                 ) : (
-                                    <div className="space-y-3 sm:space-y-4">
+                                    <div className="space-y-3 sm:space-y-4 min-w-0 w-full">
                                         {spaces.map(space => (
-                                            <div key={space.id} className="flex items-center justify-between gap-3 p-2 hover:bg-white/5 rounded-xl transition-colors min-w-0">
-                                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                            <div key={space.id} className="flex items-center justify-between gap-2.5 p-2 hover:bg-white/5 rounded-xl transition-colors min-w-0 w-full">
+                                                <div className="flex items-center gap-2.5 min-w-0 flex-1">
                                                     <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold shrink-0 overflow-hidden text-xs sm:text-sm">
                                                         {space.avatar_url
                                                             ? <img src={space.avatar_url} alt={space.name} className="w-full h-full object-cover" />
@@ -523,7 +541,7 @@ export const Trends = () => {
                                                     onClick={() => handleJoinSpace(space.id)}
                                                     disabled={space.is_member || joiningState[space.id]}
                                                     variant="secondary"
-                                                    className="px-3 py-1 text-xs h-8 shrink-0"
+                                                    className="px-2.5 py-1 text-xs h-8 shrink-0 min-w-[68px]"
                                                 >
                                                     {space.is_member ? 'Member' : 'Join'}
                                                 </Button>
@@ -538,8 +556,8 @@ export const Trends = () => {
             )}
 
             {/* Privacy note */}
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3.5 sm:p-4 text-center">
-                <p className="text-xs sm:text-sm text-gray-400">
+            <div className="bg-white/5 border border-white/10 rounded-xl p-3 sm:p-4 text-center min-w-0">
+                <p className="text-xs sm:text-sm text-gray-400 leading-normal break-words">
                     Want to contribute to these stats? Go to <a href="/dashboard/settings?tab=privacy" className="text-primary hover:underline font-medium">Settings &gt; Privacy</a> and opt-in to Anonymous Analytics.
                 </p>
             </div>
