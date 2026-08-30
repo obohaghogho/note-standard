@@ -35,9 +35,17 @@ export const KycReviewPanel: React.FC = () => {
 
   const resolveDocumentUrl = (url?: string) => {
     if (!url) return undefined;
-    if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    const cleanUrl = url.startsWith('/') ? url : `/${url}`;
-    return `${API_URL}${cleanUrl}`;
+    const token = localStorage.getItem('token');
+    let fullUrl = url;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      const cleanUrl = url.startsWith('/') ? url : `/${url}`;
+      fullUrl = `${API_URL}${cleanUrl}`;
+    }
+    if (token && !fullUrl.includes('token=')) {
+      const separator = fullUrl.includes('?') ? '&' : '?';
+      fullUrl = `${fullUrl}${separator}token=${encodeURIComponent(token)}`;
+    }
+    return fullUrl;
   };
 
   const formatAddress = (addr: any) => {
