@@ -126,6 +126,8 @@ export const KycReviewPanel: React.FC = () => {
     }
   };
 
+  const [docLoadErrorMap, setDocLoadErrorMap] = useState<Record<string, boolean>>({});
+
   const renderDocumentCard = (title: string, rawUrl?: string) => {
     const fullUrl = resolveDocumentUrl(rawUrl);
     if (!fullUrl) {
@@ -135,6 +137,8 @@ export const KycReviewPanel: React.FC = () => {
         </div>
       );
     }
+
+    const hasLoadError = docLoadErrorMap[title];
 
     return (
       <div className="bg-neutral-900 border border-white/10 rounded-xl p-3 space-y-2.5">
@@ -152,24 +156,34 @@ export const KycReviewPanel: React.FC = () => {
           </a>
         </div>
 
-        {/* Inline Image Preview Frame */}
-        <div
-          onClick={() => setPreviewImageUrl(fullUrl)}
-          className="relative group overflow-hidden rounded-lg border border-white/10 bg-black/60 min-h-[140px] max-h-60 flex items-center justify-center cursor-pointer"
-        >
-          <img
-            src={fullUrl}
-            alt={title}
-            className="max-h-56 w-full object-contain rounded transition-transform duration-200 group-hover:scale-105"
-            onError={(e) => {
-              // Hide broken image placeholder if document is a PDF or unsupported file
-              (e.target as HTMLElement).style.display = 'none';
-            }}
-          />
-          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-semibold transition-opacity gap-1.5">
-            <Maximize2 size={16} /> Tap to Zoom Image
+        {hasLoadError ? (
+          <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs space-y-1 text-center">
+            <div className="font-bold flex items-center justify-center gap-1 text-amber-400">
+              <AlertCircle size={14} /> File missing from storage
+            </div>
+            <p className="text-[11px] text-amber-200/80 leading-relaxed">
+              This document was uploaded before the storage bucket was setup. Please click <span className="font-bold text-amber-300">"Resubmit"</span> below so the user can re-upload.
+            </p>
           </div>
-        </div>
+        ) : (
+          /* Inline Image Preview Frame */
+          <div
+            onClick={() => setPreviewImageUrl(fullUrl)}
+            className="relative group overflow-hidden rounded-lg border border-white/10 bg-black/60 min-h-[140px] max-h-60 flex items-center justify-center cursor-pointer"
+          >
+            <img
+              src={fullUrl}
+              alt={title}
+              className="max-h-56 w-full object-contain rounded transition-transform duration-200 group-hover:scale-105"
+              onError={() => {
+                setDocLoadErrorMap(prev => ({ ...prev, [title]: true }));
+              }}
+            />
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-semibold transition-opacity gap-1.5">
+              <Maximize2 size={16} /> Tap to Zoom Image
+            </div>
+          </div>
+        )}
       </div>
     );
   };

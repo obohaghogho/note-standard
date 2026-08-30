@@ -32,6 +32,20 @@ const upload = multer({
 });
 
 // ── USER ENDPOINTS ───────────────────────────────────────────────────────────
+const fs = require("fs");
+
+// Helper to ensure kyc-documents bucket exists in Supabase Storage
+const ensureBucketExists = async (bucketName = "kyc-documents") => {
+  try {
+    const supabase = require("../config/database");
+    const { data: buckets } = await supabase.storage.listBuckets();
+    if (!buckets?.some((b) => b.name === bucketName)) {
+      await supabase.storage.createBucket(bucketName, { public: false });
+    }
+  } catch (e) {
+    logger.warn(`[KycRoutes] Bucket check/create notice: ${e.message}`);
+  }
+};
 
 /**
  * POST /api/kyc/documents/upload
@@ -55,17 +69,31 @@ router.post("/documents/upload", requireAuth, upload.single("file"), async (req,
     const ext = path.extname(file.originalname).toLowerCase();
     const storagePath = `kyc/${userId}/${timestamp}_${documentType}${ext}`;
 
-    // Upload to Supabase Storage private bucket or simulate object path
+    await ensureBucketExists("kyc-documents");
+
+    // Local Disk Fallback Backup
+    const localDir = path.join(__dirname, "../uploads", `kyc/${userId}`);
+    if (!fs.existsSync(localDir)) {
+      fs.mkdirSync(localDir, { recursive: true });
+    }
+    const localFilePath = path.join(localDir, `${timestamp}_${documentType}${ext}`);
     try {
-      const supabase = require("../config/database");
-      await supabase.storage
-        .from("kyc-documents")
-        .upload(storagePath, file.buffer, {
-          contentType: file.mimetype,
-          upsert: true,
-        });
-    } catch (stErr) {
-      logger.warn(`[KycRoutes] Storage upload warning: ${stErr.message}`);
+      fs.writeFileSync(localFilePath, file.buffer);
+    } catch (e) {
+      logger.warn(`[KycRoutes] Local disk backup write notice: ${e.message}`);
+    }
+
+    // Upload to Supabase Storage private bucket
+    const supabase = require("../config/database");
+    const { error: uploadErr } = await supabase.storage
+      .from("kyc-documents")
+      .upload(storagePath, file.buffer, {
+        contentType: file.mimetype,
+        upsert: true,
+      });
+
+    if (uploadErr) {
+      logger.error(`[KycRoutes] Supabase storage upload failed: ${uploadErr.message}`);
     }
 
     return res.status(200).json({
@@ -119,6 +147,7 @@ router.get("/documents/stream", requireAuth, async (req, res) => {
       return res.status(403).json({ error: "UNAUTHORIZED_DOCUMENT_ACCESS: Access to document denied." });
     }
 
+    await ensureBucketExists("kyc-documents");
     const supabase = require("../config/database");
     
     // Download document from Supabase storage
@@ -126,21 +155,24 @@ router.get("/documents/stream", requireAuth, async (req, res) => {
       .from("kyc-documents")
       .download(storagePath);
 
-    if (downloadErr || !blobData) {
-      // Fallback: Create 15-minute signed URL and redirect
-      const { data: signedData } = await supabase.storage
-        .from("kyc-documents")
-        .createSignedUrl(storagePath, 900);
+    let buffer = null;
 
-      if (signedData?.signedUrl) {
-        return res.redirect(signedData.signedUrl);
+    if (!downloadErr && blobData) {
+      const arrayBuffer = await blobData.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
+    } else {
+      // Local Disk Fallback check
+      const localFilePath = path.join(__dirname, "../uploads", storagePath);
+      if (fs.existsSync(localFilePath)) {
+        buffer = fs.readFileSync(localFilePath);
       }
-
-      throw new Error(`DOCUMENT_DOWNLOAD_FAILED: ${downloadErr?.message || 'File not found in storage'}`);
     }
 
-    const arrayBuffer = await blobData.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    if (!buffer) {
+      return res.status(404).json({
+        error: "DOCUMENT_NOT_FOUND: The requested document file is not present in storage. Please request resubmission from the user."
+      });
+    }
     
     const ext = path.extname(storagePath).toLowerCase();
     const contentTypeMap = {
