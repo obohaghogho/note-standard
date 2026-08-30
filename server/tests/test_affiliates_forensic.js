@@ -71,14 +71,14 @@ async function runAffiliateForensicAudit() {
       console.warn(`  [WARN] admin_settings query warning: ${settingErr.message}`);
     }
 
-    let rate = 10;
+    let rate = 0.5;
     if (commissionSetting && commissionSetting.value != null) {
       const rawVal = typeof commissionSetting.value === 'string'
         ? commissionSetting.value.replace(/"/g, '')
         : commissionSetting.value;
       const parsed = parseFloat(rawVal);
       if (!isNaN(parsed)) {
-        rate = parsed > 0 && parsed <= 1 ? parsed * 100 : parsed;
+        rate = parsed;
       }
     }
 

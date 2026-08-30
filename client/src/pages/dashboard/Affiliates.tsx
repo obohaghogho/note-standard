@@ -100,13 +100,13 @@ export const Affiliates = () => {
         const sumFromList = refList.reduce((sum: number, r: Referral) => sum + (parseFloat(r.total_commission_earned as any) || 0), 0);
         const totalEarnedVal = data.totalEarned !== undefined ? parseFloat(data.totalEarned) : sumFromList;
         const totalReferralsVal = data.totalReferrals !== undefined ? data.totalReferrals : refList.length;
-        const rawRate = data.commissionRate !== undefined ? parseFloat(data.commissionRate) : 10;
-        const normalizedRate = rawRate > 0 && rawRate <= 1 ? rawRate * 100 : rawRate;
+        const rawRate = data.commissionRate !== undefined ? parseFloat(data.commissionRate) : 0.5;
+        const normalizedRate = isNaN(rawRate) ? 0.5 : rawRate;
 
         setStats({
           totalEarned: isNaN(totalEarnedVal) ? 0 : totalEarnedVal,
           totalReferrals: isNaN(totalReferralsVal) ? 0 : totalReferralsVal,
-          commissionRate: isNaN(normalizedRate) ? 10 : normalizedRate
+          commissionRate: normalizedRate
         });
       }
     } catch (err) {

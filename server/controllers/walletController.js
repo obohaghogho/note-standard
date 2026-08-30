@@ -953,15 +953,14 @@ exports.getMyAffiliateStats = async (req, res) => {
       .eq("key", "affiliate_percentage")
       .maybeSingle();
 
-    let rate = 10; // Default 10%
+    let rate = 0.5; // Default 0.5%
     if (commissionRateSetting && commissionRateSetting.value != null) {
       const rawVal = typeof commissionRateSetting.value === "string"
         ? commissionRateSetting.value.replace(/"/g, "")
         : commissionRateSetting.value;
       const parsed = parseFloat(rawVal);
       if (!isNaN(parsed)) {
-        // If stored as 0.1 (decimal fraction for 10%), scale to percentage
-        rate = parsed > 0 && parsed <= 1 ? parsed * 100 : parsed;
+        rate = parsed;
       }
     }
 
