@@ -75,6 +75,7 @@ interface StatusContextValue {
   fetchFeed: () => Promise<void>;
   fetchMyStatuses: () => Promise<void>;
   openViewer: (userIndex: number, statusIndex?: number) => void;
+  openStatusById: (statusId: string) => Promise<void>;
   closeViewer: () => void;
   nextStatus: () => void;
   prevStatus: () => void;
@@ -146,6 +147,42 @@ export const StatusProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const openViewer = useCallback((userIndex: number, statusIndex = 0) => {
     setViewerOpen({ userIndex, statusIndex });
   }, []);
+
+  const openStatusById = useCallback(async (statusId: string) => {
+    if (!statusId) return;
+
+    // 1. Check own statuses
+    const myIdx = myStatuses.findIndex(st => st.id === statusId);
+    if (myIdx !== -1) {
+      setViewerOpen({ userIndex: -1, statusIndex: myIdx });
+      return;
+    }
+
+    // 2. Check feed statuses
+    for (let uIdx = 0; uIdx < feed.length; uIdx++) {
+      const stIdx = feed[uIdx].statuses.findIndex(st => st.id === statusId);
+      if (stIdx !== -1) {
+        setViewerOpen({ userIndex: uIdx, statusIndex: stIdx });
+        return;
+      }
+    }
+
+    // 3. Fallback: Fetch feed fresh & retry opening
+    try {
+      const { data: freshFeed } = await api.get('/status/feed');
+      setFeed(freshFeed);
+      for (let uIdx = 0; uIdx < freshFeed.length; uIdx++) {
+        const stIdx = freshFeed[uIdx].statuses.findIndex((st: StatusItem) => st.id === statusId);
+        if (stIdx !== -1) {
+          setViewerOpen({ userIndex: uIdx, statusIndex: stIdx });
+          return;
+        }
+      }
+      toast.error('Status expired or no longer available');
+    } catch {
+      toast.error('Could not load status');
+    }
+  }, [feed, myStatuses]);
 
   const closeViewer = useCallback(() => setViewerOpen(null), []);
   const openCreator = useCallback(() => setCreatorOpen(true), []);
@@ -311,7 +348,7 @@ export const StatusProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     <StatusContext.Provider value={{
       feed, myStatuses, viewerOpen, creatorOpen, loading,
       fetchFeed, fetchMyStatuses,
-      openViewer, closeViewer, nextStatus, prevStatus,
+      openViewer, openStatusById, closeViewer, nextStatus, prevStatus,
       openCreator, closeCreator,
       markViewed, react, reply, createStatus, deleteStatus, muteUser,
       receiveNewStatus, updateViewCount, removeStatus,

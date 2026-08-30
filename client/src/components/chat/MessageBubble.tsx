@@ -6,6 +6,7 @@ import VideoWithSignedUrl from '../common/VideoWithSignedUrl';
 import { AudioPlayer } from './AudioPlayer';
 import { useChatGesture } from '../../hooks/useChatGesture';
 import { useChatTheme } from '../../context/ChatThemeContext';
+import { useStatus } from '../../context/StatusContext';
 
 interface MessageBubbleProps {
     msg: Message;
@@ -45,6 +46,7 @@ const MessageBubble = memo(({
     onMediaLoad
 }: MessageBubbleProps) => {
     const { activeTheme, customizer } = useChatTheme();
+    const { openStatusById } = useStatus();
     const isSender = msg.sender_id === currentUserId;
 
     const fontClass = `chat-font-${customizer.typography.fontFamily}`;
@@ -184,12 +186,19 @@ const MessageBubble = memo(({
                 {/* WhatsApp-style Status Reply Card */}
                 {msg.metadata?.status_reply && (
                     <div 
-                        className="mb-2 rounded-xl overflow-hidden border border-white/10"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (msg.metadata?.status_reply?.status_id) {
+                                openStatusById(msg.metadata.status_reply.status_id);
+                            }
+                        }}
+                        className="mb-2 rounded-xl overflow-hidden border border-white/10 cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all shadow-md group/statuscard"
                         style={{
                             background: msg.metadata.status_reply.bg_gradient 
                                 || msg.metadata.status_reply.bg_color 
                                 || 'rgba(0,0,0,0.15)',
                         }}
+                        title="Click to view status"
                     >
                         {/* Status media preview */}
                         {msg.metadata.status_reply.media_url && ['image', 'gif'].includes(msg.metadata.status_reply.media_type || '') && (
