@@ -341,44 +341,44 @@ export default function StatusCreator() {
     : { backgroundColor: bgPreset.value };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-xl flex flex-col md:flex-row items-center justify-center p-4">
-      <div className="w-full h-full md:w-[400px] md:h-[800px] md:max-h-[90vh] bg-gray-950 border border-gray-800 relative md:rounded-3xl flex flex-col shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-xl flex flex-col md:flex-row items-center justify-center p-0 sm:p-4">
+      <div className="w-full h-full md:w-[420px] md:h-[840px] md:max-h-[90vh] bg-gray-950 border-0 sm:border border-gray-800 relative md:rounded-3xl flex flex-col shadow-2xl overflow-hidden max-w-full">
         
         {/* Header */}
-        <div className="p-4 border-b border-gray-800 flex items-center justify-between bg-gray-900/50 backdrop-blur-md">
-          <button onClick={closeCreator} className="text-gray-400 hover:text-white p-2 bg-gray-800 rounded-full transition-colors">
-            <X size={20} />
+        <div className="px-3 py-2.5 sm:px-4 sm:py-3 border-b border-gray-800 flex items-center justify-between gap-1.5 bg-gray-900/50 backdrop-blur-md shrink-0 max-w-full overflow-hidden">
+          <button onClick={closeCreator} className="text-gray-400 hover:text-white p-1.5 sm:p-2 bg-gray-800 rounded-full transition-colors shrink-0">
+            <X size={18} className="sm:w-5 sm:h-5" />
           </button>
           
-          <div className="flex bg-gray-800 rounded-lg p-1">
+          <div className="flex bg-gray-800 rounded-lg p-0.5 sm:p-1 shrink min-w-0 overflow-x-auto no-scrollbar">
             <button 
               onClick={() => setTab('text')} 
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${tab === 'text' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
+              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors flex items-center gap-1.5 shrink-0 ${tab === 'text' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
             >
-              <Type size={16} /> Text
+              <Type size={14} className="sm:w-4 sm:h-4" /> Text
             </button>
             <button 
               onClick={() => setTab('media')} 
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${tab === 'media' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
+              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors flex items-center gap-1.5 shrink-0 ${tab === 'media' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
             >
-              <ImageIcon size={16} /> Media
+              <ImageIcon size={14} className="sm:w-4 sm:h-4" /> Media
             </button>
             <button 
               onClick={() => setTab('link')} 
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${tab === 'link' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
+              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors flex items-center gap-1.5 shrink-0 ${tab === 'link' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
             >
-              <LinkIcon size={16} /> Link
+              <LinkIcon size={14} className="sm:w-4 sm:h-4" /> Link
             </button>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-1.5 shrink-0">
             {(tab === 'text' || tab === 'media') && (
               <button 
                 onClick={() => setShowMusicPicker(true)}
-                className={`p-2 rounded-full transition-all active:scale-95 border ${musicPreview ? 'bg-blue-600 text-white border-blue-500' : 'text-gray-400 hover:text-white bg-gray-800 border-gray-700'}`}
+                className={`p-1.5 sm:p-2 rounded-full transition-all active:scale-95 border shrink-0 ${musicPreview ? 'bg-blue-600 text-white border-blue-500' : 'text-gray-400 hover:text-white bg-gray-800 border-gray-700'}`}
                 title="Add Background Music"
               >
-                <Music size={18} />
+                <Music size={16} className="sm:w-[18px] sm:h-[18px]" />
               </button>
             )}
           </div>
@@ -386,7 +386,7 @@ export default function StatusCreator() {
 
         {/* Music preview badge */}
         {musicPreview && (
-          <div className="bg-blue-900/40 border-b border-blue-800/50 px-4 py-2 flex items-center justify-between text-blue-300 text-xs">
+          <div className="bg-blue-900/40 border-b border-blue-800/50 px-4 py-2 flex items-center justify-between text-blue-300 text-xs shrink-0">
             <span className="truncate flex items-center gap-1.5">
               <span className="animate-bounce">🎵</span> {librarySongTitle || 'Audio attachment'}
             </span>
@@ -401,30 +401,30 @@ export default function StatusCreator() {
         )}
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto flex flex-col no-scrollbar">
+        <div className="flex-1 overflow-y-auto flex flex-col no-scrollbar min-h-0">
           
           {tab === 'text' && (
-            <div className="flex-1 flex flex-col p-4 gap-4">
+            <div className="flex-1 flex flex-col p-3 sm:p-4 gap-3 sm:gap-4 min-h-0">
               
               {/* Text formatting toolbar */}
-              <div className="flex flex-wrap items-center justify-center gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1.5">
-                <button onClick={() => applyFormatting('bold')} className="px-2.5 py-1 text-sm font-bold text-gray-300 hover:text-white rounded hover:bg-gray-800 transition-colors" title="Bold (*text*)">B</button>
-                <button onClick={() => applyFormatting('italic')} className="px-2.5 py-1 text-sm italic text-gray-300 hover:text-white rounded hover:bg-gray-800 transition-colors" title="Italic (_text_)">I</button>
-                <button onClick={() => applyFormatting('strike')} className="px-2.5 py-1 text-sm line-through text-gray-300 hover:text-white rounded hover:bg-gray-800 transition-colors" title="Strike (~text~)">S</button>
-                <button onClick={() => applyFormatting('code')} className="px-2.5 py-1 text-xs font-mono text-gray-300 hover:text-white rounded hover:bg-gray-800 transition-colors" title="Code (`code`)">&lt;&gt;</button>
+              <div className="flex items-center justify-start sm:justify-center gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1.5 overflow-x-auto no-scrollbar max-w-full shrink-0">
+                <button onClick={() => applyFormatting('bold')} className="px-2 py-1 text-xs sm:text-sm font-bold text-gray-300 hover:text-white rounded hover:bg-gray-800 transition-colors shrink-0" title="Bold (*text*)">B</button>
+                <button onClick={() => applyFormatting('italic')} className="px-2 py-1 text-xs sm:text-sm italic text-gray-300 hover:text-white rounded hover:bg-gray-800 transition-colors shrink-0" title="Italic (_text_)">I</button>
+                <button onClick={() => applyFormatting('strike')} className="px-2 py-1 text-xs sm:text-sm line-through text-gray-300 hover:text-white rounded hover:bg-gray-800 transition-colors shrink-0" title="Strike (~text~)">S</button>
+                <button onClick={() => applyFormatting('code')} className="px-2 py-1 text-xs font-mono text-gray-300 hover:text-white rounded hover:bg-gray-800 transition-colors shrink-0" title="Code (`code`)">&lt;&gt;</button>
                 
-                <span className="w-[1px] h-4 bg-gray-800 mx-1" />
+                <span className="w-[1px] h-4 bg-gray-800 mx-0.5 shrink-0" />
                 
-                <button onClick={() => applyFormatting('bullet')} className="px-2 py-1 text-xs text-gray-300 hover:text-white rounded hover:bg-gray-800 transition-colors" title="Bullet List">• List</button>
-                <button onClick={() => applyFormatting('number')} className="px-2 py-1 text-xs text-gray-300 hover:text-white rounded hover:bg-gray-800 transition-colors" title="Numbered List">1. List</button>
-                <button onClick={() => applyFormatting('quote')} className="px-2 py-1 text-xs text-gray-300 hover:text-white rounded hover:bg-gray-800 transition-colors" title="Block Quote">“ Quote</button>
+                <button onClick={() => applyFormatting('bullet')} className="px-1.5 py-1 text-xs text-gray-300 hover:text-white rounded hover:bg-gray-800 transition-colors shrink-0" title="Bullet List">• List</button>
+                <button onClick={() => applyFormatting('number')} className="px-1.5 py-1 text-xs text-gray-300 hover:text-white rounded hover:bg-gray-800 transition-colors shrink-0" title="Numbered List">1. List</button>
+                <button onClick={() => applyFormatting('quote')} className="px-1.5 py-1 text-xs text-gray-300 hover:text-white rounded hover:bg-gray-800 transition-colors shrink-0" title="Block Quote">“ Quote</button>
                 
-                <span className="w-[1px] h-4 bg-gray-800 mx-1" />
+                <span className="w-[1px] h-4 bg-gray-800 mx-0.5 shrink-0" />
                 
                 <button 
                   onClick={() => setShowPreview(!showPreview)} 
                   disabled={!textContent.trim()}
-                  className={`px-2.5 py-1 text-xs font-semibold rounded transition-colors ${showPreview ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white disabled:opacity-30'}`}
+                  className={`px-2 py-1 text-xs font-semibold rounded transition-colors shrink-0 ${showPreview ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white disabled:opacity-30'}`}
                 >
                   Preview
                 </button>
@@ -432,41 +432,41 @@ export default function StatusCreator() {
 
               {/* Layout Customizers: Font sizes and Alignments */}
               {!showPreview && (
-                <div className="flex items-center justify-between bg-gray-900 border border-gray-800 rounded-xl px-3 py-2">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-gray-500 text-xs mr-1">Size:</span>
+                <div className="flex items-center justify-between bg-gray-900 border border-gray-800 rounded-xl px-2 sm:px-3 py-1.5 gap-1 overflow-x-auto no-scrollbar max-w-full shrink-0">
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-gray-500 text-[11px] sm:text-xs mr-0.5">Size:</span>
                     {FONT_SIZES.map(sz => (
                       <button 
                         key={sz} 
                         onClick={() => setFontSize(sz)}
-                        className={`w-7 h-7 rounded text-xs font-bold transition-colors ${fontSize === sz ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+                        className={`w-6 h-6 sm:w-7 sm:h-7 rounded text-[11px] sm:text-xs font-bold transition-colors shrink-0 ${fontSize === sz ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
                       >
                         {sz}
                       </button>
                     ))}
                   </div>
 
-                  <div className="flex gap-1">
+                  <div className="flex gap-0.5 shrink-0">
                     <button 
                       onClick={() => setTextAlign('left')} 
-                      className={`p-1.5 rounded transition-colors ${textAlign === 'left' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+                      className={`p-1 sm:p-1.5 rounded transition-colors ${textAlign === 'left' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
                       title="Align Left"
                     >
-                      <AlignLeft size={16} />
+                      <AlignLeft size={15} className="sm:w-4 sm:h-4" />
                     </button>
                     <button 
                       onClick={() => setTextAlign('center')} 
-                      className={`p-1.5 rounded transition-colors ${textAlign === 'center' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+                      className={`p-1 sm:p-1.5 rounded transition-colors ${textAlign === 'center' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
                       title="Align Center"
                     >
-                      <AlignCenter size={16} />
+                      <AlignCenter size={15} className="sm:w-4 sm:h-4" />
                     </button>
                     <button 
                       onClick={() => setTextAlign('right')} 
-                      className={`p-1.5 rounded transition-colors ${textAlign === 'right' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+                      className={`p-1 sm:p-1.5 rounded transition-colors ${textAlign === 'right' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
                       title="Align Right"
                     >
-                      <AlignRight size={16} />
+                      <AlignRight size={15} className="sm:w-4 sm:h-4" />
                     </button>
                   </div>
                 </div>
@@ -618,11 +618,11 @@ export default function StatusCreator() {
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-gray-800 bg-gray-900 flex justify-between items-center">
+        <div className="p-3 sm:p-4 border-t border-gray-800 bg-gray-900 flex justify-between items-center gap-2 max-w-full shrink-0">
           <select 
             value={privacy} 
             onChange={e => setPrivacy(e.target.value)}
-            className="bg-gray-800 text-sm text-gray-300 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500"
+            className="bg-gray-800 text-xs sm:text-sm text-gray-300 border border-gray-700 rounded-lg px-2 sm:px-3 py-2 focus:outline-none focus:border-blue-500 max-w-[170px] sm:max-w-none truncate shrink min-w-0"
           >
             <option value="contacts">👥 Contacts & Friends</option>
             <option value="everyone">🌎 Everyone</option>
@@ -632,12 +632,12 @@ export default function StatusCreator() {
           <button 
             onClick={handleSubmit} 
             disabled={submitting || (tab === 'text' && !textContent.trim()) || (tab === 'media' && !mediaFile)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-6 rounded-xl transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100 shadow-lg shadow-blue-900/20"
+            className="flex items-center gap-1.5 sm:gap-2 bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-semibold py-2 px-4 sm:px-6 rounded-xl transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100 shadow-lg shadow-blue-900/20 shrink-0"
           >
             {submitting || mediaUploading || musicUploading ? (
-              <><Loader2 size={18} className="animate-spin" /> {mediaUploading ? `${uploadProgress}%` : musicUploading ? 'Music...' : 'Posting'}</>
+              <><Loader2 size={16} className="animate-spin" /> {mediaUploading ? `${uploadProgress}%` : musicUploading ? 'Music...' : 'Posting'}</>
             ) : (
-              <><Send size={18} /> Post</>
+              <><Send size={16} className="sm:w-[18px] sm:h-[18px]" /> Post</>
             )}
           </button>
         </div>
