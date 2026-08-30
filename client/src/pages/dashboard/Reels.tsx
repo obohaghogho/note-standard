@@ -156,7 +156,7 @@ export const Reels: React.FC = () => {
   };
 
   return (
-    <div className="relative w-full h-[calc(100vh-4rem)] bg-black flex flex-col overflow-hidden">
+    <div className="relative w-full h-[calc(100dvh-8rem)] lg:h-[calc(100vh-4rem)] bg-black flex flex-col overflow-hidden">
       {/* Top Header */}
       <div className="absolute top-0 left-0 right-0 z-30 p-4 flex items-center justify-between pointer-events-auto">
         <div className="flex items-center gap-2 text-white font-bold text-lg drop-shadow-md">
@@ -208,7 +208,7 @@ export const Reels: React.FC = () => {
                 if (el) cardRefs.current.set(reel.id, el);
                 else cardRefs.current.delete(reel.id);
               }}
-              className="w-full h-[calc(100vh-4.5rem)] max-h-[720px] flex items-center justify-center p-1 sm:p-3 snap-start shrink-0 my-auto"
+              className="w-full h-[calc(100dvh-8.5rem)] lg:h-[calc(100vh-4.5rem)] max-h-[720px] flex items-center justify-center p-1 sm:p-3 snap-start shrink-0 my-auto"
             >
               <ReelCard
                 reel={reel}

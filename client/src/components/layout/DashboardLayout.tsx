@@ -131,7 +131,7 @@ export function DashboardLayout() {
 
                 <div className={cn(
                     "flex-1 min-h-0 w-full flex flex-col min-w-0 relative h-full max-w-full overflow-x-hidden",
-                    isChatActiveOnMobile ? "p-0 overflow-hidden" : "p-3 sm:p-4 md:p-8 max-w-7xl mx-auto overflow-y-auto overflow-x-hidden pb-44 lg:pb-8"
+                    isChatActiveOnMobile ? "p-0 overflow-hidden" : "p-3 sm:p-4 md:p-8 max-w-7xl mx-auto overflow-y-auto overflow-x-hidden pb-36 pb-safe lg:pb-8"
                 )}>
                     <ErrorBoundary fallback={
                         <div className="p-8 text-center bg-red-500/10 rounded-xl border border-red-500/20 m-4">
