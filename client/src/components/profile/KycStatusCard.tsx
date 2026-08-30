@@ -307,7 +307,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                 </div>
                 <div>
                   <h3 className="font-bold text-white">{t('kyc.tier1_title', 'Tier 1: Basic')}</h3>
-                  <p className="text-xs text-emerald-400 font-medium">{t('kyc.tier1_limit', 'Daily Limit: 50,000 NGN')}</p>
+                  <p className="text-xs text-emerald-400 font-medium">{t('kyc.tier1_limit', 'Daily Limit: 750,000 NGN')}</p>
                 </div>
               </div>
               <span className={`text-xs px-2.5 py-1 rounded-full font-bold border ${
@@ -366,7 +366,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                 </div>
                 <div>
                   <h3 className="font-bold text-white">{t('kyc.tier2_title', 'Tier 2: Banking')}</h3>
-                  <p className="text-xs text-blue-400 font-medium">{t('kyc.tier2_limit', 'Daily Limit: 500,000 NGN')}</p>
+                  <p className="text-xs text-blue-400 font-medium">{t('kyc.tier2_limit', 'Daily Limit: 7,500,000 NGN')}</p>
                 </div>
               </div>
               <span className={`text-xs px-2.5 py-1 rounded-full font-bold border ${
@@ -441,7 +441,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                 </div>
                 <div>
                   <h3 className="font-bold text-white">{t('kyc.tier3_title', 'Tier 3: Enterprise FX')}</h3>
-                  <p className="text-xs text-purple-400 font-medium">{t('kyc.tier3_limit', 'Daily Limit: Unlimited')}</p>
+                  <p className="text-xs text-purple-400 font-medium">{t('kyc.tier3_limit', 'Daily Limit: 75,000,000 NGN')}</p>
                 </div>
               </div>
               <span className={`text-xs px-2.5 py-1 rounded-full font-bold border ${
@@ -589,7 +589,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
               </button>
             </div>
             <p className="text-xs text-gray-300 leading-relaxed shrink-0">
-              Enter your BVN or NIN to activate your dedicated NGN virtual bank account and upgrade your daily limit to 500,000 NGN. Your details are encrypted and used solely for name verification.
+              Enter your BVN or NIN to activate your dedicated NGN virtual bank account and upgrade your daily limit to 7,500,000 NGN ($5,000 USD). Your details are encrypted and used solely for name verification.
             </p>
             <form onSubmit={handleTier2Submit} className="space-y-4 overflow-y-auto pr-1 flex-1 custom-scrollbar pb-10 sm:pb-2">
               <div>
