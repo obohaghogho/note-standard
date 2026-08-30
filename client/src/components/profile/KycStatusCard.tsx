@@ -18,14 +18,15 @@ interface KycStatusCardProps {
 
 export const KycStatusCard: React.FC<KycStatusCardProps> = ({
   userEmail,
-  phone: initialPhone = '',
+  phone: rawInitialPhone,
   isVerified = false,
   kycLevel = 1,
   onPhoneUpdated
 }) => {
+  const initialPhone = (typeof rawInitialPhone === 'string' && rawInitialPhone) ? rawInitialPhone : '';
   const { t } = useTranslation();
-  const [phone, setPhone] = useState(initialPhone);
-  const [phoneInput, setPhoneInput] = useState(initialPhone);
+  const [phone, setPhone] = useState<string>(initialPhone);
+  const [phoneInput, setPhoneInput] = useState<string>(initialPhone);
   const [bvnInput, setBvnInput] = useState('');
   const [dobInput, setDobInput] = useState('');
   const [showTier1Modal, setShowTier1Modal] = useState(false);
@@ -35,9 +36,10 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
 
   // Synchronize state when initialPhone prop updates asynchronously
   useEffect(() => {
-    setPhone(initialPhone);
-    setPhoneInput(initialPhone);
-  }, [initialPhone]);
+    const safe = (typeof rawInitialPhone === 'string' && rawInitialPhone) ? rawInitialPhone : '';
+    setPhone(safe);
+    setPhoneInput(safe);
+  }, [rawInitialPhone]);
 
   // Active request state from server
   const [activeKycRequest, setActiveKycRequest] = useState<any>(null);
@@ -84,9 +86,10 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
   }, []);
 
   // Determine current active tier
-  const effectiveKycLevel = serverKycLevel !== null ? serverKycLevel : kycLevel;
-  const effectiveIsVerified = serverIsVerified !== null ? serverIsVerified : isVerified;
-  const hasPhone = Boolean(phone && phone.trim().length >= 8);
+  const numKycLevel = typeof serverKycLevel === 'number' ? serverKycLevel : (typeof kycLevel === 'number' ? kycLevel : (parseInt(String(kycLevel || 0), 10) || 0));
+  const effectiveKycLevel = numKycLevel;
+  const effectiveIsVerified = serverIsVerified !== null ? serverIsVerified : Boolean(isVerified);
+  const hasPhone = Boolean(phone && typeof phone === 'string' && phone.trim().length >= 8);
   const currentTier = effectiveKycLevel >= 3 ? 3 : (effectiveKycLevel === 2 || Boolean(initialPhone && effectiveIsVerified) ? 2 : (hasPhone || effectiveKycLevel >= 1 ? 1 : 0));
 
   const isTier3Pending = activeKycRequest?.requested_tier === 3 && ['PENDING_REVIEW', 'UNDER_REVIEW'].includes(activeKycRequest?.status);
@@ -149,7 +152,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
 
   const handleTier1Submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanedPhone = phoneInput.trim();
+    const cleanedPhone = (phoneInput || '').trim();
     if (!cleanedPhone || cleanedPhone.length < 8) {
       toast.error('Please enter a valid phone number (at least 8 digits)');
       return;

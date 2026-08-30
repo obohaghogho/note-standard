@@ -285,11 +285,15 @@ export const Reels: React.FC = () => {
 
             {/* Comment Input */}
             <form onSubmit={handlePostComment} className="p-3 border-t border-white/10 flex gap-2">
+              <label htmlFor="reel-comment-input" className="sr-only">Add a comment</label>
               <input
+                id="reel-comment-input"
+                name="reel_comment"
                 type="text"
                 value={newCommentText}
                 onChange={(e) => setNewCommentText(e.target.value)}
                 placeholder="Add a comment to this Reel..."
+                aria-label="Add a comment to this Reel"
                 className="flex-1 bg-black/40 border border-white/10 rounded-full px-4 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-primary"
               />
               <button

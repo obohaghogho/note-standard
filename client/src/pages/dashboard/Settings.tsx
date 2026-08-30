@@ -937,10 +937,10 @@ export default function Settings() {
             {
                 activeTab === 'kyc' && (
                     <KycStatusCard 
-                        userEmail={user?.email}
-                        phone={phone || profile?.phone || authProfile?.phone || ''}
-                        isVerified={authProfile?.is_verified}
-                        kycLevel={authProfile?.kyc_level ?? ((phone || profile?.phone || authProfile?.phone) ? 1 : 0)}
+                        userEmail={user?.email || ''}
+                        phone={String(phone || profile?.phone || authProfile?.phone || '')}
+                        isVerified={Boolean(authProfile?.is_verified)}
+                        kycLevel={typeof authProfile?.kyc_level === 'number' ? authProfile.kyc_level : (parseInt(String(authProfile?.kyc_level || 0), 10) || ((phone || profile?.phone || authProfile?.phone) ? 1 : 0))}
                         onPhoneUpdated={(newPhone) => {
                             setPhone(newPhone);
                             setProfile(prev => prev ? { ...prev, phone: newPhone } : null);

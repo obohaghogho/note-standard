@@ -207,16 +207,16 @@ export const ReelUploadModal: React.FC<ReelUploadModalProps> = ({ onClose, onSuc
                 )}
               </div>
             ) : (
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className="cursor-pointer p-6 text-center space-y-2"
+              <label
+                htmlFor="reel-video-file-input"
+                className="block cursor-pointer p-6 text-center space-y-2"
               >
                 <div className="p-3 rounded-full bg-primary/10 text-primary inline-block">
                   <Video size={28} />
                 </div>
                 <div className="text-sm font-semibold text-white">Click to upload Reel video</div>
                 <div className="text-xs text-gray-400">Supports MP4, WebM, MOV (Auto-trimmed to 90s, Max 1GB)</div>
-              </div>
+              </label>
             )}
             <input
               ref={fileInputRef}
