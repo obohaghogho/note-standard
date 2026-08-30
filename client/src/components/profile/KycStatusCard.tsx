@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ShieldCheck, CheckCircle2, Lock, ArrowRight, Smartphone, Building2, Globe2, FileText, ChevronRight, AlertCircle } from 'lucide-react';
+import { ShieldCheck, CheckCircle2, Lock, ArrowRight, Smartphone, Building2, Globe2, FileText, ChevronRight, AlertCircle, Clock } from 'lucide-react';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import { toast } from 'react-hot-toast';
