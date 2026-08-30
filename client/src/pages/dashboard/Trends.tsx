@@ -327,54 +327,56 @@ export const Trends = () => {
 
             {/* TAB CONTENTS */}
             {activeTab === 'overview' && (
-                <div className="space-y-4 sm:space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                        <Card variant="glass" className="p-3 sm:p-6 overflow-hidden min-w-0 w-full">
+                <div className="space-y-4 sm:space-y-6 w-full max-w-full min-w-0 overflow-hidden">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 w-full min-w-0">
+                        <Card variant="glass" className="p-3 sm:p-6 overflow-hidden min-w-0 w-full max-w-full">
                             <h3 className="text-sm sm:text-lg font-semibold mb-2 sm:mb-4 flex items-center gap-2 text-white truncate">
                                 <FileText size={18} className="text-blue-400 shrink-0" />
                                 <span className="truncate">Productivity Pulse</span>
                             </h3>
-                            <div className="h-52 sm:h-64 relative w-full overflow-hidden">
+                            <div className="h-52 sm:h-64 relative w-full max-w-full min-w-0 overflow-hidden">
                                 <Line
                                     data={noteData}
                                     options={{
                                         responsive: true,
                                         maintainAspectRatio: false,
+                                        layout: { padding: { left: 0, right: 16, top: 4, bottom: 4 } },
                                         plugins: {
                                             legend: {
                                                 position: 'bottom',
-                                                labels: { color: '#9ca3af', font: { size: 9 }, boxWidth: 8, padding: 8 }
+                                                labels: { color: '#9ca3af', font: { size: 9 }, boxWidth: 6, padding: 6 }
                                             }
                                         },
                                         scales: {
                                             y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af', font: { size: 9 }, precision: 0 } },
-                                            x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af', font: { size: 9 }, maxRotation: 0, autoSkip: true } }
+                                            x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af', font: { size: 8 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 5 } }
                                         }
                                     }}
                                 />
                             </div>
                         </Card>
 
-                        <Card variant="glass" className="p-3 sm:p-6 overflow-hidden min-w-0 w-full">
+                        <Card variant="glass" className="p-3 sm:p-6 overflow-hidden min-w-0 w-full max-w-full">
                             <h3 className="text-sm sm:text-lg font-semibold mb-2 sm:mb-4 flex items-center gap-2 text-white truncate">
                                 <Users size={18} className="text-purple-400 shrink-0" />
                                 <span className="truncate">Active Contributors</span>
                             </h3>
-                            <div className="h-52 sm:h-64 relative w-full overflow-hidden">
+                            <div className="h-52 sm:h-64 relative w-full max-w-full min-w-0 overflow-hidden">
                                 <Line
                                     data={activeUserData}
                                     options={{
                                         responsive: true,
                                         maintainAspectRatio: false,
+                                        layout: { padding: { left: 0, right: 16, top: 4, bottom: 4 } },
                                         plugins: {
                                             legend: {
                                                 position: 'bottom',
-                                                labels: { color: '#9ca3af', font: { size: 9 }, boxWidth: 8, padding: 8 }
+                                                labels: { color: '#9ca3af', font: { size: 9 }, boxWidth: 6, padding: 6 }
                                             }
                                         },
                                         scales: {
                                             y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af', font: { size: 9 }, precision: 0 } },
-                                            x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af', font: { size: 9 }, maxRotation: 0, autoSkip: true } }
+                                            x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af', font: { size: 8 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 5 } }
                                         }
                                     }}
                                 />
@@ -382,18 +384,19 @@ export const Trends = () => {
                         </Card>
                     </div>
 
-                    <Card variant="glass" className="p-3 sm:p-6 overflow-hidden min-w-0 w-full">
+                    <Card variant="glass" className="p-3 sm:p-6 overflow-hidden min-w-0 w-full max-w-full">
                         <h3 className="text-sm sm:text-lg font-semibold mb-2 sm:mb-4 text-white truncate">Top Trending Topics</h3>
-                        <div className="h-56 sm:h-80 relative w-full overflow-hidden">
+                        <div className="h-56 sm:h-80 relative w-full max-w-full min-w-0 overflow-hidden">
                             <Bar
                                 data={tagData}
                                 options={{
                                     responsive: true,
                                     maintainAspectRatio: false,
+                                    layout: { padding: { left: 0, right: 12, top: 4, bottom: 4 } },
                                     plugins: { legend: { display: false } },
                                     scales: {
                                         y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af', font: { size: 9 }, precision: 0 } },
-                                        x: { grid: { display: false }, ticks: { color: '#9ca3af', font: { size: 9 }, maxRotation: 45, autoSkip: true } }
+                                        x: { grid: { display: false }, ticks: { color: '#9ca3af', font: { size: 8 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 6 } }
                                     }
                                 }}
                             />

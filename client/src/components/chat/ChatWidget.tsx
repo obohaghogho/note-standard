@@ -356,10 +356,11 @@ export const ChatWidget = () => {
         });
     };
 
-    // Hide the widget in the chat rooms (both user and admin) to avoid UI clutter
+    // Hide the widget in full-screen/immersive views (chat, reels, feed, teams) to avoid UI clutter
     const isChatRoom = location.pathname.startsWith('/dashboard/chat') || 
                        location.pathname.startsWith('/admin/chats') ||
                        location.pathname.startsWith('/dashboard/teams') ||
+                       location.pathname.startsWith('/dashboard/reels') ||
                        location.pathname === '/dashboard/feed' ||
                        location.pathname.startsWith('/dashboard/feed/');
 

@@ -255,23 +255,23 @@ export const ReelCard: React.FC<ReelCardProps> = ({
       {/* Top Gradient Overlay */}
       <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-black/80 via-black/40 to-transparent pointer-events-none z-10" />
 
-      {/* Top Header Controls Bar */}
-      <div className="relative z-30 p-3 sm:p-4 flex items-center justify-between pointer-events-none">
+      {/* Top Header Controls Bar (Positioned safely below page header) */}
+      <div className="relative z-30 pt-14 sm:pt-16 px-3 sm:px-4 pb-2 flex items-center justify-between pointer-events-none">
         {/* Mute/Unmute Speaker Button */}
         <button
           onClick={toggleMute}
-          className="px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-md text-white pointer-events-auto hover:bg-black/80 transition-all border border-white/20 flex items-center gap-1.5 shadow-lg active:scale-95 cursor-pointer"
+          className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-black/60 backdrop-blur-md text-white pointer-events-auto hover:bg-black/80 transition-all border border-white/20 flex items-center gap-1.5 shadow-lg active:scale-95 cursor-pointer"
           title={isMuted ? "Click to Unmute Sound" : "Click to Mute Sound"}
         >
           {isMuted ? (
             <>
-              <VolumeX size={15} className="text-red-400" />
-              <span className="text-[11px] font-semibold text-gray-200">Tap to Unmute</span>
+              <VolumeX size={14} className="text-red-400" />
+              <span className="text-[10px] sm:text-[11px] font-semibold text-gray-200">Tap to Unmute</span>
             </>
           ) : (
             <>
-              <Volume2 size={15} className="text-emerald-400 animate-pulse" />
-              <span className="text-[11px] font-semibold text-emerald-300">Sound On</span>
+              <Volume2 size={14} className="text-emerald-400 animate-pulse" />
+              <span className="text-[10px] sm:text-[11px] font-semibold text-emerald-300">Sound On</span>
             </>
           )}
         </button>
@@ -280,11 +280,11 @@ export const ReelCard: React.FC<ReelCardProps> = ({
         {canDelete && (
           <button
             onClick={handleDeleteClick}
-            className="px-3 py-1.5 rounded-full bg-red-500/30 backdrop-blur-md text-red-200 hover:bg-red-600 hover:text-white pointer-events-auto transition-all border border-red-500/40 shadow-lg active:scale-95 cursor-pointer flex items-center gap-1.5"
+            className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-red-500/30 backdrop-blur-md text-red-200 hover:bg-red-600 hover:text-white pointer-events-auto transition-all border border-red-500/40 shadow-lg active:scale-95 cursor-pointer flex items-center gap-1.5"
             title="Delete Reel Video"
           >
-            <Trash2 size={14} />
-            <span className="text-[11px] font-semibold">Delete</span>
+            <Trash2 size={13} />
+            <span className="text-[10px] sm:text-[11px] font-semibold">Delete</span>
           </button>
         )}
       </div>
