@@ -15,6 +15,8 @@ const crypto = require("crypto");
 const supabase = require("../config/database");
 const logger = require("../utils/logger");
 const { recordAuditLog } = require("../withdrawal/auditLogger");
+const sendgridEmailService = require("./sendgridEmailService");
+const notificationService = require("./notificationService");
 
 const memoryKycStore = new Map();
 
@@ -377,17 +379,64 @@ class KycService {
     }
 
     // 3. Write Audit Logs
-    await recordAuditLog({
-      action: "KYC_APPROVED",
-      userId: reviewerId,
-      details: { targetUserId, requestId, approvedTier: targetTier, reviewerNotes: notes },
-    }).catch(() => {});
+    // 4. Dispatch Email & Push/In-App Notification for Approval
+    try {
+      const { data: userProfile } = await supabase
+        .from("profiles")
+        .select("email, full_name")
+        .eq("id", targetUserId)
+        .single();
 
-    await recordAuditLog({
-      action: "KYC_TIER_PROMOTION",
-      userId: targetUserId,
-      details: { previousTier: req.profiles?.kyc_level || 0, newTier: targetTier, promotedBy: reviewerId },
-    }).catch(() => {});
+      const recipientEmail = userProfile?.email || req.profiles?.email;
+      const recipientName = userProfile?.full_name || req.profiles?.full_name || "Valued Member";
+
+      if (recipientEmail) {
+        const appUrl = process.env.CLIENT_URL || "https://notestandard.com";
+        const settingsLink = `${appUrl}/dashboard/settings?tab=kyc`;
+
+        const htmlContent = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background-color: #0f172a; border: 1px solid #1e293b; border-radius: 16px; color: #f8fafc;">
+            <div style="text-align: center; padding-bottom: 20px; border-bottom: 1px solid #334155;">
+              <h2 style="color: #10b981; margin: 0; font-size: 22px;">🎉 Identity Verification Approved!</h2>
+              <p style="color: #94a3b8; font-size: 13px; margin-top: 4px;">Note Standard Compliance Team</p>
+            </div>
+            <div style="padding: 20px 0;">
+              <p style="font-size: 15px; color: #e2e8f0;">Hello ${recipientName},</p>
+              <p style="font-size: 14px; color: #cbd5e1; line-height: 1.6;">Great news! Your <strong>Tier ${targetTier}</strong> identity verification application has been reviewed and approved by our compliance team.</p>
+              
+              <div style="background-color: #064e3b; border: 1px solid #059669; padding: 16px; border-radius: 12px; margin: 20px 0;">
+                <p style="margin: 0; font-size: 12px; font-weight: bold; color: #34d399; text-transform: uppercase; letter-spacing: 0.5px;">Account Verification Status</p>
+                <p style="margin: 6px 0 0 0; font-size: 14px; color: #ecfdf5; font-weight: bold;">Verified Tier ${targetTier} Member</p>
+              </div>
+
+              <p style="font-size: 14px; color: #cbd5e1;">Your account limits and features have been expanded. You can view your updated status in your settings panel anytime:</p>
+              <div style="text-align: center; margin: 28px 0;">
+                <a href="${settingsLink}" style="background: linear-gradient(135deg, #10b981, #059669); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 12px; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);">View Verification Dashboard</a>
+              </div>
+            </div>
+            <div style="border-top: 1px solid #334155; padding-top: 16px; text-align: center;">
+              <p style="font-size: 11px; color: #64748b; margin: 0;">Thank you for securing your Note Standard account.</p>
+            </div>
+          </div>
+        `;
+
+        await sendgridEmailService.sendEmail({
+          to: recipientEmail,
+          subject: `🎉 Identity Verification Approved - Welcome to Tier ${targetTier}!`,
+          htmlContent,
+        });
+      }
+
+      await notificationService.createNotification({
+        receiverId: targetUserId,
+        type: "kyc_approved",
+        title: "Identity Verified!",
+        message: `Congratulations! Your Tier ${targetTier} identity verification application has been approved.`,
+        link: "/dashboard/settings?tab=kyc",
+      });
+    } catch (notifErr) {
+      logger.error(`[KycService] Approval email/notification error: ${notifErr.message}`);
+    }
 
     logger.info(`[KycService] ✅ Request ${requestId} APPROVED by ${reviewerId}. User ${targetUserId} promoted to Tier ${targetTier}`);
     return updatedReq;
@@ -440,6 +489,65 @@ class KycService {
       details: { targetUserId: req.user_id, requestId, reason, notes },
     }).catch(() => {});
 
+    // Dispatch Email & Push/In-App Notification for Rejection
+    try {
+      const { data: userProfile } = await supabase
+        .from("profiles")
+        .select("email, full_name")
+        .eq("id", req.user_id)
+        .single();
+
+      const recipientEmail = userProfile?.email || req.profiles?.email;
+      const recipientName = userProfile?.full_name || req.profiles?.full_name || "Valued Member";
+
+      if (recipientEmail) {
+        const appUrl = process.env.CLIENT_URL || "https://notestandard.com";
+        const settingsLink = `${appUrl}/dashboard/settings?tab=kyc`;
+
+        const htmlContent = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background-color: #0f172a; border: 1px solid #1e293b; border-radius: 16px; color: #f8fafc;">
+            <div style="text-align: center; padding-bottom: 20px; border-bottom: 1px solid #334155;">
+              <h2 style="color: #f43f5e; margin: 0; font-size: 22px;">Identity Verification Update</h2>
+              <p style="color: #94a3b8; font-size: 13px; margin-top: 4px;">Note Standard Compliance Team</p>
+            </div>
+            <div style="padding: 20px 0;">
+              <p style="font-size: 15px; color: #e2e8f0;">Hello ${recipientName},</p>
+              <p style="font-size: 14px; color: #cbd5e1; line-height: 1.6;">Our compliance team reviewed your Tier ${req.requested_tier} identity verification application. Unfortunately, your request could not be approved at this time.</p>
+              
+              <div style="background-color: #4c0519; border: 1px solid #be123c; padding: 16px; border-radius: 12px; margin: 20px 0;">
+                <p style="margin: 0; font-size: 12px; font-weight: bold; color: #fb7185; text-transform: uppercase; letter-spacing: 0.5px;">Decision Details / Reason</p>
+                <p style="margin: 6px 0 0 0; font-size: 14px; color: #ffe4e6; font-style: italic;">"${reason}"</p>
+              </div>
+
+              <p style="font-size: 14px; color: #cbd5e1;">You can view your verification dashboard anytime for more details:</p>
+              <div style="text-align: center; margin: 28px 0;">
+                <a href="${settingsLink}" style="background: linear-gradient(135deg, #e11d48, #be123c); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 12px; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 12px rgba(225, 29, 72, 0.4);">View Settings Dashboard</a>
+              </div>
+            </div>
+            <div style="border-top: 1px solid #334155; padding-top: 16px; text-align: center;">
+              <p style="font-size: 11px; color: #64748b; margin: 0;">If you believe this was a mistake, please reach out to our compliance support team.</p>
+            </div>
+          </div>
+        `;
+
+        await sendgridEmailService.sendEmail({
+          to: recipientEmail,
+          subject: `Update Regarding Your Identity Verification Application`,
+          htmlContent,
+        });
+      }
+
+      await notificationService.createNotification({
+        receiverId: req.user_id,
+        type: "kyc_rejected",
+        title: "Identity Verification Update",
+        message: `Your identity verification request was not approved. Reason: ${reason}`,
+        link: "/dashboard/settings?tab=kyc",
+      });
+    } catch (notifErr) {
+      logger.error(`[KycService] Rejection email/notification error: ${notifErr.message}`);
+    }
+
     logger.info(`[KycService] ❌ Request ${requestId} REJECTED by ${reviewerId}. Reason: ${reason}`);
     return updatedReq;
   }
@@ -486,6 +594,65 @@ class KycService {
       userId: reviewerId,
       details: { targetUserId: req.user_id, requestId, reason, notes },
     }).catch(() => {});
+
+    // Dispatch Email & Push/In-App Notification for Resubmission Request
+    try {
+      const { data: userProfile } = await supabase
+        .from("profiles")
+        .select("email, full_name")
+        .eq("id", req.user_id)
+        .single();
+
+      const recipientEmail = userProfile?.email || req.profiles?.email;
+      const recipientName = userProfile?.full_name || req.profiles?.full_name || "Valued Member";
+
+      if (recipientEmail) {
+        const appUrl = process.env.CLIENT_URL || "https://notestandard.com";
+        const settingsLink = `${appUrl}/dashboard/settings?tab=kyc`;
+
+        const htmlContent = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background-color: #0f172a; border: 1px solid #1e293b; border-radius: 16px; color: #f8fafc;">
+            <div style="text-align: center; padding-bottom: 20px; border-bottom: 1px solid #334155;">
+              <h2 style="color: #a855f7; margin: 0; font-size: 22px;">Action Required: Resubmit Documents</h2>
+              <p style="color: #94a3b8; font-size: 13px; margin-top: 4px;">Note Standard Compliance Team</p>
+            </div>
+            <div style="padding: 20px 0;">
+              <p style="font-size: 15px; color: #e2e8f0;">Hello ${recipientName},</p>
+              <p style="font-size: 14px; color: #cbd5e1; line-height: 1.6;">Our compliance team reviewed your Tier ${req.requested_tier} identity verification request and needs updated documents before completing your account verification.</p>
+              
+              <div style="background-color: #1e1b4b; border: 1px solid #4338ca; padding: 16px; border-radius: 12px; margin: 20px 0;">
+                <p style="margin: 0; font-size: 12px; font-weight: bold; color: #818cf8; text-transform: uppercase; letter-spacing: 0.5px;">Resubmission Instructions / Reason</p>
+                <p style="margin: 6px 0 0 0; font-size: 14px; color: #e0e7ff; font-style: italic;">"${reason}"</p>
+              </div>
+
+              <p style="font-size: 14px; color: #cbd5e1;">Please click below to upload your updated document(s):</p>
+              <div style="text-align: center; margin: 28px 0;">
+                <a href="${settingsLink}" style="background: linear-gradient(135deg, #9333ea, #7e22ce); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 12px; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 12px rgba(147, 51, 234, 0.4);">Re-upload KYC Documents</a>
+              </div>
+            </div>
+            <div style="border-top: 1px solid #334155; padding-top: 16px; text-align: center;">
+              <p style="font-size: 11px; color: #64748b; margin: 0;">If you have any questions, please contact our compliance support team.</p>
+            </div>
+          </div>
+        `;
+
+        await sendgridEmailService.sendEmail({
+          to: recipientEmail,
+          subject: `Action Required: Please Resubmit Your Note Standard Identity Verification Documents`,
+          htmlContent,
+        });
+      }
+
+      await notificationService.createNotification({
+        receiverId: req.user_id,
+        type: "kyc_resubmission",
+        title: "KYC Action Required",
+        message: `Please resubmit your identity verification documents. Reason: ${reason}`,
+        link: "/dashboard/settings?tab=kyc",
+      });
+    } catch (notifErr) {
+      logger.error(`[KycService] Resubmission email/notification error: ${notifErr.message}`);
+    }
 
     logger.info(`[KycService] 🔄 Request ${requestId} marked RESUBMISSION_REQUIRED by ${reviewerId}`);
     return updatedReq;
