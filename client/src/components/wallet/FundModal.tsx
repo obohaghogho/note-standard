@@ -111,15 +111,24 @@ export const FundModal: React.FC<FundModalProps> = ({
         return rawUsdLimit.toLocaleString();
     };
 
-    // Format single transaction max limit in local currency
+    const getSingleTxMaxUsd = () => {
+        const tier = serverLimits?.currentTier ?? 1;
+        if (tier >= 3) return 50000;
+        if (tier === 2) return 5000;
+        if (tier === 1) return 500;
+        return 50;
+    };
+
+    // Format single transaction max limit in local currency based on user KYC tier
     const getFormattedTransactionMax = (payCurrency: string) => {
         const cur = payCurrency.toUpperCase();
-        if (currencyCap?.maxDeposit) {
+        if (currencyCap?.maxDeposit && currencyCap.maxDeposit > 500000) {
             return currencyCap.maxDeposit.toLocaleString();
         }
-        if (cur === 'NGN') return (500000).toLocaleString(); // 500,000 NGN max single transaction
-        if (cur === 'GHS') return (20000).toLocaleString();  // 20,000 GHS max single transaction
-        return (5000).toLocaleString();                     // 5,000 USD max single transaction
+        const maxUsd = getSingleTxMaxUsd();
+        if (cur === 'NGN') return (maxUsd * 1500).toLocaleString();
+        if (cur === 'GHS') return (maxUsd * 15).toLocaleString();
+        return maxUsd.toLocaleString();
     };
 
     const isCrypto = activeCurrency === 'BTC' || activeCurrency === 'ETH' || activeCurrency.startsWith('USDT') || activeCurrency.startsWith('USDC');
@@ -141,7 +150,7 @@ export const FundModal: React.FC<FundModalProps> = ({
     const userPlan = subscription?.plan?.name || 'Standard';
     const rawUsdDailyLimit = serverLimits?.remainingDepositToday ?? serverLimits?.depositLimit ?? 5000;
     const dailyLimit = effectivePayCurrency === 'NGN' ? rawUsdDailyLimit * 1500 : (effectivePayCurrency === 'GHS' ? rawUsdDailyLimit * 15 : rawUsdDailyLimit);
-    const MAX_PER_TRANSACTION = currencyCap?.maxDeposit || (effectivePayCurrency === 'NGN' ? 500000 : (effectivePayCurrency === 'GHS' ? 20000 : 5000));
+    const MAX_PER_TRANSACTION = currencyCap?.maxDeposit || (effectivePayCurrency === 'NGN' ? getSingleTxMaxUsd() * 1500 : (effectivePayCurrency === 'GHS' ? getSingleTxMaxUsd() * 15 : getSingleTxMaxUsd()));
 
     const [selectedRailId, setSelectedRailId] = useState<string | null>(null);
     const [ngnDepositMode, setNgnDepositMode] = useState<'anchor' | 'fincra'>('anchor');
@@ -700,7 +709,12 @@ export const FundModal: React.FC<FundModalProps> = ({
                                 <div>Est. Settlement: <strong className="text-white">{selectedRail.estimatedSettlement}</strong></div>
                                 <div>Fee: <strong className="text-white">{selectedRail.fee.text}</strong></div>
                                 <div>Min Amount: <strong className="text-white">{selectedRail.limits.minimum.toLocaleString()} {effectivePayCurrency}</strong></div>
-                                <div>Max Amount: <strong className="text-white">{selectedRail.limits.maximum.toLocaleString()} {effectivePayCurrency}</strong></div>
+                                <div>Max Amount: <strong className="text-white">{(() => {
+                                    const maxUsd = getSingleTxMaxUsd();
+                                    const cur = effectivePayCurrency.toUpperCase();
+                                    const tierLocalMax = cur === 'NGN' ? maxUsd * 1500 : (cur === 'GHS' ? maxUsd * 15 : maxUsd);
+                                    return Math.max(selectedRail.limits.maximum || 0, tierLocalMax).toLocaleString();
+                                })()} {effectivePayCurrency}</strong></div>
                             </div>
                         </div>
                     );
@@ -789,12 +803,21 @@ export const FundModal: React.FC<FundModalProps> = ({
                                             <span className="text-[10px] text-gray-500">Daily Limit: {getFormattedDailyDepositLimit(effectivePayCurrency)} {effectivePayCurrency}</span>
                                             <span className="text-[10px] text-gray-500">Transaction Max: {getFormattedTransactionMax(effectivePayCurrency)} {effectivePayCurrency}</span>
                                         </div>
-                                        <a
-                                            href="/dashboard/settings?tab=kyc"
-                                            className="text-[10px] text-purple-400 hover:text-purple-300 font-bold flex items-center gap-1 underline"
-                                        >
-                                            Upgrade Tier {serverLimits?.currentTier !== undefined ? `(Tier ${serverLimits.currentTier})` : ''}
-                                        </a>
+                                        {serverLimits?.currentTier !== undefined && serverLimits.currentTier >= 3 ? (
+                                            <a
+                                                href="/dashboard/settings?tab=kyc"
+                                                className="text-[10px] text-emerald-400 font-bold flex items-center gap-1 hover:text-emerald-300"
+                                            >
+                                                <ShieldCheck size={12} className="text-emerald-400" /> Tier 3 Active (Verified)
+                                            </a>
+                                        ) : (
+                                            <a
+                                                href="/dashboard/settings?tab=kyc"
+                                                className="text-[10px] text-purple-400 hover:text-purple-300 font-bold flex items-center gap-1 underline"
+                                            >
+                                                Upgrade Tier {serverLimits?.currentTier !== undefined ? `(Current: Tier ${serverLimits.currentTier})` : ''}
+                                            </a>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="p-3 bg-purple-950/20 border border-purple-500/30 rounded-xl text-[11px] text-purple-300 flex items-start gap-2.5 mb-4 leading-relaxed">
@@ -868,12 +891,21 @@ export const FundModal: React.FC<FundModalProps> = ({
                                                     <span className="text-[10px] text-gray-500">Daily Limit: {getFormattedDailyDepositLimit(effectivePayCurrency)} {effectivePayCurrency}</span>
                                                     <span className="text-[10px] text-gray-500">Transaction Max: {getFormattedTransactionMax(effectivePayCurrency)} {effectivePayCurrency}</span>
                                                 </div>
-                                                <a
-                                                    href="/dashboard/settings?tab=kyc"
-                                                    className="text-[10px] text-purple-400 hover:text-purple-300 font-bold flex items-center gap-1 underline"
-                                                >
-                                                    Upgrade Tier {serverLimits?.currentTier !== undefined ? `(Tier ${serverLimits.currentTier})` : ''}
-                                                </a>
+                                                {serverLimits?.currentTier !== undefined && serverLimits.currentTier >= 3 ? (
+                                                    <a
+                                                        href="/dashboard/settings?tab=kyc"
+                                                        className="text-[10px] text-emerald-400 font-bold flex items-center gap-1 hover:text-emerald-300"
+                                                    >
+                                                        <ShieldCheck size={12} className="text-emerald-400" /> Tier 3 Active (Verified)
+                                                    </a>
+                                                ) : (
+                                                    <a
+                                                        href="/dashboard/settings?tab=kyc"
+                                                        className="text-[10px] text-purple-400 hover:text-purple-300 font-bold flex items-center gap-1 underline"
+                                                    >
+                                                        Upgrade Tier {serverLimits?.currentTier !== undefined ? `(Current: Tier ${serverLimits.currentTier})` : ''}
+                                                    </a>
+                                                )}
                                             </div>
                                         </div>
                                         {effectivePayCurrency === 'NGN' && (
