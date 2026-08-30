@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ShieldCheck, CheckCircle, XCircle, RefreshCw, FileText, ExternalLink, AlertCircle } from 'lucide-react';
+import { ShieldCheck, CheckCircle, XCircle, RefreshCw, FileText, ExternalLink, AlertCircle, X, Maximize2 } from 'lucide-react';
 import api from '../../api/axiosInstance';
 import { API_URL } from '../../lib/api';
 
@@ -31,12 +31,29 @@ export const KycReviewPanel: React.FC = () => {
   const [reviewerNotes, setReviewerNotes] = useState<string>('');
   const [processing, setProcessing] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   const resolveDocumentUrl = (url?: string) => {
     if (!url) return undefined;
     if (url.startsWith('http://') || url.startsWith('https://')) return url;
     const cleanUrl = url.startsWith('/') ? url : `/${url}`;
     return `${API_URL}${cleanUrl}`;
+  };
+
+  const formatAddress = (addr: any) => {
+    if (!addr) return 'N/A';
+    if (typeof addr === 'string') {
+      try {
+        const parsed = JSON.parse(addr);
+        return parsed.address || parsed.street || addr;
+      } catch {
+        return addr;
+      }
+    }
+    if (typeof addr === 'object') {
+      return addr.address || addr.street || JSON.stringify(addr);
+    }
+    return String(addr);
   };
 
   const fetchPendingRequests = async () => {
@@ -101,8 +118,56 @@ export const KycReviewPanel: React.FC = () => {
     }
   };
 
+  const renderDocumentCard = (title: string, rawUrl?: string) => {
+    const fullUrl = resolveDocumentUrl(rawUrl);
+    if (!fullUrl) {
+      return (
+        <div className="p-3 bg-neutral-900 border border-white/5 rounded-xl text-xs text-gray-500 italic">
+          No {title} submitted
+        </div>
+      );
+    }
+
+    return (
+      <div className="bg-neutral-900 border border-white/10 rounded-xl p-3 space-y-2.5">
+        <div className="flex items-center justify-between text-xs">
+          <span className="font-semibold text-purple-300 flex items-center gap-1.5">
+            <FileText size={14} /> {title}
+          </span>
+          <a
+            href={fullUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-purple-400 hover:text-purple-300 flex items-center gap-1 text-[11px] font-medium bg-purple-500/10 border border-purple-500/20 px-2 py-1 rounded-lg"
+          >
+            Open Full <ExternalLink size={12} />
+          </a>
+        </div>
+
+        {/* Inline Image Preview Frame */}
+        <div
+          onClick={() => setPreviewImageUrl(fullUrl)}
+          className="relative group overflow-hidden rounded-lg border border-white/10 bg-black/60 min-h-[140px] max-h-60 flex items-center justify-center cursor-pointer"
+        >
+          <img
+            src={fullUrl}
+            alt={title}
+            className="max-h-56 w-full object-contain rounded transition-transform duration-200 group-hover:scale-105"
+            onError={(e) => {
+              // Hide broken image placeholder if document is a PDF or unsupported file
+              (e.target as HTMLElement).style.display = 'none';
+            }}
+          />
+          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-semibold transition-opacity gap-1.5">
+            <Maximize2 size={16} /> Tap to Zoom Image
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="p-6 bg-neutral-900 border border-white/10 rounded-2xl space-y-6 text-white">
+    <div className="p-4 sm:p-6 bg-neutral-900 border border-white/10 rounded-2xl space-y-6 text-white">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <ShieldCheck className="text-purple-400" size={28} />
@@ -120,7 +185,7 @@ export const KycReviewPanel: React.FC = () => {
       </div>
 
       {feedback && (
-        <div className={`p-4 rounded-xl text-xs flex items-center gap-2 ${feedback.type === 'success' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`}>
+        <div className={`p-4 rounded-xl text-xs flex items-center gap-2 ${feedback.type === 'success' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'}`}>
           <AlertCircle size={16} />
           {feedback.message}
         </div>
@@ -159,7 +224,7 @@ export const KycReviewPanel: React.FC = () => {
           </div>
 
           {/* DETAIL & ACTION PANEL */}
-          <div className="bg-neutral-800/40 border border-white/10 rounded-xl p-5 space-y-4">
+          <div className="bg-neutral-800/40 border border-white/10 rounded-xl p-4 sm:p-5 space-y-4">
             {selectedReq ? (
               <>
                 <div className="border-b border-white/10 pb-3">
@@ -182,41 +247,16 @@ export const KycReviewPanel: React.FC = () => {
                   </div>
                   <div>
                     <span className="text-gray-400">Address:</span>
-                    <div>{typeof selectedReq.residential_address === 'object' ? JSON.stringify(selectedReq.residential_address) : selectedReq.residential_address || 'N/A'}</div>
+                    <div className="text-gray-200">{formatAddress(selectedReq.residential_address)}</div>
                   </div>
                 </div>
 
-                {/* DOCUMENTS LINKS */}
-                <div className="space-y-2 pt-2">
-                  <span className="text-xs font-semibold text-gray-400">Private Documents (Signed 15m Links):</span>
-                  <div className="flex flex-col gap-2">
-                    {selectedReq.signedGovIdUrl ? (
-                      <a
-                        href={resolveDocumentUrl(selectedReq.signedGovIdUrl)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center justify-between p-2.5 bg-neutral-900 border border-white/10 rounded-lg text-xs hover:border-purple-400 text-purple-300 transition"
-                      >
-                        <span className="flex items-center gap-2"><FileText size={14} /> Government ID Document</span>
-                        <ExternalLink size={14} />
-                      </a>
-                    ) : (
-                      <div className="text-xs text-gray-500 italic">No Government ID document submitted</div>
-                    )}
-
-                    {selectedReq.signedUtilityBillUrl ? (
-                      <a
-                        href={resolveDocumentUrl(selectedReq.signedUtilityBillUrl)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center justify-between p-2.5 bg-neutral-900 border border-white/10 rounded-lg text-xs hover:border-purple-400 text-purple-300 transition"
-                      >
-                        <span className="flex items-center gap-2"><FileText size={14} /> Utility Bill / Address Proof</span>
-                        <ExternalLink size={14} />
-                      </a>
-                    ) : (
-                      <div className="text-xs text-gray-500 italic">No Utility Bill document submitted</div>
-                    )}
+                {/* INLINE DOCUMENTS PREVIEWS */}
+                <div className="space-y-3 pt-2">
+                  <span className="text-xs font-semibold text-gray-300 block">Submitted Compliance Documents:</span>
+                  <div className="space-y-3">
+                    {renderDocumentCard('Government ID Document', selectedReq.signedGovIdUrl)}
+                    {renderDocumentCard('Utility Bill / Address Proof', selectedReq.signedUtilityBillUrl)}
                   </div>
                 </div>
 
@@ -229,7 +269,7 @@ export const KycReviewPanel: React.FC = () => {
                       placeholder="Reason if rejecting or requesting resubmission..."
                       value={rejectionReason}
                       onChange={(e) => setRejectionReason(e.target.value)}
-                      className="w-full bg-neutral-900 border border-white/10 rounded-lg p-2 text-xs text-white"
+                      className="w-full bg-neutral-900 border border-white/10 rounded-lg p-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
                     />
                   </div>
                   <div>
@@ -239,33 +279,33 @@ export const KycReviewPanel: React.FC = () => {
                       placeholder="Optional compliance audit notes..."
                       value={reviewerNotes}
                       onChange={(e) => setReviewerNotes(e.target.value)}
-                      className="w-full bg-neutral-900 border border-white/10 rounded-lg p-2 text-xs text-white"
+                      className="w-full bg-neutral-900 border border-white/10 rounded-lg p-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
                     />
                   </div>
                 </div>
 
-                {/* ACTION BUTTONS */}
-                <div className="flex gap-2 pt-2">
+                {/* RESPONSIVE TOUCH ACTION BUTTONS */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-3">
                   <button
                     disabled={processing}
                     onClick={() => handleAction('approve')}
-                    className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition"
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white min-h-[46px] py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-lg disabled:opacity-50 cursor-pointer"
                   >
-                    <CheckCircle size={14} /> Approve Tier {selectedReq.requested_tier}
+                    <CheckCircle size={16} /> Approve Tier {selectedReq.requested_tier}
                   </button>
                   <button
                     disabled={processing}
                     onClick={() => handleAction('reject')}
-                    className="flex-1 bg-rose-600 hover:bg-rose-500 text-white py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition"
+                    className="w-full bg-rose-600 hover:bg-rose-500 text-white min-h-[46px] py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-lg disabled:opacity-50 cursor-pointer"
                   >
-                    <XCircle size={14} /> Reject
+                    <XCircle size={16} /> Reject
                   </button>
                   <button
                     disabled={processing}
                     onClick={() => handleAction('resubmit')}
-                    className="flex-1 bg-amber-600 hover:bg-amber-500 text-white py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition"
+                    className="w-full bg-amber-600 hover:bg-amber-500 text-white min-h-[46px] py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-lg disabled:opacity-50 cursor-pointer"
                   >
-                    <RefreshCw size={14} /> Resubmit
+                    <RefreshCw size={16} /> Resubmit
                   </button>
                 </div>
               </>
@@ -277,6 +317,26 @@ export const KycReviewPanel: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ENLARGED IMAGE LIGHTBOX MODAL */}
+      {previewImageUrl && (
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setPreviewImageUrl(null)}>
+          <div className="relative max-w-4xl w-full max-h-[90vh] flex flex-col items-center justify-center" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setPreviewImageUrl(null)}
+              className="absolute -top-12 right-0 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition cursor-pointer"
+            >
+              <X size={24} />
+            </button>
+            <img
+              src={previewImageUrl}
+              alt="KYC Document Preview"
+              className="max-h-[85vh] max-w-full object-contain rounded-xl border border-white/20 shadow-2xl"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
