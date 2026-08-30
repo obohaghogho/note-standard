@@ -2877,7 +2877,7 @@ exports.markMessageDelivered = async (req, res, next) => {
 
     const { data: updated, error: updateErr } = await supabase
       .from("messages")
-      .update({ delivery_status: "delivered", delivered_at: now })
+      .update({ delivered_at: now })
       .eq("id", messageId)
       .select()
       .single();
@@ -2926,7 +2926,7 @@ exports.markMessageRead = async (req, res, next) => {
 
     const { data: updated, error: updateErr } = await supabase
       .from("messages")
-      .update({ delivery_status: "read", read_at: now })
+      .update({ read_at: now })
       .eq("id", messageId)
       .select()
       .single();
@@ -2968,7 +2968,7 @@ exports.markConversationDelivered = async (req, res, next) => {
 
     const { data: updated, error } = await supabase
       .from("messages")
-      .update({ delivery_status: "delivered", delivered_at: now })
+      .update({ delivered_at: now })
       .eq("conversation_id", conversationId)
       .neq("sender_id", userId)
       .is("delivered_at", null)
@@ -3008,7 +3008,7 @@ exports.markConversationRead = async (req, res, next) => {
 
     const { data: updated, error } = await supabase
       .from("messages")
-      .update({ delivery_status: "read", read_at: now })
+      .update({ read_at: now })
       .eq("conversation_id", conversationId)
       .neq("sender_id", userId)
       .is("read_at", null)
@@ -3058,13 +3058,25 @@ exports.markMessagesDeliveredBatch = async (req, res, next) => {
 
     const { data: updated, error } = await supabase
       .from("messages")
-      .update({ delivery_status: "delivered", delivered_at: now })
+      .update({ delivered_at: now })
       .in("id", messageIds)
       .neq("sender_id", userId)
       .is("delivered_at", null)
       .select("id, sender_id, conversation_id");
 
     if (error) throw error;
+
+    if (updated && updated.length > 0) {
+      const realtime = require("../services/realtimeService");
+      const senderIds = [...new Set(updated.map((m) => m.sender_id))];
+      for (const senderId of senderIds) {
+        await realtime.emitToUser(senderId, "chat:messages_delivered_batch", {
+          messageIds: updated.map((m) => m.id),
+          recipientId: userId,
+          delivered_at: now,
+        });
+      }
+    }
 
     console.log(`[Chat/Telemetry] BATCH_DELIVERED | count: ${updated?.length || 0} | recipient: ${userId}`);
     res.json({ success: true, count: updated?.length || 0 });
@@ -3084,7 +3096,7 @@ exports.webhookDeliver = async (req, res, next) => {
 
     const { data: updated, error } = await supabase
       .from("messages")
-      .update({ status: "delivered", delivered_at: now })
+      .update({ delivered_at: now })
       .eq("id", messageId)
       .is("delivered_at", null)
       .select("id, sender_id, conversation_id")

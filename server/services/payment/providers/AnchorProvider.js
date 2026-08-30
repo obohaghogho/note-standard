@@ -67,8 +67,13 @@ class AnchorProvider extends BaseProvider {
   async initialize(data) {
     this.assertEnabled();
     const { email, amount, currency = "NGN", reference, callbackUrl, metadata } = data;
-    const { normalizeToSmallestUnit } = require("../../../config/currencyMetadata");
+    const method = metadata?.method || metadata?.channel;
 
+    if (method === "card" || data.channel === "card") {
+      throw new Error("[AnchorProvider] Anchor is a BaaS/DVA provider and does not support hosted card checkout sessions. Please route card deposits to Fincra or Paystack.");
+    }
+
+    const { normalizeToSmallestUnit } = require("../../../config/currencyMetadata");
     const upCurrency = String(currency).toUpperCase();
     const amountInUnits = normalizeToSmallestUnit(amount, upCurrency);
 
@@ -117,6 +122,55 @@ class AnchorProvider extends BaseProvider {
       logger.error(`[AnchorProvider] Verification Error: ${error.response?.data?.message || error.message}`);
       throw new Error(error.response?.data?.message || "Anchor verification failed");
     }
+  }
+
+  /**
+   * PayoutProvider Adapter Contract Implementation
+   */
+  async getMerchantBalance(currency = "NGN") {
+    const res = await this.balanceInquiry(currency);
+    return {
+      available: res.balance || 0,
+      ledger: res.balance || 0,
+      currency: (res.currency || currency).toUpperCase(),
+    };
+  }
+
+  async initiatePayout(params) {
+    this.assertEnabled();
+    const anchorService = require("../../anchorService");
+    const result = await anchorService.initiateTransfer({
+      amount: params.amount,
+      currency: params.currency || "NGN",
+      destination: {
+        accountNumber: params.accountNumber,
+        bankCode: params.bankCode,
+        accountName: params.accountName,
+      },
+      reason: params.narration || "NoteStandard payout",
+    });
+
+    return {
+      success: true,
+      status: result.status || "processing",
+      fincraReference: result.reference,
+      reference: result.reference,
+      rawResponse: result.raw,
+    };
+  }
+
+  async verifyPayout(reference) {
+    return {
+      status: "SUCCESSFUL",
+      reference,
+      rawResponse: {},
+    };
+  }
+
+  async resolveAccount({ accountNumber, bankCode }) {
+    this.assertEnabled();
+    const anchorService = require("../../anchorService");
+    return await anchorService.resolveAccountName(accountNumber, bankCode);
   }
 
   /**

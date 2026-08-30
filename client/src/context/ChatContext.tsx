@@ -17,6 +17,7 @@ import { generateCorrelationId, trackCorrelation, completeCorrelation } from '..
 import { logger } from '../lib/logger';
 import { ChatBootKernel } from './ChatBootKernel';
 import { getDeviceId } from '../utils/deviceId';
+import { safeRandomUUID } from '../utils/uuid';
 import { ChatCacheEngine } from '../services/chatCache';
 import { useChatStore } from '../stores/chatStore';
 import { mergeMessageMonotonic, correlationRegistry } from '../utils/messageStatusEngine';
@@ -273,7 +274,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     // Tab-primary singleton: Only one tab runs ACK batching, reconciliation and heartbeat.
     // Uses a localStorage lease refreshed every 4s. Other tabs detect staleness (>6s).
-    const TAB_ID = useRef<string>(crypto.randomUUID());
+    const TAB_ID = useRef<string>(safeRandomUUID());
     const isPrimaryTabRef = useRef<boolean>(false);
     useEffect(() => {
         if (!user?.id) {
@@ -2444,7 +2445,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         // Generate Canonical Event ID
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-        const clientEventId = crypto.randomUUID();
+        const clientEventId = safeRandomUUID();
 
         // ── Phase 1: Observability (Generate Correlation ID) ──
         const cid = generateCorrelationId();
@@ -2535,7 +2536,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
 
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-        const clientEventId = crypto.randomUUID();
+        const clientEventId = safeRandomUUID();
         const fileName = (file as File).name || `audio_${Date.now()}.webm`;
         const fileSize = file.size;
         const fileType = file.type;

@@ -3,6 +3,7 @@ const supabase = require("../config/database");
 
 const realtime = require("./realtimeService");
 const eventBus = require("./eventBus");
+const sendgridEmailService = require("./sendgridEmailService");
 
 /**
  * Creates a notification and emits it via Gateway
@@ -145,6 +146,33 @@ const createNotification = async (params) => {
     
     req.write(payloadBody);
     req.end();
+
+    // 5. Independent Non-blocking Email Notification Dispatch
+    if (receiverId) {
+      setImmediate(async () => {
+        try {
+          const { data: userProf } = await supabase
+            .from('profiles')
+            .select('email, notification_preferences')
+            .eq('id', receiverId)
+            .maybeSingle();
+
+          if (userProf && userProf.email) {
+            const emailPrefs = userProf.notification_preferences?.email;
+            if (emailPrefs !== false) {
+              await sendgridEmailService.sendNotificationEmail({
+                to: userProf.email,
+                title: title || 'New Notification',
+                message: message || title,
+                link,
+              });
+            }
+          }
+        } catch (err) {
+          console.warn('[NotificationService] Independent email dispatch notice:', err.message);
+        }
+      });
+    }
 
     return true;
   } catch (err) {

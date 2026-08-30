@@ -270,6 +270,25 @@ class SendGridEmailService {
     return this.sendEmail({ to: email, subject, htmlContent });
   }
 
+  /**
+   * Send general activity or chat notification email independently
+   */
+  async sendNotificationEmail({ to, title, message, link }) {
+    if (!to) return false;
+    const subject = `[Note Standard] ${title}`;
+    const actionUrl = link ? (link.startsWith('http') ? link : `https://notestandard.com${link}`) : 'https://notestandard.com/dashboard/notifications';
+    
+    const html = this._wrapTemplate(`
+      <h2 style="color: #1e1b4b; margin-top: 0;">${title}</h2>
+      <p style="color: #4b5563; font-size: 15px; line-height: 1.6;">${message || title}</p>
+      <div style="margin-top: 24px;">
+        <a href="${actionUrl}" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">View in Note Standard</a>
+      </div>
+    `);
+
+    return this.sendEmail({ to, subject, htmlContent: html });
+  }
+
   _wrapTemplate(body) {
     return `
     <!DOCTYPE html>

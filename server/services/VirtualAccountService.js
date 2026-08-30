@@ -163,23 +163,28 @@ class VirtualAccountService {
 
     const { data: dedicatedAccount, error: saveErr } = await supabase
       .from("dedicated_accounts")
-      .insert({
-        user_id: userId,
-        provider: providerName,
-        provider_customer_code: providerResult.providerCustomerCode || null,
-        provider_account_id: providerResult.providerAccountId || null,
-        bank_name: providerResult.bankName,
-        account_number: providerResult.accountNumber,
-        account_name: providerResult.accountName,
-        currency: upperCurrency,
-        status: 'ACTIVE',
-        metadata,
-      })
+      .upsert(
+        {
+          user_id: userId,
+          provider: providerName,
+          provider_customer_code: providerResult.providerCustomerCode || providerResult.customerCode || null,
+          provider_account_id: providerResult.providerAccountId || providerResult.id || null,
+          bank_name: providerResult.bankName,
+          account_number: providerResult.accountNumber,
+          account_name: providerResult.accountName,
+          currency: upperCurrency,
+          status: 'ACTIVE',
+          metadata,
+        },
+        { onConflict: 'user_id,provider,currency' }
+      )
       .select()
-      .single();
+      .maybeSingle();
 
     if (saveErr) {
-      logger.error(`[VirtualAccountService] Failed to save virtual account details: ${saveErr.message}`);
+      logger.warn(`[VirtualAccountService] Warning saving virtual account details (${saveErr.message}). Fetching existing record...`);
+      const existingRecord = await this.getVirtualAccount(userId, upperCurrency);
+      if (existingRecord) return existingRecord;
       throw saveErr;
     }
 

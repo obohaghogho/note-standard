@@ -33,6 +33,7 @@ const Notes = lazyWithRetry(() => import('./pages/dashboard/Notes'), 'Notes');
 const Chat = lazyWithRetry(() => import('./pages/dashboard/Chat'), 'Chat');
 const Shared = lazyWithRetry(() => import('./pages/dashboard/Shared'), 'Shared');
 const Feed = lazyWithRetry(() => import('./pages/dashboard/Feed'), 'Feed');
+const Reels = lazyWithRetry(() => import('./pages/dashboard/Reels'), 'Reels');
 const Search = lazyWithRetry(() => import('./pages/dashboard/Search'), 'Search');
 const Settings = lazyWithRetry(() => import('./pages/dashboard/Settings'), 'Settings');
 const Billing = lazyWithRetry(() => import('./pages/dashboard/Billing'), 'Billing');
@@ -156,6 +157,7 @@ function AuthenticatedProviders() {
                           <Route path="chat" element={<Chat />} />
                           <Route path="shared" element={<Shared />} />
                           <Route path="feed" element={<Feed />} />
+                          <Route path="reels" element={<Reels />} />
                           <Route path="favorites" element={<Notes />} />
                           <Route path="search" element={<Search />} />
                           <Route path="billing" element={<Billing />} />

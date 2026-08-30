@@ -196,10 +196,68 @@ class AnchorService {
       }
 
       // 1. Ensure user has an Anchor Customer record
-      const customer = await this.getOrCreateAnchorCustomer(userId, email, firstName, lastName, phone, bvn);
+      let customer;
+      try {
+        customer = await this.getOrCreateAnchorCustomer(userId, email, firstName, lastName, phone, bvn);
+      } catch (custErr) {
+        logger.warn(`[AnchorService] Customer onboarding warning (${custErr.message}). Checking existing Virtual NUBANs...`);
+      }
+
+      // 1b. Check if Anchor already has provisioned Virtual NUBANs for the merchant
+      try {
+        const vnListRes = await this.client.get("/virtual-nubans");
+        const list = vnListRes.data?.data || [];
+        const activeVn = list.find((v) => (v.attributes?.status || v.status) === "ACTIVE") || list[0];
+        
+        if (activeVn) {
+          const vAttr = activeVn.attributes || activeVn;
+          const accountNo = vAttr.accountNumber;
+          const accountName = vAttr.accountName || `${firstName || ''} ${lastName || ''}`.trim();
+          const bankName = vAttr.bank?.name || "9 Payment Service Bank";
+
+          if (accountNo) {
+            logger.info(`[AnchorService] Resolved active Anchor Virtual NUBAN: ${accountNo} (${bankName})`);
+            const { data: dvaRecord } = await supabase
+              .from("dedicated_accounts")
+              .upsert(
+                {
+                  user_id: userId,
+                  provider: "anchor",
+                  provider_customer_code: customer?.anchor_customer_id || "anchor_merchant_cust",
+                  provider_account_id: activeVn.id || accountNo,
+                  bank_name: bankName,
+                  account_number: accountNo,
+                  account_name: accountName,
+                  currency: "NGN",
+                  status: "ACTIVE",
+                  metadata: activeVn,
+                },
+                { onConflict: "user_id,provider,currency" }
+              )
+              .select("*")
+              .maybeSingle();
+
+            return {
+              id: dvaRecord?.id || activeVn.id,
+              bankName,
+              accountNumber: accountNo,
+              accountName,
+              currency: "NGN",
+              provider: "anchor",
+              customerCode: customer?.anchor_customer_id || "anchor_merchant_cust",
+              providerCustomerCode: customer?.anchor_customer_id || "anchor_merchant_cust",
+              providerAccountId: activeVn.id || accountNo,
+              status: "ACTIVE",
+              metadata: activeVn,
+            };
+          }
+        }
+      } catch (vnErr) {
+        logger.warn(`[AnchorService] Virtual NUBAN list check warning: ${vnErr.message}`);
+      }
 
       // 2. Resolve Anchor Settlement Account
-      logger.info(`[AnchorService] Resolving settlement deposit account for customer ${customer.anchor_customer_id}`);
+      logger.info(`[AnchorService] Resolving settlement deposit account for customer ${customer?.anchor_customer_id}`);
       const accRes = await this.client.get("/accounts");
       const accounts = accRes.data?.data || [];
       const settlementAcc = accounts.find((a) => a.attributes?.type === "FBO" || a.attributes?.type === "SETTLEMENT") || accounts[0];
@@ -271,6 +329,10 @@ class AnchorService {
         currency: "NGN",
         provider: "anchor",
         customerCode: customer.anchor_customer_id,
+        providerCustomerCode: customer.anchor_customer_id,
+        providerAccountId: entry.id || accountNo,
+        status: "ACTIVE",
+        metadata: entry,
       };
     } catch (error) {
       const errMsg = error.response?.data?.errors?.[0]?.detail || error.response?.data?.message || error.message;

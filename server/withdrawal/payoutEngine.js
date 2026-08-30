@@ -91,12 +91,43 @@ class PayoutEngine {
       const riskRoute = complianceRes.status === "MANUAL_REVIEW" || complianceRes.isHold ? "MANUAL_REVIEW" : "AUTO";
 
       // ── STEP 3: Check Merchant Balance Pre-Check & Treasury Routing ─────────
-      const provider = registry.getPrimary();
+      const requestedProviderName = params.provider || params.requestedProvider || null;
+      let provider;
+      if (requestedProviderName) {
+        try {
+          provider = registry.get(requestedProviderName);
+        } catch {
+          provider = registry.getPrimary();
+        }
+      } else {
+        provider = registry.getPrimary();
+      }
+
       const isTreasuryCrossCurrencyEnabled = process.env.TREASURY_CROSS_CURRENCY_WITHDRAWALS_ENABLED === "true";
 
-      const merchantBal = await provider.getMerchantBalance(currency);
+      let merchantBal = await provider.getMerchantBalance(currency);
       if (merchantBal.available < amount) {
-        logger.warn(`[PayoutEngine] [${correlation_id}] Primary merchant balance insufficient (${merchantBal.available} < ${amount} ${currency})`);
+        logger.warn(`[PayoutEngine] [${correlation_id}] Merchant balance on '${provider.name}' insufficient (${merchantBal.available} < ${amount} ${currency})`);
+
+        // Check alternate payout provider (Fincra ↔ Anchor)
+        const altProviderName = (provider.name === 'fincra') ? 'anchor' : (provider.name === 'anchor' ? 'fincra' : null);
+        if (altProviderName) {
+          try {
+            const altProvider = registry.get(altProviderName);
+            const altBal = await altProvider.getMerchantBalance(currency);
+            if (altBal.available >= amount) {
+              logger.info(`[PayoutEngine] [${correlation_id}] Dynamic payout failover: switching provider from '${provider.name}' to '${altProviderName}' (available: ${altBal.available})`);
+              provider = altProvider;
+              merchantBal = altBal;
+            }
+          } catch (altErr) {
+            logger.warn(`[PayoutEngine] Failover check to '${altProviderName}' failed: ${altErr.message}`);
+          }
+        }
+      }
+
+      if (merchantBal.available < amount) {
+        logger.warn(`[PayoutEngine] [${correlation_id}] All provider merchant balances insufficient (${merchantBal.available} < ${amount} ${currency})`);
 
         if (!isTreasuryCrossCurrencyEnabled) {
           throw new Error("MERCHANT_RESERVE_MAINTENANCE: Merchant payout reserves are currently undergoing top-up. Please try again shortly.");

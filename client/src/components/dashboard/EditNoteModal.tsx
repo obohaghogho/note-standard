@@ -12,6 +12,7 @@ import { useNotesDashboard } from '../../context/NotesDashboardContext';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import axios from 'axios';
+import { safeRandomUUID } from '../../utils/uuid';
 
 import type { Note } from '../../types/note';
 import { ChecklistModule, type ChecklistItem } from './ChecklistModule';
@@ -223,7 +224,7 @@ export const EditNoteModal = ({ isOpen, onClose, onNoteUpdated, note }: EditNote
                         const match = line.match(/^[-*]\s+\[([ x])\]\s+(.+)$/i);
                         if (match) {
                             items.push({
-                                id: crypto.randomUUID(),
+                                id: safeRandomUUID(),
                                 text: match[2].trim(),
                                 completed: match[1].toLowerCase() === 'x',
                                 indent: 0

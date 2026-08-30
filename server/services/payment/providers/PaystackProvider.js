@@ -191,6 +191,104 @@ class PaystackProvider extends PaymentProvider {
       throw new Error(error.response?.data?.message || "Paystack DVA generation failed");
     }
   }
+
+  /**
+   * PayoutProvider Adapter Contract Implementation
+   */
+  async getMerchantBalance(currency = "NGN") {
+    try {
+      const response = await axios.get(`${PAYSTACK_BASE_URL}/balance`, {
+        headers: this.getHeaders(),
+      });
+      const list = response.data?.data || [];
+      const item = list.find((b) => (b.currency || "").toUpperCase() === currency.toUpperCase()) || list[0] || { balance: 0 };
+      return {
+        available: (item.balance || 0) / 100,
+        ledger: (item.balance || 0) / 100,
+        currency: (item.currency || currency).toUpperCase(),
+      };
+    } catch (error) {
+      logger.warn(`[PaystackProvider] Merchant Balance Error: ${error.message}`);
+      return { available: 0, ledger: 0, currency: currency.toUpperCase() };
+    }
+  }
+
+  async initiatePayout(params) {
+    try {
+      // Step 1: Create Transfer Recipient
+      const recipientRes = await axios.post(
+        `${PAYSTACK_BASE_URL}/transferrecipient`,
+        {
+          type: "nuban",
+          name: params.accountName || "Beneficiary",
+          account_number: params.accountNumber,
+          bank_code: params.bankCode,
+          currency: params.currency || "NGN",
+        },
+        { headers: this.getHeaders() }
+      );
+
+      const recipientCode = recipientRes.data?.data?.recipient_code;
+
+      // Step 2: Initiate Transfer
+      const transferRes = await axios.post(
+        `${PAYSTACK_BASE_URL}/transfer`,
+        {
+          source: "balance",
+          amount: Math.round(params.amount * 100),
+          recipient: recipientCode,
+          reason: params.narration || "NoteStandard payout",
+          reference: params.reference,
+        },
+        { headers: this.getHeaders() }
+      );
+
+      const resData = transferRes.data?.data || {};
+      return {
+        success: true,
+        status: (resData.status || "success").toLowerCase(),
+        fincraReference: resData.transfer_code || resData.reference,
+        reference: resData.reference || params.reference,
+        rawResponse: resData,
+      };
+    } catch (error) {
+      logger.error(`[PaystackProvider] Payout Error: ${error.response?.data?.message || error.message}`);
+      throw new Error(error.response?.data?.message || "Paystack payout failed");
+    }
+  }
+
+  async verifyPayout(reference) {
+    try {
+      const response = await axios.get(`${PAYSTACK_BASE_URL}/transfer/verify/${encodeURIComponent(reference)}`, {
+        headers: this.getHeaders(),
+      });
+      const data = response.data?.data || {};
+      return {
+        status: data.status === "success" ? "SUCCESSFUL" : data.status,
+        reference: data.reference || reference,
+        rawResponse: data,
+      };
+    } catch (error) {
+      return { status: "PENDING", reference, rawResponse: {} };
+    }
+  }
+
+  async resolveAccount({ accountNumber, bankCode }) {
+    try {
+      const response = await axios.get(
+        `${PAYSTACK_BASE_URL}/bank/resolve?account_number=${encodeURIComponent(accountNumber)}&bank_code=${encodeURIComponent(bankCode)}`,
+        { headers: this.getHeaders() }
+      );
+      const data = response.data?.data || {};
+      return {
+        accountName: data.account_name,
+        accountNumber: data.account_number || accountNumber,
+        bankCode: bankCode,
+      };
+    } catch (error) {
+      throw new Error(error.response?.data?.message || "Paystack bank account resolution failed");
+    }
+  }
 }
 
 module.exports = PaystackProvider;

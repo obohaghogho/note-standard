@@ -130,19 +130,34 @@ class ProviderRegistry {
   }
 
   register(provider) {
-    if (!(provider instanceof PayoutProvider)) {
-      throw new TypeError("Registered provider must extend PayoutProvider.");
+    if (!provider || typeof provider.initiatePayout !== 'function') {
+      throw new TypeError("Registered payout provider must implement initiatePayout().");
     }
-    this.providers.set(provider.name.toLowerCase(), provider);
+    const providerName = provider.name || provider.constructor.name.replace("Provider", "");
+    this.providers.set(providerName.toLowerCase(), provider);
   }
 
   get(name) {
-    const key = name.toLowerCase();
+    const key = String(name || 'fincra').toLowerCase();
     if (!this.providers.has(key)) {
       if (key === "fincra") {
         try {
           const FincraProvider = require("./fincraProvider");
           this.register(new FincraProvider());
+        } catch (e) {}
+      } else if (key === "anchor") {
+        try {
+          const AnchorProvider = require("../services/payment/providers/AnchorProvider");
+          const instance = new AnchorProvider();
+          instance.name = "anchor";
+          this.register(instance);
+        } catch (e) {}
+      } else if (key === "paystack") {
+        try {
+          const PaystackProvider = require("../services/payment/providers/PaystackProvider");
+          const instance = new PaystackProvider();
+          instance.name = "paystack";
+          this.register(instance);
         } catch (e) {}
       }
     }
@@ -154,7 +169,12 @@ class ProviderRegistry {
   }
 
   getPrimary() {
-    return this.get(this.primaryProviderName);
+    const preferred = (process.env.PRIMARY_PAYOUT_PROVIDER || this.primaryProviderName).toLowerCase();
+    try {
+      return this.get(preferred);
+    } catch {
+      return this.get("fincra");
+    }
   }
 }
 

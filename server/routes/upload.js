@@ -9,7 +9,7 @@ const logger = require('../utils/logger');
 const storage = multer.memoryStorage();
 const upload = multer({
   storage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB Max for video/media
+  limits: { fileSize: 1024 * 1024 * 1024 }, // 1GB (1024MB) Max for video/media
 });
 
 // All upload routes require authentication & rate limiting

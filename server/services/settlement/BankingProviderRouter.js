@@ -14,6 +14,7 @@
 const logger = require('../../utils/logger');
 const FincraBankingProviderV1 = require('./FincraBankingProviderV1');
 const GreyBankingProviderV1 = require('./GreyBankingProviderV1');
+const AnchorBankingProviderV1 = require('./AnchorBankingProviderV1');
 const ProviderHealthScorerService = require('./ProviderHealthScorerService');
 
 class BankingProviderRouter {
@@ -28,6 +29,9 @@ class BankingProviderRouter {
 
     const grey = new GreyBankingProviderV1();
     this.providers.set(grey.getProviderId().toLowerCase(), grey);
+
+    const anchor = new AnchorBankingProviderV1();
+    this.providers.set(anchor.getProviderId().toLowerCase(), anchor);
   }
 
   registerProvider(providerInstance) {
@@ -80,9 +84,15 @@ class BankingProviderRouter {
     return candidates[0];
   }
 
-  async getDepositInstructions({ currency = 'NGN', rail = 'BANK_TRANSFER', userId }) {
-    const { provider } = this.selectBestBankingProvider({ currency, rail });
-    return provider.createDepositInstructions({ currency, rail, userId });
+  async getDepositInstructions({ currency = 'NGN', rail = 'BANK_TRANSFER', userId, provider: requestedProvider }) {
+    let targetProvider;
+    if (requestedProvider && this.providers.has(String(requestedProvider).toLowerCase())) {
+      targetProvider = this.getProvider(requestedProvider);
+    } else {
+      const selected = this.selectBestBankingProvider({ currency, rail });
+      targetProvider = selected.provider;
+    }
+    return targetProvider.createDepositInstructions({ currency, rail, userId });
   }
 }
 

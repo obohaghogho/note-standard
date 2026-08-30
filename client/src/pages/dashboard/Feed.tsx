@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FeedLayout } from '../../components/community/FeedLayout';
 import { FeedHeader } from '../../components/community/FeedHeader';
 import { FeedTabs } from '../../components/community/FeedTabs';
@@ -15,6 +16,7 @@ import { RefreshCw } from 'lucide-react';
 
 const FEED_TABS = [
   { id: 'trending', label: 'Trending' },
+  { id: 'reels', label: '🎬 Reels' },
   { id: 'latest', label: 'Latest' },
   { id: 'following', label: 'Following' },
   { id: 'saved', label: 'Saved' },
@@ -71,21 +73,38 @@ export const Feed: React.FC = () => {
 
   // ── Pull-to-refresh (touch) ───────────────────────────────────────────────
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    touchStartY.current = e.touches[0].clientY;
+    const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
+    if (scrollTop <= 5 && e.touches[0].clientY < 200) {
+      touchStartY.current = e.touches[0].clientY;
+    } else {
+      touchStartY.current = 0;
+    }
   }, []);
 
   const handleTouchEnd = useCallback(async (e: React.TouchEvent) => {
+    if (touchStartY.current <= 0) return;
+    const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
     const dy = e.changedTouches[0].clientY - touchStartY.current;
-    if (dy > 80 && window.scrollY === 0) {
+    if (dy > 120 && scrollTop <= 5) {
       setIsRefreshing(true);
-      await refresh();
-      setIsRefreshing(false);
+      try {
+        await refresh();
+      } finally {
+        setIsRefreshing(false);
+      }
     }
+    touchStartY.current = 0;
   }, [refresh]);
 
+  const navigate = useNavigate();
+
   const handleTabChange = useCallback((tab: string) => {
-    setActiveTab(tab);
-  }, []);
+    if (tab === 'reels') {
+      navigate('/dashboard/reels');
+    } else {
+      setActiveTab(tab);
+    }
+  }, [navigate]);
 
   const handleFilterChange = useCallback((state: { category: string; sort: string }) => {
     setFilterState(state);

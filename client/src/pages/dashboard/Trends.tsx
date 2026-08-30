@@ -267,17 +267,17 @@ export const Trends = () => {
     };
 
     return (
-        <div className="space-y-4 sm:space-y-6 max-w-6xl mx-auto px-3 sm:px-6 py-2 sm:py-4">
+        <div className="space-y-4 sm:space-y-6 max-w-6xl mx-auto px-3 sm:px-6 py-2 sm:py-4 pb-28 sm:pb-12 min-w-0 overflow-x-hidden">
             {/* Header banner */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-                <div>
-                    <h1 className="text-xl sm:text-3xl font-bold flex items-center gap-2.5 sm:gap-3 text-white tracking-tight">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 min-w-0">
+                <div className="min-w-0 flex-1">
+                    <h1 className="text-xl sm:text-3xl font-bold flex items-center gap-2.5 sm:gap-3 text-white tracking-tight truncate">
                         <TrendingUp className="text-primary shrink-0" size={24} />
-                        <span>Community Trends</span>
+                        <span className="truncate">Community Trends</span>
                     </h1>
-                    <p className="text-xs sm:text-sm text-gray-400 mt-1">Real-time intelligence from the Note Standard community.</p>
+                    <p className="text-xs sm:text-sm text-gray-400 mt-1 leading-relaxed">Real-time intelligence from the Note Standard community.</p>
                 </div>
-                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap shrink-0">
                     {connected && (
                         <div className="flex items-center gap-1.5 text-[10px] text-red-400 font-bold bg-red-500/10 px-2 py-1 rounded-md animate-pulse border border-red-500/20 shrink-0">
                             <Radio size={12} />
@@ -292,77 +292,89 @@ export const Trends = () => {
             </div>
 
             {/* Navigation Tabs */}
-            <div className="flex items-center gap-1.5 sm:gap-3 border-b border-white/10 overflow-x-auto no-scrollbar pb-px scroll-smooth -mx-3 px-3 sm:mx-0 sm:px-0">
-                <button
-                    onClick={() => setActiveTab('overview')}
-                    className={`pb-2.5 pt-1 px-2.5 sm:px-3 rounded-t-lg relative flex-shrink-0 text-xs sm:text-sm font-medium transition-colors ${activeTab === 'overview' ? 'text-primary' : 'text-gray-400 hover:text-white'}`}
-                >
-                    <span className="flex items-center gap-1.5 whitespace-nowrap"><FileText size={16} /> Analytics Overview</span>
-                    {activeTab === 'overview' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
-                </button>
-                <button
-                    onClick={() => setActiveTab('feed')}
-                    className={`pb-2.5 pt-1 px-2.5 sm:px-3 rounded-t-lg relative flex-shrink-0 text-xs sm:text-sm font-medium transition-colors ${activeTab === 'feed' ? 'text-primary' : 'text-gray-400 hover:text-white'}`}
-                >
-                    <span className="flex items-center gap-1.5 whitespace-nowrap"><BookOpen size={16} /> Trending Feed</span>
-                    {activeTab === 'feed' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
-                </button>
-                <button
-                    onClick={() => setActiveTab('briefing')}
-                    className={`pb-2.5 pt-1 px-2.5 sm:px-3 rounded-t-lg relative flex-shrink-0 text-xs sm:text-sm font-medium transition-colors ${activeTab === 'briefing' ? 'text-primary' : 'text-gray-400 hover:text-white'}`}
-                >
-                    <span className="flex items-center gap-1.5 whitespace-nowrap"><Sparkles size={16} /> AI Daily Briefing</span>
-                    {activeTab === 'briefing' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
-                </button>
-                <button
-                    onClick={() => setActiveTab('discover')}
-                    className={`pb-2.5 pt-1 px-2.5 sm:px-3 rounded-t-lg relative flex-shrink-0 text-xs sm:text-sm font-medium transition-colors ${activeTab === 'discover' ? 'text-primary' : 'text-gray-400 hover:text-white'}`}
-                >
-                    <span className="flex items-center gap-1.5 whitespace-nowrap"><Users size={16} /> Discover Suggested</span>
-                    {activeTab === 'discover' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
-                </button>
+            <div className="relative border-b border-white/10 -mx-3 px-3 sm:mx-0 sm:px-0">
+                <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto pb-px scroll-smooth snap-x snap-mandatory text-xs sm:text-sm font-medium">
+                    <button
+                        onClick={() => setActiveTab('overview')}
+                        className={`pb-2.5 pt-1.5 px-3 rounded-t-lg relative shrink-0 snap-start transition-colors whitespace-nowrap ${activeTab === 'overview' ? 'text-primary font-semibold' : 'text-gray-400 hover:text-white'}`}
+                    >
+                        <span className="flex items-center gap-1.5"><FileText size={15} /> Analytics Overview</span>
+                        {activeTab === 'overview' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('feed')}
+                        className={`pb-2.5 pt-1.5 px-3 rounded-t-lg relative shrink-0 snap-start transition-colors whitespace-nowrap ${activeTab === 'feed' ? 'text-primary font-semibold' : 'text-gray-400 hover:text-white'}`}
+                    >
+                        <span className="flex items-center gap-1.5"><BookOpen size={15} /> Trending Feed</span>
+                        {activeTab === 'feed' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('briefing')}
+                        className={`pb-2.5 pt-1.5 px-3 rounded-t-lg relative shrink-0 snap-start transition-colors whitespace-nowrap ${activeTab === 'briefing' ? 'text-primary font-semibold' : 'text-gray-400 hover:text-white'}`}
+                    >
+                        <span className="flex items-center gap-1.5"><Sparkles size={15} /> AI Daily Briefing</span>
+                        {activeTab === 'briefing' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('discover')}
+                        className={`pb-2.5 pt-1.5 px-3 rounded-t-lg relative shrink-0 snap-start transition-colors whitespace-nowrap ${activeTab === 'discover' ? 'text-primary font-semibold' : 'text-gray-400 hover:text-white'}`}
+                    >
+                        <span className="flex items-center gap-1.5"><Users size={15} /> Discover Suggested</span>
+                        {activeTab === 'discover' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full"></span>}
+                    </button>
+                </div>
             </div>
 
             {/* TAB CONTENTS */}
             {activeTab === 'overview' && (
                 <div className="space-y-4 sm:space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                        <Card variant="glass" className="p-4 sm:p-6">
-                            <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 flex items-center gap-2">
+                        <Card variant="glass" className="p-3 sm:p-6 overflow-hidden min-w-0 w-full">
+                            <h3 className="text-sm sm:text-lg font-semibold mb-2 sm:mb-4 flex items-center gap-2 text-white truncate">
                                 <FileText size={18} className="text-blue-400 shrink-0" />
-                                Productivity Pulse
+                                <span className="truncate">Productivity Pulse</span>
                             </h3>
-                            <div className="h-48 sm:h-64 relative w-full">
+                            <div className="h-52 sm:h-64 relative w-full overflow-hidden">
                                 <Line
                                     data={noteData}
                                     options={{
                                         responsive: true,
                                         maintainAspectRatio: false,
-                                        plugins: { legend: { position: 'bottom', labels: { color: '#9ca3af', font: { size: 10 }, boxWidth: 10 } } },
+                                        plugins: {
+                                            legend: {
+                                                position: 'bottom',
+                                                labels: { color: '#9ca3af', font: { size: 9 }, boxWidth: 8, padding: 8 }
+                                            }
+                                        },
                                         scales: {
-                                            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
-                                            x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af', font: { size: 10 }, maxRotation: 45 } }
+                                            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af', font: { size: 9 }, precision: 0 } },
+                                            x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af', font: { size: 9 }, maxRotation: 0, autoSkip: true } }
                                         }
                                     }}
                                 />
                             </div>
                         </Card>
 
-                        <Card variant="glass" className="p-4 sm:p-6">
-                            <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 flex items-center gap-2">
+                        <Card variant="glass" className="p-3 sm:p-6 overflow-hidden min-w-0 w-full">
+                            <h3 className="text-sm sm:text-lg font-semibold mb-2 sm:mb-4 flex items-center gap-2 text-white truncate">
                                 <Users size={18} className="text-purple-400 shrink-0" />
-                                Active Contributors
+                                <span className="truncate">Active Contributors</span>
                             </h3>
-                            <div className="h-48 sm:h-64 relative w-full">
+                            <div className="h-52 sm:h-64 relative w-full overflow-hidden">
                                 <Line
                                     data={activeUserData}
                                     options={{
                                         responsive: true,
                                         maintainAspectRatio: false,
-                                        plugins: { legend: { position: 'bottom', labels: { color: '#9ca3af', font: { size: 10 }, boxWidth: 10 } } },
+                                        plugins: {
+                                            legend: {
+                                                position: 'bottom',
+                                                labels: { color: '#9ca3af', font: { size: 9 }, boxWidth: 8, padding: 8 }
+                                            }
+                                        },
                                         scales: {
-                                            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
-                                            x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af', font: { size: 10 }, maxRotation: 45 } }
+                                            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af', font: { size: 9 }, precision: 0 } },
+                                            x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af', font: { size: 9 }, maxRotation: 0, autoSkip: true } }
                                         }
                                     }}
                                 />
@@ -370,9 +382,9 @@ export const Trends = () => {
                         </Card>
                     </div>
 
-                    <Card variant="glass" className="p-4 sm:p-6">
-                        <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Top Trending Topics</h3>
-                        <div className="h-56 sm:h-80 relative w-full">
+                    <Card variant="glass" className="p-3 sm:p-6 overflow-hidden min-w-0 w-full">
+                        <h3 className="text-sm sm:text-lg font-semibold mb-2 sm:mb-4 text-white truncate">Top Trending Topics</h3>
+                        <div className="h-56 sm:h-80 relative w-full overflow-hidden">
                             <Bar
                                 data={tagData}
                                 options={{
@@ -380,8 +392,8 @@ export const Trends = () => {
                                     maintainAspectRatio: false,
                                     plugins: { legend: { display: false } },
                                     scales: {
-                                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
-                                        x: { grid: { display: false }, ticks: { color: '#9ca3af', font: { size: 10 }, maxRotation: 45 } }
+                                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af', font: { size: 9 }, precision: 0 } },
+                                        x: { grid: { display: false }, ticks: { color: '#9ca3af', font: { size: 9 }, maxRotation: 45, autoSkip: true } }
                                     }
                                 }}
                             />

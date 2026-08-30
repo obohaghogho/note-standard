@@ -214,7 +214,7 @@ export const BankAccountCard: React.FC = () => {
                         </Button>
                     </form>
                 </div>
-            ) : (selectedCurrency === 'NGN' && isLocalhostOrSandbox) ? (
+            ) : selectedCurrency === 'NGN' ? (
                 <AnchorAccountCard />
             ) : account ? (
                 <div className="bg-gradient-to-br from-gray-900 to-black border border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-hidden group">

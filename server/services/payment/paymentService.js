@@ -51,9 +51,13 @@ class PaymentService {
     logger.info(`[PaymentService] Provider selection for ${currency} (${isCrypto ? 'Crypto' : 'Fiat'}) method: ${method}, Requested provider: ${options.provider || 'auto (GatewayRouter)'}`);
     
     let resolvedProvider = options.provider || null;
+    if ((method === "card" || metadata.channel === "card") && resolvedProvider && resolvedProvider.toLowerCase() === "anchor") {
+      logger.info("[PaymentService] Anchor does not support card checkout. Overriding card provider selection to card-capable gateway.");
+      resolvedProvider = null;
+    }
 
     // 1. Determine provider via Factory or explicit request
-    const provider = resolvedProvider
+    let provider = resolvedProvider
       ? PaymentFactory.getProviderByName(resolvedProvider)
       : PaymentFactory.getProvider(
         currency,
@@ -61,7 +65,7 @@ class PaymentService {
         isCrypto,
         method,
       );
-    const providerName = provider.constructor.name.replace("Provider", "")
+    let providerName = provider.constructor.name.replace("Provider", "")
       .toLowerCase();
 
     logger.info(`[PaymentService] Resolved provider: ${providerName} for ${currency} ${method}`, {
@@ -407,12 +411,12 @@ class PaymentService {
       });
 
       // ── AUTOMATIC FAILOVER GATEWAY RESILIENCE ────────────────────────────────
-      // If primary provider (e.g. Fincra) fails for NGN deposit, attempt automatic failover to backup provider (Paystack)
+      // If primary provider (e.g. Fincra or Anchor) fails for deposit/checkout, attempt automatic failover to backup provider (Paystack or Fincra)
       let fallbackSuccess = false;
-      const isNgnDeposit = String(currency).toUpperCase() === 'NGN';
-      const fallbackProviderName = (providerName === 'fincra') ? 'paystack' : (providerName === 'paystack' ? 'fincra' : null);
+      const isNgnOrCard = String(currency).toUpperCase() === 'NGN' || method === 'card' || metadata.channel === 'card';
+      const fallbackProviderName = (providerName === 'fincra') ? 'paystack' : (providerName === 'paystack' ? 'fincra' : 'paystack');
 
-      if (isNgnDeposit && fallbackProviderName) {
+      if (isNgnOrCard && fallbackProviderName) {
         try {
           logger.info(`[PaymentService] Primary provider '${providerName}' failed (${error.message}). Attempting automatic failover to backup provider '${fallbackProviderName}'...`);
           const fallbackProvider = PaymentFactory.getProviderByName(fallbackProviderName);

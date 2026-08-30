@@ -10,6 +10,8 @@ import { useWallet } from '../../hooks/useWallet';
 import { useWalletCapabilities } from '../../hooks/useWalletCapabilities';
 import { supabase } from '@/lib/supabase';
 
+import { AnchorAccountCard } from './AnchorAccountCard';
+
 interface FundModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -136,7 +138,13 @@ export const FundModal: React.FC<FundModalProps> = ({
     const currencyCap = getCurrencyCapability(effectivePayCurrency);
     const activeDepositRails = currencyCap?.depositMethods || [];
 
+    const userPlan = subscription?.plan?.name || 'Standard';
+    const rawUsdDailyLimit = serverLimits?.remainingDepositToday ?? serverLimits?.depositLimit ?? 5000;
+    const dailyLimit = effectivePayCurrency === 'NGN' ? rawUsdDailyLimit * 1500 : (effectivePayCurrency === 'GHS' ? rawUsdDailyLimit * 15 : rawUsdDailyLimit);
+    const MAX_PER_TRANSACTION = currencyCap?.maxDeposit || (effectivePayCurrency === 'NGN' ? 500000 : (effectivePayCurrency === 'GHS' ? 20000 : 5000));
+
     const [selectedRailId, setSelectedRailId] = useState<string | null>(null);
+    const [ngnDepositMode, setNgnDepositMode] = useState<'anchor' | 'fincra'>('anchor');
 
     useEffect(() => {
         if (isOpen) {
@@ -805,48 +813,83 @@ export const FundModal: React.FC<FundModalProps> = ({
                         {/* Bank Deposit */}
                         {method === 'bank' && !bankDetails && (
                             <div className="space-y-4">
-                                <div>
-                                    <label htmlFor="bank-amount" className="block text-sm text-gray-400 mb-2 cursor-pointer">Amount</label>
-                                    <div className="relative">
-                                        <input
-                                            id="bank-amount"
-                                            name="amount"
-                                            type="number"
-                                            value={amount}
-                                            onChange={(e) => setAmount(e.target.value)}
-                                            placeholder="0.00"
-                                            className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-purple-500 outline-none pr-16"
-                                            autoComplete="off"
-                                        />
-                                        <span className="absolute right-4 top-3 text-gray-400 font-bold">
-                                            {effectivePayCurrency}
-                                        </span>
-                                    </div>
-                                    <div className="flex justify-between items-center mt-2 px-1">
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] text-gray-500">Daily Limit: {getFormattedDailyDepositLimit(effectivePayCurrency)} {effectivePayCurrency}</span>
-                                            <span className="text-[10px] text-gray-500">Transaction Max: {getFormattedTransactionMax(effectivePayCurrency)} {effectivePayCurrency}</span>
-                                        </div>
-                                        <a
-                                            href="/dashboard/settings?tab=kyc"
-                                            className="text-[10px] text-purple-400 hover:text-purple-300 font-bold flex items-center gap-1 underline"
-                                        >
-                                            Upgrade Tier {serverLimits?.currentTier !== undefined ? `(Tier ${serverLimits.currentTier})` : ''}
-                                        </a>
-                                    </div>
-                                </div>
                                 {effectivePayCurrency === 'NGN' && (
-                                    <div className="p-3 bg-purple-950/20 border border-purple-500/30 rounded-xl text-[11px] text-purple-300 flex items-start gap-2.5 mb-4 leading-relaxed">
-                                        <span className="text-sm select-none">ℹ️</span>
-                                        <span>
-                                            <strong>Dedicated Account Transfer:</strong> Generate a unique NGN bank account assigned specifically to your wallet. Any bank app transfer made to this account will credit your balance instantly.
-                                        </span>
+                                    <div className="grid grid-cols-2 gap-2 p-1 bg-gray-900 border border-gray-800 rounded-xl mb-4">
+                                        <button
+                                            type="button"
+                                            onClick={() => setNgnDepositMode('anchor')}
+                                            className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex flex-col items-center gap-0.5 ${
+                                                ngnDepositMode === 'anchor'
+                                                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                                                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                                            }`}
+                                        >
+                                            <span>Anchor NUBAN</span>
+                                            <span className="text-[10px] opacity-80 font-normal">Dedicated NGN Account</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setNgnDepositMode('fincra')}
+                                            className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex flex-col items-center gap-0.5 ${
+                                                ngnDepositMode === 'fincra'
+                                                    ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                                                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                                            }`}
+                                        >
+                                            <span>Fincra GTBank</span>
+                                            <span className="text-[10px] opacity-80 font-normal">Shared Bank Transfer</span>
+                                        </button>
                                     </div>
                                 )}
-                                <Button onClick={handleBankDeposit} disabled={loading} className="w-full h-12 text-base font-bold">
-                                    {loading ? <Loader2 className="animate-spin mr-2" size={20} /> : <Landmark className="mr-2" size={20} />}
-                                    Generate Transfer Details
-                                </Button>
+
+                                {effectivePayCurrency === 'NGN' && ngnDepositMode === 'anchor' ? (
+                                    <AnchorAccountCard />
+                                ) : (
+                                    <>
+                                        <div>
+                                            <label htmlFor="bank-amount" className="block text-sm text-gray-400 mb-2 cursor-pointer">Amount</label>
+                                            <div className="relative">
+                                                <input
+                                                    id="bank-amount"
+                                                    name="amount"
+                                                    type="number"
+                                                    value={amount}
+                                                    onChange={(e) => setAmount(e.target.value)}
+                                                    placeholder="0.00"
+                                                    className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-purple-500 outline-none pr-16"
+                                                    autoComplete="off"
+                                                />
+                                                <span className="absolute right-4 top-3 text-gray-400 font-bold">
+                                                    {effectivePayCurrency}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between items-center mt-2 px-1">
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] text-gray-500">Daily Limit: {getFormattedDailyDepositLimit(effectivePayCurrency)} {effectivePayCurrency}</span>
+                                                    <span className="text-[10px] text-gray-500">Transaction Max: {getFormattedTransactionMax(effectivePayCurrency)} {effectivePayCurrency}</span>
+                                                </div>
+                                                <a
+                                                    href="/dashboard/settings?tab=kyc"
+                                                    className="text-[10px] text-purple-400 hover:text-purple-300 font-bold flex items-center gap-1 underline"
+                                                >
+                                                    Upgrade Tier {serverLimits?.currentTier !== undefined ? `(Tier ${serverLimits.currentTier})` : ''}
+                                                </a>
+                                            </div>
+                                        </div>
+                                        {effectivePayCurrency === 'NGN' && (
+                                            <div className="p-3 bg-purple-950/20 border border-purple-500/30 rounded-xl text-[11px] text-purple-300 flex items-start gap-2.5 mb-4 leading-relaxed">
+                                                <span className="text-sm select-none">ℹ️</span>
+                                                <span>
+                                                    <strong>Fincra GTBank Transfer:</strong> Transfer to Guaranty Trust Bank with your unique reference code to fund your NGN wallet.
+                                                </span>
+                                            </div>
+                                        )}
+                                        <Button onClick={handleBankDeposit} disabled={loading} className="w-full h-12 text-base font-bold">
+                                            {loading ? <Loader2 className="animate-spin mr-2" size={20} /> : <Landmark className="mr-2" size={20} />}
+                                            Generate Transfer Details
+                                        </Button>
+                                    </>
+                                )}
                             </div>
                         )}
 

@@ -2,6 +2,7 @@ import React from "react";
 import { Plus, Trash2, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { cn } from "../../utils/cn";
 import { Button } from "../common/Button";
+import { safeRandomUUID } from "../../utils/uuid";
 
 export interface ChecklistItem {
   id: string;
@@ -18,7 +19,7 @@ interface ChecklistModuleProps {
 export const ChecklistModule: React.FC<ChecklistModuleProps> = ({ items = [], onChange }) => {
   const handleAddItem = () => {
     const newItem: ChecklistItem = {
-      id: crypto.randomUUID(),
+      id: safeRandomUUID(),
       text: "",
       completed: false,
       indent: 0,

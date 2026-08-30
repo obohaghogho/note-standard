@@ -283,9 +283,15 @@ const toggleBookmark = async (req, res, next) => {
 
 const deletePost = async (req, res, next) => {
   try {
-    const { id: userId } = req.user;
+    const { id: userId, role } = req.user;
     const { postId } = req.params;
-    const { error } = await supabase.from('community_posts').delete().eq('id', postId).eq('author_id', userId);
+
+    let query = supabase.from('community_posts').delete().eq('id', postId);
+    if (role !== 'admin' && role !== 'superadmin') {
+      query = query.eq('author_id', userId);
+    }
+
+    const { error } = await query;
     if (error) throw error;
     res.json({ success: true });
   } catch (err) { next(err); }
@@ -452,6 +458,183 @@ const getComments = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const getReels = async (req, res, next) => {
+  try {
+    const userId = req.user?.id;
+    const { limit = 20, cursor } = req.query;
+    const limitNum = parseInt(limit, 10) || 20;
+
+    let query = supabase
+      .from('community_posts')
+      .select('*, author:profiles!community_posts_author_id_fkey(id, username, full_name, avatar_url)')
+      .or('post_type.eq.video,post_type.eq.reel,is_reel.eq.true')
+      .order('created_at', { ascending: false })
+      .limit(limitNum + 1);
+
+    if (cursor) {
+      query = query.lt('created_at', cursor);
+    }
+
+    let { data: posts, error } = await query;
+    let targetPosts = posts || [];
+
+    if (error || !targetPosts.length) {
+      logger.warn(`[CommunityController] getReels primary query empty/failed (${error?.message}), querying posts with video media.`);
+      const { data: fallbackPosts } = await supabase
+        .from('community_posts')
+        .select('*, author:profiles(id, username, full_name, avatar_url)')
+        .not('media_urls', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(limitNum + 1);
+      targetPosts = fallbackPosts || [];
+    }
+
+    // Filter out posts that do not contain video media URLs
+    targetPosts = targetPosts.filter(p => Array.isArray(p.media_urls) && p.media_urls.length > 0);
+
+    const postIds = targetPosts.map(p => p.id);
+    const authorIds = [...new Set(targetPosts.map(p => p.author_id).filter(Boolean))];
+
+    // Hydrate author profiles if missing
+    let authorMap = {};
+    if (authorIds.length > 0) {
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, username, full_name, avatar_url')
+        .in('id', authorIds);
+
+      (profilesData || []).forEach(prof => {
+        authorMap[prof.id] = prof;
+      });
+    }
+
+    // Fetch user's likes & bookmarks for these posts if authenticated
+    const userLikedPostIds = new Set();
+    const userBookmarkedPostIds = new Set();
+    const likesCountMap = {};
+    const commentsCountMap = {};
+
+    if (postIds.length > 0) {
+      // 1. Fetch likes count & user likes
+      const { data: likesData } = await supabase
+        .from('community_likes')
+        .select('post_id, user_id')
+        .in('post_id', postIds);
+
+      (likesData || []).forEach(l => {
+        likesCountMap[l.post_id] = (likesCountMap[l.post_id] || 0) + 1;
+        if (userId && l.user_id === userId) {
+          userLikedPostIds.add(l.post_id);
+        }
+      });
+
+      // 2. Fetch user bookmarks
+      if (userId) {
+        const { data: bookmarksData } = await supabase
+          .from('community_bookmarks')
+          .select('post_id')
+          .eq('user_id', userId)
+          .in('post_id', postIds);
+
+        (bookmarksData || []).forEach(b => {
+          userBookmarkedPostIds.add(b.post_id);
+        });
+      }
+
+      // 3. Fetch comments count
+      const { data: commentsData } = await supabase
+        .from('community_comments')
+        .select('post_id')
+        .in('post_id', postIds);
+
+      (commentsData || []).forEach(c => {
+        commentsCountMap[c.post_id] = (commentsCountMap[c.post_id] || 0) + 1;
+      });
+    }
+
+    const formatted = targetPosts.map(p => ({
+      ...p,
+      author: p.author || authorMap[p.author_id] || null,
+      media_url: Array.isArray(p.media_urls) ? p.media_urls[0] : (p.media_urls || null),
+      user_has_liked: userLikedPostIds.has(p.id),
+      user_has_bookmarked: userBookmarkedPostIds.has(p.id),
+      likes_count: likesCountMap[p.id] !== undefined ? likesCountMap[p.id] : (p.likes_count || 0),
+      comments_count: commentsCountMap[p.id] !== undefined ? commentsCountMap[p.id] : (p.comments_count || 0),
+    }));
+
+    const hasMore = formatted.length > limitNum;
+    const reelsList = formatted.slice(0, limitNum);
+    const nextCursor = hasMore && reelsList.length > 0 ? reelsList[reelsList.length - 1].created_at : null;
+
+    res.json({ reels: reelsList, hasMore, nextCursor });
+  } catch (err) {
+    logger.error('[CommunityController] getReels error:', err.message);
+    res.status(200).json({ reels: [], hasMore: false, nextCursor: null });
+  }
+};
+
+const createReel = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { content, videoUrl, thumbnailUrl, duration = 30, tags = [] } = req.body;
+
+    if (!videoUrl) {
+      return res.status(400).json({ error: "videoUrl is required for Reels" });
+    }
+
+    // Automatically clamp duration to 90 seconds max for all Reels
+    const clampedDuration = Math.min(Math.max(Math.round(Number(duration) || 30), 1), 90);
+
+    let post;
+    let { data, error } = await supabase
+      .from('community_posts')
+      .insert([{
+        author_id: userId,
+        content: content || '',
+        post_type: 'reel',
+        media_urls: [videoUrl],
+        tags: Array.isArray(tags) ? tags : [],
+        created_at: new Date().toISOString(),
+      }])
+      .select('*')
+      .single();
+
+    if (error) {
+      logger.warn(`[CommunityController] Reel insert with post_type 'reel' failed (${error.message}), retrying with post_type 'video'.`);
+      const retry = await supabase
+        .from('community_posts')
+        .insert([{
+          author_id: userId,
+          content: content || '',
+          post_type: 'video',
+          category: 'reel',
+          media_urls: [videoUrl],
+          tags: Array.isArray(tags) ? [...tags, 'reel'] : ['reel'],
+          created_at: new Date().toISOString(),
+        }])
+        .select('*')
+        .single();
+
+      if (retry.error) throw retry.error;
+      post = retry.data;
+    } else {
+      post = data;
+    }
+
+    res.status(201).json({
+      success: true,
+      reel: {
+        ...post,
+        media_url: videoUrl,
+        thumbnail_url: thumbnailUrl || null,
+        video_duration: clampedDuration,
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   createCommunityPost,
   addComment,
@@ -466,5 +649,7 @@ module.exports = {
   toggleFollow,
   reportItem,
   reportUser,
-  votePollOption
+  votePollOption,
+  getReels,
+  createReel
 };

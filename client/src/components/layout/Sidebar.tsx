@@ -20,7 +20,8 @@ import {
     Smartphone,
     X,
     AlertTriangle,
-    Wallet
+    Wallet,
+    Video
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { Button } from '../common/Button';
@@ -58,6 +59,7 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
         { icon: LayoutDashboard, label: t('nav.home'), to: '/dashboard' },
         { icon: Notebook, label: t('nav.notes'), to: '/dashboard/notes' },
         { icon: Globe, label: t('nav.feed'), to: '/dashboard/feed' },
+        { icon: Video, label: 'Reels', to: '/dashboard/reels' },
         { icon: TrendingUp, label: t('nav.trends'), to: '/dashboard/trends' },
         { icon: MessageSquare, label: t('nav.chat'), to: '/dashboard/chat' },
         { icon: Share2, label: t('nav.shared'), to: '/dashboard/shared' },

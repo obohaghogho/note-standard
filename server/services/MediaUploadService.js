@@ -164,23 +164,66 @@ class MediaUploadService {
     }
 
     const imageMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/svg+xml'];
-    const videoMimes = ['video/mp4', 'video/webm', 'video/quicktime', 'video/avi', 'video/x-matroska', 'video/mkv', 'video/3gpp'];
+    const videoMimes = ['video/mp4', 'video/webm', 'video/quicktime', 'video/avi', 'video/x-matroska', 'video/mkv', 'video/3gpp', 'video/mov', 'video/x-m4v', 'video/m4v', 'video/mpeg'];
     const audioMimes = ['audio/m4a', 'audio/mp4', 'audio/aac', 'audio/wav', 'audio/webm', 'audio/mpeg', 'audio/x-m4a', 'audio/ogg'];
 
+    const videoExts = ['.mp4', '.mov', '.webm', '.avi', '.mkv', '.m4v', '.3gp', '.mpeg', '.ts'];
+    const fileExt = path.extname(file.originalname || '').toLowerCase();
+
     const isImage = imageMimes.includes(file.mimetype) || file.mimetype.startsWith('image/');
-    const isVideo = videoMimes.includes(file.mimetype) || file.mimetype.startsWith('video/');
+    const isVideo = videoMimes.includes(file.mimetype) || file.mimetype.startsWith('video/') || videoExts.includes(fileExt);
     const isAudio = audioMimes.includes(file.mimetype) || file.mimetype.startsWith('audio/');
 
     if (!isImage && !isVideo && !isAudio) {
-      throw new Error(`Unsupported media MIME type: ${file.mimetype}`);
+      throw new Error(`Unsupported media MIME type: ${file.mimetype || 'unknown'}`);
     }
 
-    const maxSizeBytes = 50 * 1024 * 1024; // 50MB
+    const maxSizeBytes = 1024 * 1024 * 1024; // 1GB (1024MB)
     if (file.size > maxSizeBytes) {
-      throw new Error('Media file size exceeds 50MB limit');
+      throw new Error('Media file size exceeds 1GB limit');
     }
 
     const resourceType = isVideo ? 'video' : isAudio ? 'audio' : 'image';
+
+    // Route video uploads through Cloudinary if available for 1GB+ limit & automatic 90s streaming trim
+    if (isVideo && process.env.CLOUDINARY_URL) {
+      try {
+        const cloudinary = require('../config/cloudinary');
+        const cloudRes = await new Promise((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            {
+              resource_type: 'video',
+              folder: 'reels_media',
+            },
+            (err, result) => {
+              if (err) return reject(err);
+              resolve(result);
+            }
+          );
+          stream.end(file.buffer);
+        });
+
+        const rawUrl = cloudRes.secure_url || cloudRes.url;
+        // Apply Cloudinary 90-second streaming trim transformation (so_0,eo_90 = start 0s, end 90s)
+        const trimmedUrl = rawUrl && rawUrl.includes('/upload/')
+          ? rawUrl.replace('/upload/', '/upload/so_0,eo_90/')
+          : rawUrl;
+
+        logger.info(`[MediaUploadService] Cloudinary video upload success: ${trimmedUrl}`);
+        return {
+          url: trimmedUrl,
+          secure_url: trimmedUrl,
+          raw_url: rawUrl,
+          resource_type: 'video',
+          key: cloudRes.public_id,
+          mime: file.mimetype,
+          size: file.size,
+        };
+      } catch (cloudErr) {
+        logger.warn(`[MediaUploadService] Cloudinary video upload failed (${cloudErr.message}), falling back to Supabase storage.`);
+      }
+    }
+
     const defaultExt = isVideo ? '.mp4' : isAudio ? '.m4a' : '.jpg';
     const ext = path.extname(file.originalname) || defaultExt;
     const filename = `${userId}/${Date.now()}_${Math.random().toString(36).substring(7)}${ext}`;

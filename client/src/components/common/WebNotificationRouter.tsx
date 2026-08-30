@@ -110,7 +110,8 @@ export const WebNotificationRouter: React.FC = () => {
       const WEB_DEVICE_KEY = 'notestandard_web_device_id';
       let webDeviceId = localStorage.getItem(WEB_DEVICE_KEY);
       if (!webDeviceId) {
-        webDeviceId = crypto.randomUUID();
+        const { safeRandomUUID } = await import('../../utils/uuid');
+        webDeviceId = safeRandomUUID();
         localStorage.setItem(WEB_DEVICE_KEY, webDeviceId);
       }
 

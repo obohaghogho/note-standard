@@ -75,10 +75,12 @@ interface OfflineAction {
   timestamp: number;
 }
 
+import { safeRandomUUID } from '../utils/uuid';
+
 export function queueOfflineAction(action: Omit<OfflineAction, 'id' | 'timestamp'>) {
   try {
     const queue: OfflineAction[] = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
-    queue.push({ ...action, id: crypto.randomUUID(), timestamp: Date.now() });
+    queue.push({ ...action, id: safeRandomUUID(), timestamp: Date.now() });
     localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
   } catch { /* noop */ }
 }

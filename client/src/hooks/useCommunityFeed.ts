@@ -45,22 +45,34 @@ export function useCommunityFeed(params: FeedParams) {
 
   // ── Initial / refresh load ────────────────────────────────────────────────
   const loadFeed = useCallback(async (fromCache = true) => {
+    const cached = fromCache ? getCachedFeed(cacheKey) : null;
+    if (cached) {
+      setPosts(cached.posts);
+      setHasMore(cached.hasMore);
+      cursorRef.current = cached.nextCursor;
+      setIsLoading(false);
+      // Silent background refresh without flickering isLoading back to true
+      try {
+        const result: FeedResult = await getFeed({
+          tab: paramsRef.current.tab,
+          category: paramsRef.current.category,
+          sort: paramsRef.current.sort,
+          search: paramsRef.current.search,
+          limit: 20,
+        });
+        setPosts(result.posts);
+        setHasMore(result.hasMore);
+        cursorRef.current = result.nextCursor;
+        setCachedFeed(cacheKey, result);
+      } catch {
+        // Retain cached posts silently on background fetch error
+      }
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     cursorRef.current = undefined;
-
-    if (fromCache) {
-      const cached = getCachedFeed(cacheKey);
-      if (cached) {
-        setPosts(cached.posts);
-        setHasMore(cached.hasMore);
-        cursorRef.current = cached.nextCursor;
-        setIsLoading(false);
-        // Refresh in background
-        loadFeed(false);
-        return;
-      }
-    }
 
     try {
       const result: FeedResult = await getFeed({
