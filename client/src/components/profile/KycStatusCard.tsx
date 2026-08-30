@@ -528,24 +528,25 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
 
       {/* TIER 1 MODAL */}
       {showTier1Modal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-neutral-900 border border-white/10 rounded-2xl p-6 max-w-md w-full space-y-5">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Smartphone className="text-emerald-400" size={20} />
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[70] overflow-y-auto p-3 sm:p-6 flex items-start sm:items-center justify-center min-h-screen">
+          <div className="bg-neutral-900 border border-white/10 rounded-2xl p-5 sm:p-6 max-w-md w-full space-y-4 my-auto max-h-[85vh] sm:max-h-[90vh] flex flex-col shadow-2xl">
+            <div className="flex items-center justify-between shrink-0 border-b border-white/5 pb-3">
+              <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                <Smartphone className="text-emerald-400 shrink-0" size={20} />
                 Tier 1: Phone Verification
               </h3>
               <button 
                 onClick={() => setShowTier1Modal(false)}
-                className="text-gray-400 hover:text-white text-lg font-bold"
+                className="text-gray-400 hover:text-white p-1 text-lg font-bold rounded-lg hover:bg-white/5 transition-colors"
+                aria-label="Close"
               >
                 ✕
               </button>
             </div>
-            <p className="text-xs text-gray-300 leading-relaxed">
+            <p className="text-xs text-gray-300 leading-relaxed shrink-0">
               Add your phone number to complete Tier 1 Verification. This secures your account and enables standard wallet transfers.
             </p>
-            <form onSubmit={handleTier1Submit} className="space-y-4">
+            <form onSubmit={handleTier1Submit} className="space-y-4 overflow-y-auto pr-1 flex-1 custom-scrollbar pb-10 sm:pb-2">
               <div>
                 <label className="block text-xs font-medium text-gray-300 mb-1">Phone Number</label>
                 <Input
@@ -554,13 +555,14 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                   value={phoneInput}
                   onChange={(e) => setPhoneInput(e.target.value)}
                   required
+                  className="w-full text-xs"
                 />
               </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="ghost" type="button" onClick={() => setShowTier1Modal(false)}>
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2 border-t border-white/5">
+                <Button variant="ghost" type="button" onClick={() => setShowTier1Modal(false)} className="w-full sm:w-auto">
                   Cancel
                 </Button>
-                <Button type="submit" disabled={loading} className="bg-emerald-600 hover:bg-emerald-500 text-white">
+                <Button type="submit" disabled={loading} className="bg-emerald-600 hover:bg-emerald-500 text-white w-full sm:w-auto font-bold">
                   {loading ? 'Saving...' : 'Save & Verify Tier 1'}
                 </Button>
               </div>
@@ -571,24 +573,25 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
 
       {/* TIER 2 MODAL */}
       {showTier2Modal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-neutral-900 border border-white/10 rounded-2xl p-6 max-w-md w-full space-y-5">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Building2 className="text-blue-400" size={20} />
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[70] overflow-y-auto p-3 sm:p-6 flex items-start sm:items-center justify-center min-h-screen">
+          <div className="bg-neutral-900 border border-white/10 rounded-2xl p-5 sm:p-6 max-w-md w-full space-y-4 my-auto max-h-[85vh] sm:max-h-[90vh] flex flex-col shadow-2xl">
+            <div className="flex items-center justify-between shrink-0 border-b border-white/5 pb-3">
+              <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                <Building2 className="text-blue-400 shrink-0" size={20} />
                 Tier 2: BVN / NIN Verification
               </h3>
               <button 
                 onClick={() => setShowTier2Modal(false)}
-                className="text-gray-400 hover:text-white text-lg font-bold"
+                className="text-gray-400 hover:text-white p-1 text-lg font-bold rounded-lg hover:bg-white/5 transition-colors"
+                aria-label="Close"
               >
                 ✕
               </button>
             </div>
-            <p className="text-xs text-gray-300 leading-relaxed">
+            <p className="text-xs text-gray-300 leading-relaxed shrink-0">
               Enter your BVN or NIN to activate your dedicated NGN virtual bank account and upgrade your daily limit to 500,000 NGN. Your details are encrypted and used solely for name verification.
             </p>
-            <form onSubmit={handleTier2Submit} className="space-y-4">
+            <form onSubmit={handleTier2Submit} className="space-y-4 overflow-y-auto pr-1 flex-1 custom-scrollbar pb-10 sm:pb-2">
               <div>
                 <label className="block text-xs font-medium text-gray-300 mb-1">BVN or NIN Number</label>
                 <Input
@@ -597,6 +600,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                   value={bvnInput}
                   onChange={(e) => setBvnInput(e.target.value)}
                   required
+                  className="w-full text-xs"
                 />
               </div>
               <div>
@@ -606,13 +610,14 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                   value={dobInput}
                   onChange={(e) => setDobInput(e.target.value)}
                   required
+                  className="w-full text-xs"
                 />
               </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="ghost" type="button" onClick={() => setShowTier2Modal(false)}>
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2 border-t border-white/5">
+                <Button variant="ghost" type="button" onClick={() => setShowTier2Modal(false)} className="w-full sm:w-auto">
                   Cancel
                 </Button>
-                <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-500 text-white">
+                <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-500 text-white w-full sm:w-auto font-bold">
                   {loading ? 'Verifying...' : 'Submit & Activate'}
                 </Button>
               </div>
@@ -623,24 +628,25 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
 
       {/* TIER 3 MODAL */}
       {showTier3Modal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-neutral-900 border border-white/10 rounded-2xl p-6 max-w-lg w-full space-y-5">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Globe2 className="text-purple-400" size={20} />
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[70] overflow-y-auto p-3 sm:p-6 flex items-start sm:items-center justify-center min-h-screen">
+          <div className="bg-neutral-900 border border-white/10 rounded-2xl p-4 sm:p-6 max-w-lg w-full space-y-4 my-auto max-h-[85vh] sm:max-h-[90vh] flex flex-col shadow-2xl">
+            <div className="flex items-center justify-between shrink-0 border-b border-white/5 pb-3">
+              <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                <Globe2 className="text-purple-400 shrink-0" size={20} />
                 Tier 3: International FX Verification
               </h3>
               <button 
                 onClick={() => setShowTier3Modal(false)}
-                className="text-gray-400 hover:text-white text-lg font-bold"
+                className="text-gray-400 hover:text-white p-1 text-lg font-bold rounded-lg hover:bg-white/5 transition-colors"
+                aria-label="Close"
               >
                 ✕
               </button>
             </div>
-            <p className="text-xs text-gray-300 leading-relaxed">
+            <p className="text-xs text-gray-300 leading-relaxed shrink-0">
               Upload your Government ID and Utility Bill documents to unlock international USD, EUR, and GBP virtual accounts according to your plan limits.
             </p>
-            <form onSubmit={handleTier3Submit} className="space-y-4">
+            <form onSubmit={handleTier3Submit} className="space-y-4 overflow-y-auto pr-1 flex-1 custom-scrollbar pb-16 sm:pb-2">
               {/* Government ID File Input */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-gray-300">
@@ -652,7 +658,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                     accept="image/jpeg,image/png,image/webp,application/pdf"
                     onChange={(e) => handleFileUpload(e, 'government_id')}
                     disabled={uploadingGovId || loading}
-                    className="text-xs text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-600/30 file:text-purple-200 hover:file:bg-purple-600/40 cursor-pointer"
+                    className="text-xs text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-600/30 file:text-purple-200 hover:file:bg-purple-600/40 cursor-pointer w-full sm:w-auto"
                   />
                   {uploadingGovId && <span className="text-xs text-purple-400 animate-pulse">Uploading...</span>}
                   {!uploadingGovId && governmentIdStoragePath && (
@@ -674,7 +680,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                     accept="image/jpeg,image/png,image/webp,application/pdf"
                     onChange={(e) => handleFileUpload(e, 'utility_bill')}
                     disabled={uploadingUtility || loading}
-                    className="text-xs text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-600/30 file:text-purple-200 hover:file:bg-purple-600/40 cursor-pointer"
+                    className="text-xs text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-600/30 file:text-purple-200 hover:file:bg-purple-600/40 cursor-pointer w-full sm:w-auto"
                   />
                   {uploadingUtility && <span className="text-xs text-purple-400 animate-pulse">Uploading...</span>}
                   {!uploadingUtility && utilityBillStoragePath && (
@@ -685,7 +691,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-300 mb-1">Residential Address</label>
                   <Input
@@ -694,6 +700,7 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
                     required
+                    className="w-full text-xs"
                   />
                 </div>
                 <div>
@@ -704,18 +711,19 @@ export const KycStatusCard: React.FC<KycStatusCardProps> = ({
                     value={occupation}
                     onChange={(e) => setOccupation(e.target.value)}
                     required
+                    className="w-full text-xs"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="ghost" type="button" onClick={() => setShowTier3Modal(false)}>
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-3 border-t border-white/5">
+                <Button variant="ghost" type="button" onClick={() => setShowTier3Modal(false)} className="w-full sm:w-auto">
                   Cancel
                 </Button>
                 <Button 
                   type="submit" 
                   disabled={loading || uploadingGovId || uploadingUtility || !governmentIdStoragePath || !utilityBillStoragePath} 
-                  className="bg-purple-600 hover:bg-purple-500 text-white disabled:opacity-50"
+                  className="bg-purple-600 hover:bg-purple-500 text-white disabled:opacity-50 w-full sm:w-auto font-bold"
                 >
                   {loading ? 'Submitting...' : 'Submit Tier 3 Upgrade'}
                 </Button>
