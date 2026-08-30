@@ -929,30 +929,66 @@ exports.getCommissions = async (req, res) => {
 
 exports.getMyAffiliateStats = async (req, res) => {
   try {
+    const userId = req.user.id;
+
     // 1. Fetch referrals where user is the referrer
-    const { data: referrals, error } = await supabase
+    const { data: referrals, error: refErr } = await supabase
       .from("affiliate_referrals")
       .select(`
-        *,
+        id,
+        created_at,
+        total_commission_earned,
+        commission_percentage,
         referred:profiles!referred_user_id(username, email, avatar_url, created_at)
       `)
-      .eq("referrer_user_id", req.user.id)
+      .eq("referrer_user_id", userId)
       .order("created_at", { ascending: false });
 
-    if (error) throw error;
+    if (refErr) throw refErr;
 
-    // 2. Get global commission rate
+    // 2. Get global commission rate setting
     const { data: commissionRateSetting } = await supabase
       .from("admin_settings")
       .select("value")
       .eq("key", "affiliate_percentage")
       .maybeSingle();
 
+    let rate = 10; // Default 10%
+    if (commissionRateSetting && commissionRateSetting.value != null) {
+      const rawVal = typeof commissionRateSetting.value === "string"
+        ? commissionRateSetting.value.replace(/"/g, "")
+        : commissionRateSetting.value;
+      const parsed = parseFloat(rawVal);
+      if (!isNaN(parsed)) {
+        // If stored as 0.1 (decimal fraction for 10%), scale to percentage
+        rate = parsed > 0 && parsed <= 1 ? parsed * 100 : parsed;
+      }
+    }
+
+    // 3. Compute total commission earned across all referrals
+    const totalEarned = (referrals || []).reduce(
+      (sum, r) => sum + (parseFloat(r.total_commission_earned) || 0),
+      0
+    );
+
+    // 4. Get profile username for referral code
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("username")
+      .eq("id", userId)
+      .maybeSingle();
+
+    const referralCode = profile?.username || userId.slice(0, 8);
+    const clientUrl = process.env.CLIENT_URL || "https://app.notestandard.com";
+
     res.json({
+      success: true,
       referrals: referrals || [],
-      commissionRate: commissionRateSetting
-        ? parseFloat(commissionRateSetting.value)
-        : 0.1,
+      totalEarned,
+      totalReferrals: (referrals || []).length,
+      commissionRate: rate,
+      referral_code: referralCode,
+      referral_link: `${clientUrl}/signup?ref=${userId}`,
     });
   } catch (err) {
     console.error("[WalletController] getMyAffiliateStats error:", err);
@@ -1550,45 +1586,6 @@ exports.getCurrencyAuditLogs = async (req, res) => {
   }
 };
 
-exports.getMyAffiliateStats = async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('username')
-      .eq('id', userId)
-      .single();
-
-    const referralCode = profile?.username || userId.slice(0, 8);
-
-    const { count } = await supabase
-      .from('profiles')
-      .select('id', { count: 'exact', head: true })
-      .eq('referred_by', userId);
-
-    const { data: commissions } = await supabase
-      .from('affiliate_commissions')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-
-    const totalEarned = (commissions || []).reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0);
-
-    res.json({
-      success: true,
-      referral_code: referralCode,
-      referral_link: `https://app.notestandard.com/register?ref=${referralCode}`,
-      total_referrals: count || 0,
-      total_earned: totalEarned,
-      currency: 'USD',
-      commissions: commissions || [],
-    });
-  } catch (err) {
-    console.error('[WalletController] getMyAffiliateStats Error:', err);
-    res.status(500).json({ error: err.message });
-  }
-};
 
 /**
  * POST /api/wallet/withdraw

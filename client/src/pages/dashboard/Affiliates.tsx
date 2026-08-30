@@ -94,13 +94,19 @@ export const Affiliates = () => {
       
       if (response.ok) {
         const data = await response.json();
-        setReferrals(data.referrals || []);
+        const refList: Referral[] = data.referrals || [];
+        setReferrals(refList);
         
-        const total = (data.referrals || []).reduce((sum: number, r: Referral) => sum + (r.total_commission_earned || 0), 0);
+        const sumFromList = refList.reduce((sum: number, r: Referral) => sum + (parseFloat(r.total_commission_earned as any) || 0), 0);
+        const totalEarnedVal = data.totalEarned !== undefined ? parseFloat(data.totalEarned) : sumFromList;
+        const totalReferralsVal = data.totalReferrals !== undefined ? data.totalReferrals : refList.length;
+        const rawRate = data.commissionRate !== undefined ? parseFloat(data.commissionRate) : 10;
+        const normalizedRate = rawRate > 0 && rawRate <= 1 ? rawRate * 100 : rawRate;
+
         setStats({
-          totalEarned: total,
-          totalReferrals: data.referrals?.length || 0,
-          commissionRate: data.commissionRate || 0.1
+          totalEarned: isNaN(totalEarnedVal) ? 0 : totalEarnedVal,
+          totalReferrals: isNaN(totalReferralsVal) ? 0 : totalReferralsVal,
+          commissionRate: isNaN(normalizedRate) ? 10 : normalizedRate
         });
       }
     } catch (err) {
