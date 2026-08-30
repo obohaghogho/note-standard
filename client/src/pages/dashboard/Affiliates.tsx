@@ -101,7 +101,7 @@ export const Affiliates = () => {
         const totalEarnedVal = data.totalEarned !== undefined ? parseFloat(data.totalEarned) : sumFromList;
         const totalReferralsVal = data.totalReferrals !== undefined ? data.totalReferrals : refList.length;
         const rawRate = data.commissionRate !== undefined ? parseFloat(data.commissionRate) : 0.5;
-        const normalizedRate = isNaN(rawRate) ? 0.5 : rawRate;
+        const normalizedRate = (isNaN(rawRate) || rawRate <= 0.1) ? 0.5 : rawRate;
 
         setStats({
           totalEarned: isNaN(totalEarnedVal) ? 0 : totalEarnedVal,

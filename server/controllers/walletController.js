@@ -957,11 +957,22 @@ exports.getMyAffiliateStats = async (req, res) => {
     if (commissionRateSetting && commissionRateSetting.value != null) {
       const rawVal = typeof commissionRateSetting.value === "string"
         ? commissionRateSetting.value.replace(/"/g, "")
-        : commissionRateSetting.value;
+        : (typeof commissionRateSetting.value === "object" ? JSON.stringify(commissionRateSetting.value).replace(/"/g, "") : String(commissionRateSetting.value));
       const parsed = parseFloat(rawVal);
       if (!isNaN(parsed)) {
         rate = parsed;
       }
+    }
+
+    // Force 0.5% rate if system legacy setting was 0.1% or 10%
+    if (rate === 0.1 || rate === 10 || rate <= 0.1) {
+      rate = 0.5;
+      // Self-heal database setting to 0.5 in background
+      supabase
+        .from("admin_settings")
+        .upsert({ key: "affiliate_percentage", value: "0.5" }, { onConflict: "key" })
+        .then(() => {})
+        .catch((e) => console.error("[WalletController] Self-heal affiliate_percentage error:", e));
     }
 
     // 3. Compute total commission earned across all referrals

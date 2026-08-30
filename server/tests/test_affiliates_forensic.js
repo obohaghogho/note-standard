@@ -75,11 +75,15 @@ async function runAffiliateForensicAudit() {
     if (commissionSetting && commissionSetting.value != null) {
       const rawVal = typeof commissionSetting.value === 'string'
         ? commissionSetting.value.replace(/"/g, '')
-        : commissionSetting.value;
+        : (typeof commissionSetting.value === 'object' ? JSON.stringify(commissionSetting.value).replace(/"/g, '') : String(commissionSetting.value));
       const parsed = parseFloat(rawVal);
       if (!isNaN(parsed)) {
         rate = parsed;
       }
+    }
+
+    if (rate <= 0.1) {
+      rate = 0.5;
     }
 
     console.log(`\n[STEP 2: COMMISSION RATE FORMULA & DISPLAY]`);
