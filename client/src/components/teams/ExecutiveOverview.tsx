@@ -179,7 +179,7 @@ export const ExecutiveOverview: React.FC<ExecutiveOverviewProps> = ({ teams, onS
   ];
 
   return (
-    <div className="p-6 md:p-8 space-y-8 overflow-y-auto h-full scrollbar-hide bg-black text-white">
+    <div className="p-4 sm:p-6 md:p-8 pb-36 pb-safe space-y-8 overflow-y-auto h-full scrollbar-hide bg-black text-white">
       {/* Welcome Banner */}
       <div className="relative p-8 rounded-[2.5rem] overflow-hidden border border-white/5 bg-gradient-to-br from-gray-900 via-gray-950 to-black shadow-2xl">
         <div className="absolute top-0 right-0 w-80 h-80 bg-primary/5 blur-[120px] rounded-full"></div>

@@ -343,13 +343,14 @@ export function TeamsPage() {
 
         <div className="teams-icon-rail__divider" />
 
-        {/* Create Workspace Button (desktop only — mobile has it in header) */}
+        {/* Create Workspace / Team Button */}
         <button 
           onClick={() => isBusiness ? setShowCreateModal(true) : setShowUpgradeModal(true)}
           className="teams-icon-rail__btn teams-icon-rail__btn--create"
           title="Create workspace"
         >
-          <Plus size={20} />
+          <Plus size={20} className="shrink-0" />
+          <span className="md:hidden font-bold">Create New Team / Workspace</span>
         </button>
       </div>
 
