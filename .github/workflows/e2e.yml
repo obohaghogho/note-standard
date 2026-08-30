@@ -20,9 +20,9 @@ jobs:
     env:
       CI: true
       HUSKY: 0
-      SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL || 'https://placeholder.supabase.co' }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY || 'placeholder' }}
-      PLAYWRIGHT_BASE_URL: ${{ secrets.STAGING_PLAYWRIGHT_BASE_URL || 'http://localhost:5173' }}
+      SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+      PLAYWRIGHT_BASE_URL: ${{ secrets.STAGING_PLAYWRIGHT_BASE_URL }}
 
     steps:
     - uses: actions/checkout@v4
