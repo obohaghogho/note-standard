@@ -439,6 +439,110 @@ class AnchorService {
   }
 
   /**
+   * Auto-Sync Pending Deposits from Anchor Core Banking API
+   * Fetches latest Inbound NIP transactions for user's dedicated accounts and auto-credits any uncredited deposit.
+   */
+  async syncPendingAnchorDeposits(userId) {
+    if (!this.isEnabled()) return [];
+    try {
+      let query = supabase.from("dedicated_accounts").select("*").eq("provider", "anchor");
+      if (userId) query = query.eq("user_id", userId);
+
+      const { data: dedicatedAccs, error: dvaErr } = await query;
+      if (dvaErr || !dedicatedAccs || dedicatedAccs.length === 0) return [];
+
+      const DepositCreditEngine = require("./payment/DepositCreditEngine");
+      const creditedTransactions = [];
+
+      for (const dva of dedicatedAccs) {
+        const accountId = dva.provider_account_id || dva.account_number;
+        if (!accountId) continue;
+
+        try {
+          const res = await this.client.get("/transactions", { params: { accountId: accountId } });
+          const txs = res.data?.data || [];
+
+          for (const tx of txs) {
+            const attr = tx.attributes || tx;
+            const type = (tx.type || "").toLowerCase();
+            if (!type.includes("inbound") && !type.includes("deposit") && !type.includes("credit")) continue;
+
+            const txId = tx.id;
+            const rawAmount = parseFloat(attr.amount || 0);
+            if (rawAmount <= 0) continue;
+
+            // Convert kobo to Naira
+            const amountInNaira = rawAmount / 100;
+            const depRef = txId;
+
+            // Check if already in DB
+            const { data: existingTx } = await supabase
+              .from("transactions")
+              .select("id, status, wallet_credit_status")
+              .or(`provider_reference.eq.${depRef},reference_id.eq.${depRef},reference_id.eq.ANCHOR-DEP-${depRef}`)
+              .maybeSingle();
+
+            if (!existingTx) {
+              logger.info(`[AnchorSync] Uncredited deposit detected on Anchor API (${txId}: ${amountInNaira} NGN). Auto-crediting user ${dva.user_id}...`);
+              
+              const walletService = require("./walletService");
+              const wallet = await walletService.createWallet(dva.user_id, "NGN", "native");
+
+              if (wallet && wallet.id) {
+                const { data: newTx, error: newTxErr } = await supabase
+                  .from("transactions")
+                  .insert({
+                    user_id: dva.user_id,
+                    wallet_id: wallet.id,
+                    amount: amountInNaira,
+                    currency: "NGN",
+                    type: "DEPOSIT",
+                    status: "PENDING",
+                    reference_id: `ANCHOR-DEP-${depRef}`,
+                    provider_reference: depRef,
+                    provider: "anchor",
+                    payment_status: "PAYMENT_CONFIRMED",
+                    wallet_credit_status: "WALLET_CREDIT_PENDING",
+                    display_label: `Anchor Virtual Account Deposit (${amountInNaira} NGN)`,
+                    metadata: {
+                      anchor_transaction_id: depRef,
+                      summary: attr.summary,
+                      auto_synced: true
+                    }
+                  })
+                  .select("*")
+                  .single();
+
+                if (!newTxErr && newTx) {
+                  const creditRes = await DepositCreditEngine.credit({
+                    transactionId: newTx.id,
+                    reference: depRef,
+                    amount: amountInNaira,
+                    currency: "NGN",
+                    userId: dva.user_id,
+                    source: "ANCHOR_AUTO_SYNC"
+                  });
+
+                  if (creditRes && creditRes.credited) {
+                    creditedTransactions.push(newTx.id);
+                  }
+                }
+              }
+            }
+          }
+        } catch (txErr) {
+          logger.warn(`[AnchorSync] Error querying transactions for account ${accountId}: ${txErr.message}`);
+        }
+      }
+
+      return creditedTransactions;
+    } catch (err) {
+      logger.error(`[AnchorSync] Global sync error: ${err.message}`);
+      return [];
+    }
+  }
+
+  /**
    * Provider Health Monitoring Diagnostics
    */
   async getHealthStatus() {

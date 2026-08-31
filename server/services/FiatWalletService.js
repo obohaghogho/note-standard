@@ -17,6 +17,13 @@ class FiatWalletService {
    * Get all fiat wallets for a user
    */
   async getWallets(userId) {
+    try {
+      const anchorService = require("./anchorService");
+      await anchorService.syncPendingAnchorDeposits(userId);
+    } catch (syncErr) {
+      // Non-blocking auto-sync
+    }
+
     const { data: wallets, error } = await supabase
       .from("wallets_v6")
       .select("*")

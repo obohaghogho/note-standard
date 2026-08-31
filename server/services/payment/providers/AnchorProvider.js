@@ -237,7 +237,9 @@ class AnchorProvider extends BaseProvider {
       event.includes("success") || 
       event.includes("completed") || 
       event.includes("credited") || 
-      event.includes("credit")
+      event.includes("credit") ||
+      event.includes("settled") ||
+      event.includes("received")
     ) {
       status = "success";
     } else if (event.includes("failed") || event.includes("declined")) {

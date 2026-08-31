@@ -143,6 +143,13 @@ router.get("/accounts", requireAuth, async (req, res, next) => {
       }
     }
 
+    // Auto-sync any pending uncredited deposit on Anchor core banking
+    try {
+      await anchorService.syncPendingAnchorDeposits(userId);
+    } catch (syncErr) {
+      logger.warn(`[AnchorRoute] GET /accounts auto-sync warning: ${syncErr.message}`);
+    }
+
     res.json({ success: true, accounts: accounts || [] });
   } catch (err) {
     next(err);
