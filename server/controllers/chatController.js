@@ -1794,13 +1794,21 @@ exports.sendMessage = async (req, res) => {
       // 2. Broadcast to other members immediately if it's not a duplicate
       if (!isDuplicate) {
           // PRIMARY PATH: Emit to each participant's user:<id> room.
-          // PERF FIX: Reuse the `members` array fetched at the top of sendMessage
-          // (was previously a 2nd redundant SELECT on conversation_members).
           try {
-              if (members.length > 0) {
+              let targetMembers = members;
+              if (!targetMembers || targetMembers.length <= 1) {
+                  const { data: freshMembers } = await supabase
+                      .from("conversation_members")
+                      .select("user_id, is_muted, status")
+                      .eq("conversation_id", conversationId);
+                  if (freshMembers && freshMembers.length > 0) {
+                      targetMembers = freshMembers;
+                  }
+              }
+
+              if (targetMembers && targetMembers.length > 0) {
                   // Fire a single batch broadcast via pg_notify to the gateway.
-                  // This eliminates PostgreSQL connection exhaustion (EMAXCONNSESSION) on group chats.
-                  const userIds = members.map(m => m.user_id);
+                  const userIds = targetMembers.map(m => m.user_id);
                   await realtime.emitToUsers(userIds, "chat:message", safePayload, { correlationId: req.correlationId });
                   
                   logger.info("Realtime event dispatched [Stage 4]", {

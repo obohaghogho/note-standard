@@ -79,11 +79,17 @@ class PushDispatcher {
    * Routes dispatch to the correct platform handler.
    */
   static async dispatchToDevice(supabase, fbApp, device, payload) {
-    if (device.type === 'vapid' || (device.endpoint && !device.endpoint.startsWith('fcm:'))) {
+    const isWebPushUrl = typeof device.endpoint === 'string' && device.endpoint.startsWith('https://');
+    const isVapid = device.type === 'vapid' || (isWebPushUrl && device.p256dh);
+
+    if (isVapid || (isWebPushUrl && !device.type)) {
       return PushDispatcher.sendWebPush(supabase, device, payload);
     }
 
-    if (device.platform === 'android' && fbApp && device.type === 'fcm') {
+    const isFcmToken = device.type === 'fcm' || 
+      (typeof device.endpoint === 'string' && !device.endpoint.startsWith('https://') && !device.endpoint.startsWith('ExponentPushToken'));
+
+    if ((isFcmToken || device.platform === 'android') && fbApp) {
       return PushDispatcher.sendAndroidFcm(fbApp, supabase, device, payload);
     }
 
@@ -91,7 +97,7 @@ class PushDispatcher {
       return PushDispatcher.sendIosPush(fbApp, supabase, device, payload);
     }
 
-    if (device.endpoint) {
+    if (isWebPushUrl) {
       return PushDispatcher.sendWebPush(supabase, device, payload);
     }
 

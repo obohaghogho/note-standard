@@ -117,13 +117,26 @@ async function processIncomingMessage(io, supabase, envelope, deps = {}) {
 
       if (members && members.length > 0) {
         recipientIds = members.map(m => m.user_id).filter(uid => uid !== senderId);
+      } else {
+        // Fallback retry window for first message race condition
+        await new Promise(r => setTimeout(r, 250));
+        const { data: retryMembers } = await supabase
+          .from('conversation_members')
+          .select('user_id')
+          .eq('conversation_id', conversationId);
+        if (retryMembers && retryMembers.length > 0) {
+          recipientIds = retryMembers.map(m => m.user_id).filter(uid => uid !== senderId);
+        }
       }
     } catch (dbErr) {
       console.error(`[DeliveryEngine] Error fetching conversation members for ${conversationId}:`, dbErr.message);
     }
   }
 
-  if (recipientIds.length === 0) return;
+  if (recipientIds.length === 0) {
+    console.warn(`[DeliveryEngine] ⚠️ No recipients resolved for message ${messageId} (conversation ${conversationId}). Skipping push.`);
+    return;
+  }
 
   for (const recipientId of recipientIds) {
     const sockets = await io.in(`user:${recipientId}`).fetchSockets();

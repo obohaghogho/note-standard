@@ -12,7 +12,7 @@ const features = {
     CIRCUIT_BREAKER: process.env.FF_CIRCUIT_BREAKER === 'true' || false,
     OFFLINE_RETRY_QUEUE: process.env.FF_OFFLINE_RETRY_QUEUE === 'true' || false,
     STATE_PROTECTION_MIDDLEWARE: process.env.FF_STATE_PROTECTION_MIDDLEWARE === 'true' || false,
-    SEQUENCE_ENFORCEMENT: process.env.FF_SEQUENCE_ENFORCEMENT === 'true' || false,
+    SEQUENCE_ENFORCEMENT: process.env.FF_SEQUENCE_ENFORCEMENT !== 'false',
     BACKGROUND_RECOVERY_WORKERS: process.env.FF_BACKGROUND_RECOVERY_WORKERS === 'true' || false,
     
     // Knowledge Ecosystem Features
