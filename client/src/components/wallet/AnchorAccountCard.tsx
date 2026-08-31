@@ -84,7 +84,7 @@ export const AnchorAccountCard: React.FC = () => {
         <div className="space-y-3 bg-gray-950/40 border border-gray-800/80 rounded-xl p-4">
           <div className="flex items-center justify-between">
             <span className="text-xs text-gray-400 font-medium">Bank Name</span>
-            <span className="text-xs font-semibold text-gray-200">{account.bank_name || account.bankName || "PROVIDUS BANK"}</span>
+            <span className="text-xs font-semibold text-gray-200">{account.bank_name || account.bankName || "9 Payment Service Bank (9PSB)"}</span>
           </div>
 
           <div className="flex items-center justify-between">
