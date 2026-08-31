@@ -58,10 +58,10 @@ self.addEventListener('push', (event) => {
     if (!notifConversationId && data.data?.url) {
         try {
             const notifUrl = new URL(data.data.url, self.location.origin);
-            notifConversationId = notifUrl.searchParams.get('id');
+            notifConversationId = notifUrl.searchParams.get('id') || (notifUrl.pathname.includes('/dashboard/chat/') ? notifUrl.pathname.split('/dashboard/chat/')[1] : null);
         } catch (_) {
-            const match = (data.data?.url || '').match(/[?&]id=([^&]+)/);
-            notifConversationId = match ? match[1] : null;
+            const match = (data.data?.url || '').match(/([?&]id=|\/chat\/)([^&/#?]+)/);
+            notifConversationId = match ? match[2] : null;
         }
     }
 
@@ -80,7 +80,8 @@ self.addEventListener('push', (event) => {
         body: data.body || 'You have a new update.',
         icon: data.icon || '/icon-192.png',
         badge: '/icon-192.png',
-        vibrate: [100, 50, 100],
+        vibrate: [200, 100, 200, 100, 200],
+        timestamp: Date.now(),
         data: {
             url: data.data?.url || data.url || '/dashboard',
             type: data.data?.type || data.type || 'general',

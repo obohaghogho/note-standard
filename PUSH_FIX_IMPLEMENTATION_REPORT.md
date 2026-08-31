@@ -1,6 +1,6 @@
 # PUSH_FIX_IMPLEMENTATION_REPORT
 
-**Generated:** 2026-07-25T19:28:50.717Z
+**Generated:** 2026-08-31T12:00:48.262Z
 
 > [!IMPORTANT]
 > This report is based on REAL data from the live database and environment. No mock data was used.
@@ -47,49 +47,59 @@
 
 ### 2. Subscription Coverage
 
-- ❌ DB query failed: TypeError: fetch failed
+- ⚠️ Coverage: 18/863 users subscribed (2%)
+- ✅ Total push subscriptions in DB: 51
+- ⚠️ 47 subscriptions have NEVER had a successful push (secondary issue — needs investigation)
+- ✅ No subscriptions marked INVALID
 
 ### 3. V2 Routing Configuration
 
 - ✅ USE_V2_PUSH_ROUTING=true (V2 routing ACTIVE)
 - ✅ ALLOW_V2_FALLBACK=true (legacy fallback enabled)
 - ✅ PUSH_ENABLED=true
-- ✅ V2 telemetry: 10/10 recent events had push_sent=true
+- ✅ V2 telemetry: 8/10 recent events had push_sent=true
 
 ### 4. Recent Push Delivery (24h)
 
-- ✅ Last 24h push attempts: 37
-- ✅ Accepted: 33
-- ⚠️ Failed: 4 (check failure breakdown in dashboard)
-- ✅ Push success rate (24h): 89%
-- ⚠️ Failure codes: {"410":3,"500":1}
+- ✅ Last 24h push attempts: 4
+- ✅ Accepted: 4
+- ✅ Push success rate (24h): 100%
 
 ### 5. Never-Pushed Subscriptions (Secondary Issue)
 
 - ⚠️ NOTE: This is a SEPARATE issue from the 85% coverage gap.
 - ⚠️ These users HAVE subscriptions but push service never successfully delivered.
 - ⚠️ Root cause NOT yet confirmed — may be gateway failure, browser rejection, or endpoint expiry.
-- ⚠️ Found 11 subscriptions with 0 successful pushes:
-- ⚠️   #1 user=5089c266... platform=Android status=healthy created=2026-07-25 lastFail=none
-- ⚠️   #2 user=5089c266... platform=Windows status=healthy created=2026-07-25 lastFail=none
-- ⚠️   #3 user=8677bd57... platform=Windows status=healthy created=2026-07-25 lastFail=none
-- ⚠️   #4 user=6872e2a9... platform=? status=healthy created=2026-07-24 lastFail=none
-- ⚠️   #5 user=8677bd57... platform=? status=healthy created=2026-07-20 lastFail=none
-- ⚠️   #6 user=d7502a9a... platform=Android status=healthy created=2026-07-10 lastFail=none
-- ⚠️   #7 user=43bcb51a... platform=iOS status=healthy created=2026-07-02 lastFail=none
-- ⚠️   #8 user=43fdd48b... platform=Android status=healthy created=2026-06-30 lastFail=none
-- ⚠️   #9 user=7ed6886b... platform=iOS status=healthy created=2026-06-29 lastFail=none
-- ⚠️   #10 user=8677bd57... platform=MacOS status=healthy created=2026-06-25 lastFail=2026-06-26T14:18:42.018+00:00
-- ⚠️   #11 user=8677bd57... platform=Android status=healthy created=2026-06-25 lastFail=2026-06-26T14:18:42.017+00:00
+- ⚠️ Found 20 subscriptions with 0 successful pushes:
+- ⚠️   #1 user=8677bd57... platform=Android status=healthy created=2026-08-28 lastFail=none
+- ⚠️   #2 user=5089c266... platform=Windows status=healthy created=2026-08-27 lastFail=none
+- ⚠️   #3 user=5089c266... platform=Windows status=healthy created=2026-08-25 lastFail=none
+- ⚠️   #4 user=8677bd57... platform=Windows status=healthy created=2026-08-25 lastFail=none
+- ⚠️   #5 user=8677bd57... platform=Windows status=healthy created=2026-08-25 lastFail=none
+- ⚠️   #6 user=8677bd57... platform=Windows status=healthy created=2026-08-24 lastFail=none
+- ⚠️   #7 user=5089c266... platform=Windows status=healthy created=2026-08-24 lastFail=none
+- ⚠️   #8 user=5089c266... platform=? status=healthy created=2026-08-24 lastFail=none
+- ⚠️   #9 user=bc835ab2... platform=Android status=healthy created=2026-08-22 lastFail=none
+- ⚠️   #10 user=bc835ab2... platform=? status=healthy created=2026-08-22 lastFail=none
+- ⚠️   #11 user=8677bd57... platform=Windows status=healthy created=2026-08-18 lastFail=none
+- ⚠️   #12 user=8677bd57... platform=Windows status=healthy created=2026-08-18 lastFail=none
+- ⚠️   #13 user=8677bd57... platform=? status=healthy created=2026-08-18 lastFail=none
+- ⚠️   #14 user=8677bd57... platform=Windows status=healthy created=2026-08-18 lastFail=none
+- ⚠️   #15 user=8677bd57... platform=? status=healthy created=2026-08-18 lastFail=none
+- ⚠️   #16 user=8677bd57... platform=? status=healthy created=2026-08-17 lastFail=none
+- ⚠️   #17 user=8677bd57... platform=Windows status=healthy created=2026-08-17 lastFail=none
+- ⚠️   #18 user=8677bd57... platform=Windows status=healthy created=2026-08-17 lastFail=none
+- ⚠️   #19 user=8677bd57... platform=? status=healthy created=2026-08-17 lastFail=none
+- ⚠️   #20 user=8677bd57... platform=Windows status=healthy created=2026-08-17 lastFail=none
 
 ## Summary
 
 | Metric | Count |
 |--------|-------|
-| ✅ Passed | 17 |
-| ⚠️ Warnings | 17 |
-| ❌ Errors | 1 |
-| Total Checks | 35 |
+| ✅ Passed | 19 |
+| ⚠️ Warnings | 26 |
+| ❌ Errors | 0 |
+| Total Checks | 45 |
 
 ## Open Investigation Items
 

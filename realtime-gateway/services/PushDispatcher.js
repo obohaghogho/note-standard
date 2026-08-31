@@ -180,7 +180,15 @@ class PushDispatcher {
 
       await webpush.sendNotification(
         { endpoint: device.endpoint, keys: { p256dh, auth } },
-        webPayload
+        webPayload,
+        {
+          headers: {
+            Urgency: 'high',
+            TTL: '86400',
+          },
+          TTL: 86400,
+          urgency: 'high',
+        }
       );
 
       console.log(`[PushDispatcher] ✅ Web Push sent to ${device.platform} endpoint`);

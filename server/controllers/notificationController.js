@@ -168,6 +168,44 @@ const subscribeToNotifications = async (req, res, next) => {
       }
     }
 
+    // 3. V2 Multi-Account Installation Dual-Sync: automatically populate device_installations
+    // and installation_accounts so V2 push routing has immediate coverage without relying on fallback.
+    if (deviceId) {
+      try {
+        const upsertPayload = {
+          device_id: deviceId,
+          push_endpoint: endpoint || null,
+          push_p256dh: p256dh || null,
+          push_auth: auth || null,
+          platform: platform || 'web',
+          type: 'vapid',
+          token_updated_at: new Date().toISOString(),
+          last_seen_at: new Date().toISOString(),
+          endpoint_status: 'VALID',
+          failure_count: 0,
+          last_validation_reason: 'PUSH_SUBSCRIBE_SYNC'
+        };
+        const { data: inst } = await supabase
+          .from('device_installations')
+          .upsert(upsertPayload, { onConflict: 'device_id' })
+          .select('installation_id')
+          .maybeSingle();
+
+        if (inst && inst.installation_id) {
+          await supabase
+            .from('installation_accounts')
+            .upsert({
+              installation_id: inst.installation_id,
+              user_id: userId,
+              session_state: 'ACTIVE',
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'installation_id,user_id' });
+        }
+      } catch (v2Err) {
+        console.warn('[PushSubscribe] V2 dual-sync non-fatal warning:', v2Err.message);
+      }
+    }
+
     res.json({ message: "Subscribed to push notifications" });
   } catch (err) {
     next(err);

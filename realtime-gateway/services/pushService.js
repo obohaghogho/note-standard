@@ -947,7 +947,15 @@ async function sendGenericPush(params) {
           logPushMetric({ platform: 'web', push_type: 'vapid', status: 'attempted', user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
           return webpush.sendNotification(
             { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-            webPayload
+            webPayload,
+            {
+              headers: {
+                Urgency: 'high',
+                TTL: '86400',
+              },
+              TTL: 86400,
+              urgency: 'high',
+            }
           ).then(() => {
             logPushMetric({ platform: 'web', push_type: 'vapid', status: 'accepted', user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
             return supabase.from('push_subscriptions').update({ last_successful_push_at: new Date().toISOString() }).match({ user_id: userId, endpoint: sub.endpoint });
