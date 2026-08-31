@@ -213,7 +213,10 @@ class AnchorService {
       try {
         const vnListRes = await this.client.get("/virtual-nubans");
         const list = vnListRes.data?.data || [];
-        const activeVn = list.find((v) => (v.attributes?.status || v.status) === "ACTIVE") || list[0];
+        // Prioritize established Virtual NUBAN 6175916799 or proven active account
+        const activeVn = list.find((v) => (v.attributes?.accountNumber || v.accountNumber) === "6175916799") ||
+                         list.find((v) => (v.attributes?.status || v.status) === "ACTIVE") ||
+                         list[0];
         
         if (activeVn) {
           const vAttr = activeVn.attributes || activeVn;
