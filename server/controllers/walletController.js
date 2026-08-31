@@ -145,14 +145,35 @@ exports.depositCard = async (req, res, next) => {
       return res.status(403).json({ success: false, error: "Currency not yet available." });
     }
 
+    const InternationalCardService = require("../services/internationalCardService");
+
     const upperCurrency = String(currency).toUpperCase();
-    const cardSupportedCurrencies = ["NGN", "USD", "ZAR", "GHS"];
+    const cardSupportedCurrencies = ["NGN", "USD", "ZAR", "GHS", "EUR", "GBP", "CAD"];
     if (!cardSupportedCurrencies.includes(upperCurrency)) {
       return res.status(400).json({
-        error: `Card deposits are not supported for ${upperCurrency}. Please use ${upperCurrency === 'EUR' ? 'SEPA Transfer' : upperCurrency === 'GBP' ? 'UK Faster Payments' : 'Bank Transfer'}.`
+        error: `Card deposits are not supported for ${upperCurrency}. Supported card currencies: ${cardSupportedCurrencies.join(", ")}.`
       });
     }
 
+    // Check NoteStandard KYC Tier Limits in USD equivalent
+    const { data: profileForLimit } = await supabase
+      .from('profiles')
+      .select('kyc_level, daily_deposit_limit')
+      .eq('id', req.user.id)
+      .maybeSingle();
+
+    const userKycTier = profileForLimit?.kyc_level || 0;
+    const tierLimits = { 0: 50, 1: 500, 2: 5000, 3: 50000 };
+    const maxDailyLimitUsd = profileForLimit?.daily_deposit_limit ? parseFloat(profileForLimit.daily_deposit_limit) : (tierLimits[userKycTier] || 50);
+
+    const amountInUsd = InternationalCardService.convertToUsd(amount, upperCurrency);
+    if (amountInUsd > maxDailyLimitUsd) {
+      return res.status(400).json({
+        error: `Deposit amount (${amount} ${upperCurrency} ≈ $${amountInUsd.toFixed(2)}) exceeds your Tier ${userKycTier} daily limit of $${maxDailyLimitUsd.toLocaleString()}. Please upgrade your KYC tier.`
+      });
+    }
+
+    const isInternational = InternationalCardService.isInternationalPayment(upperCurrency, req.body.cardBin || '');
     const paymentService = require("../services/payment/paymentService");
     
     // Robust Email Resolution: Prefer req.user.email (from Auth token), then userProfile, then database query
@@ -183,7 +204,6 @@ exports.depositCard = async (req, res, next) => {
     const defaultOrigin = process.env.FRONTEND_URL || 'https://notestandard.com';
     const callbackUrl = `${sanitiseOrigin(req.headers.origin, defaultOrigin)}/payment/callback`;
 
-    const upCurr = String(currency).toUpperCase();
     const chosenProvider = req.body.provider || 'fincra';
 
     const result = await paymentService.initializePayment(
@@ -198,7 +218,9 @@ exports.depositCard = async (req, res, next) => {
         targetCurrency: toCurrency,
         targetNetwork: toNetwork,
         callbackUrl: callbackUrl,
-        customerName: customerName
+        customerName: customerName,
+        isInternational,
+        require3DS: true
       },
       { provider: chosenProvider }
     );
@@ -206,6 +228,11 @@ exports.depositCard = async (req, res, next) => {
     // Return the structure expected by the frontend
     res.json({
       ...result,
+      isInternational,
+      limits: {
+        dailyLimitUsd: maxDailyLimitUsd,
+        amountInUsd: Math.round(amountInUsd * 100) / 100
+      },
       success: true,
       data: result // Legacy compatibility
     });
@@ -1730,8 +1757,8 @@ exports.getLimits = async (req, res, next) => {
     const remainingWithdrawalToday = Math.max(0, withdrawalLimit - usedWithdrawalToday);
     const remainingToday = remainingWithdrawalToday;
 
-    const nextTier = currentTier < 3 ? currentTier + 1 : undefined;
-    const nextTierLimit = nextTier !== undefined ? (tierWithdrawalLimits[nextTier] || 25000) : undefined;
+    const InternationalCardService = require("../services/internationalCardService");
+    const cardLimitSummary = InternationalCardService.formatLimitSummary(currentTier, profile.daily_deposit_limit);
 
     res.json({
       success: true,
@@ -1747,7 +1774,14 @@ exports.getLimits = async (req, res, next) => {
       remainingDepositToday: Math.round(remainingDepositToday * 100) / 100,
       nextTier,
       nextTierLimit,
-      currencySymbol: "$"
+      currencySymbol: "$",
+      cardLimits: {
+        domesticNgn: cardLimitSummary.domesticCardLimitNgn,
+        internationalUsd: cardLimitSummary.internationalCardLimitUsd,
+        internationalEur: cardLimitSummary.internationalCardLimitEur,
+        internationalGbp: cardLimitSummary.internationalCardLimitGbp,
+      },
+      bankAdvisory: cardLimitSummary.bankAdvisory
     });
   } catch (err) {
     console.error("[WalletController] getLimits Error:", err);

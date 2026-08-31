@@ -11,6 +11,7 @@ import { useWalletCapabilities } from '../../hooks/useWalletCapabilities';
 import { supabase } from '@/lib/supabase';
 
 import { AnchorAccountCard } from './AnchorAccountCard';
+import { CardLimitNotice } from './CardLimitNotice';
 
 interface FundModalProps {
     isOpen: boolean;
@@ -61,6 +62,7 @@ export const FundModal: React.FC<FundModalProps> = ({
     // Direct Purchase State
     const [isPurchase, setIsPurchase] = useState(initialIsPurchase);
     const [isRequestingLimit, setIsRequestingLimit] = useState(false);
+    const [showCardLimitNotice, setShowCardLimitNotice] = useState(false);
     const [requestedLimit, setRequestedLimit] = useState('');
     const [requestReason, setRequestReason] = useState('');
     
@@ -799,31 +801,23 @@ export const FundModal: React.FC<FundModalProps> = ({
                                         </span>
                                     </div>
                                     <div className="flex justify-between items-center mt-2 px-1">
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] text-gray-500">Daily Limit: {getFormattedDailyDepositLimit(effectivePayCurrency)} {effectivePayCurrency}</span>
-                                            <span className="text-[10px] text-gray-500">Transaction Max: {getFormattedTransactionMax(effectivePayCurrency)} {effectivePayCurrency}</span>
-                                        </div>
-                                        {serverLimits?.currentTier !== undefined && serverLimits.currentTier >= 3 ? (
-                                            <a
-                                                href="/dashboard/settings?tab=kyc"
-                                                className="text-[10px] text-emerald-400 font-bold flex items-center gap-1 hover:text-emerald-300"
-                                            >
-                                                <ShieldCheck size={12} className="text-emerald-400" /> Tier 3 Active (Verified)
-                                            </a>
-                                        ) : (
-                                            <a
-                                                href="/dashboard/settings?tab=kyc"
-                                                className="text-[10px] text-purple-400 hover:text-purple-300 font-bold flex items-center gap-1 underline"
-                                            >
-                                                Upgrade Tier {serverLimits?.currentTier !== undefined ? `(Current: Tier ${serverLimits.currentTier})` : ''}
-                                            </a>
-                                        )}
-                                    </div>
+                                         <div className="flex flex-col">
+                                             <span className="text-[10px] text-gray-500">Daily Limit: {getFormattedDailyDepositLimit(effectivePayCurrency)} {effectivePayCurrency}</span>
+                                             <span className="text-[10px] text-gray-500">Transaction Max: {getFormattedTransactionMax(effectivePayCurrency)} {effectivePayCurrency}</span>
+                                         </div>
+                                         <button
+                                             type="button"
+                                             onClick={() => setShowCardLimitNotice(true)}
+                                             className="text-[10px] text-emerald-400 hover:text-emerald-300 font-semibold underline flex items-center gap-1"
+                                         >
+                                             💳 Bank Card Limits Advisory
+                                         </button>
+                                     </div>
                                 </div>
                                 <div className="p-3 bg-purple-950/20 border border-purple-500/30 rounded-xl text-[11px] text-purple-300 flex items-start gap-2.5 mb-4 leading-relaxed">
                                     <span className="text-sm select-none">ℹ️</span>
                                     <span>
-                                        <strong>Secure Card Payment:</strong> You will be redirected to a secure payment gateway for <strong>Credit & Debit Card</strong> deposits. NoteStandard does not store your card details.
+                                        <strong>Domestic & International Cards Supported:</strong> Instant 3D-Secure card deposits for <strong>Visa, Mastercard, Verve & AMEX</strong> (NGN, USD, EUR, GBP). NoteStandard does not store raw card details.
                                     </span>
                                 </div>
                                 <Button onClick={handleCardDeposit} disabled={loading} className="w-full h-12 text-base font-bold">
@@ -1402,6 +1396,34 @@ export const FundModal: React.FC<FundModalProps> = ({
                             </div>
                         )}
                     </motion.div>
+                </AnimatePresence>
+
+                {/* Card Limit Advisory Overlay */}
+                <AnimatePresence>
+                    {showCardLimitNotice && (
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="absolute inset-0 bg-gray-950/95 z-[70] p-4 flex items-center justify-center backdrop-blur-md"
+                        >
+                            <CardLimitNotice
+                                currentTier={serverLimits?.currentTier ?? 1}
+                                dailyLimitUsd={serverLimits?.depositLimit ?? 5000}
+                                remainingAllowanceUsd={serverLimits?.remainingDepositToday ?? 5000}
+                                currency={effectivePayCurrency}
+                                onUpgradeKyc={() => {
+                                    setShowCardLimitNotice(false);
+                                    window.location.href = '/dashboard/settings?tab=kyc';
+                                }}
+                                onRequestLimitIncrease={() => {
+                                    setShowCardLimitNotice(false);
+                                    setIsRequestingLimit(true);
+                                }}
+                                onClose={() => setShowCardLimitNotice(false)}
+                            />
+                        </motion.div>
+                    )}
                 </AnimatePresence>
 
                 {/* Limit Request Overlay */}
