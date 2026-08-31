@@ -455,7 +455,21 @@ class AnchorService {
       const creditedTransactions = [];
 
       for (const dva of dedicatedAccs) {
-        const accountId = dva.provider_account_id || dva.account_number;
+        let accountId = dva.provider_account_id || dva.account_number;
+        // Anchor API requires deposit account ID (ends with -anc_acc), not Virtual NUBAN ID (ends with -anc_acc_num)
+        if (accountId && accountId.endsWith("-anc_acc_num")) {
+          try {
+            const accRes = await this.client.get("/accounts");
+            const accList = accRes.data?.data || [];
+            const matchingAcc = accList.find((a) => (a.attributes?.accountNumber || a.accountNumber || "").endsWith(dva.account_number.slice(-4))) || accList[0];
+            if (matchingAcc) {
+              accountId = matchingAcc.id;
+            }
+          } catch (e) {
+            logger.warn(`[AnchorSync] Could not resolve deposit account ID for ${dva.account_number}: ${e.message}`);
+          }
+        }
+
         if (!accountId) continue;
 
         try {
