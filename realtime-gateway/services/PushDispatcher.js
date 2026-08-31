@@ -184,7 +184,6 @@ class PushDispatcher {
         {
           headers: {
             Urgency: 'high',
-            TTL: '86400',
           },
           TTL: 86400,
           urgency: 'high',

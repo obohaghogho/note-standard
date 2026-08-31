@@ -700,7 +700,7 @@ async function dispatchV2Push(params, pushTargets, isCall = false) {
         };
         nativePromises.push(sendApnsWithFallback(notification, t.push_endpoint, 'V2 APNs Push', t.platform, t.type, userId, t.device_id));
       }
-    } else if (t.platform === 'web' && t.type === 'vapid' && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    } else if ((t.type === 'vapid' || (t.push_endpoint && !t.push_endpoint.startsWith('fcm:'))) && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
       if (isCall) continue; // Web pushes usually don't handle VoIP call pushes the same way
 
       if (payload?.trace) { payload.trace.pushProviderStartTs = Date.now(); }
@@ -727,7 +727,17 @@ async function dispatchV2Push(params, pushTargets, isCall = false) {
       logPushMetric({ platform: 'web', push_type: 'vapid', status: 'attempted', user_id: userId, device_id: t.device_id, endpoint_hash: endpointHash });
       
       nativePromises.push(
-        webpush.sendNotification({ endpoint: t.push_endpoint, keys: { p256dh: t.push_p256dh, auth: t.push_auth } }, webPayload)
+        webpush.sendNotification(
+          { endpoint: t.push_endpoint, keys: { p256dh: t.push_p256dh, auth: t.push_auth } },
+          webPayload,
+          {
+            headers: {
+              Urgency: 'high',
+            },
+            TTL: 86400,
+            urgency: 'high',
+          }
+        )
           .then(() => logPushMetric({ platform: 'web', push_type: 'vapid', status: 'accepted', user_id: userId, device_id: t.device_id, endpoint_hash: endpointHash }))
           .catch(err => {
             logPushMetric({ platform: 'web', push_type: 'vapid', status: 'failed', error_code: String(err.statusCode || err.message), user_id: userId, device_id: t.device_id, endpoint_hash: endpointHash });
@@ -951,7 +961,6 @@ async function sendGenericPush(params) {
             {
               headers: {
                 Urgency: 'high',
-                TTL: '86400',
               },
               TTL: 86400,
               urgency: 'high',
