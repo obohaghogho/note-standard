@@ -1789,5 +1789,40 @@ exports.getLimits = async (req, res, next) => {
   }
 };
 
+/**
+ * GET /api/wallet/ledger
+ * Returns recent transaction entries for the user
+ */
+exports.getLedger = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const limit = parseInt(req.query.limit || req.query.pageSize || 20);
+
+    const { data: txs, error } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+
+    const entries = (txs || []).map(t => ({
+      id: t.id,
+      amount: t.amount,
+      currency: t.currency,
+      type: t.type,
+      status: t.status,
+      display_label: t.display_label || t.type,
+      created_at: t.created_at,
+      reference: t.provider_reference || t.reference_id
+    }));
+
+    res.json({ success: true, entries });
+  } catch (err) {
+    next(err);
+  }
+};
+
 
 
