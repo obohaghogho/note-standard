@@ -110,13 +110,38 @@ router.get("/accounts", requireAuth, async (req, res, next) => {
   try {
     const userId = req.user.id;
 
-    const { data: accounts, error } = await supabase
+    let { data: accounts, error } = await supabase
       .from("dedicated_accounts")
       .select("*")
       .eq("user_id", userId)
       .eq("provider", "anchor");
 
     if (error) throw error;
+
+    const hasStaleProvidus = accounts && accounts.some((a) => a.bank_name?.toUpperCase().includes("PROVIDUS"));
+
+    if (hasStaleProvidus || !accounts || accounts.length === 0) {
+      try {
+        const email = req.user.email || req.userProfile?.email || `${userId}@notestandard.com`;
+        await anchorService.createVirtualAccount({
+          userId,
+          email,
+          firstName: req.user.user_metadata?.first_name || req.userProfile?.username || "User",
+          lastName: req.user.user_metadata?.last_name || "Customer",
+          phone: req.user.phone,
+        });
+
+        const { data: updatedAccounts } = await supabase
+          .from("dedicated_accounts")
+          .select("*")
+          .eq("user_id", userId)
+          .eq("provider", "anchor");
+
+        accounts = updatedAccounts || accounts;
+      } catch (resyncErr) {
+        logger.warn(`[AnchorRoute] GET /accounts auto-resync warning: ${resyncErr.message}`);
+      }
+    }
 
     res.json({ success: true, accounts: accounts || [] });
   } catch (err) {

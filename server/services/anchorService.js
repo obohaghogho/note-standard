@@ -182,7 +182,9 @@ class AnchorService {
         .eq("currency", "NGN")
         .maybeSingle();
 
-      if (existingDva && existingDva.account_number) {
+      const isStaleProvidus = existingDva?.bank_name?.toUpperCase().includes("PROVIDUS");
+
+      if (existingDva && existingDva.account_number && !isStaleProvidus) {
         logger.info(`[AnchorService] Found existing dedicated_account for user ${userId}: ${existingDva.account_number}`);
         return {
           id: existingDva.id,
@@ -193,6 +195,10 @@ class AnchorService {
           provider: existingDva.provider,
           customerCode: existingDva.provider_customer_code,
         };
+      }
+
+      if (isStaleProvidus) {
+        logger.warn(`[AnchorService] Found stale Providus Bank account (${existingDva.account_number}) for user ${userId}. Resyncing with Anchor active 9PSB Virtual NUBANs...`);
       }
 
       // 1. Ensure user has an Anchor Customer record
