@@ -44,6 +44,28 @@ class SendGridEmailService {
     }
   }
 
+  getSmtpTransporter() {
+    if (this.smtpTransporter) return this.smtpTransporter;
+
+    const host = process.env.SMTP_HOST;
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+
+    if (host && user && pass) {
+      this.smtpTransporter = nodemailer.createTransport({
+        host,
+        port: parseInt(process.env.SMTP_PORT || "587"),
+        secure: process.env.SMTP_SECURE === "true" || process.env.SMTP_PORT === "465",
+        auth: { user, pass },
+        pool: true,
+        maxConnections: 5,
+        maxMessages: 100,
+      });
+      logger.info("[SendGridEmailService] SMTP backup transporter initialized successfully.");
+    }
+    return this.smtpTransporter;
+  }
+
   /**
    * Send an email via SendGrid with automatic SMTP fallback
    * @param {Object} params
@@ -53,7 +75,9 @@ class SendGridEmailService {
    * @returns {Promise<boolean>} Success status
    */
   async sendEmail({ to, subject, htmlContent }) {
+    this.apiKey = process.env.SENDGRID_API_KEY || this.apiKey;
     if (this.apiKey) {
+      sgMail.setApiKey(this.apiKey);
       const msg = {
         to,
         from: {
@@ -79,7 +103,8 @@ class SendGridEmailService {
       logger.warn("[SendGridEmailService] SendGrid API Key missing. Trying SMTP backup...");
     }
 
-    if (this.smtpTransporter) {
+    const transporter = this.getSmtpTransporter();
+    if (transporter) {
       try {
         const mailOptions = {
           from: `"${this.senderName}" <${process.env.SMTP_FROM || this.from}>`,
@@ -87,7 +112,7 @@ class SendGridEmailService {
           subject,
           html: htmlContent,
         };
-        const info = await this.smtpTransporter.sendMail(mailOptions);
+        const info = await transporter.sendMail(mailOptions);
         logger.info(`[SendGridEmailService] Email sent to ${to}: ${subject} (via SMTP Backup)`);
         return true;
       } catch (smtpError) {
