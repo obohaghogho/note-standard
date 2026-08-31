@@ -107,6 +107,22 @@ export const AnchorAccountCard: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {/* Real-time Deposit Settlement & Credit Status Indicator */}
+          <div className="mt-3 p-3 rounded-xl bg-emerald-950/60 border border-emerald-500/30 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </span>
+              <span className="text-[11px] font-medium text-emerald-300">
+                Auto-Credit Engine Active • Live Deposit Monitoring
+              </span>
+            </div>
+            <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+              Auto-Credited
+            </span>
+          </div>
         </div>
       ) : (
         <div className="text-center py-4 space-y-3">
