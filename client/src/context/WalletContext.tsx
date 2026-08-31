@@ -212,8 +212,9 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                         }
                     }
                     
-                    if (payload.eventType === 'INSERT') {
-                        toast('New transaction initiated', { 
+                     if (payload.eventType === 'INSERT') {
+                        const newTx = payload.new as Partial<{ amount?: number; currency?: string; display_label?: string; }>;
+                        toast(`Processing incoming deposit...`, { 
                             icon: '🟡',
                             style: {
                                 background: '#451a03',
@@ -226,7 +227,15 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
              )
              .subscribe();
 
+        // 3. Automatic Background Sync Interval (Every 8 seconds when tab is active)
+        const autoSyncInterval = setInterval(() => {
+            if (document.visibilityState === 'visible' && !fetchingRef.current) {
+                fetchData();
+            }
+        }, 8000);
+
         return () => {
+            clearInterval(autoSyncInterval);
             supabase.removeChannel(ledgerChannel);
             supabase.removeChannel(txChannel);
         };
