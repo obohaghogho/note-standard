@@ -249,9 +249,9 @@ class AnchorProvider extends BaseProvider {
     const rawAmount = parseFloat(data.amount || data.settledAmount || data.attributes?.amount || 0);
     const currency = (data.currency || data.attributes?.currency || "NGN").toUpperCase();
     
-    // Auto-detect kobo vs naira units (e.g. > 10,000 NGN in kobo vs standard naira)
+    // Anchor sends all NGN amounts in smallest unit (kobo). Convert kobo to Naira.
     let parsedAmount = rawAmount;
-    if (currency === 'NGN' && rawAmount > 50000) {
+    if (currency === 'NGN') {
       const { formatFromSmallestUnit } = require("../../../config/currencyMetadata");
       parsedAmount = formatFromSmallestUnit(rawAmount, currency);
     }

@@ -320,8 +320,9 @@ app.use("/api/webhooks/fincra", require("./routes/fincraWebhook"));
 app.use("/webhooks/fincra", require("./routes/fincraWebhook"));
 
 // Webhook Routes (ALL providers)
-// Paystack, Grey, NowPayments, Flutterwave route through shared webhooks.js
+// Paystack, Grey, NowPayments, Flutterwave, Anchor route through shared webhooks.js
 app.use("/api/webhooks", require("./routes/webhooks"));
+app.use("/webhooks", require("./routes/webhooks"));
 
 const WebhookService = require("./services/WebhookService");
 
