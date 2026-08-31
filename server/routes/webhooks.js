@@ -394,10 +394,89 @@ router.post("/anchor", async (req, res) => {
     const parsed = provider.parseWebhookEvent(req.body);
     logger.info(`[AnchorWebhook] Event received: type=${parsed.type} status=${parsed.status} ref=${parsed.reference}`);
 
-    if (parsed.type === "DEPOSIT" && parsed.status === "success" && parsed.reference) {
+    if (parsed.type === "DEPOSIT" && parsed.status === "success") {
+      const depositRef = parsed.reference || parsed.transactionId;
+      if (!depositRef) {
+        logger.warn("[AnchorWebhook] Deposit event missing reference. Ignored.");
+        return;
+      }
+
+      // Check if a transaction already exists
+      let { data: existingTx } = await supabase
+        .from("transactions")
+        .select("id, status, wallet_credit_status")
+        .or(`provider_reference.eq.${depositRef},reference_id.eq.${depositRef}`)
+        .maybeSingle();
+
+      if (!existingTx) {
+        // Unannounced virtual account deposit — resolve user from dedicated_accounts by account_number
+        const accountNumber = parsed.accountNumber || parsed.raw?.data?.attributes?.accountNumber || parsed.raw?.data?.accountNumber;
+        let userId = null;
+
+        if (accountNumber) {
+          const { data: dedicatedAcc } = await supabase
+            .from("dedicated_accounts")
+            .select("user_id")
+            .eq("account_number", accountNumber)
+            .maybeSingle();
+          if (dedicatedAcc) {
+            userId = dedicatedAcc.user_id;
+            logger.info(`[AnchorWebhook] Resolved user ${userId} via dedicated_accounts (account_number: ${accountNumber})`);
+          }
+        }
+
+        if (!userId && parsed.customerCode) {
+          const { data: custAcc } = await supabase
+            .from("dedicated_accounts")
+            .select("user_id")
+            .eq("provider_customer_code", parsed.customerCode)
+            .maybeSingle();
+          if (custAcc) {
+            userId = custAcc.user_id;
+          }
+        }
+
+        if (userId) {
+          try {
+            const walletService = require("../services/walletService");
+            const wallet = await walletService.createWallet(userId, (parsed.currency || "NGN").toUpperCase(), "native");
+            
+            if (wallet && wallet.id) {
+              const { data: newTx, error: newTxErr } = await supabase
+                .from("transactions")
+                .insert({
+                  user_id: userId,
+                  wallet_id: wallet.id,
+                  amount: parseFloat(parsed.amount || 0),
+                  currency: (parsed.currency || "NGN").toUpperCase(),
+                  type: "DEPOSIT",
+                  status: "PENDING",
+                  reference_id: `ANCHOR-DEP-${depositRef}`,
+                  provider_reference: depositRef,
+                  provider: "anchor",
+                  payment_status: "PAYMENT_CONFIRMED",
+                  wallet_credit_status: "WALLET_CREDIT_PENDING"
+                })
+                .select("id")
+                .single();
+
+              if (newTxErr) {
+                logger.error(`[AnchorWebhook] Failed to auto-create transaction for ${depositRef}: ${newTxErr.message}`);
+              } else {
+                existingTx = newTx;
+                logger.info(`[AnchorWebhook] Auto-created transaction ${newTx.id} for unannounced deposit ${depositRef}`);
+              }
+            }
+          } catch (walletErr) {
+            logger.error(`[AnchorWebhook] Wallet resolution error for user ${userId}: ${walletErr.message}`);
+          }
+        }
+      }
+
       // Credit via the unified DepositCreditEngine
       const creditResult = await DepositCreditEngine.credit({
-        reference:    parsed.reference,
+        transactionId: existingTx?.id || null,
+        reference:    depositRef,
         amount:       parsed.amount,
         currency:     parsed.currency,
         providerTxId: parsed.transactionId,
@@ -407,9 +486,9 @@ router.post("/anchor", async (req, res) => {
       if (creditResult.error) {
         logger.error(`[AnchorWebhook] DepositCreditEngine error: ${creditResult.error}`);
       } else if (creditResult.credited) {
-        logger.info(`[AnchorWebhook] ✅ Wallet credited via DepositCreditEngine. Ref: ${parsed.reference}`);
+        logger.info(`[AnchorWebhook] ✅ Wallet credited via DepositCreditEngine. Ref: ${depositRef}`);
       } else if (creditResult.alreadyCredited) {
-        logger.info(`[AnchorWebhook] Idempotency hit. Ref: ${parsed.reference}`);
+        logger.info(`[AnchorWebhook] Idempotency hit. Ref: ${depositRef}`);
       }
     }
   } catch (err) {
