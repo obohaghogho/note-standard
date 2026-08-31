@@ -110,6 +110,9 @@ export const FundModal: React.FC<FundModalProps> = ({
         const cur = payCurrency.toUpperCase();
         if (cur === 'NGN') return (rawUsdLimit * 1500).toLocaleString();
         if (cur === 'GHS') return (rawUsdLimit * 15).toLocaleString();
+        if (cur === 'EUR') return Math.round(rawUsdLimit / 1.08).toLocaleString();
+        if (cur === 'GBP') return Math.round(rawUsdLimit / 1.27).toLocaleString();
+        if (cur === 'CAD') return Math.round(rawUsdLimit / 0.74).toLocaleString();
         return rawUsdLimit.toLocaleString();
     };
 
@@ -130,6 +133,9 @@ export const FundModal: React.FC<FundModalProps> = ({
         const maxUsd = getSingleTxMaxUsd();
         if (cur === 'NGN') return (maxUsd * 1500).toLocaleString();
         if (cur === 'GHS') return (maxUsd * 15).toLocaleString();
+        if (cur === 'EUR') return Math.round(maxUsd / 1.08).toLocaleString();
+        if (cur === 'GBP') return Math.round(maxUsd / 1.27).toLocaleString();
+        if (cur === 'CAD') return Math.round(maxUsd / 0.74).toLocaleString();
         return maxUsd.toLocaleString();
     };
 
