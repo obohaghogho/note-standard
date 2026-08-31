@@ -145,11 +145,12 @@ class SendGridEmailService {
     return this.sendEmail({ to: email, subject, htmlContent });
   }
 
-  async sendDepositApprovedEmail(email, { amount, currency }) {
+  async sendDepositApprovedEmail(email, { amount, currency, reference }) {
     const subject = "✅ Deposit Approved - Wallet Credited";
     const htmlContent = this._wrapTemplate(`
       <h2 style="color: #10b981; margin-bottom: 16px;">✅ Deposit Approved!</h2>
       <p>Your deposit of <strong>${currency} ${amount}</strong> has been approved.</p>
+      ${reference ? `<p style="color: #6b7280; font-size: 14px;">Reference: <code style="background: #f3f4f6; padding: 2px 6px; border-radius: 4px;">${reference}</code></p>` : ''}
       <p>Your wallet has been credited successfully. You can now use your funds in the app.</p>
       <div style="margin-top: 24px;">
         <a href="${process.env.CLIENT_URL || "https://notestandard.com"}/dashboard/wallet"

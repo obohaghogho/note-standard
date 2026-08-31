@@ -124,6 +124,12 @@ server.listen(PORT, "0.0.0.0", async () => {
   const CryptoWalletVerificationWorker = require("./workers/CryptoWalletVerificationWorker");
   CryptoWalletVerificationWorker.start();
 
+  // ── Anchor BaaS: Server-Side Deposit Poller (30s interval) ─────────────────
+  // PERMANENT FIX: Polls Anchor API for new deposits and auto-credits wallets.
+  // This ensures deposits are credited even if webhooks fail or are misconfigured.
+  const AnchorDepositPoller = require("./workers/AnchorDepositPoller");
+  AnchorDepositPoller.start(30000);
+
   // ✅ Workers are launched — mark workers ready
   bootManager.setService("workers", true);
 

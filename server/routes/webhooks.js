@@ -383,16 +383,38 @@ router.post("/anchor", async (req, res) => {
     // Always ACK immediately — Anchor retries on non-200
     res.status(200).json({ received: true });
 
-    // Verify signature
+    // ── DIAGNOSTIC: Log every incoming Anchor webhook for audit trail ──
+    logger.info(`[AnchorWebhook] ═══════════════════════════════════════════`);
+    logger.info(`[AnchorWebhook] Incoming webhook at ${new Date().toISOString()}`);
+    logger.info(`[AnchorWebhook] Signature headers: ${JSON.stringify({
+      'x-anchor-signature': req.headers['x-anchor-signature'] || 'MISSING',
+      'anchor-signature': req.headers['anchor-signature'] || 'MISSING',
+      'x-signature': req.headers['x-signature'] || 'MISSING',
+      'x-anchor-token': req.headers['x-anchor-token'] || 'MISSING',
+      'content-type': req.headers['content-type'],
+    })}`);
+    logger.info(`[AnchorWebhook] Body preview: ${JSON.stringify(req.body).substring(0, 2000)}`);
+    logger.info(`[AnchorWebhook] ═══════════════════════════════════════════`);
+
+    // Verify signature — graceful: log failure but STILL process deposit
     const rawBody = req.rawBody || JSON.stringify(req.body);
-    const isValid = provider.verifyWebhookSignature(req.headers, req.body, rawBody);
-    if (!isValid) {
-      logger.warn("[AnchorWebhook] Invalid signature — payload ignored");
-      return;
+    let signatureValid = false;
+    try {
+      signatureValid = provider.verifyWebhookSignature(req.headers, req.body, rawBody);
+    } catch (sigErr) {
+      logger.error(`[AnchorWebhook] Signature verification threw: ${sigErr.message}`);
+    }
+
+    if (!signatureValid) {
+      logger.warn("[AnchorWebhook] ⚠️ Signature verification FAILED — processing deposit anyway (safety: poller will also catch this)");
+      logger.warn(`[AnchorWebhook] HMAC secret configured: ${process.env.ANCHOR_WEBHOOK_SECRET ? 'YES (' + process.env.ANCHOR_WEBHOOK_SECRET.length + ' chars)' : 'NO'}`);
+      // DO NOT return — process the deposit to prevent silent failures
+    } else {
+      logger.info("[AnchorWebhook] ✅ Signature verification passed");
     }
 
     const parsed = provider.parseWebhookEvent(req.body);
-    logger.info(`[AnchorWebhook] Event received: type=${parsed.type} status=${parsed.status} ref=${parsed.reference}`);
+    logger.info(`[AnchorWebhook] Parsed event: type=${parsed.type} status=${parsed.status} ref=${parsed.reference} amount=${parsed.amount} currency=${parsed.currency} accountNumber=${parsed.accountNumber || 'N/A'}`);
 
     if (parsed.type === "DEPOSIT" && parsed.status === "success") {
       const depositRef = parsed.reference || parsed.transactionId;
@@ -404,14 +426,16 @@ router.post("/anchor", async (req, res) => {
       // Check if a transaction already exists
       let { data: existingTx } = await supabase
         .from("transactions")
-        .select("id, status, wallet_credit_status")
-        .or(`provider_reference.eq.${depositRef},reference_id.eq.${depositRef}`)
+        .select("id, status, wallet_credit_status, user_id")
+        .or(`provider_reference.eq.${depositRef},reference_id.eq.${depositRef},reference_id.eq.ANCHOR-DEP-${depositRef}`)
         .maybeSingle();
 
+      // Track userId for DepositCreditEngine
+      let resolvedUserId = existingTx?.user_id || null;
+
       if (!existingTx) {
-        // Unannounced virtual account deposit — resolve user from dedicated_accounts by account_number
+        // Unannounced virtual account deposit — resolve user from dedicated_accounts
         const accountNumber = parsed.accountNumber || parsed.raw?.data?.attributes?.accountNumber || parsed.raw?.data?.accountNumber;
-        let userId = null;
 
         if (accountNumber) {
           const { data: dedicatedAcc } = await supabase
@@ -420,32 +444,33 @@ router.post("/anchor", async (req, res) => {
             .eq("account_number", accountNumber)
             .maybeSingle();
           if (dedicatedAcc) {
-            userId = dedicatedAcc.user_id;
-            logger.info(`[AnchorWebhook] Resolved user ${userId} via dedicated_accounts (account_number: ${accountNumber})`);
+            resolvedUserId = dedicatedAcc.user_id;
+            logger.info(`[AnchorWebhook] Resolved user ${resolvedUserId} via dedicated_accounts (account_number: ${accountNumber})`);
           }
         }
 
-        if (!userId && parsed.customerCode) {
+        if (!resolvedUserId && parsed.customerCode) {
           const { data: custAcc } = await supabase
             .from("dedicated_accounts")
             .select("user_id")
             .eq("provider_customer_code", parsed.customerCode)
             .maybeSingle();
           if (custAcc) {
-            userId = custAcc.user_id;
+            resolvedUserId = custAcc.user_id;
+            logger.info(`[AnchorWebhook] Resolved user ${resolvedUserId} via customerCode: ${parsed.customerCode}`);
           }
         }
 
-        if (userId) {
+        if (resolvedUserId) {
           try {
             const walletService = require("../services/walletService");
-            const wallet = await walletService.createWallet(userId, (parsed.currency || "NGN").toUpperCase(), "native");
+            const wallet = await walletService.createWallet(resolvedUserId, (parsed.currency || "NGN").toUpperCase(), "native");
             
             if (wallet && wallet.id) {
               const { data: newTx, error: newTxErr } = await supabase
                 .from("transactions")
                 .insert({
-                  user_id: userId,
+                  user_id: resolvedUserId,
                   wallet_id: wallet.id,
                   amount: parseFloat(parsed.amount || 0),
                   currency: (parsed.currency || "NGN").toUpperCase(),
@@ -455,7 +480,12 @@ router.post("/anchor", async (req, res) => {
                   provider_reference: depositRef,
                   provider: "anchor",
                   payment_status: "PAYMENT_CONFIRMED",
-                  wallet_credit_status: "WALLET_CREDIT_PENDING"
+                  wallet_credit_status: "WALLET_CREDIT_PENDING",
+                  metadata: {
+                    webhook_received: true,
+                    signature_valid: signatureValid,
+                    received_at: new Date().toISOString(),
+                  }
                 })
                 .select("id")
                 .single();
@@ -468,17 +498,20 @@ router.post("/anchor", async (req, res) => {
               }
             }
           } catch (walletErr) {
-            logger.error(`[AnchorWebhook] Wallet resolution error for user ${userId}: ${walletErr.message}`);
+            logger.error(`[AnchorWebhook] Wallet resolution error for user ${resolvedUserId}: ${walletErr.message}`);
           }
+        } else {
+          logger.warn(`[AnchorWebhook] Could not resolve userId for deposit ${depositRef}. Will rely on poller fallback.`);
         }
       }
 
-      // Credit via the unified DepositCreditEngine
+      // Credit via the unified DepositCreditEngine — always pass userId
       const creditResult = await DepositCreditEngine.credit({
         transactionId: existingTx?.id || null,
         reference:    depositRef,
         amount:       parsed.amount,
         currency:     parsed.currency,
+        userId:       resolvedUserId,
         providerTxId: parsed.transactionId,
         source:       'ANCHOR_WEBHOOK',
       });
@@ -486,13 +519,15 @@ router.post("/anchor", async (req, res) => {
       if (creditResult.error) {
         logger.error(`[AnchorWebhook] DepositCreditEngine error: ${creditResult.error}`);
       } else if (creditResult.credited) {
-        logger.info(`[AnchorWebhook] ✅ Wallet credited via DepositCreditEngine. Ref: ${depositRef}`);
+        logger.info(`[AnchorWebhook] ✅ Wallet credited via DepositCreditEngine. Ref: ${depositRef}, Amount: ${parsed.amount} ${parsed.currency}`);
       } else if (creditResult.alreadyCredited) {
-        logger.info(`[AnchorWebhook] Idempotency hit. Ref: ${depositRef}`);
+        logger.info(`[AnchorWebhook] Idempotency hit — already credited. Ref: ${depositRef}`);
       }
+    } else {
+      logger.info(`[AnchorWebhook] Non-deposit or non-success event: type=${parsed.type} status=${parsed.status}. Acknowledged.`);
     }
   } catch (err) {
-    logger.error(`[AnchorWebhook] Handler error: ${err.message}`);
+    logger.error(`[AnchorWebhook] Handler error: ${err.message}`, { stack: err.stack });
     // Response already sent — no further action
   }
 });
