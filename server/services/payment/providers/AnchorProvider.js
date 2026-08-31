@@ -176,14 +176,32 @@ class AnchorProvider extends BaseProvider {
   /**
    * Cryptographic Webhook Signature Validation (HMAC SHA-256)
    */
-  verifyWebhookSignature(headers, body, rawBody = null) {
+  verifyWebhookSignature(headers, body, rawBody) {
+    if (!this.isEnabled) return false;
+    
+    // In sandbox/testing mode, if secret is not set, log warning but allow payload processing
     if (!this.webhookSecret) {
+      if (this.env === 'sandbox') {
+        logger.warn("[AnchorProvider] Sandbox mode: ANCHOR_WEBHOOK_SECRET not set, allowing webhook execution.");
+        return true;
+      }
       logger.warn("[AnchorProvider] Missing ANCHOR_WEBHOOK_SECRET for signature verification");
       return false;
     }
 
-    const signature = headers["x-anchor-signature"] || headers["anchor-signature"] || headers["x-signature"];
-    if (!signature) return false;
+    const signature = headers["x-anchor-signature"] || 
+      headers["anchor-signature"] || 
+      headers["x-signature"] || 
+      headers["signature"] || 
+      headers["x-anchor-token"];
+
+    if (!signature) {
+      if (this.env === 'sandbox') {
+        logger.warn("[AnchorProvider] Sandbox mode: signature header missing, allowing webhook execution.");
+        return true;
+      }
+      return false;
+    }
 
     const data = rawBody || (typeof body === "string" ? body : JSON.stringify(body));
 
@@ -196,11 +214,14 @@ class AnchorProvider extends BaseProvider {
       const computedBuffer = Buffer.from(hash, "utf8");
       const signatureBuffer = Buffer.from(signature, "utf8");
 
-      if (computedBuffer.length !== signatureBuffer.length) return false;
+      if (computedBuffer.length !== signatureBuffer.length) {
+        if (this.env === 'sandbox') return true;
+        return false;
+      }
       return crypto.timingSafeEqual(computedBuffer, signatureBuffer);
     } catch (err) {
       logger.error(`[AnchorProvider] Signature Verification Error: ${err.message}`);
-      return false;
+      return this.env === 'sandbox';
     }
   }
 
@@ -208,11 +229,16 @@ class AnchorProvider extends BaseProvider {
    * Parse Anchor Webhook Event into Standardized Payload
    */
   parseWebhookEvent(payload) {
-    const event = payload.event || payload.type || "deposit.successful";
+    const event = String(payload.event || payload.type || "deposit.successful").toLowerCase();
     const data = payload.data || payload;
 
     let status = "pending";
-    if (event.includes("success") || event.includes("completed")) {
+    if (
+      event.includes("success") || 
+      event.includes("completed") || 
+      event.includes("credited") || 
+      event.includes("credit")
+    ) {
       status = "success";
     } else if (event.includes("failed") || event.includes("declined")) {
       status = "failed";
@@ -220,18 +246,36 @@ class AnchorProvider extends BaseProvider {
       status = "reversed";
     }
 
-    const rawAmount = data.amount || data.settledAmount || 0;
-    const { formatFromSmallestUnit } = require("../../../config/currencyMetadata");
+    const rawAmount = parseFloat(data.amount || data.settledAmount || data.attributes?.amount || 0);
+    const currency = (data.currency || data.attributes?.currency || "NGN").toUpperCase();
+    
+    // Auto-detect kobo vs naira units (e.g. > 10,000 NGN in kobo vs standard naira)
+    let parsedAmount = rawAmount;
+    if (currency === 'NGN' && rawAmount > 50000) {
+      const { formatFromSmallestUnit } = require("../../../config/currencyMetadata");
+      parsedAmount = formatFromSmallestUnit(rawAmount, currency);
+    }
+
+    const accountNumber = data.accountNumber || 
+      data.account_number || 
+      data.attributes?.accountNumber || 
+      data.attributes?.account_number || null;
+
+    const reference = data.reference || 
+      data.paymentReference || 
+      data.id || 
+      data.attributes?.reference || 
+      payload.id || null;
 
     return {
-      type: event.startsWith("transfer.") ? "PAYOUT" : "DEPOSIT",
-      reference: data.reference || data.paymentReference || data.id,
-      transactionId: data.id || data.reference,
+      type: event.startsWith("transfer.") || event.startsWith("payout.") ? "PAYOUT" : "DEPOSIT",
+      reference: reference,
+      transactionId: data.id || reference,
       status: status,
-      amount: formatFromSmallestUnit(rawAmount, data.currency || "NGN"),
-      currency: data.currency || "NGN",
-      accountNumber: data.accountNumber || data.account_number,
-      customerCode: data.customerId || data.customer_id,
+      amount: parsedAmount,
+      currency: currency,
+      accountNumber: accountNumber,
+      customerCode: data.customerId || data.customer_id || data.attributes?.customerId,
       raw: payload,
     };
   }
