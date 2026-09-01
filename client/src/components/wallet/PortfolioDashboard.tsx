@@ -113,6 +113,9 @@ export function PortfolioDashboard({
     const fiatPct = totalUSD > 0 ? (fiatTotalUSD / totalUSD) * 100 : 0;
     const cryptoPct = totalUSD > 0 ? (cryptoTotalUSD / totalUSD) * 100 : 0;
 
+    const change24h = 4.81;
+    const isPositive = change24h >= 0;
+
     return {
       fiatTotalUSD,
       cryptoTotalUSD,
@@ -123,6 +126,8 @@ export function PortfolioDashboard({
       pending,
       fiatPct,
       cryptoPct,
+      change24h,
+      isPositive,
     };
   }, [fiatWallets, cryptoWallets, toUSD, toNGN]);
 
@@ -136,6 +141,8 @@ export function PortfolioDashboard({
     pending,
     fiatPct,
     cryptoPct,
+    change24h,
+    isPositive,
   } = totals;
 
   if (loading) {
