@@ -114,8 +114,8 @@ class GreyEmailService {
       // Grey-specific patterns (more flexible)
       /(?:received|credited|deposited|transfer)\s+(?:of\s+)?(?:\$|£|€|NGN|USD|GBP|EUR)?\s*([\d,]+(?:\.\d{1,2})?)/i,
       /(?:amount|total)\s*(?::|of|is)?\s*(?:\$|£|€|NGN)?\s*([\d,]+(?:\.\d{1,2})?)/i,
-      // Currency-symbol formats
-      /(?:\$|£|€)\s*([\d,]+(?:\.\d{1,2})?)/,
+      // Currency-symbol formats (including ₦ for Naira)
+      /(?:\$|£|€|₦)\s*([\d,]+(?:\.\d{1,2})?)/,
       // Currency-code formats
       /([\d,]+(?:\.\d{1,2})?)\s*(?:USD|GBP|EUR|NGN)\b/i,
       // Generic large number in financial context

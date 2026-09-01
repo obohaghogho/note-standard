@@ -807,10 +807,18 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 setConversations(prev => {
                     const existingMap = new Map(filteredServerData.map(c => [c.id, c]));
                     
-                    // Retain active conversation & optimistic in-flight local creations not yet in server snapshot
+                    // Retain active conversation, optimistic in-flight local creations not yet
+                    // in the server snapshot, and any conversation created within the last 8 s
+                    // (guards the startConversation race where Supabase hasn't replicated yet).
+                    const RECENT_MS = 8000;
+                    const now = Date.now();
                     prev.forEach(p => {
                         if (!existingMap.has(p.id) && !tombstones.has(p.id)) {
-                            if (p.id === activeConversationIdRef.current || p.id.startsWith('temp-')) {
+                            const isActive  = p.id === activeConversationIdRef.current;
+                            const isTemp    = p.id.startsWith('temp-');
+                            const isRecent  = !!(p as any)._localCreatedAt &&
+                                              (now - (p as any)._localCreatedAt) < RECENT_MS;
+                            if (isActive || isTemp || isRecent) {
                                 existingMap.set(p.id, p);
                             }
                         }
@@ -1954,13 +1962,19 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         const onNewConversation = (conv: Conversation) => {
             if (!isMounted.current || !conv || !conv.id) return;
             console.log(`[ChatContext] 📥 chat:new_conversation received:`, conv.id);
-            // Tombstone guard: never re-add a deleted conversation via socket event
-            if (deletedConversationIdsRef.current.has(conv.id)) {
+            // Tombstone guard: never re-add a deleted conversation via socket event.
+            // Exception: the active conversation is always allowed through — the user
+            // explicitly chose to open it via startConversation so it must appear.
+            const isActiveConv = conv.id === activeConversationIdRef.current;
+            if (!isActiveConv && deletedConversationIdsRef.current.has(conv.id)) {
                 console.log(`[ChatContext] onNewConversation BLOCKED by conversation tombstone: ${conv.id}`);
                 return;
             }
-            // Peer tombstone guard for direct chats
-            if (conv.type === 'direct') {
+            // Peer tombstone guard for direct chats.
+            // Skip the guard if this is the conversation the user just explicitly started
+            // (tombstone was already cleared by startConversation but the socket event
+            // may race ahead of the async tombstone-clear code path).
+            if (!isActiveConv && conv.type === 'direct') {
                 const otherMember = conv.members?.find(m => m.user_id !== user?.id);
                 const peerId = otherMember?.user_id || (otherMember?.profile as { id?: string })?.id;
                 if (peerId && deletedPeerIdsRef.current.has(peerId)) {
@@ -2799,13 +2813,17 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 throw new Error(res.data?.error || 'Invalid server response');
             }
 
+            // Stamp the conversation with creation time so the loadConversations merge
+            // logic can preserve it even if the server snapshot hasn't caught up yet.
+            const convWithStamp = conv ? { ...conv, _localCreatedAt: Date.now() } : conv;
+
             // Immediately populate conversation into Zustand chatStore AND ChatContext state so activeConversation is found instantly everywhere
-            if (conv) {
-                useChatStore.getState().upsertConversation(conv);
+            if (convWithStamp) {
+                useChatStore.getState().upsertConversation(convWithStamp);
                 setConversations(prev => {
-                    const exists = prev.some(c => c.id === conv.id);
-                    if (exists) return prev.map(c => c.id === conv.id ? { ...c, ...conv } : c);
-                    return [conv, ...prev];
+                    const exists = prev.some(c => c.id === convWithStamp.id);
+                    if (exists) return prev.map(c => c.id === convWithStamp.id ? { ...c, ...convWithStamp } : c);
+                    return [convWithStamp, ...prev];
                 });
             }
 
@@ -2837,6 +2855,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             delete messagesCachedAtRef.current[id];
 
             setActiveConversationId(id);
+
+            // FIX: Reset the fetch guard before re-loading so the call is never silently
+            // swallowed by the concurrent-fetch de-bounce. This ensures the server snapshot
+            // always reflects the freshly created conversation.
+            conversationsFetchRef.current = false;
             loadConversations().catch(() => {});
             return id;
         } catch (err: any) {
