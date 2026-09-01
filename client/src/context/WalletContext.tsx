@@ -47,6 +47,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const fetchingRef = useRef(false);
+    const lastUserIdRef = useRef<string | null>(null);
 
     // Derived State: The Valuation Singleton DTO
     const financialView = useMemo(() => {
@@ -79,17 +80,17 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             // Map raw wallets to Unified Balance Model (WalletEntry)
             const rawWallets = Array.isArray(walletsData) ? walletsData : [];
             const mappedWallets: WalletEntry[] = (rawWallets as Array<Record<string, unknown>>).map((w) => ({
-                id: w.id,
-                asset: w.currency,
+                id: w.id as string,
+                asset: w.currency as string,
                 type: w.provider === 'nowpayments' ? 'external' : 'custodial',
                 balance: Math.max(0, Number(w.balance) || 0),
                 available: Math.max(0, Number(w.available_balance != null ? w.available_balance : w.balance) || 0),
                 locked: Math.max(0, (Number(w.balance) || 0) - (Number(w.available_balance != null ? w.available_balance : w.balance) || 0)),
                 source: w.provider === 'nowpayments' ? 'external_provider' : 'internal_ledger',
-                network: w.network,
-                address: w.address,
-                is_frozen: w.is_frozen,
-                provider: w.provider
+                network: w.network as string,
+                address: w.address as string,
+                is_frozen: w.is_frozen as boolean,
+                provider: w.provider as string
             }));
 
             setWallets(mappedWallets);
@@ -108,7 +109,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     setFrozenAssets(ratesData.frozenAssets);
                     
                     const firstMeta = Object.values(ratesData.metadata || {})[0] as Record<string, unknown> | undefined;
-                    setRegime(firstMeta?.regime);
+                    setRegime(firstMeta?.regime as string);
                 } else if (typeof ratesData === 'object') {
                     setRates(ratesData as unknown as Record<string, number>);
                 }
@@ -119,10 +120,9 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             console.warn('Wallet data fetch warning (server initializing):', err instanceof Error ? err.message : String(err));
             setError(err instanceof Error ? err.message : 'Failed to load wallet data');
         } finally {
-
             fetchingRef.current = false;
         }
-    }, [user, profile, authReady]);
+    }, [user?.id, profile?.id, authReady]);
 
 
     // Initial Load & Financial Data Isolation on Account Switch
@@ -133,22 +133,26 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             setTransactions([]);
             setLoading(true);
             fetchingRef.current = false;
+            lastUserIdRef.current = null;
         };
 
         window.addEventListener('account-switched', handleAccountSwitch);
 
         if (authReady && user && profile) {
-            // Financial Data Isolation: Immediately flush state before fetching
-            // to ensure no brief flash of previous account's financial data on switch
-            setWallets([]);
-            setTransactions([]);
-            setLoading(true);
-            fetchingRef.current = false;
+            // Financial Data Isolation: Only flush state when user ID actually changes
+            if (lastUserIdRef.current !== user.id) {
+                lastUserIdRef.current = user.id;
+                setWallets([]);
+                setTransactions([]);
+                setLoading(true);
+                fetchingRef.current = false;
+            }
             fetchData();
         } else if (authReady && (!user || !profile)) {
             setWallets([]);
             setTransactions([]);
             setLoading(false);
+            lastUserIdRef.current = null;
         }
 
         return () => window.removeEventListener('account-switched', handleAccountSwitch);

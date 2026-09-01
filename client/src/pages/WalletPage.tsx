@@ -102,7 +102,10 @@ function WalletHubContent() {
   }, []);
 
   // ── Refresh on mount ──────────────────────────────────────────────────────
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const handleRefresh = () => { refresh(); setRefreshKey(k => k + 1); };
