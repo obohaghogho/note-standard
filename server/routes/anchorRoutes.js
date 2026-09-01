@@ -145,6 +145,17 @@ router.get("/accounts", requireAuth, async (req, res, next) => {
 
         accounts = updatedAccounts || accounts;
       } catch (resyncErr) {
+        // If Anchor API is unavailable, return a clear signal to the client
+        if (resyncErr.code === 'ANCHOR_API_UNAVAILABLE' || resyncErr.message?.includes('ANCHOR_API_UNAVAILABLE')) {
+          logger.warn(`[AnchorRoute] Anchor API unavailable — returning available:false to client`);
+          return res.json({
+            success: true,
+            accounts: [],
+            available: false,
+            reason: 'ANCHOR_SERVICE_UNAVAILABLE',
+            message: 'Anchor banking service is temporarily unavailable. Please use Fincra GTBank transfer to fund your NGN wallet.',
+          });
+        }
         logger.warn(`[AnchorRoute] GET /accounts auto-resync warning: ${resyncErr.message}`);
       }
     }
@@ -156,7 +167,22 @@ router.get("/accounts", requireAuth, async (req, res, next) => {
       logger.warn(`[AnchorRoute] GET /accounts auto-sync warning: ${syncErr.message}`);
     }
 
-    res.json({ success: true, accounts: accounts || [] });
+    // Final validation: don't serve accounts that are known-invalid
+    const validAccounts = (accounts || []).filter(a => {
+      const hasValidNum = a.account_number && /^\d{10}$/.test(a.account_number);
+      const hasValidBank = a.bank_name && !a.bank_name.toUpperCase().includes('PROVIDUS');
+      return hasValidNum && hasValidBank;
+    });
+
+    res.json({
+      success: true,
+      accounts: validAccounts,
+      available: validAccounts.length > 0,
+      ...(validAccounts.length === 0 && {
+        reason: 'NO_VALID_ACCOUNTS',
+        message: 'No valid Anchor virtual accounts available. Please use Fincra GTBank transfer.',
+      }),
+    });
   } catch (err) {
     next(err);
   }

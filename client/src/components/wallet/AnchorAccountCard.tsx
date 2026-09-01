@@ -1,25 +1,53 @@
 import React, { useState, useEffect } from "react";
-import { Landmark, Copy, Check, ShieldCheck, Loader2 } from "lucide-react";
+import { Landmark, Copy, Check, ShieldCheck, Loader2, AlertTriangle } from "lucide-react";
 import { anchorApi, type AnchorAccount } from "../../services/anchorApi";
 import toast from "react-hot-toast";
 
-export const AnchorAccountCard: React.FC = () => {
+interface AnchorAccountCardProps {
+  onSwitchToFincra?: () => void;
+}
+
+export const AnchorAccountCard: React.FC<AnchorAccountCardProps> = ({ onSwitchToFincra }) => {
   const [account, setAccount] = useState<AnchorAccount | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [creating, setCreating] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
+  const [unavailable, setUnavailable] = useState<boolean>(false);
+  const [unavailableMessage, setUnavailableMessage] = useState<string>("");
 
   useEffect(() => {
     let isMounted = true;
     const fetchAnchorAccount = async () => {
       try {
         setLoading(true);
-        const accounts = await anchorApi.getAccounts();
+        const res = await anchorApi.getAccounts();
+
+        // Handle structured response with availability info
+        const responseData = res as any;
+        if (responseData?.available === false || (Array.isArray(res) && res.length === 0)) {
+          if (isMounted) {
+            setUnavailable(true);
+            setUnavailableMessage(
+              responseData?.message || "Anchor banking service is temporarily unavailable. Please use Fincra GTBank transfer."
+            );
+          }
+          return;
+        }
+
+        const accounts = Array.isArray(res) ? res : (responseData?.accounts || []);
         if (isMounted && accounts.length > 0) {
           setAccount(accounts[0]);
+          setUnavailable(false);
+        } else if (isMounted) {
+          setUnavailable(true);
+          setUnavailableMessage("No valid Anchor virtual account available. Please use Fincra GTBank transfer.");
         }
-      } catch (err) {
+      } catch (err: any) {
         console.warn("[AnchorAccountCard] Failed loading Anchor accounts:", err);
+        if (isMounted) {
+          setUnavailable(true);
+          setUnavailableMessage("Anchor banking service is temporarily unavailable. Please use Fincra GTBank transfer.");
+        }
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -36,9 +64,17 @@ export const AnchorAccountCard: React.FC = () => {
       setCreating(true);
       const newAcc = await anchorApi.createVirtualAccount({});
       setAccount(newAcc);
+      setUnavailable(false);
       toast.success("Anchor Virtual NUBAN Account generated successfully!");
     } catch (err: any) {
-      toast.error(err.response?.data?.message || err.message || "Failed to generate Anchor Virtual Account");
+      const msg = err.response?.data?.message || err.message || "";
+      if (msg.includes("ANCHOR_API_UNAVAILABLE") || msg.includes("ANCHOR_NO_VALID_ACCOUNT")) {
+        setUnavailable(true);
+        setUnavailableMessage("Anchor banking service is temporarily unavailable. Please use Fincra GTBank transfer.");
+        toast.error("Anchor service is temporarily unavailable");
+      } else {
+        toast.error(msg || "Failed to generate Anchor Virtual Account");
+      }
     } finally {
       setCreating(false);
     }
@@ -55,6 +91,49 @@ export const AnchorAccountCard: React.FC = () => {
     return (
       <div className="bg-gray-800/40 backdrop-blur border border-gray-700/60 rounded-2xl p-5 flex items-center justify-center min-h-[140px]">
         <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
+      </div>
+    );
+  }
+
+  // Anchor service unavailable — show clear message with Fincra fallback
+  if (unavailable) {
+    return (
+      <div className="bg-gradient-to-br from-amber-950/30 via-gray-900/60 to-gray-900/80 backdrop-blur border border-amber-500/30 rounded-2xl p-5 shadow-xl relative overflow-hidden">
+        <div className="flex items-center gap-2.5 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <AlertTriangle className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="text-sm font-semibold text-white">Anchor NUBAN Temporarily Unavailable</h4>
+            <p className="text-xs text-gray-400">Service disruption detected</p>
+          </div>
+        </div>
+
+        <div className="bg-gray-950/40 border border-gray-800/80 rounded-xl p-4 space-y-3">
+          <p className="text-xs text-gray-300 leading-relaxed">
+            {unavailableMessage}
+          </p>
+
+          <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-950/40 border border-amber-500/20">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+            </span>
+            <span className="text-[11px] text-amber-300 font-medium">
+              Anchor API service disruption • Auto-recovery monitoring active
+            </span>
+          </div>
+
+          {onSwitchToFincra && (
+            <button
+              onClick={onSwitchToFincra}
+              className="w-full py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-medium text-xs transition-all shadow-lg shadow-purple-950/40 flex items-center justify-center gap-2"
+            >
+              <Landmark className="w-4 h-4" />
+              Switch to Fincra GTBank Transfer
+            </button>
+          )}
+        </div>
       </div>
     );
   }

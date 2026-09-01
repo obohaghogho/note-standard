@@ -218,6 +218,13 @@ class AnchorService {
       try {
         customer = await this.getOrCreateAnchorCustomer(userId, email, firstName, lastName, phone, bvn);
       } catch (custErr) {
+        // If Anchor API is completely down (502/503/timeout), fail fast — don't serve stale data
+        const statusCode = custErr.response?.status;
+        if (statusCode === 502 || statusCode === 503 || statusCode === 504 || custErr.code === 'ECONNREFUSED' || custErr.code === 'ETIMEDOUT') {
+          const err = new Error('ANCHOR_API_UNAVAILABLE: Anchor banking service is temporarily unavailable. Please use Fincra GTBank transfer instead.');
+          err.code = 'ANCHOR_API_UNAVAILABLE';
+          throw err;
+        }
         logger.warn(`[AnchorService] Customer onboarding warning (${custErr.message}). Checking existing Virtual NUBANs...`);
       }
 
@@ -273,6 +280,13 @@ class AnchorService {
           }
         }
       } catch (vnErr) {
+        // If Anchor API is completely down, fail fast — don't fall through to more API calls that will also fail
+        const statusCode = vnErr.response?.status;
+        if (statusCode === 502 || statusCode === 503 || statusCode === 504 || vnErr.code === 'ECONNREFUSED' || vnErr.code === 'ETIMEDOUT') {
+          const err = new Error('ANCHOR_API_UNAVAILABLE: Anchor banking service is temporarily unavailable. Please use Fincra GTBank transfer instead.');
+          err.code = 'ANCHOR_API_UNAVAILABLE';
+          throw err;
+        }
         logger.warn(`[AnchorService] Virtual NUBAN list check warning: ${vnErr.message}`);
       }
 

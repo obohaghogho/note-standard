@@ -161,7 +161,7 @@ export const FundModal: React.FC<FundModalProps> = ({
     const MAX_PER_TRANSACTION = currencyCap?.maxDeposit || (effectivePayCurrency === 'NGN' ? getSingleTxMaxUsd() * 1500 : (effectivePayCurrency === 'GHS' ? getSingleTxMaxUsd() * 15 : getSingleTxMaxUsd()));
 
     const [selectedRailId, setSelectedRailId] = useState<string | null>(null);
-    const [ngnDepositMode, setNgnDepositMode] = useState<'anchor' | 'fincra'>('anchor');
+    const [ngnDepositMode, setNgnDepositMode] = useState<'anchor' | 'fincra'>('fincra');
 
     useEffect(() => {
         if (isOpen) {
@@ -866,7 +866,7 @@ export const FundModal: React.FC<FundModalProps> = ({
                                 )}
 
                                 {effectivePayCurrency === 'NGN' && ngnDepositMode === 'anchor' ? (
-                                    <AnchorAccountCard />
+                                    <AnchorAccountCard onSwitchToFincra={() => setNgnDepositMode('fincra')} />
                                 ) : (
                                     <>
                                         <div>

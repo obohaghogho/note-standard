@@ -57,9 +57,13 @@ export const anchorApi = {
     return res.data.data;
   },
 
-  async getAccounts(): Promise<AnchorAccount[]> {
+  async getAccounts(): Promise<AnchorAccount[] | { accounts: AnchorAccount[]; available: boolean; message?: string }> {
     try {
       const res = await api.get("/anchor/accounts");
+      // Return full response if it contains availability metadata
+      if (res.data && 'available' in res.data) {
+        return res.data;
+      }
       return res.data.accounts || [];
     } catch {
       return [];

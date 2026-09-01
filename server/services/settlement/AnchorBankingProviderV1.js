@@ -56,7 +56,12 @@ class AnchorBankingProviderV1 extends IBankingProvider {
         .eq('currency', curr)
         .maybeSingle();
 
-      if (existing) {
+      // Validate existing account before using it
+      const isValidExisting = existing?.account_number
+        && /^\d{10}$/.test(existing.account_number)
+        && !existing.bank_name?.toUpperCase().includes('PROVIDUS');
+
+      if (existing && isValidExisting) {
         account = existing;
       } else {
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
@@ -70,12 +75,24 @@ class AnchorBankingProviderV1 extends IBankingProvider {
         });
       }
     } catch (err) {
+      // Propagate API unavailability so the router can fall back to Fincra
+      if (err.code === 'ANCHOR_API_UNAVAILABLE' || err.message?.includes('ANCHOR_API_UNAVAILABLE')) {
+        throw err;
+      }
       logger.warn(`[AnchorBankingProviderV1] Virtual account lookup/creation warning: ${err.message}`);
     }
 
     const bankName = account?.bank_name || account?.bankName || '9 Payment Service Bank';
     const accountNumber = account?.account_number || account?.accountNumber || '';
     const accountHolder = account?.account_name || account?.accountName || 'NoteStandard User';
+
+    // Don't return deposit instructions with invalid/empty account numbers
+    if (!accountNumber || !/^\d{10}$/.test(accountNumber)) {
+      const err = new Error('ANCHOR_NO_VALID_ACCOUNT: No valid Anchor virtual account available. Please use Fincra GTBank transfer.');
+      err.code = 'ANCHOR_NO_VALID_ACCOUNT';
+      throw err;
+    }
+
     const refCode = `ANC_${userId.substring(0, 8)}_${Date.now().toString(36)}`;
 
     return {
