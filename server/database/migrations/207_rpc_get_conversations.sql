@@ -32,9 +32,12 @@ BEGIN
             cm.role,
             cm.status,
             cm.cleared_at,
-            cm.is_muted
+            cm.is_muted,
+            cm.is_deleted,
+            cm.deleted_at
         FROM conversation_members cm
         WHERE cm.user_id = p_user_id
+          AND (cm.is_deleted IS NOT TRUE)  -- Exclude soft-deleted memberships
     ),
 
     -- Step 2: Get all conversations in one batch
@@ -146,6 +149,8 @@ BEGIN
                 'role', um.role,
                 'status', um.status,
                 'cleared_at', um.cleared_at,
+                'is_deleted', COALESCE(um.is_deleted, false),
+                'deleted_at', um.deleted_at,
                 'joined_at', NULL
             ),
             'is_muted', COALESCE(um.is_muted, false),
