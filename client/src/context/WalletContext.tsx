@@ -54,12 +54,15 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return FinancialViewService.computeGlobalView(wallets, rates, rateMeta, evaluationId, frozenAssets, regime);
     }, [wallets, rates, rateMeta, evaluationId, frozenAssets, regime]);
 
-    const fetchData = useCallback(async () => {
+    const fetchData = useCallback(async (isSilent = false) => {
         if (!user || !profile || !authReady) return;
         if (fetchingRef.current) return;
         
         fetchingRef.current = true;
-        setLoading(true);
+        // Only trigger full skeleton loading if explicitly not silent AND we have no existing wallet data
+        if (!isSilent && wallets.length === 0) {
+            setLoading(true);
+        }
         setError(null);
 
         const currentFetchUserId = user.id;
@@ -93,8 +96,19 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 provider: w.provider as string
             }));
 
-            setWallets(mappedWallets);
-            setTransactions(Array.isArray(transactionsData?.transactions) ? transactionsData.transactions : []);
+            // Only update wallets if values actually changed to preserve reference identity
+            setWallets(prev => {
+                const prevStr = JSON.stringify(prev);
+                const nextStr = JSON.stringify(mappedWallets);
+                return prevStr === nextStr ? prev : mappedWallets;
+            });
+
+            const newTxs = Array.isArray(transactionsData?.transactions) ? transactionsData.transactions : [];
+            setTransactions(prev => {
+                const prevStr = JSON.stringify(prev);
+                const nextStr = JSON.stringify(newTxs);
+                return prevStr === nextStr ? prev : newTxs;
+            });
 
             // 2. Clear initial loading state once core data is ready
             setLoading(false);
@@ -120,9 +134,10 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             console.warn('Wallet data fetch warning (server initializing):', err instanceof Error ? err.message : String(err));
             setError(err instanceof Error ? err.message : 'Failed to load wallet data');
         } finally {
+            setLoading(false);
             fetchingRef.current = false;
         }
-    }, [user?.id, profile?.id, authReady]);
+    }, [user?.id, profile?.id, authReady, wallets.length]);
 
 
     // Initial Load & Financial Data Isolation on Account Switch
@@ -146,8 +161,10 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 setTransactions([]);
                 setLoading(true);
                 fetchingRef.current = false;
+                fetchData(false); // Non-silent for initial load
+            } else {
+                fetchData(true); // Silent refresh if same user
             }
-            fetchData();
         } else if (authReady && (!user || !profile)) {
             setWallets([]);
             setTransactions([]);
@@ -174,7 +191,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 },
                 (payload) => {
                     console.log('Wallet balance updated (Sovereign Ledger sync):', payload.eventType);
-                    fetchData(); // Recalculate balances
+                    fetchData(true); // Silent sync
                 }
             )
             .subscribe();
@@ -191,7 +208,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 },
                 (payload) => {
                     console.log('Transaction update received:', payload.eventType);
-                    fetchData(); // Refresh history and redundant balance check
+                    fetchData(true); // Silent sync
                     
                     // Live Status Notifications
                     if (payload.eventType === 'UPDATE') {
@@ -231,12 +248,12 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
              )
              .subscribe();
 
-        // 3. Automatic Background Sync Interval (Every 8 seconds when tab is active)
+        // 3. Automatic Background Sync Interval (Every 15 seconds when tab is active)
         const autoSyncInterval = setInterval(() => {
             if (document.visibilityState === 'visible' && !fetchingRef.current) {
-                fetchData();
+                fetchData(true); // Silent background sync
             }
-        }, 8000);
+        }, 15000);
 
         return () => {
             clearInterval(autoSyncInterval);
@@ -251,12 +268,12 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         const onBalanceUpdated = (data: BalanceUpdate) => {
             console.log('[WalletContext] Balance update via Socket:', data);
-            fetchData();
+            fetchData(true); // Silent sync
         };
 
         const onNotification = (data: RealtimeNotification) => {
             if (data.type === 'payment_success' || data.type === 'wallet_update') {
-                fetchData();
+                fetchData(true); // Silent sync
             }
         };
 
