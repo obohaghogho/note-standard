@@ -73,8 +73,8 @@ class AnchorBankingProviderV1 extends IBankingProvider {
       logger.warn(`[AnchorBankingProviderV1] Virtual account lookup/creation warning: ${err.message}`);
     }
 
-    const bankName = account?.bank_name || account?.bankName || 'PROVIDUS BANK';
-    const accountNumber = account?.account_number || account?.accountNumber || '0000000000';
+    const bankName = account?.bank_name || account?.bankName || '9 Payment Service Bank';
+    const accountNumber = account?.account_number || account?.accountNumber || '';
     const accountHolder = account?.account_name || account?.accountName || 'NoteStandard User';
     const refCode = `ANC_${userId.substring(0, 8)}_${Date.now().toString(36)}`;
 

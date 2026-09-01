@@ -182,10 +182,22 @@ class AnchorService {
         .eq("currency", "NGN")
         .maybeSingle();
 
+      // ── Stale Record Detection ──────────────────────────────────────────────
+      // Detect stale/invalid cached records that would cause "invalid account
+      // number" errors in banking apps (First Bank, Moniepoint, etc.).
+      // A record is stale if:
+      //   1. Bank name contains "PROVIDUS" (Anchor migrated to 9PSB)
+      //   2. Account number is missing or not a valid 10-digit NUBAN
+      //   3. Bank name is empty/placeholder
       const isStaleProvidus = existingDva?.bank_name?.toUpperCase().includes("PROVIDUS");
+      const hasValidNuban = existingDva?.account_number && /^\d{10}$/.test(existingDva.account_number);
+      const hasValidBankName = existingDva?.bank_name && 
+        !existingDva.bank_name.toUpperCase().includes("PROVIDUS") &&
+        existingDva.bank_name !== "0000000000";
+      const isStaleRecord = isStaleProvidus || !hasValidNuban || !hasValidBankName;
 
-      if (existingDva && existingDva.account_number && !isStaleProvidus) {
-        logger.info(`[AnchorService] Found existing dedicated_account for user ${userId}: ${existingDva.account_number}`);
+      if (existingDva && existingDva.account_number && !isStaleRecord) {
+        logger.info(`[AnchorService] Found existing dedicated_account for user ${userId}: ${existingDva.account_number} (${existingDva.bank_name})`);
         return {
           id: existingDva.id,
           bankName: existingDva.bank_name,
@@ -197,8 +209,8 @@ class AnchorService {
         };
       }
 
-      if (isStaleProvidus) {
-        logger.warn(`[AnchorService] Found stale Providus Bank account (${existingDva.account_number}) for user ${userId}. Resyncing with Anchor active 9PSB Virtual NUBANs...`);
+      if (isStaleRecord && existingDva) {
+        logger.warn(`[AnchorService] Found stale/invalid Anchor account for user ${userId} (bank_name: ${existingDva.bank_name}, account_number: ${existingDva.account_number}). Resyncing with Anchor API to get valid 9PSB Virtual NUBAN...`);
       }
 
       // 1. Ensure user has an Anchor Customer record
@@ -213,9 +225,8 @@ class AnchorService {
       try {
         const vnListRes = await this.client.get("/virtual-nubans");
         const list = vnListRes.data?.data || [];
-        // Prioritize established Virtual NUBAN 6175916799 or proven active account
-        const activeVn = list.find((v) => (v.attributes?.accountNumber || v.accountNumber) === "6175916799") ||
-                         list.find((v) => (v.attributes?.status || v.status) === "ACTIVE") ||
+        // Select the first ACTIVE Virtual NUBAN from Anchor (no hardcoded account numbers)
+        const activeVn = list.find((v) => (v.attributes?.status || v.status) === "ACTIVE") ||
                          list[0];
         
         if (activeVn) {
@@ -300,7 +311,7 @@ class AnchorService {
       const attr = entry.attributes || entry;
       const accountNo = attr.accountNumber;
       const accountName = attr.accountName || `${firstName || ''} ${lastName || ''}`.trim();
-      const bankName = attr.bank?.name || "PROVIDUS BANK";
+      const bankName = attr.bank?.name || "9 Payment Service Bank";
 
       if (!accountNo) {
         throw new Error("Anchor API response did not contain account_number");

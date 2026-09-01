@@ -118,9 +118,15 @@ router.get("/accounts", requireAuth, async (req, res, next) => {
 
     if (error) throw error;
 
-    const hasStaleProvidus = accounts && accounts.some((a) => a.bank_name?.toUpperCase().includes("PROVIDUS"));
+    // Detect stale records: Providus bank name, invalid NUBAN format, or empty bank name
+    const hasStaleRecord = accounts && accounts.some((a) => {
+      const isProvidus = a.bank_name?.toUpperCase().includes("PROVIDUS");
+      const hasInvalidNuban = !a.account_number || !/^\d{10}$/.test(a.account_number);
+      const hasMissingBankName = !a.bank_name;
+      return isProvidus || hasInvalidNuban || hasMissingBankName;
+    });
 
-    if (hasStaleProvidus || !accounts || accounts.length === 0) {
+    if (hasStaleRecord || !accounts || accounts.length === 0) {
       try {
         const email = req.user.email || req.userProfile?.email || `${userId}@notestandard.com`;
         await anchorService.createVirtualAccount({
