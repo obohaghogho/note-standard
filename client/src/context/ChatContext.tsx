@@ -825,8 +825,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     const uniqueConvs: Conversation[] = [];
                     for (const conv of allMerged) {
                         if (conv.type === 'direct') {
-                            const otherMember = conv.members?.find((m: { user_id: string }) => m.user_id !== user?.id);
-                            const peerId = otherMember?.user_id;
+                            const otherMember = conv.members?.find((m: { user_id: string; profile?: { id?: string } }) => (m.user_id || m.profile?.id) !== user?.id);
+                            const peerId = otherMember?.user_id || (otherMember as any)?.profile?.id;
                             if (peerId) {
                                 if (seenDirectPeers.has(peerId)) continue;
                                 seenDirectPeers.add(peerId);

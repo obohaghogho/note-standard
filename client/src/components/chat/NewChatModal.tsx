@@ -3,6 +3,7 @@ import { useChat } from '../../context/ChatContext';
 import { X } from 'lucide-react';
 import SecureImage from '../common/SecureImage';
 import { supabase } from '../../lib/supabase';
+import { useSearchParams } from 'react-router-dom';
 
 interface NewChatModalProps {
     isOpen: boolean;
@@ -22,6 +23,7 @@ const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [searchResults, setSearchResults] = useState<UserResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [, setSearchParams] = useSearchParams();
     const { startConversation } = useChat();
 
     // Real-time search for users
@@ -51,17 +53,22 @@ const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose }) => {
         return () => clearTimeout(timeoutId);
     }, [recipientId]);
 
-    const handleStartChat = async (username: string) => {
+    const handleStartChat = async (targetUser: string) => {
+        if (!targetUser) return;
         setError('');
         setIsSubmitting(true);
         try {
-            await startConversation(username);
+            const newId = await startConversation(targetUser);
+            if (newId) {
+                setSearchParams({ id: newId }, { replace: true });
+            }
             onClose();
             setRecipientId('');
             setSearchResults([]);
         } catch (err: unknown) {
             const error = err as Error;
             setError(error.message || 'Failed to start conversation');
+        } finally {
             setIsSubmitting(false);
         }
     };
@@ -109,7 +116,7 @@ const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose }) => {
                                     searchResults.map(user => (
                                         <div
                                             key={user.id}
-                                            onClick={() => handleStartChat(user.username)}
+                                            onClick={() => handleStartChat(user.username || user.id)}
                                             className="p-3 hover:bg-gray-700 cursor-pointer flex items-center gap-3 transition-colors"
                                         >
                                             <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center overflow-hidden flex-shrink-0">

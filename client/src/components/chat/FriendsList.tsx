@@ -53,7 +53,7 @@ export const FriendsList: React.FC<{ limit?: number; showRequestsOnly?: boolean 
 
     const handleChat = (conversationId: string) => {
         setActiveConversationId(conversationId);
-        navigate('/dashboard/chat');
+        navigate(`/dashboard/chat?id=${conversationId}`);
     };
 
     if (loading && socialData.friends.length === 0 && socialData.requests.length === 0) {

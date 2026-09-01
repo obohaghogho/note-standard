@@ -2,7 +2,7 @@ import React, { useMemo, startTransition, useRef, useCallback, useState } from '
 import { useChat } from '../../context/ChatContext';
 import type { Conversation } from '../../context/ChatContext';
 import { useAuth } from '../../context/AuthContext';
-import { Check, CheckCheck, Trash2 } from 'lucide-react';
+import { Check, CheckCheck, Trash2, MessageSquare } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { usePresence } from '../../context/PresenceContext';
 import { useSearchParams } from 'react-router-dom';
