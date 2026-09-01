@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TrendingUp, TrendingDown, Eye, EyeOff, Wallet, Bitcoin, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 
@@ -15,23 +15,60 @@ interface PortfolioProps {
 function AnimatedNumber({ value, prefix = '', suffix = '', decimals = 2, className = '' }: {
   value: number; prefix?: string; suffix?: string; decimals?: number; className?: string;
 }) {
-  const [display, setDisplay] = useState(0);
+  const [display, setDisplay] = useState(value);
+  const animFrameRef = useRef<number | null>(null);
+  const prevValueRef = useRef<number>(value);
+  const currentDisplayRef = useRef<number>(value);
+
   useEffect(() => {
-    if (value === 0) { setDisplay(0); return; }
-    const start = display;
-    const end = value;
-    const duration = 800;
+    // Precision guard: Ignore microscopic floating-point changes
+    const diff = Math.abs(prevValueRef.current - value);
+    const threshold = 1 / Math.pow(10, decimals + 1);
+    if (diff < threshold && display !== 0) {
+      return;
+    }
+
+    const start = currentDisplayRef.current;
+    const end = Number.isFinite(value) ? value : 0;
+    prevValueRef.current = end;
+
+    if (start === end) {
+      setDisplay(end);
+      currentDisplayRef.current = end;
+      return;
+    }
+
+    const duration = 600;
     const startTime = Date.now();
+
     const frame = () => {
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplay(start + (end - start) * eased);
-      if (progress < 1) requestAnimationFrame(frame);
+      const nextDisplay = start + (end - start) * eased;
+      
+      currentDisplayRef.current = nextDisplay;
+      setDisplay(nextDisplay);
+
+      if (progress < 1) {
+        animFrameRef.current = requestAnimationFrame(frame);
+      } else {
+        currentDisplayRef.current = end;
+        setDisplay(end);
+      }
     };
-    requestAnimationFrame(frame);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
+
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+    }
+    animFrameRef.current = requestAnimationFrame(frame);
+
+    return () => {
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+      }
+    };
+  }, [value, decimals]);
 
   return (
     <span className={className}>
@@ -50,34 +87,56 @@ export function PortfolioDashboard({
   onToggleBalances,
 }: PortfolioProps) {
   // Convert all balances to USD equivalent
-  const toUSD = (amount: number, currency: string) => {
+  const toUSD = useCallback((amount: number, currency: string) => {
     if (currency === 'USD') return amount;
     const rate = rates[currency];
     if (!rate || rate <= 0) return 0;
     return amount * rate;
-  };
+  }, [rates]);
 
-  const toNGN = (usdAmount: number) => {
+  const toNGN = useCallback((usdAmount: number) => {
     if (ngnRate <= 0) return 0;
     return usdAmount / ngnRate;
-  };
+  }, [ngnRate]);
 
-  const fiatTotalUSD = fiatWallets.reduce((sum, w) => sum + toUSD(w.balance || 0, w.currency), 0);
-  const cryptoTotalUSD = cryptoWallets.reduce((sum, w) => sum + toUSD(w.balance || 0, w.currency), 0);
-  const totalUSD = fiatTotalUSD + cryptoTotalUSD;
-  const totalNGN = toNGN(totalUSD);
+  const totals = useMemo(() => {
+    const fiatTotalUSD = fiatWallets.reduce((sum, w) => sum + toUSD(w.balance || 0, w.currency), 0);
+    const cryptoTotalUSD = cryptoWallets.reduce((sum, w) => sum + toUSD(w.balance || 0, w.currency), 0);
+    const totalUSD = fiatTotalUSD + cryptoTotalUSD;
+    const totalNGN = toNGN(totalUSD);
 
-  const allWallets = [...fiatWallets, ...cryptoWallets];
-  const available = allWallets.reduce((sum, w) => sum + toUSD(w.balances?.available ?? w.balance ?? 0, w.currency), 0);
-  const locked = allWallets.reduce((sum, w) => sum + toUSD(w.balances?.locked ?? 0, w.currency), 0);
-  const pending = allWallets.reduce((sum, w) => sum + toUSD(w.balances?.pending ?? 0, w.currency), 0);
+    const allWallets = [...fiatWallets, ...cryptoWallets];
+    const available = allWallets.reduce((sum, w) => sum + toUSD(w.balances?.available ?? w.balance ?? 0, w.currency), 0);
+    const locked = allWallets.reduce((sum, w) => sum + toUSD(w.balances?.locked ?? 0, w.currency), 0);
+    const pending = allWallets.reduce((sum, w) => sum + toUSD(w.balances?.pending ?? 0, w.currency), 0);
 
-  // Simulated 24h change — in production this would compare with a snapshot
-  const change24h = 4.81; // placeholder — real implementation uses snapshot comparison
-  const isPositive = change24h >= 0;
+    const fiatPct = totalUSD > 0 ? (fiatTotalUSD / totalUSD) * 100 : 0;
+    const cryptoPct = totalUSD > 0 ? (cryptoTotalUSD / totalUSD) * 100 : 0;
 
-  const fiatPct = totalUSD > 0 ? (fiatTotalUSD / totalUSD) * 100 : 0;
-  const cryptoPct = totalUSD > 0 ? (cryptoTotalUSD / totalUSD) * 100 : 0;
+    return {
+      fiatTotalUSD,
+      cryptoTotalUSD,
+      totalUSD,
+      totalNGN,
+      available,
+      locked,
+      pending,
+      fiatPct,
+      cryptoPct,
+    };
+  }, [fiatWallets, cryptoWallets, toUSD, toNGN]);
+
+  const {
+    fiatTotalUSD,
+    cryptoTotalUSD,
+    totalUSD,
+    totalNGN,
+    available,
+    locked,
+    pending,
+    fiatPct,
+    cryptoPct,
+  } = totals;
 
   if (loading) {
     return (

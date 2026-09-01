@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { ErrorBoundary } from '../components/common/ErrorBoundary';
 import { useWallet } from '../hooks/useWallet';
 import walletApi from '../api/walletApi';
@@ -133,14 +133,15 @@ function WalletHubContent() {
   const cryptoWalletsInfo = cryptoCatalog.map(c => ({ currency: c.code, symbol: c.symbol, balance: getWalletBalance(c.code).balance, flag: c.flag, color: c.color }));
 
   // fiat wallets for portfolio summary
-  const fiatWalletsForPortfolio = fiatCatalog.map(c => {
+  const fiatWalletsForPortfolio = useMemo(() => fiatCatalog.map(c => {
     const b = getWalletBalance(c.code);
     return { currency: c.code, balance: b.balance, balances: { available: b.available, pending: b.pending, locked: 0 } };
-  });
-  const cryptoWalletsForPortfolio = cryptoCatalog.map(c => {
+  }), [fiatCatalog, wallets]);
+
+  const cryptoWalletsForPortfolio = useMemo(() => cryptoCatalog.map(c => {
     const b = getWalletBalance(c.code);
     return { currency: c.code, balance: b.balance, balances: { available: b.available, pending: b.pending, locked: 0 } };
-  });
+  }), [cryptoCatalog, wallets]);
 
   const openModal = (type: 'fund' | 'withdraw' | 'transfer' | 'receive' | 'buy', currency: string, network = 'native') => {
     setSelectedAsset({ currency, network });
