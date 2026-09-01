@@ -24,6 +24,8 @@ const logger   = require('../../utils/logger');
 const ALL_CURRENCIES = ['NGN', 'USD', 'EUR', 'GBP', 'BTC', 'ETH', 'USDT', 'USDC'];
 
 // Provider & Currency Specific Freshness TTL Hierarchy
+// QUIDAX GUARD: Quidax is intentionally excluded from TTL_MAP_MS pending official balance API & TTL freshness docs.
+// Until verified, QUIDAX = NOT_ELIGIBLE_FOR_RESERVE_ASSERTION (filterEligibleBalances will return false for Quidax).
 const TTL_MAP_MS = {
   FINCRA:      { NGN: 15 * 60 * 1000 },
   ANCHOR:      { USD: 15 * 60 * 1000 },

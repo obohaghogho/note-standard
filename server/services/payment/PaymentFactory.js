@@ -29,6 +29,9 @@ const ProvidusProvider = require(
 const AnchorProvider = require(
   path.join(__dirname, "providers", "AnchorProvider"),
 );
+const QuidaxProvider = require(
+  path.join(__dirname, "providers", "QuidaxProvider"),
+);
 const logger = require("../../utils/logger");
 const currencyConfig = require("../../config/currencyConfig");
 
@@ -51,7 +54,7 @@ class PaymentFactory {
         upCurrency.startsWith(c)
       )
     ) {
-      const cryptoProvider = (process.env.CRYPTO_PROVIDER || "nowpayments")
+      const cryptoProvider = (process.env.ACTIVE_CRYPTO_DEPOSIT_PROVIDER || process.env.CRYPTO_PROVIDER || "nowpayments")
         .toLowerCase();
 
       logger.info(
@@ -59,6 +62,8 @@ class PaymentFactory {
       );
 
       switch (cryptoProvider) {
+        case "quidax":
+          return new QuidaxProvider();
         case "nowpayments":
           return new NowPaymentsProvider();
         default:
@@ -120,6 +125,8 @@ class PaymentFactory {
         return new ProvidusProvider();
       case "anchor":
         return new AnchorProvider();
+      case "quidax":
+        return new QuidaxProvider();
 
       default:
         throw new Error(`Unknown provider: ${name}`);

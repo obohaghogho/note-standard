@@ -85,6 +85,16 @@ module.exports = {
   FINCRA_SECRET_KEY: process.env.FINCRA_SECRET_KEY,
   FINCRA_PUBLIC_KEY: process.env.FINCRA_PUBLIC_KEY,
   NOWPAYMENTS_API_KEY: process.env.NOWPAYMENTS_API_KEY,
+
+  // Quidax Configuration (Disabled by default until official documentation & keys configured)
+  QUIDAX_ENABLED: process.env.QUIDAX_ENABLED === "true",
+  QUIDAX_SECRET_KEY: process.env.QUIDAX_SECRET_KEY || "",
+  QUIDAX_PUBLIC_KEY: process.env.QUIDAX_PUBLIC_KEY || "",
+  QUIDAX_WEBHOOK_SECRET: process.env.QUIDAX_WEBHOOK_SECRET || "",
+  QUIDAX_BASE_URL: process.env.QUIDAX_BASE_URL || "https://api.quidax.com/v1",
+  QUIDAX_ENVIRONMENT: process.env.QUIDAX_ENVIRONMENT || "sandbox",
+  ACTIVE_CRYPTO_DEPOSIT_PROVIDER: process.env.ACTIVE_CRYPTO_DEPOSIT_PROVIDER || "nowpayments",
+
   // AI Service (Groq)
   GROQ_API_KEY: process.env.GROQ_API_KEY,
   GROQ_MODEL: process.env.GROQ_MODEL || "openai/gpt-oss-20b",

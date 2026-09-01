@@ -370,6 +370,13 @@ router.post("/ipn", WebhookService.processNowPaymentsWebhook.bind(WebhookService
 router.post("/crypto", (req, res) => res.status(200).json({ received: true, status: "not_implemented" }));
 
 /**
+ * POST /webhooks/quidax
+ * Quidax Crypto Webhooks
+ */
+const quidaxController = require("../controllers/quidaxController");
+router.post("/quidax", (req, res) => quidaxController.handleWebhook(req, res));
+
+/**
  * POST /webhooks/anchor
  * Anchor BaaS virtual account & payout webhooks
  */

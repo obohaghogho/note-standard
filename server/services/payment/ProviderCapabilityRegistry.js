@@ -69,7 +69,8 @@ class ProviderCapabilityRegistry {
       const operations = row.operation === 'both' ? ['deposit', 'withdrawal'] : [row.operation];
 
       const isCryptoFx = (curr === 'USDT' || curr === 'USDC');
-      const railProvider = isCryptoFx ? 'nowpayments' : row.provider;
+      const activeCryptoProvider = (process.env.ACTIVE_CRYPTO_DEPOSIT_PROVIDER || process.env.CRYPTO_PROVIDER || 'nowpayments').toLowerCase();
+      const railProvider = isCryptoFx ? activeCryptoProvider : row.provider;
       const minLimit = isCryptoFx ? Math.max(15, Number(row.min_amount || 15)) : Number(row.min_amount || 1);
 
       map[curr].rails.push({
