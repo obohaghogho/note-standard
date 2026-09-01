@@ -612,31 +612,33 @@ exports.createConversation = async (req, res) => {
             const { data: members } = await supabase
               .from("conversation_members")
               .select(`
-                user_id, role, status,
+                user_id, role, status, is_deleted, deleted_at, cleared_at,
                 profile:profiles (id, username, full_name, avatar_url, is_verified)
               `)
               .eq("conversation_id", existingId);
 
             const memberList = members || [];
 
-            // Re-open the conversation for this user with a clean slate:
-            // - Reset is_deleted and deleted_at so it appears in sidebar
-            // - ALWAYS set cleared_at = NOW() so all old messages are hidden
-            //   The user explicitly chose to re-add this person, so they expect
-            //   a fresh start. Old messages from before the delete should never show.
-            const reopenTimestamp = new Date().toISOString();
-            await supabase
-              .from("conversation_members")
-              .update({ 
-                is_deleted: false, 
-                deleted_at: null, 
-                cleared_at: reopenTimestamp 
-              })
-              .eq("conversation_id", existingId)
-              .eq("user_id", userId);
+            // Re-open the conversation for this user ONLY IF it was previously soft-deleted.
+            // DO NOT update cleared_at to NOW() on active conversations, otherwise active chat messages get hidden!
+            const myMembership = memberList.find(m => m.user_id === userId);
+            if (myMembership?.is_deleted) {
+              const reopenTimestamp = new Date().toISOString();
+              await supabase
+                .from("conversation_members")
+                .update({ 
+                  is_deleted: false, 
+                  deleted_at: null, 
+                  cleared_at: myMembership.cleared_at || myMembership.deleted_at || reopenTimestamp 
+                })
+                .eq("conversation_id", existingId)
+                .eq("user_id", userId);
+
+              myMembership.is_deleted = false;
+              myMembership.deleted_at = null;
+            }
 
             // Auto-accept if the initiator's current status is pending
-            const myMembership = memberList.find(m => m.user_id === userId);
             if (myMembership && myMembership.status === 'pending') {
               await supabase
                 .from("conversation_members")
