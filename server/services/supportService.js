@@ -298,16 +298,31 @@ class SupportService {
       support_status: "escalated"
     });
 
-    // 3. Notify Support Staff / Admins via Realtime
+    // 3. Notify Support Staff / Admins via DB Notifications & Realtime
     try {
-      const { data: supportUsers } = await supabase
+      const { data: adminProfiles } = await supabase
+        .from('profiles')
+        .select('id, username, full_name')
+        .or('plan_tier.eq.admin,role.eq.admin');
+
+      const { data: permUsers } = await supabase
         .from('user_permissions')
         .select('user_id, permissions!inner(name)')
         .eq('permissions.name', 'support.receive_ticket');
 
-      const recipients = (supportUsers || []).map(u => u.user_id);
-      
-      for (const staffId of recipients) {
+      const recipientSet = new Set();
+      (adminProfiles || []).forEach(p => recipientSet.add(p.id));
+      (permUsers || []).forEach(p => recipientSet.add(p.user_id));
+
+      const { data: customerProfile } = await supabase
+        .from('profiles')
+        .select('username, full_name')
+        .eq('id', userId)
+        .maybeSingle();
+
+      const customerName = customerProfile?.full_name || customerProfile?.username || 'A Customer';
+
+      for (const staffId of recipientSet) {
         await realtime.emitToUser(staffId, "support:new_ticket", {
           ticket_id: transactionResult?.ticket_id,
           conversation_id: conversationId,
@@ -321,12 +336,24 @@ class SupportService {
           await notificationService.createNotification({
             receiverId: staffId,
             type: 'new_support_ticket',
-            title: 'New Support Ticket Escalated',
-            message: `User needs help with ${category || 'general issue'}: ${(content || '').substring(0, 50)}...`,
+            title: '🆘 New Support Ticket Escalated',
+            message: `${customerName} requested support (${category || 'General'}): "${(content || '').substring(0, 60)}..."`,
             link: `/admin/chats?id=${conversationId}&ticket_id=${transactionResult?.ticket_id}`,
             conversationId: conversationId
           });
         }
+      }
+
+      // 4. Notify Customer (e.g. Stephen) that ticket was assigned to a human specialist
+      if (notificationService.createNotification) {
+        await notificationService.createNotification({
+          receiverId: userId,
+          type: 'support_escalated_customer',
+          title: 'Support Request Escalated 🎧',
+          message: 'Our AI support assistant transferred your request to a human specialist. An agent will reply shortly!',
+          link: `/dashboard/chat?id=${conversationId}`,
+          conversationId: conversationId
+        });
       }
 
       await realtime.emitToAdmin("support:new_ticket", {
