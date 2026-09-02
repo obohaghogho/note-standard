@@ -43,12 +43,12 @@ class SupportInactivityWorker {
     this.isProcessing = true;
 
     try {
-      // 1. Fetch active support conversations (status: open, pending, escalated, warning_sent)
+      // 1. Fetch active support conversations (status: open, pending, warning_sent — EXCLUDING escalated tickets waiting for human specialist agents)
       const { data: conversations, error: convErr } = await supabase
         .from("conversations")
         .select("id, support_status, updated_at, members:conversation_members(user_id, role)")
         .eq("chat_type", "support")
-        .in("support_status", ["open", "pending", "escalated", "warning_sent"]);
+        .in("support_status", ["open", "pending", "warning_sent"]);
 
       if (convErr || !conversations || conversations.length === 0) {
         this.isProcessing = false;
@@ -85,8 +85,8 @@ class SupportInactivityWorker {
           latestMsg.content.includes("This support chat session is now closed")
         );
 
-        // ── SCENARIO 1: Send warning message if user hasn't responded in 15+ mins ──
-        if ((conv.support_status === "open" || conv.support_status === "pending" || conv.support_status === "escalated") && !lastSenderIsUser && !isAlreadyWarningOrClosed) {
+        // ── SCENARIO 1: Send warning message if user hasn't responded in 15+ mins (EXCLUDING escalated tickets) ──
+        if ((conv.support_status === "open" || conv.support_status === "pending") && !lastSenderIsUser && !isAlreadyWarningOrClosed) {
           if (elapsedSinceLastMsg >= WARNING_TIMEOUT_MS) {
             logger.info(`[SupportInactivityWorker] Sending 15-minute inactivity warning for conv ${conv.id}`);
 
