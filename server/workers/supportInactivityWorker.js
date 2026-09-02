@@ -12,9 +12,9 @@ const supabase = require("../config/database");
 const realtime = require("../services/realtimeService");
 const logger = require("../utils/logger");
 
-const WARNING_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-const CLOSING_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes after warning
-const CHECK_INTERVAL_MS = 60 * 1000;      // 1 minute polling
+const WARNING_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+const CLOSING_TIMEOUT_MS = 5 * 60 * 1000;  // 5 minutes after warning (20 minutes total)
+const CHECK_INTERVAL_MS = 60 * 1000;       // 1 minute polling
 
 class SupportInactivityWorker {
   constructor() {
@@ -23,7 +23,7 @@ class SupportInactivityWorker {
   }
 
   start() {
-    logger.info("[SupportInactivityWorker] Started support inactivity monitor (1m interval)");
+    logger.info("[SupportInactivityWorker] Started support inactivity monitor (15m warning / 20m auto-close)");
     // Initial check
     this.checkInactivity().catch(err => logger.error("[SupportInactivityWorker] Error on initial check:", err.message));
     this.intervalRef = setInterval(() => {
@@ -43,12 +43,12 @@ class SupportInactivityWorker {
     this.isProcessing = true;
 
     try {
-      // 1. Fetch active support conversations (status: open, pending, warning_sent)
+      // 1. Fetch active support conversations (status: open, pending, escalated, warning_sent)
       const { data: conversations, error: convErr } = await supabase
         .from("conversations")
         .select("id, support_status, updated_at, members:conversation_members(user_id, role)")
         .eq("chat_type", "support")
-        .in("support_status", ["open", "pending", "warning_sent"]);
+        .in("support_status", ["open", "pending", "escalated", "warning_sent"]);
 
       if (convErr || !conversations || conversations.length === 0) {
         this.isProcessing = false;
@@ -85,12 +85,12 @@ class SupportInactivityWorker {
           latestMsg.content.includes("This support chat session is now closed")
         );
 
-        // ── SCENARIO 1: Send warning message if user hasn't responded in 5+ mins ──
-        if ((conv.support_status === "open" || conv.support_status === "pending") && !lastSenderIsUser && !isAlreadyWarningOrClosed) {
+        // ── SCENARIO 1: Send warning message if user hasn't responded in 15+ mins ──
+        if ((conv.support_status === "open" || conv.support_status === "pending" || conv.support_status === "escalated") && !lastSenderIsUser && !isAlreadyWarningOrClosed) {
           if (elapsedSinceLastMsg >= WARNING_TIMEOUT_MS) {
-            logger.info(`[SupportInactivityWorker] Sending inactivity warning for conv ${conv.id}`);
+            logger.info(`[SupportInactivityWorker] Sending 15-minute inactivity warning for conv ${conv.id}`);
 
-            const warningText = "I will be closing this chat if there are no further questions. Please let us know if you need anything else! 😊 If you still need help, please reply to this message within 3 minutes.";
+            const warningText = "I will be closing this support chat session in 5 minutes due to inactivity if there are no further questions. Please reply to this message if you still need help! 😊";
 
             const { data: rpcData } = await supabase.rpc('rpc_send_message', {
               p_conversation_id: conv.id,
@@ -118,12 +118,12 @@ class SupportInactivityWorker {
 
         const isAlreadyClosed = latestMsg.content && latestMsg.content.includes("This support chat session is now closed");
 
-        // ── SCENARIO 2: Auto-close support chat if user still hasn't responded after warning ──
+        // ── SCENARIO 2: Auto-close support chat if user still hasn't responded after 20 minutes total ──
         if (conv.support_status === "warning_sent" && !lastSenderIsUser && !isAlreadyClosed) {
           if (elapsedSinceLastMsg >= CLOSING_TIMEOUT_MS) {
-            logger.info(`[SupportInactivityWorker] Auto-closing idle support chat ${conv.id}`);
+            logger.info(`[SupportInactivityWorker] Auto-closing 20-minute idle support chat ${conv.id}`);
 
-            const closingText = "This support chat session is now closed due to inactivity. ✅ Whenever you reach out to our AI support team again, your previous conversation will be wiped clean so you start with a fresh new session! Have a great day! – Note Standard Support Team";
+            const closingText = "This support chat session is now closed due to 20 minutes of user inactivity. ✅ Whenever you reach out to our AI support team again, your previous conversation will be wiped clean so you start with a fresh new session! Have a great day! – Note Standard Support Team";
 
             const { data: rpcData } = await supabase.rpc('rpc_send_message', {
               p_conversation_id: conv.id,

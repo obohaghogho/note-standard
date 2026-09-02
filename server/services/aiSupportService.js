@@ -324,9 +324,15 @@ class AiSupportService {
       let calculatedConfidence = parsedResponse.confidence !== undefined ? parsedResponse.confidence : 0.95;
       if (retrieval.sources_used.length === 0) {
           calculatedConfidence = 0.20;
+      } else {
+          calculatedConfidence = Math.max(calculatedConfidence, 0.90);
       }
       
       let isEscalated = parsedResponse.escalate === true || calculatedConfidence < 0.80;
+      if (retrieval.sources_used.length > 0 && parsedResponse.response && parsedResponse.response.length > 20) {
+          // If knowledge base articles matched and AI provided a response, keep chat active with AI answer
+          isEscalated = false;
+      }
       
       if (!isEscalated && !this.validateResponse(parsedResponse)) {
           isEscalated = true;
