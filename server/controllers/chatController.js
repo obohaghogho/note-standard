@@ -2538,6 +2538,15 @@ exports.markConversationRead = async (req, res) => {
               .neq("sender_id", userId)
               .is("read_at", null);
             if (error && error.code !== "42703") throw error;
+
+            await supabase
+              .from("conversation_unread_state")
+              .upsert({
+                conversation_id: conversationId,
+                user_id: userId,
+                unread_count: 0,
+                last_reconciled_at: now
+              }, { onConflict: 'conversation_id,user_id' });
         } else {
             throw rpcError;
         }
@@ -2985,6 +2994,15 @@ exports.markConversationRead = async (req, res, next) => {
       .select("id, sender_id");
 
     if (error) throw error;
+
+    await supabase
+      .from("conversation_unread_state")
+      .upsert({
+        conversation_id: conversationId,
+        user_id: userId,
+        unread_count: 0,
+        last_reconciled_at: now
+      }, { onConflict: 'conversation_id,user_id' });
 
     if (updated && updated.length > 0) {
       const realtime = require("../services/realtimeService");

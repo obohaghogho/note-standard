@@ -137,6 +137,15 @@ module.exports = (io, socket) => {
             .eq('conversation_id', conversationId)
             .neq('sender_id', userId)
             .is('read_at', null);
+
+          await supabase
+            .from('conversation_unread_state')
+            .upsert({
+              conversation_id: conversationId,
+              user_id: userId,
+              unread_count: 0,
+              last_reconciled_at: now
+            }, { onConflict: 'conversation_id,user_id' });
         }
       } catch (err) {
         console.error('[GW] Failed to persist read receipt to DB:', err.message);

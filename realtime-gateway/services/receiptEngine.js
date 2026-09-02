@@ -107,6 +107,20 @@ async function markRead(supabase, io, conversationId, readerId, messageIds) {
 
   if (!data || data.length === 0) return { updatedCount: 0 };
 
+  // Reset cached unread state in DB so getConversations returns unreadCount = 0
+  try {
+    await supabase
+      .from('conversation_unread_state')
+      .upsert({
+        conversation_id: conversationId,
+        user_id: readerId,
+        unread_count: 0,
+        last_reconciled_at: now
+      }, { onConflict: 'conversation_id,user_id' });
+  } catch (uErr) {
+    console.warn('[ReceiptEngine] Reset conversation_unread_state warning:', uErr.message);
+  }
+
   const receipt = {
     conversationId,
     messageIds: data.map(m => m.id),
