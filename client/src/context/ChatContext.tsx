@@ -634,7 +634,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         // Update local unread count and lastMessage status
         setConversations(prev => {
             const conv = prev.find(c => c.id === conversationId);
-            const currentUnread = (conv as any)?.unreadCount ?? (conv as any)?.unread_count ?? 0;
             if (!conv) return prev;
             
             const nowStr = new Date().toISOString();
@@ -644,14 +643,17 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 status: 'read' as const
             } : conv.lastMessage;
 
-            if (currentUnread === 0 && conv.lastMessage?.read_at) return prev; // No-op
-
-            return prev.map(c => c.id === conversationId ? { 
+            const nextConvs = prev.map(c => c.id === conversationId ? { 
                 ...c, 
                 unreadCount: 0, 
                 unread_count: 0,
                 lastMessage: updatedLastMsg
             } : c);
+
+            useChatStore.getState().setConversations(nextConvs);
+            ChatCacheEngine.saveConversations(nextConvs).catch(() => {});
+
+            return nextConvs;
         });
     }, [session, deviceId]);
 
@@ -1672,20 +1674,24 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                             created_at: msg.created_at,
                             type: msg.type,
                             event_id: msg.event_id,
-                            delivered_at: msg.delivered_at,
-                            read_at: msg.read_at,
-                            status: (msg.status ?? 'sent') as NonNullable<Conversation['lastMessage']>['status']
+                            delivered_at: msg.delivered_at || (isCurrentlyOpen ? new Date().toISOString() : undefined),
+                            read_at: isCurrentlyOpen ? new Date().toISOString() : msg.read_at,
+                            status: (isCurrentlyOpen ? 'read' : (msg.status ?? 'sent')) as NonNullable<Conversation['lastMessage']>['status']
                         } : conv.lastMessage;
+
+                        const nextUnread = isCurrentlyOpen ? 0 : (shouldIncrementUnread ? (((conv as any).unreadCount || (conv as any).unread_count || 0) + newlyAddedCount) : ((conv as any).unreadCount || (conv as any).unread_count || 0));
 
                         return {
                             ...conv,
                             updated_at: shouldUpdateLastMessage ? msg.created_at : conv.updated_at,
                             lastMessage: incomingLastMsg,
-                            unreadCount: shouldIncrementUnread
-                                ? (conv.unreadCount || 0) + newlyAddedCount
-                                : conv.unreadCount
+                            unreadCount: nextUnread,
+                            unread_count: nextUnread
                         };
                     }).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+
+                    useChatStore.getState().setConversations(nextConvs);
+                    ChatCacheEngine.saveConversations(nextConvs).catch(() => {});
                     
                     console.log(`[CLIENT_TRACE] [${Date.now()}] conversations state updated: PASS | next state size: ${nextConvs.length}`);
                     return nextConvs;
@@ -1989,18 +1995,24 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     return c;
                 }));
             } else {
-                setConversations(prev => prev.map(c => {
-                    if (c.id === conversationId) {
-                        return {
-                            ...c,
-                            unreadCount: 0,
-                            lastMessage: c.lastMessage && c.lastMessage.sender_id !== user?.id
-                                ? mergeMessageMonotonic(c.lastMessage as Message, { read_at: readAt }, 'read').merged as Conversation['lastMessage']
-                                : c.lastMessage
-                        };
-                    }
-                    return c;
-                }));
+                setConversations(prev => {
+                    const nextConvs = prev.map(c => {
+                        if (c.id === conversationId) {
+                            return {
+                                ...c,
+                                unreadCount: 0,
+                                unread_count: 0,
+                                lastMessage: c.lastMessage && c.lastMessage.sender_id !== user?.id
+                                    ? mergeMessageMonotonic(c.lastMessage as Message, { read_at: readAt, status: 'read' }, 'read').merged as Conversation['lastMessage']
+                                    : c.lastMessage
+                            };
+                        }
+                        return c;
+                    });
+                    useChatStore.getState().setConversations(nextConvs);
+                    ChatCacheEngine.saveConversations(nextConvs).catch(() => {});
+                    return nextConvs;
+                });
             }
         };
 

@@ -127,7 +127,7 @@ const ConversationItem = React.memo(({
             {/* Text Info */}
             <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-baseline mb-0.5">
-                    <h3 className={`text-[15px] font-bold truncate flex items-center gap-1.5 ${unreadCount > 0 ? 'text-white' : 'text-gray-200'}`}>
+                    <h3 className={`text-[15px] truncate flex items-center gap-1.5 ${unreadCount > 0 ? 'text-white font-bold' : 'text-gray-200 font-normal'}`}>
                         {displayName || 'Untitled Chat'}
                         {conv.type === 'direct' && (
                             <UserBadge 
@@ -162,7 +162,7 @@ const ConversationItem = React.memo(({
                 </div>
 
                 <div className="flex items-center justify-between gap-2">
-                    <p className={`text-[13px] truncate flex-1 leading-relaxed ${unreadCount > 0 ? 'text-gray-100 font-semibold' : 'text-gray-500'}`}>
+                    <p className={`text-[13px] truncate flex-1 leading-relaxed ${unreadCount > 0 ? 'text-white font-semibold' : 'text-gray-400 font-normal'}`}>
                         {typingUsersList.length > 0 ? (
                             <span className="text-blue-400 animate-pulse font-medium italic">
                                 {typingUsersList.length > 1 ? 'People are typing...' : `${typingUsersList[0]} is typing...`}
