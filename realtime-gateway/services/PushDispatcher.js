@@ -14,6 +14,11 @@
 const admin = require('firebase-admin');
 const webpush = require('web-push');
 
+function normalizeBase64Url(str) {
+  if (!str) return str;
+  return String(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 class PushDispatcher {
   /**
    * Dispatches push notifications across all active target devices for a recipient.
@@ -51,7 +56,16 @@ class PushDispatcher {
     // Resolve Firebase Admin instance
     let fbApp = firebaseApp || (admin.apps.length > 0 ? admin.apps[0] : null);
 
-    const resolvedGatewayUrl = gatewayUrl || process.env.SELF_URL || process.env.BACKEND_URL || 'http://localhost:5000';
+    const defaultGatewayUrl = process.env.NODE_ENV === 'production' 
+      ? 'https://gateway.notestandard.com' 
+      : 'http://localhost:5001';
+
+    const resolvedGatewayUrl = process.env.REALTIME_GATEWAY_URL || 
+      process.env.GATEWAY_PUBLIC_URL || 
+      (gatewayUrl && !gatewayUrl.includes('localhost:5000') ? gatewayUrl : null) || 
+      process.env.SELF_URL || 
+      defaultGatewayUrl;
+
     const deliveryWebhookUrl = messageId
       ? `${resolvedGatewayUrl.replace(/\/$/, '')}/deliver/${messageId}?recipientId=${userId}&cid=${correlationId || ''}`
       : '';
@@ -80,25 +94,21 @@ class PushDispatcher {
    */
   static async dispatchToDevice(supabase, fbApp, device, payload) {
     const isWebPushUrl = typeof device.endpoint === 'string' && device.endpoint.startsWith('https://');
-    const isVapid = device.type === 'vapid' || (isWebPushUrl && device.p256dh);
+    const isVapid = device.type === 'vapid' || isWebPushUrl;
 
-    if (isVapid || (isWebPushUrl && !device.type)) {
+    if (isVapid || isWebPushUrl) {
       return PushDispatcher.sendWebPush(supabase, device, payload);
     }
 
     const isFcmToken = device.type === 'fcm' || 
       (typeof device.endpoint === 'string' && !device.endpoint.startsWith('https://') && !device.endpoint.startsWith('ExponentPushToken'));
 
-    if ((isFcmToken || device.platform === 'android') && fbApp) {
+    if (device.platform === 'android' && isFcmToken && fbApp) {
       return PushDispatcher.sendAndroidFcm(fbApp, supabase, device, payload);
     }
 
-    if (device.platform === 'ios') {
+    if (device.platform === 'ios' && isFcmToken && fbApp) {
       return PushDispatcher.sendIosPush(fbApp, supabase, device, payload);
-    }
-
-    if (isWebPushUrl) {
-      return PushDispatcher.sendWebPush(supabase, device, payload);
     }
 
     return false;
@@ -160,8 +170,11 @@ class PushDispatcher {
    */
   static async sendWebPush(supabase, device, payload) {
     try {
-      const p256dh = device.p256dh || device.push_p256dh || device.keys?.p256dh;
-      const auth = device.auth || device.push_auth || device.keys?.auth;
+      const rawP256dh = device.p256dh || device.push_p256dh || device.keys?.p256dh;
+      const rawAuth = device.auth || device.push_auth || device.keys?.auth;
+
+      const p256dh = normalizeBase64Url(rawP256dh);
+      const auth = normalizeBase64Url(rawAuth);
 
       if (!p256dh || !auth) {
         console.warn(`[PushDispatcher] ⚠️ Skipping Web Push for ${device.endpoint?.slice(0, 30)}... — missing p256dh or auth keys`);

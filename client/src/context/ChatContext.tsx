@@ -1321,7 +1321,20 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     useEffect(() => {
         console.log(`[SYNC_FORENSICS] ChatContext socket effect evaluated | socket exists: ${!!socket} | connected: ${connected}`);
-        if (!socket || !connected) return;
+        const sendBatchDeliveryAck = (messageIds: string[]) => {
+            if (!messageIds || messageIds.length === 0 || !user?.id) return;
+            const defaultUrl = import.meta.env.DEV ? 'http://localhost:5001' : 'https://gateway.notestandard.com';
+            const rawGatewayUrl = import.meta.env.VITE_SOCKET_URL || defaultUrl;
+            const targetUrl = `${rawGatewayUrl.replace(/\/$/, '')}/deliver/batch`;
+            
+            fetch(targetUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messageIds, userId: user.id })
+            }).catch(err => {
+                console.warn('[ChatContext] Auto-batch delivery ACK warning:', err);
+            });
+        };
 
         const processIncomingMessage = (raw: unknown) => {
             // Narrow to Message-shape for reconnect buffer (safe — validated below)
@@ -1351,6 +1364,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
             console.log(`[FORENSIC][CLIENT] Message Received | messageId: ${msg.id} | conversationId: ${msg.conversation_id} | senderId: ${msg.sender_id} | timestamp: ${Date.now()}`);
             console.log(`[SYNC_FORENSICS] [CLIENT_TRACE] [${Date.now()}] chat:message received | id: ${msg.id} | convId: ${msg.conversation_id} | activeConvId: ${activeConversationIdRef.current}`);
+
+            // Automatically send delivery ACK for incoming messages from peer users
+            if (msg.sender_id !== user?.id && msg.id && !msg.id.startsWith('temp-')) {
+                sendBatchDeliveryAck([msg.id]);
+            }
 
             // ── GLOBAL SEEN CACHE GUARD ──────────────────────────────────────
             // Single-pass gate using dedupeMessages canonical key (event_id || id).

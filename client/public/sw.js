@@ -135,8 +135,8 @@ self.addEventListener('push', (event) => {
                                        /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(swHost);
 
             if (isLocalOrPrivateIP && options.data?.messageId) {
-                // Map deliveryUrl to the active local gateway running on port 3001 of the current host
-                deliveryUrl = `${self.location.protocol}//${swHost}:3001/deliver/${options.data.messageId}`;
+                // Map deliveryUrl to the active local gateway running on port 5001 of the current host
+                deliveryUrl = `${self.location.protocol}//${swHost}:5001/deliver/${options.data.messageId}`;
             }
         }
 
