@@ -194,6 +194,7 @@ class SocketLifecycleManager {
   // ── Internal ──────────────────────────────────────────────────────────────
 
   private _reattachListeners(socket: Socket) {
+    if (!socket) return;
     for (const { event, handler } of this.listeners) {
       socket.off(event, handler); // Remove stale binding first
       socket.on(event, handler);  // Re-register fresh

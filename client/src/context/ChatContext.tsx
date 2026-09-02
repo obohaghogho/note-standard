@@ -2114,55 +2114,55 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         document.addEventListener('visibilitychange', handleVisibilityChange);
 
-        socket.off('chat:message', processIncomingMessage);
-        socket.on('chat:message', processIncomingMessage);
-        socket.off('chat:new_message', processIncomingMessage);
-        socket.on('chat:new_message', processIncomingMessage);
+        socket?.off('chat:message', processIncomingMessage);
+        socket?.on('chat:message', processIncomingMessage);
+        socket?.off('chat:new_message', processIncomingMessage);
+        socket?.on('chat:new_message', processIncomingMessage);
 
-        socket.off('chat:conversation_deleted', onConversationDeleted);
-        socket.on('chat:conversation_deleted', onConversationDeleted);
+        socket?.off('chat:conversation_deleted', onConversationDeleted);
+        socket?.on('chat:conversation_deleted', onConversationDeleted);
 
-        socket.off('chat:history_cleared', onHistoryCleared);
-        socket.on('chat:history_cleared', onHistoryCleared);
+        socket?.off('chat:history_cleared', onHistoryCleared);
+        socket?.on('chat:history_cleared', onHistoryCleared);
 
-        socket.off('chat:message_deleted', onMessageDeleted);
-        socket.on('chat:message_deleted', onMessageDeleted);
+        socket?.off('chat:message_deleted', onMessageDeleted);
+        socket?.on('chat:message_deleted', onMessageDeleted);
 
-        socket.off('chat:message_edited', onMessageEdited);
-        socket.on('chat:message_edited', onMessageEdited);
+        socket?.off('chat:message_edited', onMessageEdited);
+        socket?.on('chat:message_edited', onMessageEdited);
 
-        socket.off('chat:message_delivered', onDeliveryEvent);
-        socket.on('chat:message_delivered', onDeliveryEvent);
+        socket?.off('chat:message_delivered', onDeliveryEvent);
+        socket?.on('chat:message_delivered', onDeliveryEvent);
 
-        socket.off('chat:delivery_receipt', onDeliveryEvent);
-        socket.on('chat:delivery_receipt', onDeliveryEvent);
+        socket?.off('chat:delivery_receipt', onDeliveryEvent);
+        socket?.on('chat:delivery_receipt', onDeliveryEvent);
 
         // FIX 1: Subscribe to batch delivery receipts from the gateway /deliver/batch fast-path.
         // This event was previously emitted by the gateway but never consumed by the client.
-        socket.off('chat:messages_delivered_batch', onBatchDeliveryEvent);
-        socket.on('chat:messages_delivered_batch', onBatchDeliveryEvent);
+        socket?.off('chat:messages_delivered_batch', onBatchDeliveryEvent);
+        socket?.on('chat:messages_delivered_batch', onBatchDeliveryEvent);
 
-        socket.off('chat:message_read', onReadEvent);
-        socket.on('chat:message_read', onReadEvent);
+        socket?.off('chat:message_read', onReadEvent);
+        socket?.on('chat:message_read', onReadEvent);
 
-        socket.off('chat:read_receipt', onBatchReadEvent);
-        socket.on('chat:read_receipt', onBatchReadEvent);
+        socket?.off('chat:read_receipt', onBatchReadEvent);
+        socket?.on('chat:read_receipt', onBatchReadEvent);
 
-        socket.off('chat:conversation_updated', onConversationUpdated);
-        socket.on('chat:conversation_updated', onConversationUpdated);
+        socket?.off('chat:conversation_updated', onConversationUpdated);
+        socket?.on('chat:conversation_updated', onConversationUpdated);
 
-        socket.off('chat:new_conversation', onNewConversation);
-        socket.on('chat:new_conversation', onNewConversation);
+        socket?.off('chat:new_conversation', onNewConversation);
+        socket?.on('chat:new_conversation', onNewConversation);
 
 
-        socket.off('chat:conversation_read', onConversationRead);
-        socket.on('chat:conversation_read', onConversationRead);
+        socket?.off('chat:conversation_read', onConversationRead);
+        socket?.on('chat:conversation_read', onConversationRead);
 
-        socket.off('chat:conversation_delivered', onConversationDelivered);
-        socket.on('chat:conversation_delivered', onConversationDelivered);
+        socket?.off('chat:conversation_delivered', onConversationDelivered);
+        socket?.on('chat:conversation_delivered', onConversationDelivered);
 
-        socket.off('chat:typing', onTyping);
-        socket.on('chat:typing', onTyping);
+        socket?.off('chat:typing', onTyping);
+        socket?.on('chat:typing', onTyping);
 
         // Re-join ALL conversation rooms on every socket reconnect.
         const onSocketReconnect = async () => {
@@ -2183,11 +2183,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             const currentConvs = conversationsRef.current;
             if (currentConvs.length > 0) {
                 console.log(`[ChatContext] 🔄 Socket reconnected — re-joining ${currentConvs.length} rooms`);
-                currentConvs.forEach(conv => socket.emit('join_room', conv.id));
+                currentConvs.forEach(conv => socket?.emit('join_room', conv.id));
             }
             // Also rejoin the active conversation room explicitly
             if (activeConversationIdRef.current) {
-                socket.emit('join_room', activeConversationIdRef.current);
+                socket?.emit('join_room', activeConversationIdRef.current);
             }
             
             // Layer 5: Reconciliation Engine Trigger (Socket Reconnect)
@@ -2201,30 +2201,30 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             isReconnectingRef.current = true;
         };
 
-        socket.off('connect', onSocketReconnect);
-        socket.on('connect', onSocketReconnect);
+        socket?.off('connect', onSocketReconnect);
+        socket?.on('connect', onSocketReconnect);
         
-        socket.off('disconnect', onSocketDisconnect);
-        socket.on('disconnect', onSocketDisconnect);
+        socket?.off('disconnect', onSocketDisconnect);
+        socket?.on('disconnect', onSocketDisconnect);
         
         return () => { 
-            socket.off('chat:message', processIncomingMessage); 
-            socket.off('chat:new_message', processIncomingMessage); 
-            socket.off('chat:message_deleted', onMessageDeleted);
-            socket.off('chat:message_edited', onMessageEdited);
-            socket.off('chat:message_delivered', onDeliveryEvent);
-            socket.off('chat:delivery_receipt', onDeliveryEvent);
-            socket.off('chat:messages_delivered_batch', onBatchDeliveryEvent);
-            socket.off('chat:message_read', onReadEvent);
-            socket.off('chat:read_receipt', onBatchReadEvent);
-            socket.off('chat:conversation_updated', onConversationUpdated);
-            socket.off('chat:new_conversation', onNewConversation);
-            socket.off('chat:conversation_read', onConversationRead);
+            socket?.off('chat:message', processIncomingMessage); 
+            socket?.off('chat:new_message', processIncomingMessage); 
+            socket?.off('chat:message_deleted', onMessageDeleted);
+            socket?.off('chat:message_edited', onMessageEdited);
+            socket?.off('chat:message_delivered', onDeliveryEvent);
+            socket?.off('chat:delivery_receipt', onDeliveryEvent);
+            socket?.off('chat:messages_delivered_batch', onBatchDeliveryEvent);
+            socket?.off('chat:message_read', onReadEvent);
+            socket?.off('chat:read_receipt', onBatchReadEvent);
+            socket?.off('chat:conversation_updated', onConversationUpdated);
+            socket?.off('chat:new_conversation', onNewConversation);
+            socket?.off('chat:conversation_read', onConversationRead);
 
-            socket.off('chat:conversation_delivered', onConversationDelivered);
-            socket.off('chat:typing', onTyping);
-            socket.off('connect', onSocketReconnect);
-            socket.off('disconnect', onSocketDisconnect);
+            socket?.off('chat:conversation_delivered', onConversationDelivered);
+            socket?.off('chat:typing', onTyping);
+            socket?.off('connect', onSocketReconnect);
+            socket?.off('disconnect', onSocketDisconnect);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps

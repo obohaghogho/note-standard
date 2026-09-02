@@ -218,8 +218,8 @@ export function TeamsPage() {
         setActiveCall(null);
       }
     };
-    socket.on('notification', onNotification);
-    return () => { socket.off('notification', onNotification); };
+    socket?.on('notification', onNotification);
+    return () => { socket?.off('notification', onNotification); };
   }, [socket]);
 
   const handleCreateTeam = async (e: React.FormEvent) => {

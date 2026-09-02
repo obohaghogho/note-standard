@@ -189,15 +189,15 @@ export const AdminChat = () => {
         socket.on('admin_presence_update', onPresenceUpdate);
 
         return () => {
-            socket.off('chat:message', onReceiveMessage);
-            socket.off('chat:new_conversation', onNewSupportChat);
-            socket.off('chat:new_support_chat', onNewSupportChat);
-            socket.off('support:new_ticket', onNewTicket);
-            socket.off('chat:conversation_updated', onConversationUpdated);
-            socket.off('chat:message_read', onMessageRead);
-            socket.off('chat:message_delivered');
-            socket.off('chat:conversation_read');
-            socket.off('admin_presence_update', onPresenceUpdate);
+            socket?.off('chat:message', onReceiveMessage);
+            socket?.off('chat:new_conversation', onNewSupportChat);
+            socket?.off('chat:new_support_chat', onNewSupportChat);
+            socket?.off('support:new_ticket', onNewTicket);
+            socket?.off('chat:conversation_updated', onConversationUpdated);
+            socket?.off('chat:message_read', onMessageRead);
+            socket?.off('chat:message_delivered');
+            socket?.off('chat:conversation_read');
+            socket?.off('admin_presence_update', onPresenceUpdate);
         };
     }, [socket, connected, isAdmin, user?.id, fetchChats]);
 

@@ -158,19 +158,19 @@ export function useCommunityFeed(params: FeedParams) {
       }));
     };
 
-    socket.on('community:post_created', handleNewPost);
-    socket.on('community:post_deleted', handlePostDeleted);
-    socket.on('community:post_edited', handlePostEdited);
-    socket.on('community:like_toggled', handleLikeToggled);
-    socket.on('community:comment_count_updated', handleCommentCountUpdated);
+    socket?.on('community:post_created', handleNewPost);
+    socket?.on('community:post_deleted', handlePostDeleted);
+    socket?.on('community:post_edited', handlePostEdited);
+    socket?.on('community:like_toggled', handleLikeToggled);
+    socket?.on('community:comment_count_updated', handleCommentCountUpdated);
 
     return () => {
-      socket.emit('community:leave_feed');
-      socket.off('community:post_created', handleNewPost);
-      socket.off('community:post_deleted', handlePostDeleted);
-      socket.off('community:post_edited', handlePostEdited);
-      socket.off('community:like_toggled', handleLikeToggled);
-      socket.off('community:comment_count_updated', handleCommentCountUpdated);
+      socket?.emit('community:leave_feed');
+      socket?.off('community:post_created', handleNewPost);
+      socket?.off('community:post_deleted', handlePostDeleted);
+      socket?.off('community:post_edited', handlePostEdited);
+      socket?.off('community:like_toggled', handleLikeToggled);
+      socket?.off('community:comment_count_updated', handleCommentCountUpdated);
     };
   }, [socket]);
 

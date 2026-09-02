@@ -74,7 +74,7 @@ export const Trends = () => {
         });
 
         return () => {
-            socket.off('stats_updated');
+            socket?.off('stats_updated');
         };
     }, [socket]);
 
