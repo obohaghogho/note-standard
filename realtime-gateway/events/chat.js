@@ -117,17 +117,37 @@ module.exports = (io, socket) => {
 
   // Emitted by client when messages are seen.
   // Payload: { conversationId, messageIds: string[], readAt: ISO string, senderId?: string }
-  socket.on('chat:read', (data) => {
+  socket.on('chat:read', async (data) => {
     const { conversationId, messageIds, readAt, senderId } = data || {};
-    if (!conversationId || !Array.isArray(messageIds) || messageIds.length === 0) return;
+    if (!conversationId) return;
 
-    console.log(`[FORENSIC][GW] MESSAGE_READ | message_id:${messageIds.join(',')} | ts:${Date.now()}`);
+    const now = readAt || new Date().toISOString();
+    console.log(`[FORENSIC][GW] MESSAGE_READ | conv:${conversationId} | user:${userId} | msgs:${messageIds?.length || 'all'}`);
+
+    // Persist read status to PostgreSQL DB so read status never reverts after closing app
+    if (supabase) {
+      try {
+        const receiptEngine = require('../services/receiptEngine');
+        if (Array.isArray(messageIds) && messageIds.length > 0) {
+          await receiptEngine.markRead(supabase, io, conversationId, userId, messageIds);
+        } else {
+          await supabase
+            .from('messages')
+            .update({ read_at: now })
+            .eq('conversation_id', conversationId)
+            .neq('sender_id', userId)
+            .is('read_at', null);
+        }
+      } catch (err) {
+        console.error('[GW] Failed to persist read receipt to DB:', err.message);
+      }
+    }
 
     const payload = {
       userId,
       conversationId,
-      messageIds,
-      readAt: readAt || new Date().toISOString(),
+      messageIds: messageIds || [],
+      readAt: now,
     };
 
     // Route globally to the sender's user room if provided

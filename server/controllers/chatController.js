@@ -2910,13 +2910,6 @@ exports.markMessageRead = async (req, res, next) => {
 
     if (updateErr) throw updateErr;
 
-    // Update conversation_members last_read_at
-    await supabase
-      .from("conversation_members")
-      .update({ last_read_at: now })
-      .eq("conversation_id", msg.conversation_id)
-      .eq("user_id", userId);
-
     // Emit Realtime Read ACK to the original sender
     const realtime = require("../services/realtimeService");
     await realtime.emitToUser(msg.sender_id, "chat:message_read", {
@@ -2992,12 +2985,6 @@ exports.markConversationRead = async (req, res, next) => {
       .select("id, sender_id");
 
     if (error) throw error;
-
-    await supabase
-      .from("conversation_members")
-      .update({ last_read_at: now })
-      .eq("conversation_id", conversationId)
-      .eq("user_id", userId);
 
     if (updated && updated.length > 0) {
       const realtime = require("../services/realtimeService");
