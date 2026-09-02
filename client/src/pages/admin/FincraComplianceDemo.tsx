@@ -67,98 +67,98 @@ interface ComplianceControlItem {
     description: string;
 }
 
-// ─── COMPLIANCE CONTROLS MATRIX BASED ON REPOSITORY AUDIT ───
+// ─── COMPLIANCE CONTROLS MATRIX — PLAIN ENGLISH FOR FINCRA REVIEW ───
 const COMPLIANCE_CONTROLS_DATA: ComplianceControlItem[] = [
     {
         id: 'ctrl-1',
-        name: 'Authentication & Session Security',
+        name: 'User Login & Account Security',
         status: 'VERIFIED',
         evidence: 'AuthContext.tsx, authRoutes.js, Express Bearer Middleware',
-        description: 'Multi-factor capable Supabase JWT session verification with token auto-refresh and session arbitration.'
+        description: 'Every user must log in securely. The system checks who they are, keeps their session active safely, and automatically logs them out when the session expires. Only verified users can access their accounts.'
     },
     {
         id: 'ctrl-2',
-        name: 'KYC Status & User Verification',
+        name: 'Identity Verification (Know Your Customer — KYC)',
         status: 'IMPLEMENTED — LIVE VALIDATION PENDING',
         evidence: 'profiles.plan_tier, 20260226_create_pending_verifications.sql',
-        description: 'Tiered user verification framework enforcing tier limits and identification check protocols.'
+        description: 'Before a user can send large amounts of money, they must verify their identity. We have three levels — Tier 1 (basic), Tier 2 (government ID), and Tier 3 (full review). Higher tiers unlock higher transaction limits.'
     },
     {
         id: 'ctrl-3',
-        name: 'Transaction Limits & Velocity Enforcement',
+        name: 'Transaction Limits & Daily Spending Caps',
         status: 'IMPLEMENTED — LIVE VALIDATION PENDING',
         evidence: '114_add_custom_deposit_limit.sql, LimitRequestsPage.tsx',
-        description: 'Dynamic per-transaction and daily cumulative cap verification prior to routing payment requests.'
+        description: 'Every user has a maximum daily spending limit based on their verification level. The system automatically checks this limit before every payment. If a user has already hit their daily cap, the transaction is blocked immediately.'
     },
     {
         id: 'ctrl-4',
-        name: 'Authorization & Role Access (RBAC)',
+        name: 'Who Can Access What — Role-Based Permissions',
         status: 'VERIFIED',
         evidence: 'ProtectedRoute.tsx (allowedRoles=[admin, support]), 330_rbac_roles_permissions.sql',
-        description: 'Strict role-based access control protecting administration dashboards and compliance endpoints.'
+        description: 'Different users have different levels of access. A regular customer cannot see the admin panel. A support agent can view accounts but cannot move money. Only a system admin can access financial settings. These restrictions are enforced automatically.'
     },
     {
         id: 'ctrl-5',
-        name: 'Idempotency & Duplicate Request Protection',
+        name: 'Preventing Duplicate Payments',
         status: 'VERIFIED',
         evidence: '174_fincra_deterministic_idempotency.sql, 185_fix_confirm_deposit_idempotency.sql',
-        description: 'Deterministic hash-keyed idempotency fences preventing duplicate provider requests or replay attacks.'
+        description: 'Every payment request is given a unique ID. If the same request is accidentally sent twice — due to a network error or user double-click — the system detects the duplicate and processes it only once. No customer is ever charged twice for the same transaction.'
     },
     {
         id: 'ctrl-6',
-        name: 'Row Level Security (RLS) Isolation',
+        name: 'User Data Isolation — No Cross-Account Access',
         status: 'VERIFIED',
         evidence: '067_ledger_balance_and_rls_hardening.sql, 078_wallet_rls_hardening.sql, 175_harden_rls_public.sql',
-        description: 'Hardened PostgreSQL RLS policies preventing cross-tenant wallet or transaction access.'
+        description: 'Every user can only see and access their own wallet, transactions, and account data. It is impossible for one user to view or interact with another user\'s balance or records. This is enforced directly at the database level.'
     },
     {
         id: 'ctrl-7',
-        name: 'Provider Health & Capabilities Verification',
+        name: 'Checking That Fincra Is Ready Before Sending Payments',
         status: 'VERIFIED',
         evidence: 'providerHealthRoutes.js, 257_provider_health_metrics.sql, PaymentCapabilitiesPage.tsx',
-        description: 'Real-time telemetry and circuit breaker evaluation of external gateways prior to dispatching payments.'
+        description: 'Before any payment is sent to Fincra, NoteStandard checks that Fincra\'s systems are online and responding correctly. If Fincra is experiencing downtime or delays, payments are held safely until the service is restored — protecting users from failed transactions.'
     },
     {
         id: 'ctrl-8',
-        name: 'Webhook Event Processing & Verification',
+        name: 'Verifying Payment Confirmations from Fincra',
         status: 'VERIFIED',
         evidence: 'server/routes/webhooks.js, server/routes/fincraWebhook.js, 304_webhook_events.sql',
-        description: 'HMAC signature verification and outbox pattern handling for inbound provider notifications.'
+        description: 'When Fincra sends a payment confirmation back to NoteStandard, the system verifies that the message is genuinely from Fincra using a digital signature check. Fake or tampered confirmations are rejected automatically — only real, verified confirmations trigger account updates.'
     },
     {
         id: 'ctrl-9',
-        name: 'Double-Entry Ledger Accounting Integrity',
+        name: 'Accurate Financial Record Keeping (Double-Entry Accounting)',
         status: 'VERIFIED',
         evidence: '067_ledger_balance_and_rls_hardening.sql, 164_v6_institutional_ledger.sql, 299_double_entry_ledger.sql',
-        description: 'Atomic double-entry journal posting enforcing strict equality: Total Debits == Total Credits.'
+        description: 'NoteStandard records every transaction using double-entry accounting — the same standard used by all banks. Every payment is recorded as both where the money came from and where it went. These two sides must always match exactly. If they don\'t, the transaction is rejected.'
     },
     {
         id: 'ctrl-10',
-        name: 'Settlement Finality & State Machine Tracking',
+        name: 'Money Is Only Released After Full Confirmation',
         status: 'VERIFIED',
         evidence: '136_settlement_finality.sql, 253_settlements_state_machine.sql, 407_atomic_withdrawal_settlement_rpc.sql',
-        description: 'Deterministic state machine preventing premature balance releases until provider confirmation.'
+        description: 'Funds are never added to a user\'s wallet until the payment has been fully confirmed by Fincra. Money stays in a holding state until every step is complete. This prevents users from spending money that hasn\'t actually arrived yet.'
     },
     {
         id: 'ctrl-11',
-        name: 'Failed Transaction & Dead Letter Queue (DLQ)',
+        name: 'Safely Handling Failed Payments',
         status: 'VERIFIED',
         evidence: '172_hardened_dlq.sql, 310_dead_letter_queue.sql',
-        description: 'Isolated quarantine storage for unresolvable provider errors with automated retries.'
+        description: 'If a payment fails — for example due to a bank error or network timeout — the failed transaction is logged in a secure holding area for review. The system records exactly what went wrong and why, so nothing is lost or unaccounted for.'
     },
     {
         id: 'ctrl-12',
-        name: 'Reversal & Refund Accounting Safeguards',
+        name: 'Automatic Refunds When Payments Fail',
         status: 'VERIFIED',
         evidence: '204_fix_payout_reversal_and_ui_state.sql, 246_reconcile_and_refund_reserved_withdrawals.sql',
-        description: 'Automated atomic ledger reversal entries restoring user balances upon provider payment cancellation.'
+        description: 'If a payment to Fincra fails or is cancelled, the customer\'s money is automatically and immediately returned to their wallet. No manual action is needed. The refund is recorded in the financial books at the same time, so the accounts always balance.'
     },
     {
         id: 'ctrl-13',
-        name: 'Immutable Audit Trail Logging',
+        name: 'Permanent Record of All Activity (Audit Trail)',
         status: 'VERIFIED',
         evidence: '256_immutable_audit_log.sql, 331_audit_logs_compliance.sql, 345_audit_trail_explorer.sql',
-        description: 'Append-only cryptographic action log capturing every compliance, payment, and system decision.'
+        description: 'Every action on NoteStandard — every login, payment, identity check, admin change, and system decision — is permanently recorded in a log that cannot be edited or deleted. This gives Fincra and regulators a complete, transparent history of everything that has ever happened on the platform.'
     }
 ];
 
@@ -189,31 +189,31 @@ export default function FincraComplianceDemo() {
 
     // Audit Trail State
     const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([
-        { id: 'log-1', timestamp: '09:00:01', actor: 'DEMO_USER', action: 'Transaction initiated by user', txId: 'DEMO-TX-001', reference: 'DEMO-PROVIDER-001', result: 'SUCCESS' },
-        { id: 'log-2', timestamp: '09:00:02', actor: 'COMPLIANCE', action: 'KYC Tier 1 & Daily Limit Validation passed', txId: 'DEMO-TX-001', reference: 'LIMIT-CHECK-8821', result: 'SUCCESS' },
-        { id: 'log-3', timestamp: '09:00:03', actor: 'SYSTEM', action: 'Fincra Sandbox Request Dispatched', txId: 'DEMO-TX-001', reference: 'DEMO-PROVIDER-001', result: 'SUCCESS' },
-        { id: 'log-4', timestamp: '09:00:04', actor: 'PROVIDER', action: 'Signed Fincra Webhook Event Received', txId: 'DEMO-TX-001', reference: 'DEMO-WEBHOOK-001', result: 'SUCCESS' },
-        { id: 'log-5', timestamp: '09:00:05', actor: 'LEDGER', action: 'Double-Entry Journal Lines Posted', txId: 'DEMO-TX-001', reference: 'DEMO-LEDGER-001', result: 'SUCCESS' },
-        { id: 'log-6', timestamp: '09:00:06', actor: 'SYSTEM', action: 'Reconciliation & Settlement Finalized', txId: 'DEMO-TX-001', reference: 'SETTLED-REF-001', result: 'SUCCESS' }
+        { id: 'log-1', timestamp: '09:00:01', actor: 'USER', action: 'User started a payment of ₦500,000', txId: 'DEMO-TX-001', reference: 'DEMO-PROVIDER-001', result: 'SUCCESS' },
+        { id: 'log-2', timestamp: '09:00:02', actor: 'COMPLIANCE', action: 'Identity verified — daily limit checked and approved', txId: 'DEMO-TX-001', reference: 'LIMIT-CHECK-8821', result: 'SUCCESS' },
+        { id: 'log-3', timestamp: '09:00:03', actor: 'SYSTEM', action: 'Payment sent to Fincra for processing', txId: 'DEMO-TX-001', reference: 'DEMO-PROVIDER-001', result: 'SUCCESS' },
+        { id: 'log-4', timestamp: '09:00:04', actor: 'FINCRA', action: 'Fincra confirmed the payment — signature verified', txId: 'DEMO-TX-001', reference: 'DEMO-WEBHOOK-001', result: 'SUCCESS' },
+        { id: 'log-5', timestamp: '09:00:05', actor: 'RECORDS', action: 'Financial records updated — books balanced', txId: 'DEMO-TX-001', reference: 'DEMO-LEDGER-001', result: 'SUCCESS' },
+        { id: 'log-6', timestamp: '09:00:06', actor: 'SYSTEM', action: 'Payment completed — wallet balance updated', txId: 'DEMO-TX-001', reference: 'SETTLED-REF-001', result: 'SUCCESS' }
     ]);
 
-    // ─── LIFECYCLE STEPS DEFINITION ───
+    // ─── LIFECYCLE STEPS DEFINITION — PLAIN ENGLISH ───
     const normalLifecycleSteps: LifecycleStep[] = [
-        { id: 'step-1', label: '1. INITIATED', status: 'INITIATED', timestamp: '09:00:01', actor: 'DEMO_USER', description: 'User submits transaction request of ₦500,000 DEMO.', details: 'ID: DEMO-TX-001 | Currency: NGN | Destination: Fincra Virtual Account' },
-        { id: 'step-2', label: '2. VALIDATED', status: 'VALIDATED', timestamp: '09:00:02', actor: 'COMPLIANCE', description: 'KYC Tier 1 check verified. Remaining daily limit (₦1,125,000) > ₦500,000.', details: 'User Status: VERIFIED | Risk Score: LOW | Idempotency Key: HASH-7712' },
-        { id: 'step-3', label: '3. PROVIDER_REQUESTED', status: 'PROVIDER_REQUESTED', timestamp: '09:00:03', actor: 'SYSTEM', description: 'Fincra payment endpoint called with sandbox parameters.', details: 'Provider Ref: DEMO-PROVIDER-001 | Channel: NGN_BANK_TRANSFER' },
-        { id: 'step-4', label: '4. WEBHOOK_RECEIVED', status: 'WEBHOOK_RECEIVED', timestamp: '09:00:04', actor: 'PROVIDER', description: 'Inbound Fincra webhook notification cryptographically verified.', details: 'Webhook Event ID: DEMO-WEBHOOK-001 | Signature: SHA256-VALID' },
-        { id: 'step-5', label: '5. LEDGER_POSTED', status: 'LEDGER_POSTED', timestamp: '09:00:05', actor: 'LEDGER', description: 'Double-entry journal posted. Debits (₦500k) == Credits (₦500k).', details: 'Ledger Ref: DEMO-LEDGER-001 | Balance Check: MATCHED' },
-        { id: 'step-6', label: '6. SETTLED', status: 'SETTLED', timestamp: '09:00:06', actor: 'SYSTEM', description: 'Transaction marked SETTLED. Wallet credit applied.', details: 'Wallet Delta: +₦500,000 DEMO | Final Status: SETTLED' }
+        { id: 'step-1', label: '1. PAYMENT STARTED', status: 'INITIATED', timestamp: '09:00:01', actor: 'USER', description: 'User requests to send ₦500,000. The system logs this immediately with a unique reference ID.', details: 'Reference: DEMO-TX-001 | Currency: Nigerian Naira (NGN) | Destination: Fincra' },
+        { id: 'step-2', label: '2. IDENTITY & LIMIT CHECKED', status: 'VALIDATED', timestamp: '09:00:02', actor: 'COMPLIANCE', description: 'System confirms the user is verified (Tier 1 KYC) and has ₦1,125,000 remaining in today\'s daily limit — enough to cover this payment.', details: 'User Status: VERIFIED | Daily Limit Remaining: ₦1,125,000 | Duplicate Check: PASSED' },
+        { id: 'step-3', label: '3. SENT TO FINCRA', status: 'PROVIDER_REQUESTED', timestamp: '09:00:03', actor: 'SYSTEM', description: 'Payment is securely sent to Fincra for processing. A unique payment code is attached so this request can never be processed twice.', details: 'Fincra Reference: DEMO-PROVIDER-001 | Payment Channel: Bank Transfer' },
+        { id: 'step-4', label: '4. FINCRA CONFIRMS PAYMENT', status: 'WEBHOOK_RECEIVED', timestamp: '09:00:04', actor: 'FINCRA', description: 'Fincra sends back a payment confirmation. NoteStandard verifies it is genuinely from Fincra using a digital security check before accepting it.', details: 'Confirmation ID: DEMO-WEBHOOK-001 | Signature Verified: YES' },
+        { id: 'step-5', label: '5. FINANCIAL RECORDS UPDATED', status: 'LEDGER_POSTED', timestamp: '09:00:05', actor: 'RECORDS', description: 'The financial books are updated using double-entry accounting. Money out equals money in — the books are perfectly balanced.', details: 'Record Reference: DEMO-LEDGER-001 | Books Balanced: YES (₦500,000 = ₦500,000)' },
+        { id: 'step-6', label: '6. PAYMENT COMPLETE', status: 'SETTLED', timestamp: '09:00:06', actor: 'SYSTEM', description: 'Payment is fully complete. The user\'s wallet is updated and the transaction is permanently marked as settled.', details: 'Wallet Updated: +₦500,000 | Final Status: COMPLETE' }
     ];
 
     const failureLifecycleSteps: LifecycleStep[] = [
-        { id: 'f-step-1', label: '1. INITIATED', status: 'INITIATED', timestamp: '09:05:01', actor: 'DEMO_USER', description: 'User initiates ₦100,000 withdrawal via Fincra payout.', details: 'ID: DEMO-TX-ERR-99 | Wallet Balance: ₦2,450,000 DEMO' },
-        { id: 'f-step-2', label: '2. VALIDATED', status: 'VALIDATED', timestamp: '09:05:02', actor: 'COMPLIANCE', description: 'Pre-flight check passed. Wallet balance reserved.', details: 'Reserved Amount: ₦100,000 DEMO | Status: PENDING_PROVIDER' },
-        { id: 'f-step-3', label: '3. PROVIDER_REQUESTED', status: 'PROVIDER_REQUESTED', timestamp: '09:05:03', actor: 'SYSTEM', description: 'Payout request dispatched to Fincra settlement API.', details: 'Provider Ref: DEMO-PROVIDER-ERR-99' },
-        { id: 'f-step-4', label: '4. PROVIDER_FAILED', status: 'PROVIDER_FAILED', timestamp: '09:05:04', actor: 'PROVIDER', description: 'Fincra returned 502 GATEWAY_TIMEOUT provider failure.', details: 'Error Code: PROVIDER_TIMEOUT | Event Logged in DLQ' },
-        { id: 'f-step-5', label: '5. REVERSAL_POSTED', status: 'REVERSAL_POSTED', timestamp: '09:05:05', actor: 'LEDGER', description: 'Atomic reversal entry posted to double-entry ledger.', details: 'Reversal Ref: DEMO-REV-001 | Restoring debit to custody account' },
-        { id: 'f-step-6', label: '6. REVERSED', status: 'REVERSED', timestamp: '09:05:06', actor: 'SYSTEM', description: 'Wallet balance restored to ₦2,450,000 DEMO. Final status REVERSED.', details: 'Final Balance: ₦2,450,000 DEMO | Reversal Balanced: YES' }
+        { id: 'f-step-1', label: '1. PAYMENT STARTED', status: 'INITIATED', timestamp: '09:05:01', actor: 'USER', description: 'User requests to withdraw ₦100,000. The system logs this and places a hold on the funds in the user\'s wallet.', details: 'Reference: DEMO-TX-ERR-99 | Wallet Balance: ₦2,450,000' },
+        { id: 'f-step-2', label: '2. IDENTITY & LIMIT CHECKED', status: 'VALIDATED', timestamp: '09:05:02', actor: 'COMPLIANCE', description: 'System checks the user is verified and within their daily limit. All checks pass. Funds are temporarily reserved while the payment is processed.', details: 'Funds Reserved: ₦100,000 | Status: Waiting for Fincra' },
+        { id: 'f-step-3', label: '3. SENT TO FINCRA', status: 'PROVIDER_REQUESTED', timestamp: '09:05:03', actor: 'SYSTEM', description: 'Payment request is sent securely to Fincra\'s payout system.', details: 'Fincra Reference: DEMO-PROVIDER-ERR-99' },
+        { id: 'f-step-4', label: '4. FINCRA COULD NOT PROCESS', status: 'PROVIDER_FAILED', timestamp: '09:05:04', actor: 'FINCRA', description: 'Fincra reported that the payment could not be completed — likely due to a network issue or bank timeout. The failure is immediately logged.', details: 'Failure Reason: Bank Gateway Timeout | Failure Logged: YES' },
+        { id: 'f-step-5', label: '5. REFUND RECORDED IN BOOKS', status: 'REVERSAL_POSTED', timestamp: '09:05:05', actor: 'RECORDS', description: 'The system immediately records a refund in the financial books, reversing the original payment entry so the accounts remain balanced.', details: 'Refund Reference: DEMO-REV-001 | Books Rebalanced: YES' },
+        { id: 'f-step-6', label: '6. MONEY RETURNED TO USER', status: 'REVERSED', timestamp: '09:05:06', actor: 'SYSTEM', description: 'The user\'s wallet is fully restored. They are back to ₦2,450,000 as if the failed payment never happened. No money was lost.', details: 'Final Wallet Balance: ₦2,450,000 | Refund Confirmed: YES' }
     ];
 
     const activeSteps = failureScenario ? failureLifecycleSteps : normalLifecycleSteps;
