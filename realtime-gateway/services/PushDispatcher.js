@@ -35,7 +35,7 @@ class PushDispatcher {
    * @param {string} opts.gatewayUrl
    * @param {string} [opts.correlationId]
    */
-  static async dispatch({ supabase, firebaseApp, devices, userId, title, body, messageId, conversationId, gatewayUrl, correlationId }) {
+  static async dispatch({ supabase, firebaseApp, devices, userId, title, body, messageId, conversationId, url, link, gatewayUrl, correlationId }) {
     if (!supabase || !userId || !Array.isArray(devices) || devices.length === 0) {
       return { attempted: 0, sent: 0, failed: 0 };
     }
@@ -70,6 +70,8 @@ class PushDispatcher {
       ? `${resolvedGatewayUrl.replace(/\/$/, '')}/deliver/${messageId}?recipientId=${userId}&cid=${correlationId || ''}`
       : '';
 
+    const targetUrl = url || link || (conversationId ? `/dashboard/chat?id=${conversationId}` : '/dashboard/chat');
+
     const results = await Promise.allSettled(
       devices.map(device => PushDispatcher.dispatchToDevice(supabase, fbApp, device, {
         userId,
@@ -77,6 +79,7 @@ class PushDispatcher {
         body: body || 'You have a new message',
         messageId: messageId || '',
         conversationId: conversationId || '',
+        url: targetUrl,
         deliveryWebhookUrl,
         correlationId
       }))
@@ -189,7 +192,7 @@ class PushDispatcher {
           type: 'chat_message',
           messageId: payload.messageId,
           conversationId: payload.conversationId,
-          url: payload.conversationId ? `/dashboard/chat?id=${payload.conversationId}` : '/dashboard/chat',
+          url: payload.url || payload.link || (payload.conversationId ? `/dashboard/chat?id=${payload.conversationId}` : '/dashboard/chat'),
           recipientId: payload.userId,
           targetAccountId: payload.userId,
           deliveryWebhookUrl: payload.deliveryWebhookUrl,

@@ -46,7 +46,7 @@ const PushDispatcher = require('./PushDispatcher');
  * @param {string}  opts.gatewayUrl     - e.g. https://realtime-gateway-gsb5.onrender.com
  * @param {string}  [opts.correlationId]
  */
-async function sendChatPush({ supabase, firebaseApp: fbApp, userId, title, body, messageId, conversationId, gatewayUrl, correlationId }) {
+async function sendChatPush({ supabase, firebaseApp: fbApp, userId, title, body, messageId, conversationId, url, link, gatewayUrl, correlationId }) {
   if (!supabase || !userId) return;
 
   // 1. Fetch normalized, deduplicated devices via DeviceRegistry (single source of truth)
@@ -55,6 +55,29 @@ async function sendChatPush({ supabase, firebaseApp: fbApp, userId, title, body,
   if (!devices || devices.length === 0) {
     console.log(`[ChatPush] No active, healthy devices found for user ${userId} | cid:${correlationId || 'N/A'}`);
     return;
+  }
+
+  let targetUrl = url || link;
+  if (!targetUrl && conversationId) {
+    try {
+      const [{ data: conv }, { data: profile }] = await Promise.all([
+        supabase.from('conversations').select('chat_type, type, name').eq('id', conversationId).single(),
+        supabase.from('profiles').select('role').eq('id', userId).single()
+      ]);
+
+      const isSupportConv = conv?.chat_type === 'support' || conv?.name === 'Support Chat' || (conv?.name && conv.name.toLowerCase().includes('support'));
+      const isAdminOrSupport = profile?.role === 'admin' || profile?.role === 'support' || profile?.role === 'super_admin';
+
+      if (isSupportConv) {
+        targetUrl = isAdminOrSupport 
+          ? `/admin/chats?id=${conversationId}` 
+          : `/dashboard/chat?id=${conversationId}&openSupport=true`;
+      } else {
+        targetUrl = `/dashboard/chat?id=${conversationId}`;
+      }
+    } catch (e) {
+      targetUrl = `/dashboard/chat?id=${conversationId}`;
+    }
   }
 
   // 2. Dispatch platform-tailored push notifications via PushDispatcher
@@ -67,6 +90,7 @@ async function sendChatPush({ supabase, firebaseApp: fbApp, userId, title, body,
     body,
     messageId,
     conversationId,
+    url: targetUrl,
     gatewayUrl,
     correlationId
   });

@@ -321,8 +321,11 @@ self.addEventListener('notificationclick', (event) => {
     if (data?.targetAccountId) {
         const urlObj = new URL(urlToOpen);
         urlObj.searchParams.set('targetAccountId', data.targetAccountId);
-        if (data?.conversationId) {
+        if (data?.conversationId && !urlObj.searchParams.has('conversationId') && !urlObj.searchParams.has('id')) {
             urlObj.searchParams.set('conversationId', data.conversationId);
+        }
+        if (urlToOpen.includes('/admin/')) {
+            urlObj.searchParams.set('isSupport', 'true');
         }
         urlToOpen = urlObj.href;
     }

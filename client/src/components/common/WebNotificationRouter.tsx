@@ -41,7 +41,12 @@ export const WebNotificationRouter: React.FC = () => {
     if (handledRef.current === handledKey) return;
     handledRef.current = handledKey;
 
-    const isSupportNotif = searchParams.get('isSupport') === 'true' || searchParams.get('link')?.includes('/admin/') || searchParams.get('type')?.includes('support');
+    const isAdminOrSupportUser = user?.role === 'admin' || user?.role === 'support' || user?.role === 'super_admin';
+    const isSupportNotif = searchParams.get('isSupport') === 'true' || 
+                           searchParams.get('link')?.includes('/admin/') || 
+                           searchParams.get('type')?.includes('support') || 
+                           window.location.pathname.startsWith('/admin/') ||
+                           (isAdminOrSupportUser && (searchParams.get('type')?.startsWith('new_support') || searchParams.get('type')?.startsWith('support')));
     const destination = isSupportNotif
       ? (conversationId ? `/admin/chats?id=${conversationId}` : '/admin/chats')
       : (conversationId ? `/dashboard/chat?id=${conversationId}` : '/dashboard');
