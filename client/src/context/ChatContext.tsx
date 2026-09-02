@@ -631,11 +631,27 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             console.error('[Chat] Failed to mark conversation read:', err);
         });
 
-        // Only update local unread count if it's actually > 0 to avoid unnecessary re-renders
+        // Update local unread count and lastMessage status
         setConversations(prev => {
             const conv = prev.find(c => c.id === conversationId);
-            if (!conv || conv.unreadCount === 0) return prev; // No-op, preserves array reference
-            return prev.map(c => c.id === conversationId ? { ...c, unreadCount: 0 } : c);
+            const currentUnread = (conv as any)?.unreadCount ?? (conv as any)?.unread_count ?? 0;
+            if (!conv) return prev;
+            
+            const nowStr = new Date().toISOString();
+            const updatedLastMsg = conv.lastMessage ? {
+                ...conv.lastMessage,
+                read_at: conv.lastMessage.read_at || nowStr,
+                status: 'read' as const
+            } : conv.lastMessage;
+
+            if (currentUnread === 0 && conv.lastMessage?.read_at) return prev; // No-op
+
+            return prev.map(c => c.id === conversationId ? { 
+                ...c, 
+                unreadCount: 0, 
+                unread_count: 0,
+                lastMessage: updatedLastMsg
+            } : c);
         });
     }, [session, deviceId]);
 
@@ -765,11 +781,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             const response = await api.get('/chat/conversations');
             const data = response.data;
             console.log('[CHAT] conversations loaded', data?.length);
-            if (isMounted.current && Array.isArray(data)) {
-                const mappedData = data.map((conv: Conversation & { last_message?: Conversation['lastMessage'] }) => ({
-                    ...conv,
-                    lastMessage: conv.last_message 
-                }));
+                const mappedData = data.map((conv: Conversation & { last_message?: Conversation['lastMessage']; unread_count?: number }) => {
+                    const count = conv.unread_count ?? conv.unreadCount ?? 0;
+                    return {
+                        ...conv,
+                        lastMessage: conv.last_message || conv.lastMessage,
+                        unreadCount: count,
+                        unread_count: count
+                    };
+                });
                 
                 // Server-authoritative merge logic:
                 // Evaluated formula: (Server Conversations + Legitimate Pending Offline Creations) - Tombstoned Conversation & Peer IDs

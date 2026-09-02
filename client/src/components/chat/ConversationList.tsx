@@ -42,7 +42,8 @@ const ConversationItem = React.memo(({
     }
 
     const lastMsg = conv.lastMessage ?? (conv as unknown as { last_message?: typeof conv.lastMessage }).last_message;
-    const unreadCount = (conv as unknown as { unreadCount?: number }).unreadCount || 0;
+    const rawUnread = (conv as unknown as { unreadCount?: number; unread_count?: number }).unreadCount ?? (conv as unknown as { unread_count?: number }).unread_count ?? 0;
+    const unreadCount = isActive ? 0 : Math.max(0, rawUnread);
     const typingUsersList = typingUsers;
 
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -208,6 +209,10 @@ const ConversationItem = React.memo(({
     const nextTyping = nextProps.typingUsers;
     const typingEqual = prevTyping.length === nextTyping.length &&
         prevTyping.every((u, i) => u === nextTyping[i]);
+
+    const prevUnread = (prevProps.conv as any).unreadCount ?? (prevProps.conv as any).unread_count ?? 0;
+    const nextUnread = (nextProps.conv as any).unreadCount ?? (nextProps.conv as any).unread_count ?? 0;
+
     return prevProps.isActive === nextProps.isActive &&
            prevProps.isOnline === nextProps.isOnline &&
            prevProps.typingUsers === nextProps.typingUsers &&
@@ -218,7 +223,7 @@ const ConversationItem = React.memo(({
            prevProps.conv.lastMessage?.status === nextProps.conv.lastMessage?.status &&
            prevProps.conv.lastMessage?.delivered_at === nextProps.conv.lastMessage?.delivered_at &&
            prevProps.conv.lastMessage?.read_at === nextProps.conv.lastMessage?.read_at &&
-           (prevProps.conv as unknown as { unreadCount?: number }).unreadCount === (nextProps.conv as unknown as { unreadCount?: number }).unreadCount;
+           prevUnread === nextUnread;
 });
 
 const ConversationList: React.FC = () => {
