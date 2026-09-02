@@ -780,7 +780,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         try {
             const response = await api.get('/chat/conversations');
             const data = response.data;
-            console.log('[CHAT] conversations loaded', data?.length);
+            if (isMounted.current && Array.isArray(data)) {
                 const mappedData = data.map((conv: Conversation & { last_message?: Conversation['lastMessage']; unread_count?: number }) => {
                     const count = conv.unread_count ?? conv.unreadCount ?? 0;
                     return {
