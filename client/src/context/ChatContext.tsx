@@ -824,9 +824,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         }
                     });
 
-                    const allMerged = Array.from(existingMap.values()).sort((a, b) =>
-                        new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime()
-                    );
+                    const allMerged = Array.from(existingMap.values()).sort((a, b) => {
+                        const hasMsgA = (a.lastMessage || (a as any).last_message) ? 1 : 0;
+                        const hasMsgB = (b.lastMessage || (b as any).last_message) ? 1 : 0;
+                        if (hasMsgA !== hasMsgB) return hasMsgB - hasMsgA;
+
+                        const timeA = new Date((a as any).last_message_at || a.lastMessage?.created_at || a.updated_at || 0).getTime();
+                        const timeB = new Date((b as any).last_message_at || b.lastMessage?.created_at || b.updated_at || 0).getTime();
+                        return timeB - timeA;
+                    });
 
                     // Deduplicate direct conversations by peer user ID
                     const seenDirectPeers = new Set<string>();

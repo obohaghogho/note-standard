@@ -30,21 +30,21 @@ async function _mapSenderTypeBatch(messages) {
         const convIds = [...new Set(messages.map(m => m.conversation_id))];
         const { data: convs } = await supabase.from('conversations').select('id, chat_type').in('id', convIds);
         const supportConvIds = new Set((convs || []).filter(c => c.chat_type === 'support').map(c => c.id));
+        const SUPPORT_BOT_ID = '00000000-0000-0000-0000-000000000000';
         
-        if (supportConvIds.size > 0) {
-            const { data: adminUser } = await supabase.from('profiles').select('id').eq('plan_tier', 'admin').limit(1).maybeSingle();
-            if (adminUser) {
-                for (const msg of messages) {
-                    if (supportConvIds.has(msg.conversation_id)) {
-                        msg.sender_type = msg.sender_id === adminUser.id ? 'ai' : 'user';
-                    } else {
-                        msg.sender_type = 'user';
-                    }
+        for (const msg of messages) {
+            if (supportConvIds.has(msg.conversation_id)) {
+                if (msg.sender_id === SUPPORT_BOT_ID) {
+                    msg.sender_type = 'ai';
+                } else if (msg.sender_id === currentUserId) {
+                    msg.sender_type = 'user';
+                } else {
+                    msg.sender_type = 'human';
                 }
-                return;
+            } else {
+                msg.sender_type = 'user';
             }
         }
-        for (const msg of messages) msg.sender_type = 'user';
     } catch (e) {
         console.warn('[Chat Controller] Error mapping sender type batch:', e.message);
     }
@@ -105,6 +105,11 @@ function deduplicateDirectConversations(conversations, currentUserId) {
   const result = [];
 
   const sorted = [...conversations].sort((a, b) => {
+    // Prefer conversations with messages over empty ones
+    const hasMsgA = a.last_message ? 1 : 0;
+    const hasMsgB = b.last_message ? 1 : 0;
+    if (hasMsgA !== hasMsgB) return hasMsgB - hasMsgA;
+
     const timeA = new Date(a.last_message_at || a.last_message?.created_at || a.updated_at || a.created_at || 0).getTime();
     const timeB = new Date(b.last_message_at || b.last_message?.created_at || b.updated_at || b.created_at || 0).getTime();
     return timeB - timeA;
@@ -590,13 +595,14 @@ exports.createConversation = async (req, res) => {
           .eq("user_id", recipientId);
 
         if (commonMemberships && commonMemberships.length > 0) {
-          // Check if any of these common conversations are 'direct'
+          // Check if any of these common conversations are 'direct' (and NOT support chats)
           const finalConvIds = commonMemberships.map(m => m.conversation_id);
           const { data: existingConvs } = await supabase
             .from("conversations")
-            .select("id, type, updated_at")
+            .select("id, type, updated_at, chat_type, name")
             .in("id", finalConvIds)
             .eq("type", "direct")
+            .neq("chat_type", "support")
             .order("updated_at", { ascending: false });
 
           if (existingConvs && existingConvs.length > 0) {
@@ -619,21 +625,18 @@ exports.createConversation = async (req, res) => {
 
             const memberList = members || [];
 
-            // Re-open the conversation for this user ONLY IF it was previously soft-deleted.
-            // DO NOT update cleared_at to NOW() on active conversations, otherwise active chat messages get hidden!
-            const myMembership = memberList.find(m => m.user_id === userId);
-            if (myMembership?.is_deleted) {
-              const reopenTimestamp = new Date().toISOString();
-              await supabase
-                .from("conversation_members")
-                .update({ 
-                  is_deleted: false, 
-                  deleted_at: null, 
-                  cleared_at: myMembership.cleared_at || myMembership.deleted_at || reopenTimestamp 
-                })
-                .eq("conversation_id", existingId)
-                .eq("user_id", userId);
+            // Re-open the conversation for ALL members IF it was soft-deleted.
+            await supabase
+              .from("conversation_members")
+              .update({ 
+                is_deleted: false, 
+                deleted_at: null 
+              })
+              .eq("conversation_id", existingId)
+              .in("user_id", [userId, recipientId]);
 
+            const myMembership = memberList.find(m => m.user_id === userId);
+            if (myMembership) {
               myMembership.is_deleted = false;
               myMembership.deleted_at = null;
             }
@@ -1428,6 +1431,23 @@ exports.sendMessage = async (req, res) => {
       }
     }
 
+    // AUTO-REOPEN: If any member soft-deleted this conversation, un-delete it when a message is sent
+    // so the conversation automatically reappears in their chat list.
+    const deletedMembers = (members || []).filter(m => m.is_deleted);
+    if (deletedMembers.length > 0) {
+      const delUserIds = deletedMembers.map(m => m.user_id);
+      await supabase
+        .from("conversation_members")
+        .update({ is_deleted: false, deleted_at: null })
+        .eq("conversation_id", conversationId)
+        .in("user_id", delUserIds);
+
+      deletedMembers.forEach(m => {
+        m.is_deleted = false;
+        m.deleted_at = null;
+      });
+    }
+
     // AUTO-ACCEPT: If the sender's membership status is currently 'pending', sending a message
     // automatically accepts the conversation request and updates status to 'accepted'.
     const currentMember = members.find(m => m.user_id === userId);
@@ -1878,10 +1898,27 @@ exports.sendMessage = async (req, res) => {
 
             const isSenderAdmin = senderProfile?.plan_tier === "admin" || senderProfile?.role === "admin";
 
-            // If user (not admin) sends a message and support chat is open, process via Groq AI
-            if (!isSenderAdmin && (convInfo.support_status === "open" || !convInfo.support_status)) {
+            if (!isSenderAdmin) {
+              // User message: trigger AI support handling
               const supportService = require("../services/supportService");
               await supportService.handleUserSupportMessage(conversationId, content || "", userId);
+            } else {
+              // Human admin responding: add admin to conversation_members if not present & update support status
+              await supabase
+                .from("conversation_members")
+                .upsert([
+                  { conversation_id: conversationId, user_id: userId, role: "admin", status: "accepted" }
+                ], { onConflict: "conversation_id,user_id" });
+
+              await supabase
+                .from("conversations")
+                .update({ support_status: "pending", updated_at: new Date().toISOString() })
+                .eq("id", conversationId);
+
+              realtime.emitToConversation(conversationId, "chat:conversation_updated", {
+                id: conversationId,
+                support_status: "pending"
+              });
             }
           }
         } catch (aiErr) {

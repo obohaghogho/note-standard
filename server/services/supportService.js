@@ -66,7 +66,12 @@ class SupportService {
   /**
    * Helper to resolve a distinct system bot / support admin ID for AI responses.
    */
+  /**
+   * Helper to resolve a distinct system bot / support admin ID for AI responses.
+   * MUST ALWAYS return a dedicated bot ID and NEVER return an actual human admin user ID.
+   */
   async getBotSenderId(excludeUserId) {
+    const DEDICATED_BOT_ID = "00000000-0000-0000-0000-000000000000";
     try {
       const { createClient } = require('@supabase/supabase-js');
       const env = require('../config/env');
@@ -76,37 +81,15 @@ class SupportService {
       const { data: botProfile } = await serviceSupabase
         .from("profiles")
         .select("id")
-        .or("username.eq.support_bot,username.eq.support_ai,role.eq.bot")
+        .or("username.eq.support_bot,username.eq.support_ai,role.eq.bot,id.eq.00000000-0000-0000-0000-000000000000")
         .limit(1)
         .maybeSingle();
 
       if (botProfile && botProfile.id !== excludeUserId) return botProfile.id;
-
-      // 2. Otherwise find an admin profile that is NOT the current user
-      const { data: adminProfile } = await serviceSupabase
-        .from("profiles")
-        .select("id")
-        .eq("plan_tier", "admin")
-        .neq("id", excludeUserId || "00000000-0000-0000-0000-000000000000")
-        .limit(1)
-        .maybeSingle();
-
-      if (adminProfile && adminProfile.id !== excludeUserId) return adminProfile.id;
-
-      // 3. Fallback: query any admin user that is not the current user
-      const { data: anyAdmin } = await serviceSupabase
-        .from("profiles")
-        .select("id")
-        .eq("role", "admin")
-        .neq("id", excludeUserId || "00000000-0000-0000-0000-000000000000")
-        .limit(1)
-        .maybeSingle();
-
-      if (anyAdmin && anyAdmin.id !== excludeUserId) return anyAdmin.id;
     } catch (e) {
       logger.warn(`[SupportService] Error finding botSenderId: ${e.message}`);
     }
-    return "00000000-0000-0000-0000-000000000000";
+    return DEDICATED_BOT_ID;
   }
 
   /**
@@ -121,7 +104,7 @@ class SupportService {
       botSenderId = await this.getBotSenderId(userId);
     }
 
-    // Check conversation session state
+    // Check conversation session state. Re-open session if previously resolved/closed.
     const { data: convInfo } = await supabase
       .from("conversations")
       .select("support_status")
@@ -129,8 +112,16 @@ class SupportService {
       .maybeSingle();
 
     if (convInfo?.support_status === "resolved" || convInfo?.support_status === "closed") {
-      logger.info(`[AI Diagnostic] trigger: user_message | convId: ${conversationId} | status: SKIPPED_RESOLVED_SESSION`);
-      return { isEscalated: false, skipped: true, reason: "RESOLVED_SESSION" };
+      logger.info(`[SupportService] Reopening resolved support session: ${conversationId}`);
+      await supabase
+        .from("conversations")
+        .update({ support_status: "open", updated_at: new Date().toISOString() })
+        .eq("id", conversationId);
+
+      await realtime.emitToConversation(conversationId, "chat:conversation_updated", {
+        id: conversationId,
+        support_status: "open"
+      });
     }
 
     // ── STEP 1: AI Decision & Evaluation ──────────────────────────────────────

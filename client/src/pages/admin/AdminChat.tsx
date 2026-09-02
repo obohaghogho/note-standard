@@ -22,8 +22,10 @@ import toast from 'react-hot-toast';
 import SecureImage from '../../components/common/SecureImage';
 import './AdminChat.css';
 
+const BOT_ID = '00000000-0000-0000-0000-000000000000';
+
 const getUserFromChat = (chat: Conversation) => {
-    return chat.members.find(m => m.role !== 'admin');
+    return chat.members?.find(m => m.user_id !== BOT_ID && m.role !== 'admin') || chat.members?.[0];
 };
 
 export const AdminChat = () => {
@@ -547,44 +549,55 @@ export const AdminChat = () => {
                         )}
 
                         <div className="chat-messages">
-                            {messages?.map(msg => (
-                                <div
-                                    key={msg.id}
-                                    className={`message ${msg.sender_id === user?.id ? 'own' : 'other'}`}
-                                >
-                                    <div className={`message-content ${msg.sentiment?.label || ''}`}>
-                                        {msg.type === 'audio' ? (
-                                            <div className="flex flex-col gap-2 min-w-[200px]">
-                                                <AudioPlayer 
-                                                    path={msg.attachment?.storage_path || ''} 
-                                                    fetchUrl={fetchSignedUrl} 
-                                                />
+                            {messages?.map(msg => {
+                                const isBot = msg.sender_id === BOT_ID || (msg as any).sender_type === 'ai';
+                                const isOwn = !isBot && (msg.sender_id === user?.id || (msg as any).sender_type === 'human');
+                                const senderRoleLabel = isBot ? '🤖 AI Support Bot' : isOwn ? 'Admin' : null;
+
+                                return (
+                                    <div
+                                        key={msg.id}
+                                        className={`message ${isOwn ? 'own' : isBot ? 'bot' : 'other'}`}
+                                    >
+                                        <div className={`message-content ${msg.sentiment?.label || ''}`}>
+                                            {senderRoleLabel && (
+                                                <div className="text-[10px] font-bold text-indigo-300/90 mb-1 tracking-wide uppercase flex items-center gap-1">
+                                                    {senderRoleLabel}
+                                                </div>
+                                            )}
+                                            {msg.type === 'audio' ? (
+                                                <div className="flex flex-col gap-2 min-w-[200px]">
+                                                    <AudioPlayer 
+                                                        path={msg.attachment?.storage_path || ''} 
+                                                        fetchUrl={fetchSignedUrl} 
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <p>{msg.content}</p>
+                                            )}
+                                            <div className="message-meta">
+                                                {msg.sentiment && (
+                                                    <span className="sentiment-tag" title={msg.sentiment.label}>
+                                                        {getSentimentEmoji(msg.sentiment.label)}
+                                                    </span>
+                                                )}
+                                                <span className="message-time">{formatTime(msg.created_at)}</span>
+                                                {isOwn && (
+                                                    <span className="status ml-1 scale-90 inline-block">
+                                                        {msg.read_at ? (
+                                                            <CheckCheck size={14} className="text-blue-300" />
+                                                        ) : msg.delivered_at ? (
+                                                            <CheckCheck size={14} className="text-gray-400" />
+                                                        ) : (
+                                                            <Check size={14} className="opacity-50" />
+                                                        )}
+                                                    </span>
+                                                )}
                                             </div>
-                                        ) : (
-                                            <p>{msg.content}</p>
-                                        )}
-                                        <div className="message-meta">
-                                            {msg.sentiment && (
-                                                <span className="sentiment-tag" title={msg.sentiment.label}>
-                                                    {getSentimentEmoji(msg.sentiment.label)}
-                                                </span>
-                                            )}
-                                            <span className="message-time">{formatTime(msg.created_at)}</span>
-                                            {msg.sender_id === user?.id && (
-                                                <span className="status ml-1 scale-90 inline-block">
-                                                    {msg.read_at ? (
-                                                        <CheckCheck size={14} className="text-blue-300" />
-                                                    ) : msg.delivered_at ? (
-                                                        <CheckCheck size={14} className="text-gray-400" />
-                                                    ) : (
-                                                        <Check size={14} className="opacity-50" />
-                                                    )}
-                                                </span>
-                                            )}
                                         </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                             <div ref={messagesEndRef} />
                         </div>
 
