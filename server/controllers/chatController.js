@@ -1800,6 +1800,58 @@ exports.sendMessage = async (req, res) => {
           }
       }
 
+      // --- AI Support Auto-Reply Trigger ---
+      let aiResponseMsg = null;
+      try {
+        const { data: convInfo } = await supabase
+          .from("conversations")
+          .select("chat_type, support_status")
+          .eq("id", conversationId)
+          .single();
+
+        if (convInfo && convInfo.chat_type === "support") {
+          const { data: senderProfile } = await supabase
+            .from("profiles")
+            .select("plan_tier, role")
+            .eq("id", userId)
+            .maybeSingle();
+
+          const isSenderAdmin = senderProfile?.plan_tier === "admin" || senderProfile?.role === "admin";
+
+          if (!isSenderAdmin) {
+            // User message: trigger AI support handling synchronously
+            const supportService = require("../services/supportService");
+            const aiRes = await supportService.handleUserSupportMessage(conversationId, content || "", userId);
+            if (aiRes && aiRes.message) {
+              aiResponseMsg = aiRes.message;
+            }
+          } else {
+            // Human admin responding: add admin to conversation_members if not present & update support status
+            await supabase
+              .from("conversation_members")
+              .upsert([
+                { conversation_id: conversationId, user_id: userId, role: "admin", status: "accepted" }
+              ], { onConflict: "conversation_id,user_id" });
+
+            await supabase
+              .from("conversations")
+              .update({ support_status: "pending", updated_at: new Date().toISOString() })
+              .eq("id", conversationId);
+
+            realtime.emitToConversation(conversationId, "chat:conversation_updated", {
+              id: conversationId,
+              support_status: "pending"
+            });
+          }
+        }
+      } catch (aiErr) {
+        logger.warn(`[sendMessage:AiSupport] Non-fatal AI trigger error: ${aiErr.message}`);
+      }
+
+      if (aiResponseMsg) {
+        safePayload = { ...safePayload, ai_reply: aiResponseMsg };
+      }
+
       // 1. Respond to sender immediately
       if (!res.headersSent) {
           res.json(safePayload);
@@ -1812,119 +1864,6 @@ exports.sendMessage = async (req, res) => {
             durationMs: Date.now() - startTimeMs
           });
       }
-
-      // 2. Broadcast to other members immediately if it's not a duplicate
-      if (!isDuplicate) {
-          // PRIMARY PATH: Emit to each participant's user:<id> room.
-          try {
-              let targetMembers = members;
-              if (!targetMembers || targetMembers.length <= 1) {
-                  const { data: freshMembers } = await supabase
-                      .from("conversation_members")
-                      .select("user_id, is_muted, status")
-                      .eq("conversation_id", conversationId);
-                  if (freshMembers && freshMembers.length > 0) {
-                      targetMembers = freshMembers;
-                  }
-              }
-
-              if (targetMembers && targetMembers.length > 0) {
-                  // Fire a single batch broadcast via pg_notify to the gateway.
-                  const userIds = targetMembers.map(m => m.user_id);
-                  await realtime.emitToUsers(userIds, "chat:message", safePayload, { correlationId: req.correlationId });
-                  
-                  logger.info("Realtime event dispatched [Stage 4]", {
-                    correlationId: req.correlationId,
-                    userId,
-                    conversationId,
-                    messageId: safePayload.id,
-                    eventId: safePayload.event_id,
-                    recipientCount: userIds.length,
-                    durationMs: Date.now() - startTimeMs
-                  });
-              }
-          } catch (memberFetchErr) {
-              console.warn("[Chat Controller] Broadcast per-user emit failed:", memberFetchErr.message);
-          }
-      }
-
-      // 3. Background tasks (non-blocking)
-      supabase.from("conversations").update({ updated_at: new Date() }).eq(
-        "id",
-        conversationId,
-      ).then();
-
-      // --- 3a. Fast Push Notification (LEGACY ONLY) ---
-      // When v2 pipeline is active, the deliveryEngine handles push via pg_notify
-      // with proper socket-presence checking and ACK timeout fallback.
-      // Firing dispatchFastPush here would create a competing push path that
-      // races with the deliveryEngine, causing suppression or duplication.
-      if (PIPELINE_VERSION !== 'v2' && members && members.length > 0) {
-        const recipientIds = members.map(m => m.user_id).filter(id => id !== userId);
-        const senderName = safePayload.sender?.full_name || safePayload.sender?.username || 'Someone';
-        let pushText = safePayload.content || '';
-        if (safePayload.type === 'image') pushText = '📸 Sent an image';
-        if (safePayload.type === 'audio') pushText = '🎤 Sent a voice message';
-        if (!pushText && safePayload.attachment_id) pushText = '📎 Sent an attachment';
-
-        recipientIds.forEach(recipientId => {
-          dispatchFastPush({
-            receiverId: recipientId,
-            type: 'chat_message',
-            title: senderName,
-            message: pushText,
-            link: `/dashboard/chat?id=${conversationId}`,
-            messageId: safePayload.id,
-            conversationId: conversationId
-          });
-        });
-      }
-
-      // --- 3b. AI Support Auto-Reply Trigger ---
-      (async () => {
-        try {
-          const { data: convInfo } = await supabase
-            .from("conversations")
-            .select("chat_type, support_status")
-            .eq("id", conversationId)
-            .single();
-
-          if (convInfo && convInfo.chat_type === "support") {
-            const { data: senderProfile } = await supabase
-              .from("profiles")
-              .select("plan_tier, role")
-              .eq("id", userId)
-              .maybeSingle();
-
-            const isSenderAdmin = senderProfile?.plan_tier === "admin" || senderProfile?.role === "admin";
-
-            if (!isSenderAdmin) {
-              // User message: trigger AI support handling
-              const supportService = require("../services/supportService");
-              await supportService.handleUserSupportMessage(conversationId, content || "", userId);
-            } else {
-              // Human admin responding: add admin to conversation_members if not present & update support status
-              await supabase
-                .from("conversation_members")
-                .upsert([
-                  { conversation_id: conversationId, user_id: userId, role: "admin", status: "accepted" }
-                ], { onConflict: "conversation_id,user_id" });
-
-              await supabase
-                .from("conversations")
-                .update({ support_status: "pending", updated_at: new Date().toISOString() })
-                .eq("id", conversationId);
-
-              realtime.emitToConversation(conversationId, "chat:conversation_updated", {
-                id: conversationId,
-                support_status: "pending"
-              });
-            }
-          }
-        } catch (aiErr) {
-          logger.warn(`[sendMessage:AiSupport] Non-fatal AI trigger error: ${aiErr.message}`);
-        }
-      })();
 
       // 4. Server-side ACK Timeout Recheck (Self-Healing Delivery)
       // After 30s, check if the message was confirmed delivered.

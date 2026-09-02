@@ -352,7 +352,25 @@ export const ChatWidget = () => {
             }
 
             const serverMessage = await res.json();
-            setMessages(prev => prev.map(m => m.id === tempId ? serverMessage : m));
+            
+            setMessages(prev => {
+                const updated = prev.map(m => m.id === tempId ? serverMessage : m);
+                if (serverMessage.ai_reply) {
+                    const aiExists = updated.some(m => m.id === serverMessage.ai_reply.id);
+                    if (!aiExists) {
+                        return [...updated, serverMessage.ai_reply];
+                    }
+                }
+                return updated;
+            });
+
+            // Self-healing fallback sync: fetch latest messages after 1.2s to guarantee zero missed timeline updates
+            setTimeout(() => {
+                const currentId = supportChatRef.current?.id || supportChat?.id;
+                if (currentId) {
+                    fetchMessages(currentId);
+                }
+            }, 1200);
         } catch (err) {
             console.error('Failed to send message:', err);
         }
