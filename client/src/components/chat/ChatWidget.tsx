@@ -192,12 +192,30 @@ export const ChatWidget = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
+    const handledSearchRef = useRef<string | null>(null);
+
+    const handleCloseWidget = useCallback(() => {
+        setIsOpen(false);
+        setIsMinimized(false);
+        if (typeof window !== 'undefined' && (window.location.search.includes('openSupport') || window.location.search.includes('support'))) {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('openSupport');
+            url.searchParams.delete('support');
+            window.history.replaceState({}, '', url.pathname + (url.searchParams.toString() ? '?' + url.searchParams.toString() : ''));
+        }
+    }, []);
+
     // Check for existing chat or URL parameter trigger
     useEffect(() => {
         const search = location.search;
         if (search.includes('openSupport=true') || search.includes('support=true')) {
-            setIsOpen(true);
-            setIsMinimized(false);
+            if (handledSearchRef.current !== search) {
+                handledSearchRef.current = search;
+                setIsOpen(true);
+                setIsMinimized(false);
+            }
+        } else {
+            handledSearchRef.current = null;
         }
         if (isOpen && session?.access_token && !supportChat) {
             checkExistingSupportChat();
@@ -402,7 +420,7 @@ export const ChatWidget = () => {
 
     const hasOpenSupportParam = location.search.includes('openSupport=true') || location.search.includes('support=true');
 
-    // Hide the widget in full-screen/immersive views (chat, reels, feed, teams) EXCEPT when explicitly opening support chat
+    // Hide the widget in full-screen/immersive views (chat, reels, feed, teams) unless explicitly open
     const isChatRoom = (
         location.pathname.startsWith('/dashboard/chat') || 
         location.pathname.startsWith('/admin/chats') ||
@@ -410,7 +428,7 @@ export const ChatWidget = () => {
         location.pathname.startsWith('/dashboard/reels') ||
         location.pathname === '/dashboard/feed' ||
         location.pathname.startsWith('/dashboard/feed/')
-    ) && !hasOpenSupportParam && !isOpen;
+    ) && !isOpen;
 
     if (!user || (!isOpen && isKeyboardOpen) || isChatRoom) return null;
 
@@ -470,10 +488,10 @@ export const ChatWidget = () => {
                                     </button>
                                 </div>
                             )}
-                            <button onClick={() => setIsMinimized(!isMinimized)}>
+                            <button onClick={() => setIsMinimized(!isMinimized)} title="Minimize">
                                 <Minimize2 size={18} />
                             </button>
-                            <button onClick={() => setIsOpen(false)}>
+                            <button onClick={handleCloseWidget} title="Close Support Widget">
                                 <X size={18} />
                             </button>
                         </div>
