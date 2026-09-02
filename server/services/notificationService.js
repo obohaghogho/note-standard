@@ -35,10 +35,11 @@ const createNotification = async (params) => {
   }
 
   try {
-    // 1. Persist to Database
+    // 1. Persist to Database (supports both user_id and receiver_id columns)
     const { data, error } = await supabase
       .from("notifications")
       .insert([{
+        user_id: receiverId,
         receiver_id: receiverId,
         sender_id: senderId || null,
         type,

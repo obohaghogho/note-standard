@@ -1929,8 +1929,11 @@ exports.sendMessage = async (req, res) => {
 
         const previewContent = getNotificationPreview(type || 'text', content);
 
-        const dbNotificationPromises = otherMembers.map(async (member) => {
-          if (member.is_muted) return;
+        const notificationPromises = otherMembers.map(async (member) => {
+          if (member.is_muted) {
+            console.log(`[Chat Notify] Skipping muted user push: ${member.user_id}`);
+            return;
+          }
           await createNotification({
             receiverId: member.user_id,
             senderId: userId,
@@ -1940,39 +1943,25 @@ exports.sendMessage = async (req, res) => {
             link: `/dashboard/chat?id=${conversationId}`,
             messageId: createdMessageId,
             conversationId: conversationId,
-            skipPush: true,
+            skipPush: false,
+          });
+          await dispatchFastPush({
+            receiverId: member.user_id,
+            type: "chat_message",
+            title: senderName,
+            message: previewContent,
+            link: `/dashboard/chat?id=${conversationId}`,
+            messageId: createdMessageId,
+            conversationId: conversationId,
+            trace: {
+              clientSendTs,
+              apiReceiveTs: t1_ApiReceived,
+              dbStartTs: t2_DbInsertStart,
+              dbDoneTs: t3_DbInsertDone,
+            }
           });
         });
-
-        // Fast push via /internal/push is LEGACY ONLY.
-        // When v2 pipeline is active, the deliveryEngine already dispatches push
-        // notifications via chatPush → DeviceRegistry → PushDispatcher.
-        // Firing dispatchFastPush here would create a second competing push.
-        if (PIPELINE_VERSION !== 'v2') {
-          const fastPushPromises = otherMembers.map(async (member) => {
-            if (member.is_muted) {
-              console.log(`[Chat Notify] Skipping muted user fast-push: ${member.user_id}`);
-              return;
-            }
-            await dispatchFastPush({
-              receiverId: member.user_id,
-              type: "chat_message",
-              title: senderName,
-              message: previewContent,
-              link: `/dashboard/chat?id=${conversationId}`,
-              messageId: createdMessageId,
-              conversationId: conversationId,
-              trace: {
-                clientSendTs,
-                apiReceiveTs: t1_ApiReceived,
-                dbStartTs: t2_DbInsertStart,
-                dbDoneTs: t3_DbInsertDone,
-              }
-            });
-          });
-          Promise.allSettled(fastPushPromises).then();
-        }
-        Promise.allSettled(dbNotificationPromises).then();
+        Promise.allSettled(notificationPromises).then();
       }
 
       // --- Mention Logic ---
