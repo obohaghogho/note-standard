@@ -450,14 +450,12 @@ export const ChatWidget = () => {
                                 <h4>Support Chat</h4>
                                 <div className="flex items-center gap-2">
                                     <span className="status">
-                                        {supportChat?.support_status === 'resolved' ? (
+                                        {supportChat?.support_status === 'resolved' || supportChat?.support_status === 'closed' ? (
                                             <span className="text-green-300">Issue Resolved</span>
-                                        ) : supportChat?.support_status === 'escalated' ? (
+                                        ) : supportChat?.support_status === 'escalated' || supportChat?.support_status === 'pending' || supportChat?.support_status === 'assigned' ? (
                                             <span className="text-amber-300 animate-pulse">Connecting to a Live Agent...</span>
-                                        ) : supportChat?.id ? (
-                                            'AI Assistant Online ✅'
                                         ) : (
-                                            'Support Team'
+                                            <span className="text-blue-300">AI Assistant Online ✅</span>
                                         )}
                                     </span>
                                     {isBusiness ? (

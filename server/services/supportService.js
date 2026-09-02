@@ -465,8 +465,15 @@ class SupportService {
 
       let conversation = convs[0];
 
-      // Note: Resolved or closed support chats remain read-only when fetched.
-      // History is preserved and status is not altered on read operations.
+      // Auto-reopen resolved or closed support chats to 'open' state when user fetches/opens support widget
+      if (conversation.support_status === "resolved" || conversation.support_status === "closed") {
+        logger.info(`[SupportService] Auto-reopening resolved support chat session ${conversation.id} to open state for user ${userId}`);
+        await supabase
+          .from("conversations")
+          .update({ support_status: "open", updated_at: new Date().toISOString() })
+          .eq("id", conversation.id);
+        conversation.support_status = "open";
+      }
 
       // 2. Fetch full timeline messages
       const { data: messages } = await supabase
