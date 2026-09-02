@@ -2859,12 +2859,14 @@ exports.createSupportChat = async (req, res) => {
       ]);
     }
 
+    let fullPayload = await supportService.getSupportChatForUser(userId);
+
     if (content) {
       const result = await supportService.handleUserSupportMessage(convId, content, userId);
-      return res.json({ success: true, conversationId: convId, ...result });
+      return res.json({ success: true, conversationId: convId, conversation: fullPayload?.conversation, ...result });
     }
 
-    res.json({ success: true, conversationId: convId });
+    res.json({ success: true, conversationId: convId, conversation: fullPayload?.conversation });
   } catch (err) {
     console.error("[ChatController] createSupportChat error:", err.message);
     res.status(500).json({ error: "Failed to create support chat", details: err.message });

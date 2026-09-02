@@ -89,7 +89,7 @@ export const ChatWidget = () => {
 
             if (res.ok) {
                 const data = await res.json();
-                if (data.conversation) {
+                if (data && data.conversation) {
                     setSupportChat(data.conversation);
                     if (data.messages) {
                         setMessages(data.messages);
@@ -216,7 +216,7 @@ export const ChatWidget = () => {
 
             const data = await res.json();
             if (!res.ok) {
-                if (data.existingChatId) {
+                if (data && data.existingChatId) {
                     setSupportChat({ 
                         id: data.existingChatId, 
                         name: 'Support', 
@@ -231,12 +231,24 @@ export const ChatWidget = () => {
                     }
                     return;
                 }
-                throw new Error(data.error || 'Failed to start chat');
+                throw new Error(data?.error || 'Failed to start chat');
             }
 
-            setSupportChat(data.conversation);
-            if (socket && connected) {
-                socket.emit('join_room', data.conversation.id);
+            const targetConv = data?.conversation || {
+                id: data?.conversationId,
+                name: 'Support Chat',
+                support_status: 'open',
+                type: 'direct',
+                chat_type: 'support',
+                updated_at: new Date().toISOString(),
+                members: []
+            };
+
+            if (targetConv && targetConv.id) {
+                setSupportChat(targetConv as Conversation);
+                if (socket && connected) {
+                    socket.emit('join_room', targetConv.id);
+                }
             }
         } catch (err) {
             console.error('Failed to start support chat:', err);
