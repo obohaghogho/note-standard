@@ -1016,19 +1016,25 @@ const ChatWindow: React.FC = () => {
                             </button>
                             {showMoreMenu && (
                                 <div className="absolute top-full right-0 mt-2 w-48 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-50 p-1 animate-in zoom-in-95 duration-200">
-                                    <button onClick={() => { setShowMoreMenu(false); setIsGalleryOpen(true); }} className="w-full text-left px-4 py-2 text-sm text-purple-300 hover:bg-purple-500/20 rounded-lg flex items-center justify-between">
-                                        <span>Theme Gallery</span>
+                                    <button onClick={() => { setShowMoreMenu(false); setIsGalleryOpen(true); }} className="w-full text-left px-4 py-2 text-sm text-purple-300 hover:bg-purple-500/20 rounded-lg flex items-center justify-between font-semibold">
+                                        <span>🛍️ Online Theme Gallery</span>
                                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-500/30">NEW</span>
+                                    </button>
+                                    <button 
+                                        onClick={() => { setIsSettingsOpen(true); setShowMoreMenu(false); }} 
+                                        className="w-full text-left px-4 py-2 text-sm text-blue-400 hover:bg-blue-500/10 rounded-lg font-semibold"
+                                    >
+                                        ✍️ Write-up & Font Style
+                                    </button>
+                                    <button 
+                                        onClick={() => { setShowCustomizeModal(true); setShowMoreMenu(false); }} 
+                                        className="w-full text-left px-4 py-2 text-sm text-amber-400 hover:bg-amber-500/10 rounded-lg font-semibold"
+                                    >
+                                        🎨 Chat Wallpaper
                                     </button>
                                     <button onClick={handleMuteChat} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 rounded-lg">{activeConversation?.is_muted ? 'Unmute Notifications' : 'Mute Notifications'}</button>
                                     <button onClick={handleClearChat} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 rounded-lg">Clear History</button>
                                     <button onClick={handleDeleteChat} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-400/10 rounded-lg">Delete Chat</button>
-                                    <button 
-                                        onClick={() => { setShowCustomizeModal(true); setShowMoreMenu(false); }} 
-                                        className="w-full text-left px-4 py-2 text-sm text-blue-400 hover:bg-blue-500/10 rounded-lg"
-                                    >
-                                        Theme & Fonts
-                                    </button>
                                     {activeConversation?.type === 'direct' && (
                                         <button onClick={handleBlockUser} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-400/10 rounded-lg">
                                             {activeConversation.blockedByMe ? 'Unblock User' : 'Block User'}

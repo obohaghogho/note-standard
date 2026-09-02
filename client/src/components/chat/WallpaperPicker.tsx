@@ -5,6 +5,7 @@ import {
   RotateCcw, Sliders, Image as ImageIcon, Sparkles, X, Sun, Moon, Eye, Crop, ZoomIn
 } from 'lucide-react';
 import { useWallpaper, type WallpaperConfig, WALLPAPER_PRESETS } from '../../context/WallpaperContext';
+import { useChatTheme } from '../../context/ChatThemeContext';
 import { WallpaperEngine } from './WallpaperEngine';
 import toast from 'react-hot-toast';
 
@@ -205,6 +206,7 @@ const CATEGORY_PRESETS: WallpaperConfig[] = [
 ];
 
 export const WallpaperPicker: React.FC<WallpaperPickerProps> = ({ chatId, onClose }) => {
+  const { setIsSettingsOpen } = useChatTheme();
   const {
     presets: contextPresets,
     getWallpaper,
@@ -446,6 +448,17 @@ export const WallpaperPicker: React.FC<WallpaperPickerProps> = ({ chatId, onClos
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                handleCancel();
+                setIsSettingsOpen(true);
+              }}
+              className="px-3 py-1.5 rounded-xl border border-blue-500/30 bg-blue-600/20 text-[11px] font-bold text-blue-300 hover:bg-blue-600/30 transition-all flex items-center gap-1.5"
+            >
+              <Sparkles size={12} />
+              <span>Font & Write-up Style</span>
+            </button>
             <button
               type="button"
               onClick={handleReset}
