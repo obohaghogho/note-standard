@@ -82,12 +82,12 @@ class AiSupportService {
          messaging: ['message', 'tick', 'notification', 'chat', 'receipt', 'read', 'push', 'call', 'video', 'audio', 'voice', 'media', 'attachment', 'reaction', 'disappearing'],
          crypto: ['crypto', 'swap', 'network', 'chain', 'coin', 'token', 'usdt', 'btc', 'eth', 'memo', 'tag', 'nowpayments', 'trc20', 'erc20', 'bitcoin'],
          authentication: ['auth', 'login', 'password', 'verify', 'verification', '2fa', 'otp', 'sign', 'kyc', 'bvn', 'nin', 'tier', 'session', 'pin'],
-         workspace: ['workspace', 'trend', 'note', 'folder', 'tag', 'export', 'summary', 'ai', 'editor', 'community'],
+         workspace: ['workspace', 'trend', 'note', 'notes', 'folder', 'tag', 'export', 'summary', 'ai', 'editor', 'community'],
          teams: ['team', 'member', 'invite', 'role', 'permission', 'owner', 'guest', 'organization', 'collaborate'],
          monetization: ['monetization', 'subscription', 'pro', 'plan', 'billing', 'upgrade', 'pricing', 'affiliate', 'referral', 'commission', 'ad', 'advertisement', 'banner', 'paid'],
-         settings: ['setting', 'settings', 'profile', 'avatar', 'theme', 'dark', 'light', 'wallpaper', 'ad', 'advertisement', 'privacy', 'pwa', 'install', 'language'],
+         settings: ['setting', 'settings', 'profile', 'avatar', 'theme', 'dark', 'light', 'wallpaper', 'privacy', 'pwa', 'install', 'language'],
          support: ['support', 'ticket', 'agent', 'help', 'contact', 'hours', 'issue', 'problem', 'escalate', 'human', 'session', 'close'],
-         troubleshooting: ['troubleshoot', 'error', 'fail', 'failed', 'slow', 'broken', 'load', 'bug', 'fix', 'app', 'freeze', 'blank', 'disconnect', 'permission', 'push']
+         troubleshooting: ['troubleshoot', 'error', 'fail', 'failed', 'slow', 'broken', 'load', 'bug', 'freeze', 'blank', 'disconnect', 'permission']
      };
 
      let allIntents = [];
@@ -98,7 +98,8 @@ class AiSupportService {
          
          const keywords = categoryKeywords[feature] || [];
          for (const kw of keywords) {
-             if (queryLower.includes(kw)) baseCategoryScore += 2;
+             const regex = new RegExp(`\\b${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+             if (regex.test(queryLower)) baseCategoryScore += 3;
          }
 
          for (const intent of data.intents || []) {
@@ -253,22 +254,14 @@ class AiSupportService {
       const retrieval = this.retrieveKnowledge(userMessage);
 
       const messagesPayload = [
-        { role: "system", content: `${this.systemPrompt}\n\n${this.supportPolicy}\n\n# RETRIEVED PRODUCT KNOWLEDGE (Version: ${retrieval.knowledge_version})\n${retrieval.content || "No matching knowledge found."}\n\nThe user's first name is: ${firstName}` },
+        { role: "system", content: `${this.systemPrompt}\n\n${this.supportPolicy}\n\n# RETRIEVED PRODUCT KNOWLEDGE (Version: ${retrieval.knowledge_version})\n${retrieval.content || "No matching knowledge snippet found."}\n\nThe user's first name is: ${firstName}` },
         ...chatHistory
       ];
 
-      console.log(`[AI] Sending request to Groq...`);
-      console.log(`Model: llama-3.3-70b-versatile`);
-      console.log(`Conversation ID: ${conversationId}`);
-      console.log(`User ID: ${userId}`);
-      console.log(`Prompt length: ${messagesPayload[0].content.length} chars`);
-      console.log(`History messages: ${chatHistory.length}`);
-
       const modelsToTry = [
         process.env.GROQ_MODEL,
-        "openai/gpt-oss-20b",
-        "openai/gpt-oss-120b",
-        "qwen/qwen3.6-27b"
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant"
       ].filter(Boolean);
 
       let completion = null;
@@ -321,18 +314,9 @@ class AiSupportService {
           return this.generateKnowledgeFallbackResponse(userMessage, firstName, retrieval);
       }
       
+      const explicitHumanRequest = /human|agent|specialist|operator|speak to human|talk to agent|escalate to agent/i.test(userMessage);
+      let isEscalated = parsedResponse.escalate === true || explicitHumanRequest;
       let calculatedConfidence = parsedResponse.confidence !== undefined ? parsedResponse.confidence : 0.95;
-      if (retrieval.sources_used.length === 0) {
-          calculatedConfidence = 0.20;
-      } else {
-          calculatedConfidence = Math.max(calculatedConfidence, 0.90);
-      }
-      
-      let isEscalated = parsedResponse.escalate === true || calculatedConfidence < 0.80;
-      if (retrieval.sources_used.length > 0 && parsedResponse.response && parsedResponse.response.length > 20) {
-          // If knowledge base articles matched and AI provided a response, keep chat active with AI answer
-          isEscalated = false;
-      }
       
       if (!isEscalated && !this.validateResponse(parsedResponse)) {
           isEscalated = true;
@@ -385,26 +369,38 @@ class AiSupportService {
     const isMatched = retrieval.sources_used && retrieval.sources_used.length > 0;
     const responseId = 'ai_resp_kb_' + require('crypto').randomUUID().replace(/-/g, '').substring(0, 16);
     
-    let text = `Hi ${firstName}! 👋 Thank you for reaching out to Note Standard Support. `;
+    let text = `Hi ${firstName}! 👋 Thank you for reaching out to NoteStandard Support. `;
     let isEscalated = false;
 
     if (isMatched) {
-      text += `Regarding your question, here is what our knowledge base recommends:\n\n`;
+      text += `Here is what our knowledge base recommends for your query:\n\n`;
       try {
-        const snippets = retrieval.content ? JSON.parse(retrieval.content.split('\n\n')[0] || '{}') : null;
-        if (snippets && snippets.solution) {
-          text += snippets.solution;
-        } else if (snippets && snippets.summary) {
-          text += snippets.summary;
+        const rawSnippets = retrieval.content ? retrieval.content.split('\n\n') : [];
+        let addedAnswers = [];
+        for (const raw of rawSnippets) {
+          try {
+            const parsed = JSON.parse(raw);
+            const ans = parsed.answer || parsed.solution || parsed.summary || parsed.description;
+            if (ans) addedAnswers.push(`• ${ans}`);
+          } catch {}
+        }
+        if (addedAnswers.length > 0) {
+          text += addedAnswers.join('\n\n');
         } else {
-          text += `Please check your settings or account dashboard for recent updates. If you still need help, reply with more details!`;
+          text += `You can manage notes in the Workspace tab (+ button), view balances and make transactions in the Wallet tab, or adjust settings in Settings. Reply to this message if you need further details!`;
         }
       } catch (e) {
-        text += `Please check your dashboard or account settings. Reply to this message if you need further assistance!`;
+        text += `Please check your dashboard or settings. Reply to this message if you need further assistance!`;
       }
     } else {
-      isEscalated = true;
-      text += `Our AI support system has received your report. A specialist support agent has been notified and will assist you shortly!`;
+      const explicitHuman = /human|agent|specialist|operator|speak to human|talk to agent/i.test(userMessage);
+      if (explicitHuman) {
+        isEscalated = true;
+        text += `I've assigned a human specialist agent to your request. A support team member will follow up shortly!`;
+      } else {
+        isEscalated = false;
+        text += `NoteStandard provides a multi-currency wallet, real-time messaging with voice/video calls, team workspaces, notes editor with AI assistance, and social community feed.\n\nYou can create new notes in the Workspace tab (+ button), send messages or start calls in Chat, manage funds in Wallet, and manage projects in Teams. Feel free to ask any specific question!`;
+      }
     }
 
     return {
@@ -414,7 +410,7 @@ class AiSupportService {
         category: "General",
         intent: "Support Request",
         priority: isEscalated ? "high" : "normal",
-        confidence: isMatched ? 0.85 : 0.40,
+        confidence: isMatched ? 0.85 : 0.60,
         customer_problem: userMessage,
         recommended_next_step: "Review chat history"
       },
