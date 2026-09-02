@@ -1186,7 +1186,8 @@ const ChatWindow: React.FC = () => {
 
 
             {!isPending ? (
-                <div className="chat-input-bar relative bg-gray-950/80 backdrop-blur-2xl border-t border-white/10 z-40" ref={composerRef}>
+                <div className="chat-input-bar relative bg-gray-950 border-t border-white/10 z-40" ref={composerRef}>
+                    <div className="absolute top-full left-0 right-0 h-[60vh] bg-gray-950 pointer-events-none -z-10" />
                     <div className="max-w-[900px] mx-auto px-3 py-2 md:p-4 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
                         {activeConversation?.isBlocked ? (
                             <div className="flex flex-col items-center justify-center p-4 bg-gray-800/80 rounded-2xl border border-gray-700/50">
@@ -1408,7 +1409,8 @@ const ChatWindow: React.FC = () => {
                     </div>
                 </div>
             ) : (
-                <div className="chat-input-bar relative bg-gray-950/90 backdrop-blur-2xl border-t border-white/10 p-4 md:p-6 z-40" ref={composerRef}>
+                <div className="chat-input-bar relative bg-gray-950 border-t border-white/10 p-4 md:p-6 z-40" ref={composerRef}>
+                    <div className="absolute top-full left-0 right-0 h-[60vh] bg-gray-950 pointer-events-none -z-10" />
                     <div className="max-w-[700px] mx-auto flex flex-col items-center gap-3 text-center">
                         <div className="flex items-center gap-2 text-blue-400 font-semibold text-sm">
                             <MessageCircle size={18} />

@@ -59,6 +59,7 @@
     overflow: hidden;
     position: fixed;
     overscroll-behavior-y: none;
+    background-color: #030712 !important;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
   }
@@ -71,8 +72,8 @@
     overflow: hidden;
     position: fixed;
     overscroll-behavior-y: none;
-    background-color: var(--background);
-    @apply bg-background text-body font-sans antialiased;
+    background-color: #030712 !important;
+    @apply text-body font-sans antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
@@ -87,6 +88,7 @@
     flex-direction: column;
     overflow: hidden;
     overscroll-behavior-y: none;
+    background-color: #030712 !important;
   }
 
   /* Remove tap highlight globally and enforce fast tap response */

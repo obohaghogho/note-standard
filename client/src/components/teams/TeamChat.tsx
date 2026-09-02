@@ -746,6 +746,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
 
       {/* Input Area */}
       <div className="team-chat__input-container z-40 shadow-[0_-15px_40px_rgba(0,0,0,0.4)]">
+        <div className="absolute top-full left-0 right-0 h-[60vh] bg-gray-950 pointer-events-none -z-10" />
         {editingMessageId && (
             <div className="absolute bottom-[calc(100%+0.5rem)] left-0 right-0 flex items-center justify-between bg-blue-900/40 text-blue-200 text-xs px-3 py-2 rounded-lg border border-blue-500/20 backdrop-blur-md animate-in slide-in-from-bottom-2 mx-4">
                 <span className="font-medium flex items-center gap-1.5 flex-1">
