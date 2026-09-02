@@ -29,8 +29,15 @@ export type FontChoice =
   | 'rounded'
   | 'serif'
   | 'handwriting'
+  | 'calligraphy'
+  | 'cyberpunk'
+  | 'vintage'
+  | 'scifi'
+  | 'comic'
+  | 'luxury'
   | 'minimal'
   | 'monospace'
+  | 'impact'
   | 'chat_classic';
 
 export interface ChatThemeColors {

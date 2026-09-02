@@ -39,13 +39,20 @@ export const ChatThemeSettingsModal: React.FC = () => {
   if (!isSettingsOpen) return null;
 
   const fontOptions: { id: FontChoice; label: string; preview: string }[] = [
-    { id: 'inter', label: 'Modern Sans (Inter)', preview: 'The quick brown fox' },
-    { id: 'rounded', label: 'Rounded Sans (Quicksand)', preview: 'The quick brown fox' },
-    { id: 'serif', label: 'Elegant Serif (Playfair)', preview: 'The quick brown fox' },
-    { id: 'handwriting', label: 'Handwriting (Caveat)', preview: 'The quick brown fox' },
-    { id: 'minimal', label: 'Minimal Tech (Space Grotesk)', preview: 'The quick brown fox' },
-    { id: 'monospace', label: 'Monospace (Fira Code)', preview: 'The quick brown fox' },
-    { id: 'chat_classic', label: 'Chat Classic (System)', preview: 'The quick brown fox' },
+    { id: 'inter', label: '1. Modern Sans (Inter)', preview: 'Clean & sharp modern tech UI font' },
+    { id: 'cyberpunk', label: '2. Cyberpunk Neon (Orbitron)', preview: 'NEON HUD HIGH-TECH INTERFACE' },
+    { id: 'calligraphy', label: '3. Elegant Calligraphy (Dancing Script)', preview: 'Stylish cursive handwritten script' },
+    { id: 'vintage', label: '4. Vintage Typewriter (Special Elite)', preview: 'Classic vintage typewriter journal print' },
+    { id: 'scifi', label: '5. Tactical Sci-Fi (Rajdhani)', preview: 'Futuristic esport interface text' },
+    { id: 'luxury', label: '6. Royal Luxury (Cormorant Garamond)', preview: 'High-fashion 16th century royal serif' },
+    { id: 'handwriting', label: '7. Casual Notepad (Caveat)', preview: 'Personal handwritten notepad write-up' },
+    { id: 'comic', label: '8. Comic Playful (Fredoka)', preview: 'Bold cheerful playful pop aesthetic' },
+    { id: 'rounded', label: '9. Soft Rounded (Quicksand)', preview: 'Friendly curved warm aesthetics' },
+    { id: 'serif', label: '10. Editorial Serif (Playfair)', preview: 'Magazine editorial luxury typography' },
+    { id: 'minimal', label: '11. Minimal Tech (Space Grotesk)', preview: 'Avant-garde minimalist Swiss tech' },
+    { id: 'monospace', label: '12. Hacker Terminal (Fira Code)', preview: 'Developer code terminal style' },
+    { id: 'impact', label: '13. Headline Impact (Oswald)', preview: 'CONDENSED BOLD HIGH IMPACT WRITING' },
+    { id: 'chat_classic', label: '14. System Classic', preview: 'Standard OS default chat font' },
   ];
 
   return createPortal(
@@ -387,8 +394,8 @@ export const ChatThemeSettingsModal: React.FC = () => {
                               : 'border-slate-800 bg-slate-950/40 hover:border-slate-700 text-slate-300'
                           }`}
                         >
-                          <div className="text-xs font-bold mb-0.5">{font.label}</div>
-                          <div className="text-[11px] opacity-70 truncate">{font.preview}</div>
+                          <div className={`text-xs font-bold mb-0.5 font-theme-${font.id} chat-font-${font.id}`}>{font.label}</div>
+                          <div className={`text-xs opacity-90 truncate font-theme-${font.id} chat-font-${font.id}`}>{font.preview}</div>
                         </button>
                       ))}
                     </div>
