@@ -619,15 +619,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, [session, user?.id, deviceId]);
 
     const markConversationRead = useCallback(async (conversationId: string) => {
-        if (!session || !deviceId) return;
+        if (!session) return;
+        const resolvedDeviceId = deviceId || deviceIdRef.current || getDeviceId();
 
-        // CRITICAL: Always fire the API so the server emits chat:conversation_read to the sender.
-        // This is what triggers the blue double-tick on the sender's screen.
-        // Previously this was gated behind unreadCount > 0 which meant:
-        //   - If receiver opened chat with 0 unread (first visit), no API call was made
-        //   - Server never knew the message was read → no chat:conversation_read event → no blue ticks
-        // The API call is fire-and-forget — it's cheap (the server deduplicates via read_at IS NULL).
-        api.put(`/chat/conversations/${conversationId}/read`, { deviceId }).catch(err => {
+        // CRITICAL: Always fire the API so the server executes rpc_mark_read in DB
+        // and emits chat:conversation_read to the sender.
+        api.put(`/chat/conversations/${conversationId}/read`, { deviceId: resolvedDeviceId }).catch(err => {
             console.error('[Chat] Failed to mark conversation read:', err);
         });
 
@@ -657,15 +654,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         });
     }, [session, deviceId]);
 
-    // Industry pattern (WhatsApp / Telegram): mark ALL messages in a conversation
-    // as read the instant the user opens it — one unconditional API call, no lease gate.
-    // This is the primary read-marking trigger. The visibility-based onMessageVisible
-    // path (ReadReceiptEngine) is a secondary best-effort supplement.
-    const prevActiveConversationIdRef = useRef<string | null>(null);
     useEffect(() => {
-        if (!activeConversationId || activeConversationId === prevActiveConversationIdRef.current) return;
-        prevActiveConversationIdRef.current = activeConversationId;
-        // markConversationRead guards internally (returns early if !session || !deviceId)
+        if (!activeConversationId) return;
         markConversationRead(activeConversationId);
     }, [activeConversationId, markConversationRead]);
 
