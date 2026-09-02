@@ -404,7 +404,7 @@ export const WallpaperPicker: React.FC<WallpaperPickerProps> = ({ chatId, onClos
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex flex-col justify-end bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+      className="fixed inset-0 z-[100] flex flex-col justify-end bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
       onClick={handleCancel}
       role="dialog"
       aria-modal="true"

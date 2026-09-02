@@ -342,7 +342,7 @@ const ConversationList: React.FC = () => {
 
             {/* Quick Confirm Delete Modal */}
             {pendingDeleteId && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
                     <div className="bg-gray-900 border border-white/10 p-6 rounded-2xl max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-200">
                         <h3 className="text-lg font-bold text-white mb-2">Delete Conversation</h3>
                         <p className="text-sm text-gray-400 mb-6">
