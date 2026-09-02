@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   X, 
   Palette, 
@@ -47,8 +48,8 @@ export const ChatThemeSettingsModal: React.FC = () => {
     { id: 'chat_classic', label: 'Chat Classic (System)', preview: 'The quick brown fox' },
   ];
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
+  return createPortal(
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
       <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
         
         {/* ─── Header ─── */}
@@ -465,6 +466,7 @@ export const ChatThemeSettingsModal: React.FC = () => {
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

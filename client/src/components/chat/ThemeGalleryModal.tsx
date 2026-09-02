@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Download, Check, Sparkles, Tag, ShieldCheck, RefreshCw } from 'lucide-react';
 import { useChatTheme } from '../../context/ChatThemeContext';
 import { ThemeManifestService } from '../../services/ThemeManifestService';
@@ -59,8 +60,8 @@ export const ThemeGalleryModal: React.FC = () => {
     }, 350);
   };
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
+  return createPortal(
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
       <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-5xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
         
         {/* Header */}
@@ -195,6 +196,7 @@ export const ThemeGalleryModal: React.FC = () => {
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

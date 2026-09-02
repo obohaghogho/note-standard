@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   ArrowLeft, Search, Star, History, Upload, Check, 
   RotateCcw, Sliders, Image as ImageIcon, Sparkles, X, Sun, Moon, Eye, Crop, ZoomIn
@@ -402,9 +403,9 @@ export const WallpaperPicker: React.FC<WallpaperPickerProps> = ({ chatId, onClos
       .slice(0, 10);
   }, [recentlyUsed, allPresets]);
 
-  return (
+  return createPortal(
     <div 
-      className="fixed inset-0 z-[100] flex flex-col justify-end bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+      className="fixed inset-0 z-[99999] flex flex-col justify-end bg-black/70 backdrop-blur-xs animate-in fade-in duration-200"
       onClick={handleCancel}
       role="dialog"
       aria-modal="true"
@@ -694,6 +695,7 @@ export const WallpaperPicker: React.FC<WallpaperPickerProps> = ({ chatId, onClos
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
