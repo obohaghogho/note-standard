@@ -351,7 +351,7 @@ class SupportService {
           type: 'support_escalated_customer',
           title: 'Support Request Escalated 🎧',
           message: 'Our AI support assistant transferred your request to a human specialist. An agent will reply shortly!',
-          link: `/dashboard/chat?id=${conversationId}`,
+          link: `/dashboard/chat?id=${conversationId}&openSupport=true`,
           conversationId: conversationId
         });
       }

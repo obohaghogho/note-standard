@@ -1,5 +1,6 @@
 import { Bell, Check, ExternalLink, MessageSquare, StickyNote, UserPlus, Globe, Edit3, Trash2, Heart } from 'lucide-react';
 import { useNotifications } from '../../hooks/useNotifications';
+import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../utils/cn';
 import { safeFormatDistanceToNow } from '../../utils/dateUtils';
 import { Link } from 'react-router-dom';
@@ -7,6 +8,7 @@ import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 
 export const Notifications = () => {
+    const { user } = useAuth();
     const { 
         notifications, 
         unreadCount, 
@@ -16,6 +18,24 @@ export const Notifications = () => {
         clearAllNotifications, 
         loading 
     } = useNotifications();
+
+    const resolveSupportLink = (notif: { type?: string; link?: string; conversationId?: string }) => {
+        const isSupport = notif.type?.startsWith('support') || 
+                          notif.type === 'new_support_ticket' || 
+                          notif.type === 'ai_support_reply' || 
+                          notif.link?.includes('openSupport') ||
+                          notif.link?.includes('support');
+
+        if (isSupport) {
+            if (user?.role === 'admin' || user?.role === 'support') {
+                return notif.link && notif.link.includes('/admin')
+                    ? notif.link
+                    : `/admin/chats?id=${notif.conversationId || ''}`;
+            }
+            return `/dashboard/chat?openSupport=true${notif.conversationId ? `&id=${notif.conversationId}` : ''}`;
+        }
+        return notif.link || '/dashboard';
+    };
 
     const getIcon = (type: string, size = 20) => {
         switch (type) {
@@ -120,9 +140,14 @@ export const Notifications = () => {
                                         <div className="flex items-center gap-4">
                                             {notif.link && (
                                                 <Link
-                                                    to={notif.link}
+                                                    to={resolveSupportLink(notif)}
                                                     className="text-xs text-primary font-semibold hover:underline flex items-center gap-1.5"
-                                                    onClick={(e) => e.stopPropagation()}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        if (resolveSupportLink(notif).includes('openSupport=true')) {
+                                                            window.dispatchEvent(new CustomEvent('open-support-chat'));
+                                                        }
+                                                    }}
                                                 >
                                                     <ExternalLink size={14} />
                                                     View Details

@@ -192,12 +192,29 @@ export const ChatWidget = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
-    // Check for existing chat
+    // Check for existing chat or URL parameter trigger
     useEffect(() => {
+        const search = location.search;
+        if (search.includes('openSupport=true') || search.includes('support=true')) {
+            setIsOpen(true);
+            setIsMinimized(false);
+        }
         if (isOpen && session?.access_token && !supportChat) {
             checkExistingSupportChat();
         }
-    }, [isOpen, session?.access_token, supportChat, checkExistingSupportChat]);
+    }, [isOpen, location.search, session?.access_token, supportChat, checkExistingSupportChat]);
+
+    useEffect(() => {
+        const handleOpenSupport = () => {
+            setIsOpen(true);
+            setIsMinimized(false);
+            if (session?.access_token && !supportChat) {
+                checkExistingSupportChat();
+            }
+        };
+        window.addEventListener('open-support-chat', handleOpenSupport);
+        return () => window.removeEventListener('open-support-chat', handleOpenSupport);
+    }, [session?.access_token, supportChat, checkExistingSupportChat]);
 
     const startSupportChat = async () => {
         if (supportChat || !session?.access_token) return;
@@ -383,13 +400,17 @@ export const ChatWidget = () => {
         });
     };
 
-    // Hide the widget in full-screen/immersive views (chat, reels, feed, teams) to avoid UI clutter
-    const isChatRoom = location.pathname.startsWith('/dashboard/chat') || 
-                       location.pathname.startsWith('/admin/chats') ||
-                       location.pathname.startsWith('/dashboard/teams') ||
-                       location.pathname.startsWith('/dashboard/reels') ||
-                       location.pathname === '/dashboard/feed' ||
-                       location.pathname.startsWith('/dashboard/feed/');
+    const hasOpenSupportParam = location.search.includes('openSupport=true') || location.search.includes('support=true');
+
+    // Hide the widget in full-screen/immersive views (chat, reels, feed, teams) EXCEPT when explicitly opening support chat
+    const isChatRoom = (
+        location.pathname.startsWith('/dashboard/chat') || 
+        location.pathname.startsWith('/admin/chats') ||
+        location.pathname.startsWith('/dashboard/teams') ||
+        location.pathname.startsWith('/dashboard/reels') ||
+        location.pathname === '/dashboard/feed' ||
+        location.pathname.startsWith('/dashboard/feed/')
+    ) && !hasOpenSupportParam && !isOpen;
 
     if (!user || (!isOpen && isKeyboardOpen) || isChatRoom) return null;
 

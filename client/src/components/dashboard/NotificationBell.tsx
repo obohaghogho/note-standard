@@ -5,12 +5,32 @@ import {
     ShieldAlert, LifeBuoy, Megaphone 
 } from 'lucide-react';
 import { useNotifications } from '../../hooks/useNotifications';
+import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../utils/cn';
 import { safeFormatDistanceToNow } from '../../utils/dateUtils';
 import { Link } from 'react-router-dom';
 
 export const NotificationBell = () => {
+    const { user } = useAuth();
     const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+
+    const resolveSupportLink = (notif: { type?: string; link?: string; conversationId?: string }) => {
+        const isSupport = notif.type?.startsWith('support') || 
+                          notif.type === 'new_support_ticket' || 
+                          notif.type === 'ai_support_reply' || 
+                          notif.link?.includes('openSupport') ||
+                          notif.link?.includes('support');
+
+        if (isSupport) {
+            if (user?.role === 'admin' || user?.role === 'support') {
+                return notif.link && notif.link.includes('/admin')
+                    ? notif.link
+                    : `/admin/chats?id=${notif.conversationId || ''}`;
+            }
+            return `/dashboard/chat?openSupport=true${notif.conversationId ? `&id=${notif.conversationId}` : ''}`;
+        }
+        return notif.link || '/dashboard';
+    };
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -160,12 +180,15 @@ export const NotificationBell = () => {
 
                                         {notif.link && (
                                             <Link
-                                                to={notif.link}
+                                                to={resolveSupportLink(notif)}
                                                 className="text-[10px] text-primary hover:text-primary/80 flex items-center gap-1 w-fit mt-2 font-medium"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     if (!notif.is_read) markAsRead(notif.id);
                                                     setIsOpen(false);
+                                                    if (resolveSupportLink(notif).includes('openSupport=true')) {
+                                                        window.dispatchEvent(new CustomEvent('open-support-chat'));
+                                                    }
                                                 }}
                                             >
                                                 View Details
