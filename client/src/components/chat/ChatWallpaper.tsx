@@ -14,28 +14,11 @@ export const ChatWallpaper: React.FC<ChatWallpaperProps> = ({ children, classNam
   const wp = customizer.wallpaper;
 
   const getBackgroundStyle = (): React.CSSProperties => {
-    const style: React.CSSProperties = {
-      filter: `blur(${wp.blur}px) brightness(${wp.brightness}%) contrast(${wp.contrast}%) saturate(${wp.saturation}%)`,
-      opacity: wp.opacity,
+    // When WallpaperEngine renders, keep fallback layer transparent so wallpaper is crisp
+    return {
+      background: 'transparent',
       transition: 'opacity 150ms ease, filter 150ms ease, background 150ms ease',
     };
-
-    if (wp.solidColor) {
-      style.backgroundColor = wp.solidColor;
-    } else if (wp.gradient) {
-      style.background = wp.gradient;
-    } else if (activeTheme.colors.bgGradient) {
-      style.background = activeTheme.colors.bgGradient;
-    } else if (activeTheme.colors.bgSolid) {
-      style.backgroundColor = activeTheme.colors.bgSolid;
-    } else if (wp.url) {
-      style.backgroundImage = `url("${wp.url}")`;
-      style.backgroundSize = 'cover';
-      style.backgroundPosition = 'center';
-      style.backgroundRepeat = 'no-repeat';
-    }
-
-    return style;
   };
 
   const isMeshAnimated = wp.category === 'mesh' || wp.animationType === 'moving_gradients';

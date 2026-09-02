@@ -493,6 +493,14 @@ export const WallpaperProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (config.fontTheme) {
       localStorage.setItem('chat_font_theme', config.fontTheme);
     }
+    // When user explicitly sets a wallpaper, disable auto-theme override so manual choice persists
+    setAutoThemeSettings(prev => {
+      const next = { ...prev, enabled: false };
+      localStorage.setItem(`${storagePrefix}auto_theme`, JSON.stringify(next));
+      localStorage.setItem('ns_wp_auto_theme', JSON.stringify(next));
+      return next;
+    });
+
     if (chatId === 'global') {
       setGlobalWallpaper(prev => {
         const next = { ...prev, ...config } as WallpaperConfig;
@@ -503,7 +511,6 @@ export const WallpaperProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       });
     } else {
       setChatWallpapers(prev => {
-        // Get existing or derive from global
         const base = prev[chatId] || { ...globalWallpaper };
         const next = { ...prev, [chatId]: { ...base, ...config } as WallpaperConfig };
         const json = JSON.stringify(next);
@@ -511,6 +518,10 @@ export const WallpaperProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         localStorage.setItem('ns_wp_chats', json);
         return next;
       });
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('ns-wallpaper-changed', { detail: { chatId, config } }));
     }
   }, [globalWallpaper, storagePrefix]);
 

@@ -459,12 +459,12 @@ export const WallpaperEngine: React.FC<WallpaperEngineProps> = ({ chatId, previe
         />
       )}
 
-      {/* 3. Static Custom uploaded Image */}
-      {config.type === 'image' && config.customUrl && (
+      {/* 3. Static Custom uploaded or Preset Image */}
+      {config.type === 'image' && (config.customUrl || config.url) && (
         <div 
           className="absolute inset-0"
           style={{
-            backgroundImage: `url(${config.customUrl})`,
+            backgroundImage: `url(${config.customUrl || config.url})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
@@ -474,9 +474,9 @@ export const WallpaperEngine: React.FC<WallpaperEngineProps> = ({ chatId, previe
       )}
 
       {/* 4. Muted loop video wallpapers */}
-      {config.type === 'video' && config.customUrl && !isBatterySaverActive && !isReducedMotionActive && (
+      {config.type === 'video' && (config.customUrl || config.url) && !isBatterySaverActive && !isReducedMotionActive && (
         <video
-          src={config.customUrl}
+          src={config.customUrl || config.url}
           autoPlay
           loop
           muted
