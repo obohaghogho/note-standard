@@ -776,6 +776,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const tombstones = deletedConversationIdsRef.current;
                 const peerTombstones = deletedPeerIdsRef.current;
                 const filteredServerData = mappedData.filter(conv => {
+                    // Exclude support chats from personal direct user chat list
+                    if (conv.chat_type === 'support' || conv.name === 'Support Chat' || conv.name === 'Support Request') return false;
                     if (tombstones.has(conv.id)) return false;
                     if (conv.type === 'direct') {
                         const otherMember = conv.members?.find((m: { user_id: string; profile?: { id?: string } }) => m.user_id !== user?.id);
@@ -984,6 +986,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             const response = await api.get(`/chat/conversations/${conversationId}`);
             if (isMounted.current && response.data) {
                 const conv = response.data;
+                if (conv.chat_type === 'support' || conv.name === 'Support Chat' || conv.name === 'Support Request') return;
                 // Re-check tombstone after async gap — deletion may have happened while awaiting
                 if (deletedConversationIdsRef.current.has(conversationId)) {
                     console.log(`[ChatContext] loadSingleConversation BLOCKED by tombstone (post-fetch): ${conversationId}`);

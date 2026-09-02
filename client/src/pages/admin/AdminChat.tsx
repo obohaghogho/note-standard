@@ -47,6 +47,47 @@ export const AdminChat = () => {
 
     // Refs
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const activeChatRef = useRef<Conversation | null>(null);
+    useEffect(() => {
+        activeChatRef.current = activeChat;
+    }, [activeChat]);
+
+    // Join admin room & conversation rooms
+    useEffect(() => {
+        if (!socket || !connected || !isAdmin) return;
+        
+        console.log('[AdminChat] Joining admin room and rooms for', chats.length, 'chats');
+        socket.emit('join_room', 'admin');
+        chats.forEach(chat => {
+            socket.emit('join_room', chat.id);
+        });
+    }, [socket, connected, isAdmin, chats]);
+
+    // Function to re-fetch chats from server
+    const fetchChats = useCallback(async () => {
+        if (!session?.access_token || !isAdmin) return;
+        try {
+            const params = new URLSearchParams();
+            if (statusFilter) params.append('status', statusFilter);
+
+            const res = await fetch(`${API_URL}/api/admin/support-chats?${params}`, {
+                headers: { 
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (res.ok) {
+                const data = await res.json() || [];
+                setChats(data);
+                if (socket && connected) {
+                    data.forEach((c: Conversation) => socket.emit('join_room', c.id));
+                }
+            }
+        } catch (err) {
+            console.error('Failed to fetch chats:', err);
+        }
+    }, [session?.access_token, isAdmin, statusFilter, socket, connected]);
 
     // Register Admin Listeners
     useEffect(() => {
@@ -58,22 +99,48 @@ export const AdminChat = () => {
             if (msg.sender_id !== user?.id) {
                 NotificationService.notifyNewMessage('User', msg.content, msg.conversation_id);
             }
+            
+            const currentActiveId = activeChatRef.current?.id;
             setMessages(prev => {
-                if (msg.conversation_id === activeChat?.id) {
+                if (currentActiveId && msg.conversation_id === currentActiveId) {
+                    const exists = prev.some(m => m.id === msg.id || (m.id.startsWith('temp-') && m.content === msg.content));
+                    if (exists) {
+                        return prev.map(m => (m.id === msg.id || (m.id.startsWith('temp-') && m.content === msg.content)) ? msg : m);
+                    }
                     return [...prev, msg];
                 }
                 return prev;
             });
-            setChats(prev => prev.map(c =>
-                c.id === msg.conversation_id
-                    ? { ...c, lastMessage: { content: msg.content, created_at: msg.created_at, sender_id: msg.sender_id } }
-                    : c
-            ));
+
+            setChats(prev => {
+                const exists = prev.some(c => c.id === msg.conversation_id);
+                if (!exists) {
+                    // Chat is new to admin panel state - trigger re-fetch to include full profile & members
+                    fetchChats();
+                    return prev;
+                }
+                return prev.map(c =>
+                    c.id === msg.conversation_id
+                        ? { ...c, lastMessage: { content: msg.content, created_at: msg.created_at, sender_id: msg.sender_id } }
+                        : c
+                );
+            });
         };
 
         const onNewSupportChat = (chat: Conversation) => {
             NotificationService.notifyNewSupportChat('A User');
-            setChats(prev => [chat, ...prev]);
+            if (socket && connected && chat?.id) {
+                socket.emit('join_room', chat.id);
+            }
+            setChats(prev => {
+                if (prev.some(c => c.id === chat.id)) return prev;
+                return [chat, ...prev];
+            });
+            fetchChats();
+        };
+
+        const onNewTicket = () => {
+            fetchChats();
         };
 
         const onPresenceUpdate = ({ conversationId, adminId, adminName, status }: { conversationId: string; adminId: string; adminName: string; status: string }) => {
@@ -97,13 +164,15 @@ export const AdminChat = () => {
 
         const onConversationUpdated = ({ id, support_status }: { id: string; support_status: string }) => {
             setChats(prev => prev.map(c => c.id === id ? { ...c, support_status: support_status as any } : c));
-            if (activeChat?.id === id) {
+            if (activeChatRef.current?.id === id) {
                 setActiveChat(prev => prev ? { ...prev, support_status: support_status as any } : null);
             }
         };
 
         socket.on('chat:message', onReceiveMessage);
         socket.on('chat:new_conversation', onNewSupportChat);
+        socket.on('chat:new_support_chat', onNewSupportChat);
+        socket.on('support:new_ticket', onNewTicket);
         socket.on('chat:conversation_updated', onConversationUpdated);
         socket.on('chat:message_read', onMessageRead);
         socket.on('chat:message_delivered', ({ messageId, delivered_at }: { messageId: string, delivered_at?: string }) => {
@@ -111,7 +180,7 @@ export const AdminChat = () => {
         });
         socket.on('chat:conversation_read', ({ conversationId, readAt }: { conversationId: string, readAt: string }) => {
             setMessages(prev => {
-                if (activeChat && conversationId === activeChat.id) {
+                if (activeChatRef.current && conversationId === activeChatRef.current.id) {
                     return prev.map(m => m.sender_id === user?.id ? { ...m, read_at: m.read_at || readAt } : m);
                 }
                 return prev;
@@ -122,13 +191,15 @@ export const AdminChat = () => {
         return () => {
             socket.off('chat:message', onReceiveMessage);
             socket.off('chat:new_conversation', onNewSupportChat);
+            socket.off('chat:new_support_chat', onNewSupportChat);
+            socket.off('support:new_ticket', onNewTicket);
             socket.off('chat:conversation_updated', onConversationUpdated);
             socket.off('chat:message_read', onMessageRead);
             socket.off('chat:message_delivered');
             socket.off('chat:conversation_read');
             socket.off('admin_presence_update', onPresenceUpdate);
         };
-    }, [socket, connected, isAdmin, user?.id, activeChat]);
+    }, [socket, connected, isAdmin, user?.id, fetchChats]);
 
     // Join rooms for all chats when they are loaded or when connection status changes
     useEffect(() => {

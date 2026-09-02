@@ -197,12 +197,17 @@ export default function ChatListScreen({ navigation }: Props) {
         }
     }, [navigation]);
 
+    const userConversations = React.useMemo(() =>
+        conversations.filter(c => c.chat_type !== 'support' && c.name !== 'Support Chat' && !c.name?.toLowerCase().includes('support')),
+        [conversations]
+    );
+
     const pendingCount = React.useMemo(() =>
-        conversations.filter(c => {
+        userConversations.filter(c => {
             const my = c.members?.find((m: any) => m.user_id === user?.id);
             return my?.status === 'pending';
         }).length,
-        [conversations, user?.id]
+        [userConversations, user?.id]
     );
 
     // ── Stable renderItem — no inline arrow function ───────────────────────────
@@ -238,14 +243,14 @@ export default function ChatListScreen({ navigation }: Props) {
                 }}
             />
             <FriendsList
-                conversations={conversations}
+                conversations={userConversations}
                 currentUserId={user?.id}
             />
-            {conversations.length > 0 && (
+            {userConversations.length > 0 && (
                 <Text style={styles.sectionTitle}>Recent Conversations</Text>
             )}
         </View>
-    ), [conversations, user?.id]);
+    ), [userConversations, user?.id]);
 
     const ListEmpty = useMemo(() => (
         <View style={styles.empty}>
@@ -280,9 +285,9 @@ export default function ChatListScreen({ navigation }: Props) {
                     >
                         <Text style={styles.searchEmoji}>🔍</Text>
                     </TouchableOpacity>
-                    {conversations.length > 0 && (
+                    {userConversations.length > 0 && (
                         <View style={styles.headerBadge}>
-                            <Text style={styles.headerBadgeText}>{conversations.length}</Text>
+                            <Text style={styles.headerBadgeText}>{userConversations.length}</Text>
                         </View>
                     )}
                 </View>
@@ -290,7 +295,7 @@ export default function ChatListScreen({ navigation }: Props) {
 
             {/* FlashList — 60fps with surgical memoization */}
             <SafeFlashList
-                data={conversations}
+                data={userConversations}
                 keyExtractor={keyExtractor}
                 renderItem={renderItem}
                 estimatedItemSize={84}

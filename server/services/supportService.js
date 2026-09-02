@@ -285,9 +285,15 @@ class SupportService {
     };
 
     await realtime.emitToConversation(conversationId, "chat:message", botMessageObj);
+    await realtime.emitToUser(userId, "chat:message", botMessageObj);
+    await realtime.emitToAdmin("chat:message", botMessageObj);
 
-    // 2. Emit conversation status update to conversation room
+    // 2. Emit conversation status update to conversation room and admin
     await realtime.emitToConversation(conversationId, "chat:conversation_updated", {
+      id: conversationId,
+      support_status: "escalated"
+    });
+    await realtime.emitToAdmin("chat:conversation_updated", {
       id: conversationId,
       support_status: "escalated"
     });

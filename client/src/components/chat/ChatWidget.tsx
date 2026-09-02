@@ -43,6 +43,18 @@ export const ChatWidget = () => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const [supportChat, setSupportChat] = useState<Conversation | null>(null);
+    const supportChatRef = useRef<Conversation | null>(null);
+    useEffect(() => {
+        supportChatRef.current = supportChat;
+    }, [supportChat]);
+
+    // Ensure socket room is joined whenever supportChat becomes available
+    useEffect(() => {
+        if (socket && connected && supportChat?.id) {
+            socket.emit('join_room', supportChat.id);
+        }
+    }, [socket, connected, supportChat?.id]);
+
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [adminTyping, setAdminTyping] = useState(false);
@@ -96,15 +108,16 @@ export const ChatWidget = () => {
         if (!socket || !connected || !isOpen) return;
 
         const onReceiveMessage = (msg: Message) => {
-            if (msg.conversation_id === supportChat?.id) {
+            const currentChatId = supportChatRef.current?.id || supportChat?.id;
+            if (currentChatId && msg.conversation_id === currentChatId) {
                 setMessages(prev => {
                     const exists = prev.some(m => 
                         m.id === msg.id || 
-                        (m.id.startsWith('temp-') && m.content === msg.content && m.sender_id === msg.sender_id)
+                        (m.id.startsWith('temp-') && m.content === msg.content)
                     );
                     if (exists) {
                         return prev.map(m => 
-                            (m.id === msg.id || (m.id.startsWith('temp-') && m.content === msg.content && m.sender_id === msg.sender_id)) 
+                            (m.id === msg.id || (m.id.startsWith('temp-') && m.content === msg.content)) 
                                 ? msg 
                                 : m
                         );
@@ -118,13 +131,15 @@ export const ChatWidget = () => {
         };
 
         const onTyping = ({ conversationId, userId, isTyping: typing }: { conversationId: string, userId: string, isTyping: boolean }) => {
-            if (conversationId === supportChat?.id && userId !== user?.id) {
+            const currentChatId = supportChatRef.current?.id || supportChat?.id;
+            if (currentChatId && conversationId === currentChatId && userId !== user?.id) {
                 setAdminTyping(typing);
             }
         };
 
         const onConversationUpdated = ({ id, support_status }: { id: string; support_status: string }) => {
-            if (id === supportChat?.id) {
+            const currentChatId = supportChatRef.current?.id || supportChat?.id;
+            if (currentChatId && id === currentChatId) {
                 setSupportChat(prev => prev ? { ...prev, support_status: support_status as any } : null);
             }
         };
