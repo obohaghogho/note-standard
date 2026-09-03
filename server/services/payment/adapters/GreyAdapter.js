@@ -77,13 +77,20 @@ class GreyAdapter extends BasePaymentAdapter {
     const start = Date.now();
     try {
       const axios = require('axios');
-      const baseUrl = this.config('GREY_BASE_URL') || 'https://api.grey.co';
-      const apiKey  = this.config('GREY_API_KEY');
-      await axios.get(`${baseUrl}/v1/ping`, {
+      const greyEnv = (process.env.GREY_ENV || 'production').toLowerCase();
+      const defaultBase = greyEnv === 'sandbox'
+        ? 'https://businessapi-sandbox.grey.co'
+        : 'https://businessapi.grey.co';
+      const baseUrl = this.config('GREY_BASE_URL') || defaultBase;
+      const apiKey  = this.config('GREY_API_KEY') || this.config('GREY_SECRET_KEY');
+      // Grey Business API has no /v1/ping — use /v1/balances as liveness probe
+      const r = await axios.get(`${baseUrl}/v1/balances`, {
         headers: { Authorization: `Bearer ${apiKey}` },
         timeout: 5000,
+        validateStatus: () => true,
       });
-      return { status: 'HEALTHY', latencyMs: Date.now() - start };
+      const ok = r.status >= 200 && r.status < 300;
+      return { status: ok ? 'HEALTHY' : 'DEGRADED', latencyMs: Date.now() - start };
     } catch {
       return { status: 'DOWN', latencyMs: Date.now() - start };
     }
@@ -118,16 +125,25 @@ class GreyAdapter extends BasePaymentAdapter {
   async balanceInquiry(currency) {
     try {
       const axios    = require('axios');
-      const baseUrl  = this.config('GREY_BASE_URL') || 'https://api.grey.co';
-      const apiKey   = this.config('GREY_API_KEY');
+      const greyEnv  = (process.env.GREY_ENV || 'production').toLowerCase();
+      const defaultBase = greyEnv === 'sandbox'
+        ? 'https://businessapi-sandbox.grey.co'
+        : 'https://businessapi.grey.co';
+      const baseUrl  = this.config('GREY_BASE_URL') || defaultBase;
+      const apiKey   = this.config('GREY_API_KEY') || this.config('GREY_SECRET_KEY');
       const up       = String(currency).toUpperCase();
-      const { data } = await axios.get(`${baseUrl}/v1/wallets/${up}`, {
+      const { data } = await axios.get(`${baseUrl}/v1/balances`, {
         headers: { Authorization: `Bearer ${apiKey}` },
         timeout: 8000,
       });
+      // Grey Business API: { data: { balances: [{ currency, available_balance, pending_balance }] } }
+      const balances = data?.data?.balances || data?.data || data?.balances || [];
+      const found = Array.isArray(balances)
+        ? balances.find(b => String(b.currency).toUpperCase() === up)
+        : null;
       return {
-        available: parseFloat(data?.balance || data?.available || 0),
-        pending:   parseFloat(data?.pending  || 0),
+        available: parseFloat(found?.available_balance ?? found?.balance ?? 0),
+        pending:   parseFloat(found?.pending_balance   ?? 0),
         currency:  up,
         updatedAt: new Date().toISOString(),
       };

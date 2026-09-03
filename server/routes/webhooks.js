@@ -57,7 +57,7 @@ router.post("/grey", webhookLimiter, async (req, res) => {
     }
 
     const payload = req.body || {};
-    const eventType = payload.event || payload.event_type || 'unknown';
+    const eventType = payload.event || payload.event_type || payload.type || 'unknown';
     const eventTypeStr = String(eventType).toLowerCase().trim();
 
     logger.info(`[Grey Webhook] Received event: ${eventTypeStr}`);
@@ -117,38 +117,94 @@ router.post("/grey", webhookLimiter, async (req, res) => {
  * or customerName profile match. Then credits wallet via DepositCreditEngine.
  */
 async function handleGreyDepositWebhook(payload) {
+  // Grey Business API wraps transaction data in payload.data
   const data = payload.data || payload;
-  const greyRef = data.reference || data.id || data.transaction_id;
-  const amount = parseFloat(data.amount || data.source_amount || data.net_amount || 0);
-  const currency = (data.currency || data.source_currency || 'USD').toUpperCase();
-  const senderName = data.sender_name || data.customer_name || data.counterparty_name || data.narration || '';
-  const memo = data.memo || data.narration || data.description || data.remark || '';
-  const rail = (data.rail || data.type || data.channel || 'ACH').toUpperCase();
 
-  logger.info(`[Grey Webhook/Deposit] Incoming: ${amount} ${currency} via ${rail} (ref: ${greyRef}, sender: ${senderName})`);
+  // Grey Business API canonical reference fields:
+  //   transaction_reference = Grey's internal ref
+  //   client_reference      = caller-supplied idempotency reference
+  const greyRef = data.transaction_reference || data.reference || data.id || data.transaction_id;
+  const clientRef = data.client_reference || null;
+
+  // Grey Business API amount fields: source_amount / source_currency
+  const amount = parseFloat(data.source_amount || data.amount || data.net_amount || 0);
+  const currency = (data.source_currency || data.currency || 'USD').toUpperCase();
+
+  // Sender information from Grey's sender object (or fallback flat fields)
+  const senderName = data.sender?.name ||
+    data.sender_name || data.customer_name || data.counterparty_name ||
+    data.narration || '';
+  const senderBank = data.sender?.bank_name || data.sender_bank || '';
+
+  const memo = data.memo || data.narration || data.description || data.remark || clientRef || '';
+  const rail = (data.rail || data.transaction_type || data.type || data.channel || 'ACH').toUpperCase();
+
+  logger.info(
+    `[Grey Webhook/Deposit] Incoming: ${amount} ${currency} via ${rail}` +
+    ` (txRef: ${greyRef}, clientRef: ${clientRef}, sender: ${senderName})`
+  );
 
   if (!greyRef || !amount) {
-    logger.warn("[Grey Webhook/Deposit] Missing required fields (ref/amount). Skipping.");
-    return { handled: false, reason: "Missing required fields" };
+    logger.warn('[Grey Webhook/Deposit] Missing required fields (ref/amount). Skipping.');
+    return { handled: false, reason: 'Missing required fields' };
   }
 
   // ── Idempotency: check if this Grey reference was already processed ────
-  const { data: existingLog } = await supabase
-    .from("transactions")
-    .select("id, status, wallet_credit_status")
-    .eq("provider_reference", greyRef)
-    .eq("provider", "grey")
+  // Check both provider reference (Grey's txn ref) and client reference
+  let existingCheck = await supabase
+    .from('transactions')
+    .select('id, status, wallet_credit_status')
+    .eq('provider_reference', greyRef)
+    .eq('provider', 'grey')
     .maybeSingle();
+
+  if (!existingCheck.data && clientRef) {
+    existingCheck = await supabase
+      .from('transactions')
+      .select('id, status, wallet_credit_status')
+      .eq('reference_id', `GREY-DEP-${clientRef}`)
+      .eq('provider', 'grey')
+      .maybeSingle();
+  }
+
+  const existingLog = existingCheck.data;
 
   if (existingLog && existingLog.wallet_credit_status === 'WALLET_CREDITED') {
     logger.info(`[Grey Webhook/Deposit] Already processed: ${greyRef}. Skipping.`);
-    return { handled: true, reason: "Already processed" };
+    return { handled: true, reason: 'Already processed' };
   }
 
   // ── User Resolution ─────────────────────────────────────────────────────
   let userId = null;
 
-  // Strategy 1: Extract NS-XXXXXXX from memo/narration via progressive DB matching
+  // Strategy 1: Use client_reference as the primary resolution key (Grey's own idempotency)
+  if (!userId && clientRef) {
+    const searchText = `${clientRef} ${memo} ${senderName} ${data.description || ''}`;
+    const nsRawMatch = searchText.match(/NS[-_ ]?([A-Z0-9]+)/i);
+    if (nsRawMatch) {
+      const rawCapture = nsRawMatch[1].toUpperCase();
+      logger.info(`[Grey Webhook/Deposit] client_reference NS capture: ${rawCapture}`);
+
+      for (let len = Math.min(rawCapture.length, 8); len >= 5 && !userId; len--) {
+        const candidateRef = `NS-${rawCapture.substring(0, len)}`;
+
+        const { data: refMatch } = await supabase
+          .from('user_bank_references')
+          .select('user_id')
+          .eq('reference', candidateRef)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (refMatch) {
+          userId = refMatch.user_id;
+          logger.info(`[Grey Webhook/Deposit] Resolved user ${userId} via client_reference bank ref (${candidateRef}).`);
+          break;
+        }
+      }
+    }
+  }
+
+  // Strategy 2: Extract NS-XXXXXXX from memo/narration via progressive DB matching
   if (!userId) {
     const searchText = `${memo} ${senderName} ${data.description || ''}`;
     const nsRawMatch = searchText.match(/NS[-_ ]?([A-Z0-9]+)/i);
@@ -296,29 +352,32 @@ async function handleGreyDepositWebhook(payload) {
 
   if (!primaryTx) {
     const { data: newTx } = await supabase
-      .from("transactions")
+      .from('transactions')
       .insert({
         user_id: userId,
         wallet_id: wallet.id,
         amount,
         currency,
-        type: "DEPOSIT",
-        status: "PENDING",
-        reference_id: `GREY-DEP-${greyRef}`,
+        type: 'DEPOSIT',
+        status: 'PENDING',
+        reference_id: `GREY-DEP-${clientRef || greyRef}`,
         provider_reference: greyRef,
-        provider: "grey",
-        payment_status: "PAYMENT_CONFIRMED",
-        wallet_credit_status: "WALLET_CREDIT_PENDING",
+        provider: 'grey',
+        payment_status: 'PAYMENT_CONFIRMED',
+        wallet_credit_status: 'WALLET_CREDIT_PENDING',
         display_label: `${currency} ${rail} Deposit`,
         metadata: {
-          provider: "grey",
+          provider: 'grey',
           channel: rail,
           sender_name: senderName,
+          sender_bank: senderBank,
+          client_reference: clientRef,
+          transaction_reference: greyRef,
           memo,
           payload: data
         }
       })
-      .select("id, reference_id")
+      .select('id, reference_id')
       .single();
     primaryTx = newTx;
   }

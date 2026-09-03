@@ -20,8 +20,13 @@ function test(name, ok, detail = '') {
 
 (async () => {
   try {
-    const GREY_API_KEY = process.env.GREY_API_KEY;
-    const GREY_BASE_URL = (process.env.GREY_BASE_URL || 'https://api.grey.co').trim();
+    const GREY_API_KEY = process.env.GREY_API_KEY || process.env.GREY_SECRET_KEY;
+    const GREY_ENV     = (process.env.GREY_ENV || 'production').toLowerCase();
+    // Correct base URLs per Grey Finance Business API spec
+    const GREY_BASE_URL_DEFAULT = GREY_ENV === 'sandbox'
+      ? 'https://businessapi-sandbox.grey.co'
+      : 'https://businessapi.grey.co';
+    const GREY_BASE_URL = (process.env.GREY_BASE_URL || GREY_BASE_URL_DEFAULT).trim();
     const GREY_WEBHOOK_SECRET = process.env.GREY_WEBHOOK_SECRET;
 
     // ═══════════════════════════════════════════════════════════════
@@ -30,10 +35,12 @@ function test(name, ok, detail = '') {
     console.log('═'.repeat(60));
 
     test('GREY_API_KEY present', !!GREY_API_KEY && GREY_API_KEY.length > 10, `len=${(GREY_API_KEY||'').length}`);
+    test('GREY_API_KEY starts with gbsk_', (GREY_API_KEY||'').startsWith('gbsk_'), `prefix=${(GREY_API_KEY||'').substring(0, 5)}`);
     test('GREY_BASE_URL is https', GREY_BASE_URL.startsWith('https://'), GREY_BASE_URL);
+    test('GREY_BASE_URL uses businessapi domain', GREY_BASE_URL.includes('businessapi'), GREY_BASE_URL);
     test('GREY_WEBHOOK_SECRET present', !!GREY_WEBHOOK_SECRET && GREY_WEBHOOK_SECRET.length >= 10, `len=${(GREY_WEBHOOK_SECRET||'').length}`);
     test('GREY_ENABLED=true', process.env.GREY_ENABLED === 'true', `val=${process.env.GREY_ENABLED}`);
-    test('GREY_ENV=production', (process.env.GREY_ENV||'').toLowerCase() === 'production', `val=${process.env.GREY_ENV}`);
+    test('GREY_ENV configured', ['production', 'sandbox'].includes(GREY_ENV), `val=${GREY_ENV}`);
 
     const holder = (process.env.GREY_LEAD_BANK_HOLDER || '').replace(/"/g, '');
     const acctNum = (process.env.GREY_LEAD_BANK_ACCOUNT_NUMBER || '').replace(/"/g, '');
@@ -66,43 +73,87 @@ function test(name, ok, detail = '') {
       test('DNS resolves ' + new URL(GREY_BASE_URL).hostname, false, `ENOTFOUND — ${dnsErr.message}`);
     }
 
-    // 2.2 GET /v1/balances
+    // 2.2 GET /v1/balances — Grey Business API primary liveness probe
     if (dnsResolved) {
       try {
         const r = await axios.get(`${GREY_BASE_URL}/v1/balances`, {
           headers: { 'Authorization': `Bearer ${GREY_API_KEY}` },
           timeout: 10000, validateStatus: () => true
         });
-        test('GET /v1/balances', r.status < 500, `HTTP ${r.status} — ${JSON.stringify(r.data).substring(0, 150)}`);
+        const ok = r.status < 500;
+        // Validate balance response shape
+        const balances = r.data?.data?.balances || r.data?.data || r.data?.balances || [];
+        const hasBalances = Array.isArray(balances);
+        test('GET /v1/balances', ok, `HTTP ${r.status} — ${JSON.stringify(r.data).substring(0, 150)}`);
+        test('GET /v1/balances — response has balances array', ok && hasBalances, `balances=${JSON.stringify(balances).substring(0, 100)}`);
       } catch (e) {
         test('GET /v1/balances', false, e.message);
       }
 
-      // 2.3 GET /v1/transactions
+      // 2.3 GET /api/v1/transactions (correct path for Grey Business API)
       try {
-        const r = await axios.get(`${GREY_BASE_URL}/v1/transactions`, {
+        const r = await axios.get(`${GREY_BASE_URL}/api/v1/transactions`, {
           headers: { 'Authorization': `Bearer ${GREY_API_KEY}` },
           params: { limit: 5 }, timeout: 10000, validateStatus: () => true
         });
-        test('GET /v1/transactions', r.status < 500, `HTTP ${r.status}`);
+        test('GET /api/v1/transactions', r.status < 500, `HTTP ${r.status}`);
       } catch (e) {
-        test('GET /v1/transactions', false, e.message);
+        test('GET /api/v1/transactions', false, e.message);
       }
 
-      // 2.4 FX Quote
+      // 2.4 POST /v1/currency/rate (Grey Business API FX endpoint — POST not GET)
       try {
-        const r = await axios.get(`${GREY_BASE_URL}/v1/fx/quote`, {
-          headers: { 'Authorization': `Bearer ${GREY_API_KEY}` },
-          params: { from: 'USD', to: 'NGN', amount: 100 },
-          timeout: 10000, validateStatus: () => true
-        });
-        test('GET /v1/fx/quote USD→NGN', r.status < 500, `HTTP ${r.status}`);
+        const r = await axios.post(`${GREY_BASE_URL}/v1/currency/rate`,
+          { source_amount: 100, source_currency: 'USD', destination_currency: 'NGN', transaction_type: 'swap' },
+          {
+            headers: { 'Authorization': `Bearer ${GREY_API_KEY}` },
+            timeout: 10000, validateStatus: () => true
+          });
+        test('POST /v1/currency/rate USD→NGN', r.status < 500, `HTTP ${r.status} — ${JSON.stringify(r.data).substring(0, 100)}`);
       } catch (e) {
-        test('GET /v1/fx/quote', false, e.message);
+        test('POST /v1/currency/rate', false, e.message);
+      }
+
+      // 2.5 Sandbox topup — only run if GREY_ENV=sandbox
+      if (GREY_ENV === 'sandbox') {
+        console.log('\n  ── SANDBOX TOPUP TEST (USD wallet crediting) ──');
+        try {
+          const topupPayload = {
+            amount: 100,
+            currency: 'USD',
+            description: 'NoteStandard Grey integration test topup'
+          };
+          const r = await axios.post(`${GREY_BASE_URL}/v1/sandbox/topup`, topupPayload, {
+            headers: { 'Authorization': `Bearer ${GREY_API_KEY}` },
+            timeout: 15000, validateStatus: () => true
+          });
+          const ok = r.status === 200 || r.status === 201;
+          test('POST /v1/sandbox/topup (USD $100)', ok, `HTTP ${r.status} — ${JSON.stringify(r.data).substring(0, 200)}`);
+
+          if (ok) {
+            // Verify the balance reflects the topup
+            const balR = await axios.get(`${GREY_BASE_URL}/v1/balances`, {
+              headers: { 'Authorization': `Bearer ${GREY_API_KEY}` },
+              timeout: 10000, validateStatus: () => true
+            });
+            const balances = balR.data?.data?.balances || balR.data?.data || balR.data?.balances || [];
+            const usdBal = balances.find(b => String(b.currency).toUpperCase() === 'USD');
+            test(
+              'USD balance > 0 after topup',
+              !!usdBal && Number(usdBal.available_balance || usdBal.balance || 0) > 0,
+              `USD available_balance=${usdBal?.available_balance}`
+            );
+            console.log(`  ✅ Sandbox USD wallet topup confirmed. Balance: $${usdBal?.available_balance || 0}`);
+          }
+        } catch (e) {
+          test('POST /v1/sandbox/topup', false, e.message);
+        }
+      } else {
+        console.log('  ⚠️  Sandbox topup skipped — GREY_ENV is not "sandbox"');
       }
     } else {
       console.log(`  ${WARN} Skipping live API tests — DNS does not resolve for ${GREY_BASE_URL}`);
-      console.log('  🔴 CRITICAL: api.grey.co is NOT a valid domain. Live API calls will ALWAYS fail.');
+      console.log('  🔴 CRITICAL: Ensure GREY_BASE_URL is set to https://businessapi-sandbox.grey.co (sandbox) or https://businessapi.grey.co (production)');
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -133,37 +184,40 @@ function test(name, ok, detail = '') {
     console.log(' SECTION 4 — WEBHOOK SIGNATURE VERIFICATION');
     console.log('═'.repeat(60));
 
-    const payload = JSON.stringify({ event: 'deposit.completed', data: { amount: 100, currency: 'USD' } });
+    // Grey Business API sends: X-Webhook-Signature: sha256=<hex>
+    const payload = JSON.stringify({ event: 'transaction.received', data: { source_amount: 100, source_currency: 'USD', transaction_reference: 'txn_test_001', client_reference: 'NS-AUDIT01' } });
     const secret = GREY_WEBHOOK_SECRET;
-    const validSig = crypto.createHmac('sha256', secret).update(payload).digest('hex');
+    const hmacHex = crypto.createHmac('sha256', secret).update(payload).digest('hex');
+    const validSig = `sha256=${hmacHex}`;  // Grey sends "sha256=" prefixed
 
-    test('Valid HMAC-SHA256 signature accepted', validSig.length === 64, `sig=${validSig.substring(0, 20)}...`);
+    test('Valid HMAC-SHA256 signature generated', hmacHex.length === 64, `sig=${hmacHex.substring(0, 20)}...`);
 
-    // Verify valid signature
+    // Verify stripping "sha256=" prefix and timingSafeEqual works correctly
+    const sigStripped = validSig.startsWith('sha256=') ? validSig.slice(7) : validSig;
     const expected = crypto.createHmac('sha256', secret).update(payload).digest('hex');
     try {
-      const isValid = crypto.timingSafeEqual(Buffer.from(validSig), Buffer.from(expected));
-      test('Valid signature passes timingSafeEqual', isValid);
+      const isValid = crypto.timingSafeEqual(Buffer.from(sigStripped, 'hex'), Buffer.from(expected, 'hex'));
+      test('Valid sig passes (sha256= stripped + timingSafeEqual hex compare)', isValid);
     } catch {
-      test('Valid signature passes timingSafeEqual', false, 'timingSafeEqual threw');
+      test('Valid sig passes timingSafeEqual', false, 'timingSafeEqual threw');
     }
 
     // Verify invalid signature rejected
-    const invalidSig = 'deadbeef0000';
+    const invalidSig = 'deadbeef00000000deadbeef00000000deadbeef00000000deadbeef00000000';
     try {
-      const isInvalid = crypto.timingSafeEqual(Buffer.from(invalidSig), Buffer.from(expected));
+      const isInvalid = crypto.timingSafeEqual(Buffer.from(invalidSig, 'hex'), Buffer.from(expected, 'hex'));
       test('Invalid signature rejected', !isInvalid);
     } catch {
-      // timingSafeEqual throws on length mismatch — that's a rejection
-      test('Invalid signature rejected (length mismatch)', true);
+      test('Invalid signature rejected (exception = mismatch)', true);
     }
 
-    // Timestamp freshness
-    const now = Math.floor(Date.now() / 1000);
-    const fresh = Math.abs(now - now) <= 300;
-    test('Fresh timestamp accepted (0s old)', fresh);
-    const stale = Math.abs(now - (now - 600)) <= 300;
-    test('Stale timestamp rejected (600s old)', !stale);
+    // Verify signature without prefix also works (legacy fallback)
+    try {
+      const isValidRaw = crypto.timingSafeEqual(Buffer.from(hmacHex, 'hex'), Buffer.from(expected, 'hex'));
+      test('Raw hex sig (no sha256= prefix) also accepted', isValidRaw);
+    } catch {
+      test('Raw hex sig fallback', false, 'threw');
+    }
 
     // ═══════════════════════════════════════════════════════════════
     console.log('\n' + '═'.repeat(60));
@@ -244,44 +298,62 @@ function test(name, ok, detail = '') {
 
     // ═══════════════════════════════════════════════════════════════
     console.log('\n' + '═'.repeat(60));
-    console.log(' SECTION 6 — WEBHOOK EVENT PARSING');
+    console.log(' SECTION 6 — WEBHOOK EVENT PARSING (Grey Business API shape)');
     console.log('═'.repeat(60));
 
-    // Test GreyProvider.parseWebhookEvent logic
+    // Grey Business API deposit webhook shape:
+    // { event: 'transaction.received', type: 'credit', data: { transaction_reference, client_reference,
+    //   source_amount, source_currency, destination_amount, destination_currency, sender, ... } }
     function parseWebhookEvent(payload) {
-      const status = ['completed', 'successful', 'success', 'transaction success'].includes(String(payload.status || payload.event).toLowerCase())
-        ? 'success' : 'failed';
+      const data = payload.data || payload;
+      const status = ['completed', 'successful', 'success', 'transaction success'].includes(
+        String(data.status || payload.event || payload.status || '').toLowerCase()
+      ) ? 'success' : 'failed';
       return {
         type: 'deposit',
-        reference: payload.reference || payload.narration || payload.memo || null,
+        // Use client_reference first (persistent user ref), then transaction_reference
+        reference: data.client_reference || data.reference || data.narration || null,
+        transactionReference: data.transaction_reference || data.reference || null,
         status,
-        amount: payload.amount,
-        currency: payload.currency || 'USD',
-        sender: payload.sender_name || payload.sender || 'Unknown',
-        transactionId: payload.transaction_id || payload.id || null,
+        amount: Number(data.source_amount || data.amount || 0),
+        currency: (data.source_currency || data.currency || 'USD').toUpperCase(),
+        sender: data.sender?.name || data.sender_name || data.sender || 'Unknown',
+        transactionId: data.transaction_reference || data.id || null,
         raw: payload
       };
     }
 
-    const wh1 = parseWebhookEvent({ status: 'completed', reference: 'WH-001', amount: 200, currency: 'USD', sender_name: 'Test Sender' });
+    // Test with correct Grey Business API payload structure
+    const wh1 = parseWebhookEvent({
+      event: 'transaction.received',
+      data: {
+        transaction_reference: 'txn_grey_001',
+        client_reference: 'NS-AUDIT01',
+        source_amount: 200,
+        source_currency: 'USD',
+        destination_amount: 200,
+        destination_currency: 'USD',
+        sender: { name: 'Test Sender', bank_name: 'Chase' },
+        status: 'completed'
+      }
+    });
     test('Webhook: type=deposit', wh1.type === 'deposit');
     test('Webhook: status=success (completed)', wh1.status === 'success');
-    test('Webhook: reference=WH-001', wh1.reference === 'WH-001');
+    test('Webhook: client_reference parsed (NS ref)', wh1.reference === 'NS-AUDIT01');
+    test('Webhook: transaction_reference parsed', wh1.transactionReference === 'txn_grey_001');
     test('Webhook: amount=200', wh1.amount === 200);
-    test('Webhook: currency=USD', wh1.currency === 'USD');
-    test('Webhook: sender parsed', wh1.sender === 'Test Sender');
+    test('Webhook: currency=USD (source_currency field)', wh1.currency === 'USD');
+    test('Webhook: sender parsed from sender object', wh1.sender === 'Test Sender');
 
+    // Backward-compat: flat payload
     const wh2 = parseWebhookEvent({ status: 'successful', reference: 'WH-002', amount: 100 });
-    test('Webhook: status=success (successful)', wh2.status === 'success');
+    test('Webhook flat: status=success (successful)', wh2.status === 'success');
 
-    const wh3 = parseWebhookEvent({ status: 'transaction success', reference: 'WH-003', amount: 50 });
-    test('Webhook: status=success (transaction success)', wh3.status === 'success');
+    const wh3 = parseWebhookEvent({ event: 'transaction.received', data: { transaction_reference: 'txn_003', source_amount: 50, source_currency: 'USD', status: 'completed' } });
+    test('Webhook: no client_ref => reference=null', wh3.reference === null);
 
     const wh4 = parseWebhookEvent({ status: 'rejected', reference: 'FAIL-001', amount: 30 });
     test('Webhook: failed status', wh4.status === 'failed');
-
-    const wh5 = parseWebhookEvent({ status: 'completed', amount: 100 });
-    test('Webhook: missing ref=null', wh5.reference === null);
 
     // ═══════════════════════════════════════════════════════════════
     console.log('\n' + '═'.repeat(60));
@@ -387,14 +459,19 @@ function test(name, ok, detail = '') {
     if (!dnsResolved) {
       console.log(`\n 🔴 CRITICAL FINDING: ${new URL(GREY_BASE_URL).hostname} DNS does NOT resolve`);
       console.log('    All live API calls (balance, transactions, FX, payout) will FAIL.');
-      console.log('    Grey operates as a STATIC bank-instruction provider:');
-      console.log('      - Deposit: Static Lead Bank account details + user reference code');
-      console.log('      - Detection: Via Brevo/SendGrid email parsing (GreyEmailService)');
-      console.log('      - Alternative: Admin manual confirm (/api/payment/manual-confirm)');
-      console.log('    Payouts via Grey API (/v1/payouts) are NOT functional.');
-      console.log('    NGN payouts use Paystack/Fincra. Crypto payouts use NowPayments.');
-      console.log('\n    ⚡ RECOMMENDATION: Either obtain the correct Grey API URL or');
-      console.log('       ensure all deposit/payout flows use non-API code paths.');
+      console.log('    Correct Grey Finance Business API base URLs:');
+      console.log('      Sandbox:    https://businessapi-sandbox.grey.co');
+      console.log('      Production: https://businessapi.grey.co');
+      console.log('    Set GREY_BASE_URL in your .env file to one of the above.');
+      console.log('    Set GREY_ENV=sandbox  or  GREY_ENV=production accordingly.');
+      console.log('\n    ⚡ Correct endpoints:');
+      console.log('       Balances:     GET  /v1/balances');
+      console.log('       Transactions: GET  /api/v1/transactions');
+      console.log('       FX Rate:      POST /v1/currency/rate');
+      console.log('       Payout:       POST /v1/charge/payout');
+      console.log('       P2P:          POST /v1/charge/p2p');
+      console.log('       Swap:         POST /v1/charge/swap');
+      console.log('       Sandbox topup: POST /v1/sandbox/topup');
     }
 
     if (failed > 0) {

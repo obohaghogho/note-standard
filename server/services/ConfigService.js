@@ -37,10 +37,14 @@ const CONFIG_SCHEMA = {
   FINCRA_GATEWAY_URL:          { env: 'FINCRA_GATEWAY_URL',           default: null },
   FINCRA_GATEWAY_KEY:          { env: 'FINCRA_GATEWAY_KEY',           default: null },
 
-  // Grey
+  // Grey Finance Business API
+  // Production:  https://businessapi.grey.co
+  // Sandbox:     https://businessapi-sandbox.grey.co
   GREY_API_KEY:                { env: 'GREY_API_KEY',                 default: null },
+  GREY_SECRET_KEY:             { env: 'GREY_SECRET_KEY',              default: null },
   GREY_WEBHOOK_SECRET:         { env: 'GREY_WEBHOOK_SECRET',          default: null },
-  GREY_BASE_URL:               { env: 'GREY_BASE_URL',                default: 'https://api.grey.co' },
+  GREY_BASE_URL:               { env: 'GREY_BASE_URL',                default: 'https://businessapi.grey.co' },
+  GREY_ENV:                    { env: 'GREY_ENV',                     default: 'production' },
 
   // Anchor
   ANCHOR_API_KEY:              { env: 'ANCHOR_API_KEY',               default: null },

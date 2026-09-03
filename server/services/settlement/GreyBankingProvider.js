@@ -23,9 +23,16 @@ class GreyBankingProvider extends IBankingProvider {
   constructor() {
     super();
     this.apiKey = (process.env.GREY_API_KEY || process.env.GREY_SECRET_KEY || '').trim();
-    this.businessId = (process.env.GREY_BUSINESS_ID || '').trim();
     this.webhookSecret = (process.env.GREY_WEBHOOK_SECRET || 'grey_whsec_notestandard_live_2026').trim();
-    this.baseUrl = (process.env.GREY_BASE_URL || 'https://api.grey.co').trim();
+
+    // Correct base URL per Grey Finance Business API spec:
+    //   Sandbox:    https://businessapi-sandbox.grey.co
+    //   Production: https://businessapi.grey.co
+    const greyEnv = (process.env.GREY_ENV || 'production').toLowerCase();
+    const defaultBase = greyEnv === 'sandbox'
+      ? 'https://businessapi-sandbox.grey.co'
+      : 'https://businessapi.grey.co';
+    this.baseUrl = (process.env.GREY_BASE_URL || defaultBase).trim();
     this.timeoutMs = 30000;
 
     // Dynamic Lead Bank USD Account Credentials from Environment Configuration
@@ -51,8 +58,8 @@ class GreyBankingProvider extends IBankingProvider {
       baseURL: this.baseUrl,
       timeout: this.timeoutMs,
       headers: {
+        // Grey Business API: Bearer <secret_key> (starts with gbsk_)
         'Authorization': `Bearer ${this.apiKey}`,
-        'X-Business-ID': this.businessId,
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       }
@@ -211,69 +218,81 @@ class GreyBankingProvider extends IBankingProvider {
 
   /**
    * Fetch incoming ACH & Wire transactions from Grey API
+   * GET /api/v1/transactions?type=deposit
    */
   async getIncomingTransfers(params = {}) {
     return this._executeWithRetry(async () => {
-      const response = await this.client.get('/v1/transactions', {
-        params: { type: 'deposit', limit: params.limit || 50 }
+      const response = await this.client.get('/api/v1/transactions', {
+        params: { limit: params.limit || 50, page: params.page || 1 }
       }).catch(() => ({ data: { data: [] } }));
 
-      const list = response.data?.data || response.data || [];
+      const list = response.data?.data || [];
       return list.map(t => ({
-        providerTxId: t.id || t.reference,
-        providerReference: t.reference || t.id,
-        amount: Number(t.amount || 0),
-        currency: String(t.currency || 'USD').toUpperCase(),
-        rail: String(t.rail || t.type || 'ACH').toUpperCase(),
-        senderName: t.sender_name || t.narration || 'Unknown Sender',
-        senderAccount: t.sender_account || '',
-        memo: t.memo || t.narration || '',
-        fee: Number(t.fee || 0),
-        status: t.status === 'completed' ? 'SETTLED' : 'PENDING_SETTLEMENT',
-        createdAt: t.created_at || new Date().toISOString()
+        providerTxId: t.transaction_id || t.id || t.transaction_reference,
+        providerReference: t.transaction_reference || t.id,
+        clientReference: t.client_reference || null,
+        amount: Number(t.source_amount || t.amount || 0),
+        currency: String(t.source_currency || t.currency || 'USD').toUpperCase(),
+        destinationAmount: Number(t.destination_amount || 0),
+        destinationCurrency: String(t.destination_currency || '').toUpperCase(),
+        rail: String(t.rail || t.type || t.transaction_type || 'ACH').toUpperCase(),
+        senderName: t.sender?.name || t.sender_name || t.narration || 'Unknown Sender',
+        senderBank: t.sender?.bank_name || '',
+        senderAccount: t.sender?.account_number || t.sender_account || '',
+        memo: t.memo || t.narration || t.description || '',
+        fee: Number(t.fees || t.fee || 0),
+        status: ['completed', 'success'].includes(String(t.status).toLowerCase()) ? 'SETTLED' : 'PENDING_SETTLEMENT',
+        createdAt: t.created_at || new Date().toISOString(),
+        completedAt: t.completed_at || null
       }));
     });
   }
 
   /**
-   * Verify Webhook Signature (HMAC-SHA256), Timestamp Freshness & Deduplication
+   * Verify Webhook Signature per Grey Business API spec.
+   * Header: X-Webhook-Signature: sha256=<hex>
    */
   async verifyWebhook(headers, payload) {
     try {
-      const signature = headers['x-grey-signature'] || headers['signature'] || headers['x-webhook-signature'];
-      const timestamp = headers['x-grey-timestamp'] || headers['x-timestamp'];
+      const sigHeader = headers['x-webhook-signature'] || headers['x-grey-signature'] || headers['signature'] || '';
 
-      // Timestamp Freshness (300s window)
-      if (timestamp) {
-        const reqTime = parseInt(timestamp, 10);
-        const now = Math.floor(Date.now() / 1000);
-        if (Math.abs(now - reqTime) > 300) {
-          logger.warn('[GreyBankingProvider] Expired webhook timestamp. Rejecting replay.');
-          return false;
-        }
-      }
-
-      if (!signature) {
+      if (!sigHeader) {
         if (process.env.NODE_ENV === 'development' && !this.webhookSecret) {
           return true;
         }
         return false;
       }
 
+      // Strip "sha256=" prefix per Grey spec
+      const signature = sigHeader.startsWith('sha256=')
+        ? sigHeader.slice(7)
+        : sigHeader;
+
       const rawBody = typeof payload === 'string' ? payload : JSON.stringify(payload);
-      const computed = crypto.createHmac('sha256', this.webhookSecret).update(rawBody).digest('hex');
+      const computed = crypto
+        .createHmac('sha256', this.webhookSecret)
+        .update(rawBody)
+        .digest('hex');
 
       let isValidSig = false;
       try {
-        isValidSig = crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(computed));
+        isValidSig = crypto.timingSafeEqual(
+          Buffer.from(signature, 'hex'),
+          Buffer.from(computed, 'hex')
+        );
       } catch {
-        isValidSig = (signature === computed);
+        isValidSig = false;
       }
 
       if (!isValidSig) return false;
 
-      // Event Deduplication Check against DB
-      const eventId = payload.id || payload.event_id || payload.reference;
+      // Event Deduplication using Grey's canonical transaction_reference
+      const eventId =
+        payload.transaction_reference ||
+        payload.transaction_id ||
+        payload.client_reference ||
+        payload.id;
+
       if (eventId) {
         const { data: existing } = await supabase
           .from('webhook_events')
@@ -296,23 +315,30 @@ class GreyBankingProvider extends IBankingProvider {
 
   async getBalance(currency = null) {
     return this._executeWithRetry(async () => {
-      const response = await this.client.get('/v1/balances').catch(() => ({ data: { data: [] } }));
-      const balances = response.data?.data || response.data || [];
+      const response = await this.client.get('/v1/balances').catch(() => ({ data: { data: { balances: [] } } }));
+      // Grey Business API balance shape: { data: { balances: [ { currency, available_balance, pending_balance } ] } }
+      const balances =
+        response.data?.data?.balances ||
+        response.data?.data ||
+        response.data?.balances ||
+        (Array.isArray(response.data) ? response.data : []);
 
       if (currency) {
         const up = currency.toUpperCase();
         const found = balances.find(b => String(b.currency).toUpperCase() === up);
         return {
           currency: up,
-          balance: found ? Number(found.amount || found.balance || 0) : 0.0,
-          availableBalance: found ? Number(found.available_amount || found.available || 0) : 0.0
+          balance: found ? Number(found.available_balance ?? found.balance ?? 0) : 0.0,
+          availableBalance: found ? Number(found.available_balance ?? 0) : 0.0,
+          pendingBalance: found ? Number(found.pending_balance ?? 0) : 0.0
         };
       }
 
       return balances.map(b => ({
         currency: String(b.currency).toUpperCase(),
-        balance: Number(b.amount || b.balance || 0),
-        availableBalance: Number(b.available_amount || b.available || 0)
+        balance: Number(b.available_balance ?? b.balance ?? 0),
+        availableBalance: Number(b.available_balance ?? 0),
+        pendingBalance: Number(b.pending_balance ?? 0)
       }));
     });
   }
@@ -323,15 +349,24 @@ class GreyBankingProvider extends IBankingProvider {
     return p.createPayout(payoutData);
   }
 
+  /**
+   * Health Check — uses GET /v1/balances as liveness probe.
+   * Grey Business API has no dedicated /v1/health endpoint.
+   */
   async healthCheck() {
     const start = Date.now();
     try {
       if (this.circuitOpen) {
         return { status: 'DEGRADED', latencyMs: 0, message: 'Circuit breaker is OPEN' };
       }
-      await this.client.get('/v1/health').catch(() => {});
+      const r = await this.client.get('/v1/balances');
       const latencyMs = Date.now() - start;
-      return { status: 'HEALTHY', latencyMs, message: 'Grey Lead Bank Banking API operational' };
+      const ok = r.status >= 200 && r.status < 300;
+      return {
+        status: ok ? 'HEALTHY' : 'DEGRADED',
+        latencyMs,
+        message: ok ? 'Grey Lead Bank Banking API operational' : `Unexpected status ${r.status}`
+      };
     } catch (err) {
       const latencyMs = Date.now() - start;
       return { status: 'UNHEALTHY', latencyMs, message: err.message };

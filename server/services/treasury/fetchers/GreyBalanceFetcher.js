@@ -17,7 +17,12 @@ const axios  = require('axios');
 const logger = require('../../../utils/logger');
 
 const PROVIDER  = 'grey';
-const BASE_URL  = process.env.GREY_API_URL || 'https://api.grey.co';
+// Correct base URL per Grey Finance Business API spec
+const greyEnv   = (process.env.GREY_ENV || 'production').toLowerCase();
+const defaultBase = greyEnv === 'sandbox'
+  ? 'https://businessapi-sandbox.grey.co'
+  : 'https://businessapi.grey.co';
+const BASE_URL  = (process.env.GREY_BASE_URL || process.env.GREY_API_URL || defaultBase).trim();
 const TIMEOUT   = 12000;
 
 class GreyBalanceFetcher {
@@ -37,9 +42,13 @@ class GreyBalanceFetcher {
         },
       });
 
-      // Grey wallet response shape (adapt to their actual API when confirmed):
-      // { data: [ { currency, available, pending, locked } ] }
-      const wallets = data?.data || data?.wallets || [];
+      // Grey Business API balance shape:
+      // { status, message, data: { balances: [{ currency, available_balance, pending_balance }] } }
+      const wallets =
+        data?.data?.balances ||
+        data?.data ||
+        data?.balances ||
+        [];
       const results = [];
 
       for (const wallet of wallets) {
@@ -49,11 +58,11 @@ class GreyBalanceFetcher {
         results.push({
           provider:          PROVIDER,
           currency,
-          available_balance: parseFloat(wallet.available || wallet.balance || 0),
-          pending_balance:   parseFloat(wallet.pending   || 0),
+          available_balance: parseFloat(wallet.available_balance ?? wallet.available ?? wallet.balance ?? 0),
+          pending_balance:   parseFloat(wallet.pending_balance  ?? wallet.pending   ?? 0),
           reserved_balance:  parseFloat(wallet.reserved  || 0),
-          locked_balance:    parseFloat(wallet.locked    || 0),
-          ledger_balance:    parseFloat(wallet.ledger    || wallet.available || 0),
+          locked_balance:    parseFloat(wallet.locked     || 0),
+          ledger_balance:    parseFloat(wallet.available_balance ?? wallet.available ?? wallet.balance ?? 0),
           raw:               wallet,
         });
       }
