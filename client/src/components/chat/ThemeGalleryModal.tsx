@@ -14,6 +14,21 @@ export const ThemeGalleryModal: React.FC = () => {
 
   useEffect(() => {
     if (!isGalleryOpen) return;
+
+    window.history.pushState({ modal: 'themeGallery' }, '');
+
+    const handlePopState = () => {
+      setIsGalleryOpen(false);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [isGalleryOpen, setIsGalleryOpen]);
+
+  useEffect(() => {
+    if (!isGalleryOpen) return;
     let isMounted = true;
     setLoading(true);
 
@@ -61,36 +76,52 @@ export const ThemeGalleryModal: React.FC = () => {
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-5xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+    <div 
+      className="fixed inset-0 z-[99999] flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) setIsGalleryOpen(false);
+      }}
+    >
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-5xl max-h-[92vh] h-[92vh] sm:h-auto sm:max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
         
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/90 backdrop-blur-md">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
-              <Sparkles size={20} />
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-800 bg-slate-900/90 backdrop-blur-md gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+            <button
+              onClick={() => setIsGalleryOpen(false)}
+              className="sm:hidden p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all flex-shrink-0"
+              aria-label="Close Gallery"
+              title="Close"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400 flex-shrink-0">
+              <Sparkles size={18} />
             </div>
-            <div>
-              <h2 className="text-lg font-bold text-slate-100 leading-tight">Online Theme Gallery</h2>
-              <p className="text-xs text-slate-400">Browse, download & hot-swap theme packages instantly</p>
+
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm sm:text-lg font-bold text-slate-100 leading-tight truncate">Online Theme Gallery</h2>
+              <p className="text-[11px] sm:text-xs text-slate-400 truncate hidden xs:block">Browse, download & hot-swap theme packages instantly</p>
             </div>
           </div>
 
           <button
             onClick={() => setIsGalleryOpen(false)}
-            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-100 transition-all"
+            className="hidden sm:flex p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-100 transition-all flex-shrink-0"
+            title="Close"
           >
             <X size={18} />
           </button>
         </div>
 
         {/* Categories Bar */}
-        <div className="flex items-center gap-2 px-6 py-3 border-b border-slate-800 overflow-x-auto bg-slate-950/40">
+        <div className="flex items-center gap-2 px-3 sm:px-6 py-2.5 sm:py-3 border-b border-slate-800 overflow-x-auto bg-slate-950/40 flex-shrink-0">
           {categories.map(cat => (
             <button
               key={cat.id}
               onClick={() => setSelectedCategory(cat.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap flex-shrink-0 transition-all ${
                 selectedCategory === cat.id
                   ? 'bg-purple-600 text-white shadow-md'
                   : 'bg-slate-800/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200'

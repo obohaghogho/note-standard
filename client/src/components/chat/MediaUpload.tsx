@@ -126,7 +126,7 @@ export const MediaUpload: React.FC<MediaUploadProps> = ({ onUploadComplete, onCa
                             {file?.type.startsWith('image/') ? (
                                 <SecureImage src={previewUrl} alt="Preview" className="media-preview-img" />
                             ) : (
-                                <video src={previewUrl} controls className="media-preview-vid" />
+                                <video key={previewUrl || 'media-vid'} src={previewUrl} controls playsInline preload="auto" className="media-preview-vid" />
                             )}
                         </div>
                     ) : (

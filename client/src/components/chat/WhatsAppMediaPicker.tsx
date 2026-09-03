@@ -181,7 +181,7 @@ export const WhatsAppMediaPicker: React.FC<WhatsAppMediaPickerProps> = ({
                             {file?.type.startsWith('image/') ? (
                                 <img src={previewUrl} alt="Preview" className="wa-sheet-img" />
                             ) : file?.type.startsWith('video/') ? (
-                                <video src={previewUrl} controls className="wa-sheet-video" />
+                                <video key={previewUrl || 'wa-vid'} src={previewUrl} controls playsInline preload="auto" className="wa-sheet-video" />
                             ) : (
                                 <div className="flex flex-col items-center justify-center p-12 text-gray-400 w-full h-[40dvh]">
                                     <FileText size={64} className="mb-4 opacity-50" />

@@ -58,8 +58,18 @@ export default function StatusCreator() {
   // Media
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+  const [videoDuration, setVideoDuration] = useState<number>(0);
   const [mediaUploading, setMediaUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  // Cleanup object URLs to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (mediaPreview) {
+        URL.revokeObjectURL(mediaPreview);
+      }
+    };
+  }, [mediaPreview]);
 
   // Link
   const [linkUrl, setLinkUrl] = useState('');
@@ -174,7 +184,10 @@ export default function StatusCreator() {
     const file = e.target.files?.[0];
     if (!file) return;
     setMediaFile(file);
+    if (mediaPreview) URL.revokeObjectURL(mediaPreview);
     setMediaPreview(URL.createObjectURL(file));
+    setVideoDuration(0);
+    e.target.value = '';
   };
 
   const handleAudioSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -553,12 +566,33 @@ export default function StatusCreator() {
               ) : (
                 <div className="w-full aspect-[9/16] relative rounded-2xl overflow-hidden group bg-black flex items-center justify-center">
                   {mediaFile?.type.startsWith('video/') ? (
-                    <video src={mediaPreview} controls className="w-full h-full object-contain" />
+                    <div className="relative w-full h-full flex items-center justify-center bg-black">
+                      <video 
+                        key={mediaPreview || 'status-vid'}
+                        src={mediaPreview} 
+                        controls 
+                        playsInline
+                        preload="auto"
+                        onLoadedMetadata={(e) => {
+                          const v = e.currentTarget;
+                          if (v.duration && !isNaN(v.duration)) {
+                            setVideoDuration(Math.round(v.duration));
+                          }
+                        }}
+                        className="w-full h-full object-contain" 
+                      />
+                      {videoDuration > 0 && (
+                        <div className="absolute top-4 left-4 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md text-white text-xs font-semibold flex items-center gap-1.5 border border-white/20 z-10">
+                          <Video size={13} className="text-blue-400" />
+                          <span>{videoDuration}s</span>
+                        </div>
+                      )}
+                    </div>
                   ) : (
-                    <img src={mediaPreview} alt="Preview" className="w-full h-full object-contain" />
+                    <img src={mediaPreview || ''} alt="Preview" className="w-full h-full object-contain" />
                   )}
                   <button 
-                    onClick={() => { setMediaFile(null); setMediaPreview(null); }}
+                    onClick={() => { setMediaFile(null); if (mediaPreview) URL.revokeObjectURL(mediaPreview); setMediaPreview(null); setVideoDuration(0); }}
                     className="absolute top-4 right-4 p-2 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-md border border-white/20 hover:bg-red-500/80 z-20"
                   >
                     <X size={20} />

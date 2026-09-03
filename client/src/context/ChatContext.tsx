@@ -1657,6 +1657,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         // FIX 3: Carry delivery metadata when writing lastMessage from incoming socket event.
                         // Without this, lastMessage starts with status='sent' and no delivered_at,
                         // even if the DB already has delivered_at set (instant-online recipient).
+                        // IMPORTANT: Auto-marking read_at / status='read' based on isCurrentlyOpen must ONLY apply
+                        // to incoming messages from the OTHER user (!isOwnMessage).
                         const incomingLastMsg = shouldUpdateLastMessage ? {
                             id: msg.id,
                             content: msg.content,
@@ -1664,9 +1666,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                             created_at: msg.created_at,
                             type: msg.type,
                             event_id: msg.event_id,
-                            delivered_at: msg.delivered_at || (isCurrentlyOpen ? new Date().toISOString() : undefined),
-                            read_at: isCurrentlyOpen ? new Date().toISOString() : msg.read_at,
-                            status: (isCurrentlyOpen ? 'read' : (msg.status ?? 'sent')) as NonNullable<Conversation['lastMessage']>['status']
+                            delivered_at: msg.delivered_at || (!isOwnMessage && isCurrentlyOpen ? new Date().toISOString() : undefined),
+                            read_at: !isOwnMessage && isCurrentlyOpen ? new Date().toISOString() : msg.read_at,
+                            status: (!isOwnMessage && isCurrentlyOpen ? 'read' : (msg.status ?? 'sent')) as NonNullable<Conversation['lastMessage']>['status']
                         } : conv.lastMessage;
 
                         const nextUnread = isCurrentlyOpen ? 0 : (shouldIncrementUnread ? (((conv as any).unreadCount || (conv as any).unread_count || 0) + newlyAddedCount) : ((conv as any).unreadCount || (conv as any).unread_count || 0));
@@ -1675,6 +1677,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                             ...conv,
                             updated_at: shouldUpdateLastMessage ? msg.created_at : conv.updated_at,
                             lastMessage: incomingLastMsg,
+                            last_message: incomingLastMsg,
                             unreadCount: nextUnread,
                             unread_count: nextUnread
                         };

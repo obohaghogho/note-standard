@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   X, 
@@ -36,6 +36,22 @@ export const ChatThemeSettingsModal: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'themes' | 'wallpaper' | 'bubbles' | 'typography' | 'performance'>('themes');
 
+  // Handle hardware / browser back button on mobile web & PWA
+  useEffect(() => {
+    if (!isSettingsOpen) return;
+
+    window.history.pushState({ modal: 'chatThemeSettings' }, '');
+
+    const handlePopState = () => {
+      setIsSettingsOpen(false);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [isSettingsOpen, setIsSettingsOpen]);
+
   if (!isSettingsOpen) return null;
 
   const fontOptions: { id: FontChoice; label: string; preview: string }[] = [
@@ -56,41 +72,65 @@ export const ChatThemeSettingsModal: React.FC = () => {
   ];
 
   return createPortal(
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+    <div 
+      className="fixed inset-0 z-[99999] flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) setIsSettingsOpen(false);
+      }}
+    >
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[94vh] h-[94vh] sm:h-auto sm:max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
         
         {/* ─── Header ─── */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/90 backdrop-blur-md">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
-              <Palette size={20} />
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-800 bg-slate-900/90 backdrop-blur-md gap-2 flex-shrink-0">
+          
+          {/* Left: Close Icon (Mobile view) + Title */}
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+            <button
+              onClick={() => setIsSettingsOpen(false)}
+              className="sm:hidden p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all flex-shrink-0"
+              aria-label="Close Settings"
+              title="Close"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 flex-shrink-0">
+              <Palette size={18} />
             </div>
-            <div>
-              <h2 className="text-lg font-bold text-slate-100 leading-tight">Chat Appearance & Themes</h2>
-              <p className="text-xs text-slate-400">Customize wallpapers, bubbles, typography & animations</p>
+
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm sm:text-lg font-bold text-slate-100 leading-tight truncate">
+                Chat Appearance & Themes
+              </h2>
+              <p className="text-[11px] sm:text-xs text-slate-400 truncate hidden xs:block">
+                Customize wallpapers, bubbles, typography & animations
+              </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Right Actions */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
             <button
               onClick={() => setIsGalleryOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs font-semibold transition-all"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs font-semibold transition-all whitespace-nowrap"
             >
               <ShoppingBag size={14} />
-              <span>Theme Gallery</span>
+              <span className="hidden xs:inline">Theme Gallery</span>
+              <span className="xs:hidden">Gallery</span>
             </button>
 
             <button
               onClick={resetToDefault}
               title="Reset to default theme"
-              className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 text-xs transition-all"
+              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 text-xs transition-all flex-shrink-0"
             >
               <RotateCcw size={16} />
             </button>
 
             <button
               onClick={() => setIsSettingsOpen(false)}
-              className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-100 transition-all"
+              className="hidden sm:flex p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-100 transition-all flex-shrink-0"
+              title="Close"
             >
               <X size={18} />
             </button>
@@ -98,24 +138,24 @@ export const ChatThemeSettingsModal: React.FC = () => {
         </div>
 
         {/* ─── Main Grid Layout (Preview + Controls) ─── */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 flex-1 overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-12 flex-1 overflow-hidden min-h-0">
           
           {/* ── Left Column: Live Chat Preview ── */}
-          <div className="lg:col-span-5 border-b lg:border-b-0 lg:border-r border-slate-800 bg-slate-950/60 p-5 flex flex-col justify-between overflow-y-auto">
+          <div className="lg:col-span-5 border-b lg:border-b-0 lg:border-r border-slate-800 bg-slate-950/60 p-3 sm:p-5 flex flex-col justify-between overflow-y-auto max-h-[210px] sm:max-h-none flex-shrink-0 lg:flex-shrink">
             <div>
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-2 sm:mb-3">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                   <Eye size={13} className="text-blue-400" />
                   Live Preview
                 </span>
-                <span className="text-[11px] text-slate-500 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                <span className="text-[11px] text-slate-500 bg-slate-900 px-2 py-0.5 rounded border border-slate-800 truncate max-w-[120px]">
                   {activeTheme.name}
                 </span>
               </div>
 
               {/* Live Preview Container */}
               <div 
-                className="relative rounded-xl p-4 overflow-hidden border border-slate-800 shadow-inner flex flex-col gap-3 min-h-[300px]"
+                className="relative rounded-xl p-3 sm:p-4 overflow-hidden border border-slate-800 shadow-inner flex flex-col gap-2.5 min-h-[130px] sm:min-h-[300px]"
                 style={{
                   background: customizer.wallpaper.gradient || customizer.wallpaper.solidColor || activeTheme.colors.bgGradient || activeTheme.colors.bgSolid || '#0f172a',
                   fontFamily: customizer.typography.fontFamily === 'inter' ? 'Inter, sans-serif' : customizer.typography.fontFamily === 'serif' ? 'Playfair Display, serif' : 'Quicksand, sans-serif',
@@ -124,7 +164,7 @@ export const ChatThemeSettingsModal: React.FC = () => {
                 {/* Incoming Mock Bubble */}
                 <div className="flex justify-start">
                   <div 
-                    className="p-3 shadow-md transition-all max-w-[80%]"
+                    className="p-2.5 sm:p-3 shadow-md transition-all max-w-[85%] sm:max-w-[80%]"
                     style={{
                       backgroundColor: activeTheme.colors.receivedBubbleBg,
                       color: activeTheme.colors.receivedBubbleText,
@@ -146,7 +186,7 @@ export const ChatThemeSettingsModal: React.FC = () => {
                 {/* Outgoing Mock Bubble */}
                 <div className="flex justify-end">
                   <div 
-                    className="p-3 shadow-md transition-all max-w-[80%]"
+                    className="p-2.5 sm:p-3 shadow-md transition-all max-w-[85%] sm:max-w-[80%]"
                     style={{
                       background: activeTheme.colors.sentBubbleBg,
                       color: activeTheme.colors.sentBubbleText,
@@ -167,16 +207,16 @@ export const ChatThemeSettingsModal: React.FC = () => {
               </div>
             </div>
 
-            <p className="text-[11px] text-slate-500 mt-4 text-center">
+            <p className="text-[11px] text-slate-500 mt-2 sm:mt-4 text-center hidden sm:block">
               Changes apply live instantly across all chats.
             </p>
           </div>
 
           {/* ── Right Column: Tabbed Controls ── */}
-          <div className="lg:col-span-7 flex flex-col flex-1 overflow-hidden bg-slate-900/40">
+          <div className="lg:col-span-7 flex flex-col flex-1 overflow-hidden bg-slate-900/40 min-h-0">
             
-            {/* Tab Bar */}
-            <div className="flex items-center gap-1 px-4 pt-3 border-b border-slate-800 overflow-x-auto">
+            {/* Tab Bar - Separated Pills */}
+            <div className="flex items-center gap-2 p-2 sm:px-4 sm:py-3 border-b border-slate-800 overflow-x-auto bg-slate-950/50 flex-shrink-0">
               {[
                 { id: 'themes', label: 'Themes', icon: Palette },
                 { id: 'wallpaper', label: 'Wallpaper', icon: Sun },
@@ -190,13 +230,13 @@ export const ChatThemeSettingsModal: React.FC = () => {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id as any)}
-                    className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 ${
+                    className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-xl transition-all flex-shrink-0 whitespace-nowrap border ${
                       isActive
-                        ? 'text-blue-400 border-blue-500 bg-blue-500/10'
-                        : 'text-slate-400 border-transparent hover:text-slate-200 hover:bg-slate-800/50'
+                        ? 'text-blue-300 border-blue-500/80 bg-blue-600/20 shadow-sm shadow-blue-500/20'
+                        : 'text-slate-400 border-slate-800/80 bg-slate-900/60 hover:text-slate-200 hover:bg-slate-800/60 hover:border-slate-700'
                     }`}
                   >
-                    <Icon size={14} />
+                    <Icon size={14} className={isActive ? 'text-blue-400' : 'text-slate-400'} />
                     <span>{tab.label}</span>
                   </button>
                 );
@@ -204,7 +244,7 @@ export const ChatThemeSettingsModal: React.FC = () => {
             </div>
 
             {/* Tab Contents */}
-            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-6">
 
               {/* ── Tab 1: Preset Themes Grid ── */}
               {activeTab === 'themes' && (
@@ -267,7 +307,7 @@ export const ChatThemeSettingsModal: React.FC = () => {
                       max="150"
                       value={customizer.wallpaper.brightness}
                       onChange={(e) => updateWallpaper({ brightness: Number(e.target.value) })}
-                      className="w-full accent-blue-500"
+                      className="w-full accent-blue-500 cursor-pointer"
                     />
                   </div>
 
@@ -283,7 +323,7 @@ export const ChatThemeSettingsModal: React.FC = () => {
                       max="150"
                       value={customizer.wallpaper.contrast}
                       onChange={(e) => updateWallpaper({ contrast: Number(e.target.value) })}
-                      className="w-full accent-blue-500"
+                      className="w-full accent-blue-500 cursor-pointer"
                     />
                   </div>
 
@@ -299,7 +339,7 @@ export const ChatThemeSettingsModal: React.FC = () => {
                       max="200"
                       value={customizer.wallpaper.saturation}
                       onChange={(e) => updateWallpaper({ saturation: Number(e.target.value) })}
-                      className="w-full accent-blue-500"
+                      className="w-full accent-blue-500 cursor-pointer"
                     />
                   </div>
 
@@ -315,7 +355,7 @@ export const ChatThemeSettingsModal: React.FC = () => {
                       max="20"
                       value={customizer.wallpaper.blur}
                       onChange={(e) => updateWallpaper({ blur: Number(e.target.value) })}
-                      className="w-full accent-blue-500"
+                      className="w-full accent-blue-500 cursor-pointer"
                     />
                   </div>
                 </div>
@@ -338,7 +378,7 @@ export const ChatThemeSettingsModal: React.FC = () => {
                       max="28"
                       value={customizer.bubble.borderRadius}
                       onChange={(e) => updateBubble({ borderRadius: Number(e.target.value) })}
-                      className="w-full accent-blue-500"
+                      className="w-full accent-blue-500 cursor-pointer"
                     />
                   </div>
 
@@ -355,7 +395,7 @@ export const ChatThemeSettingsModal: React.FC = () => {
                       step="0.05"
                       value={customizer.bubble.opacity}
                       onChange={(e) => updateBubble({ opacity: Number(e.target.value) })}
-                      className="w-full accent-blue-500"
+                      className="w-full accent-blue-500 cursor-pointer"
                     />
                   </div>
 
@@ -413,7 +453,7 @@ export const ChatThemeSettingsModal: React.FC = () => {
                       max="20"
                       value={customizer.typography.fontSize}
                       onChange={(e) => updateTypography({ fontSize: Number(e.target.value) })}
-                      className="w-full accent-blue-500"
+                      className="w-full accent-blue-500 cursor-pointer"
                     />
                   </div>
 
@@ -429,7 +469,7 @@ export const ChatThemeSettingsModal: React.FC = () => {
                       max="16"
                       value={customizer.typography.bubbleSpacing}
                       onChange={(e) => updateTypography({ bubbleSpacing: Number(e.target.value) })}
-                      className="w-full accent-blue-500"
+                      className="w-full accent-blue-500 cursor-pointer"
                     />
                   </div>
                 </div>
@@ -472,8 +512,27 @@ export const ChatThemeSettingsModal: React.FC = () => {
           </div>
         </div>
 
+        {/* ─── Sticky Mobile Footer Action Bar ─── */}
+        <div className="sm:hidden p-3 border-t border-slate-800 bg-slate-900/95 backdrop-blur-md flex items-center justify-between flex-shrink-0">
+          <button
+            onClick={resetToDefault}
+            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-all"
+          >
+            <RotateCcw size={14} />
+            <span>Reset</span>
+          </button>
+          <button
+            onClick={() => setIsSettingsOpen(false)}
+            className="px-6 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-xs font-bold shadow-lg shadow-blue-600/30 flex items-center gap-1.5 transition-all"
+          >
+            <Check size={14} />
+            <span>Done</span>
+          </button>
+        </div>
+
       </div>
     </div>,
     document.body
   );
 };
+
