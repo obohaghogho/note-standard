@@ -6,17 +6,11 @@ import { AuthService } from './AuthService';
  * Deep-navigates to the Chat screen inside the nested navigator tree:
  * AppNavigator → MainStack (MainTabs) → Chat tab → ChatStack → Chat screen
  *
- * The conversation object must be fetched from the API before navigating
- * so that ChatScreen has the full member list, recipientName, etc.
+ * Navigates immediately to prevent landing on Home page, then enriches
+ * the conversation object in the background.
  */
 async function deepNavigateToChat(conversationId: string) {
   try {
-    // Fetch the conversation object so ChatScreen has member/profile data
-    const apiClient = require('../api/apiClient').default;
-    const res = await apiClient.get(`/chat/conversations`);
-    const conversations: any[] = res.data || [];
-    const conversation = conversations.find((c: any) => c.id === conversationId) || null;
-
     if (!navigationRef.isReady()) {
       console.warn('[ACCOUNT_FORENSIC] Navigation container not ready — aborting navigate');
       return;
@@ -24,27 +18,36 @@ async function deepNavigateToChat(conversationId: string) {
 
     console.log(`[ACCOUNT_FORENSIC] Deep navigating to Chat screen, conversationId=${conversationId}`);
 
-    // Navigate through the nested stack:
-    // MainTabs → Chat tab → Chat screen (inside ChatStack)
+    // Immediate non-blocking navigation so the user lands on the Chat screen instantly
     (navigationRef as any).navigate('MainTabs', {
       screen: 'Chat',
       params: {
         screen: 'Chat',
-        params: { conversationId, conversation },
+        params: { conversationId, conversation: null },
       },
     });
+
+    // Best-effort background pre-fetch to enrich full conversation profile/member metadata
+    try {
+      const apiClient = require('../api/apiClient').default;
+      const res = await apiClient.get(`/chat/conversations`);
+      const conversations: any[] = res.data || [];
+      const conversation = conversations.find((c: any) => c.id === conversationId) || null;
+
+      if (conversation && navigationRef.isReady()) {
+        (navigationRef as any).navigate('MainTabs', {
+          screen: 'Chat',
+          params: {
+            screen: 'Chat',
+            params: { conversationId, conversation },
+          },
+        });
+      }
+    } catch (apiErr) {
+      console.warn('[ACCOUNT_FORENSIC] Non-blocking conversation pre-fetch notice:', apiErr);
+    }
   } catch (err) {
     console.error('[ACCOUNT_FORENSIC] deepNavigateToChat error:', err);
-    // Best-effort fallback — navigate without conversation object
-    if (navigationRef.isReady()) {
-      (navigationRef as any).navigate('MainTabs', {
-        screen: 'Chat',
-        params: {
-          screen: 'Chat',
-          params: { conversationId, conversation: null },
-        },
-      });
-    }
   }
 }
 
@@ -55,11 +58,36 @@ class NotificationRouterService {
 
   setAppReady() {
     this.isAppReady = true;
-    console.log('[ACCOUNT_FORENSIC] App is ready. Processing any queued notification tap.');
-    if (this.pendingTapData) {
-      const data = this.pendingTapData;
-      this.pendingTapData = null;
-      this.handleNotificationTap(data);
+    console.log('[ACCOUNT_FORENSIC] App is ready. Checking for cold-boot or queued notification tap.');
+
+    try {
+      const Notifications = require('expo-notifications');
+      Notifications.getLastNotificationResponseAsync()
+        .then((response: any) => {
+          if (response && response.notification?.request?.content?.data) {
+            const data = response.notification.request.content.data;
+            console.log('[ACCOUNT_FORENSIC] ❄️ Cold boot notification tap detected:', JSON.stringify(data));
+            this.handleNotificationTap(data);
+          } else if (this.pendingTapData) {
+            const data = this.pendingTapData;
+            this.pendingTapData = null;
+            this.handleNotificationTap(data);
+          }
+        })
+        .catch((err: any) => {
+          console.warn('[ACCOUNT_FORENSIC] Error checking getLastNotificationResponseAsync:', err);
+          if (this.pendingTapData) {
+            const data = this.pendingTapData;
+            this.pendingTapData = null;
+            this.handleNotificationTap(data);
+          }
+        });
+    } catch (err: any) {
+      if (this.pendingTapData) {
+        const data = this.pendingTapData;
+        this.pendingTapData = null;
+        this.handleNotificationTap(data);
+      }
     }
   }
 
@@ -73,18 +101,37 @@ class NotificationRouterService {
     console.log('[ACCOUNT_FORENSIC] Handling Notification Tap:', JSON.stringify(data));
 
     try {
-      // Support both top-level and nested payload structures (Firebase wraps in data.data)
+      // Support top-level, nested, and Firebase data payload structures
       const payload = data?.data ?? data;
-      const targetAccountId = payload?.targetAccountId || payload?.recipientId;
-      const conversationId = payload?.conversationId;
-      const type = payload?.type;
+      const targetAccountId =
+        payload?.targetAccountId ||
+        payload?.target_account_id ||
+        payload?.targetUserId ||
+        payload?.target_user_id ||
+        payload?.recipientId ||
+        payload?.recipient_id ||
+        payload?.receiver_id ||
+        payload?.receiverId;
+
+      const conversationId =
+        payload?.conversationId ||
+        payload?.conversation_id ||
+        payload?.chat_id ||
+        payload?.id;
+
+      const type = payload?.type || payload?.notification_type;
 
       console.log(`[ACCOUNT_FORENSIC] Parsed payload — type=${type}, conversationId=${conversationId}, targetAccountId=${targetAccountId}`);
 
-      const isChatNotif = type === 'message' || type === 'chat_message' || type === 'chat_request' || type === 'chat_accepted';
+      // Any payload with a conversationId is a chat-related notification
+      const isChatNotif =
+        !!conversationId ||
+        ['message', 'chat_message', 'chat_request', 'chat_accepted', 'chat', 'text', 'new_message', 'mention'].includes(
+          String(type || '').toLowerCase()
+        );
 
       if (!targetAccountId) {
-        console.log('[ACCOUNT_FORENSIC] No targetAccountId in payload — navigating without account switch.');
+        console.log('[ACCOUNT_FORENSIC] No targetAccountId in payload — navigating directly to conversation.');
         if (isChatNotif && conversationId) {
           await deepNavigateToChat(conversationId);
         }
@@ -95,7 +142,7 @@ class NotificationRouterService {
         !!id1 && !!id2 && id1.trim().toLowerCase() === id2.trim().toLowerCase();
 
       const currentUser = await AuthService.getUser();
-      console.log(`[ACCOUNT_FORENSIC] Current account: ${currentUser?.id} | Target account: ${targetAccountId}`);
+      console.log(`[ACCOUNT_FORENSIC] Current active account: ${currentUser?.id} | Target account: ${targetAccountId}`);
 
       if (!isSameAccount(currentUser?.id, targetAccountId)) {
         const storedAccounts = await AuthService.getStoredAccounts();
@@ -104,39 +151,40 @@ class NotificationRouterService {
 
         if (!storedAccount) {
           console.error(`[ACCOUNT_FORENSIC] ❌ Account ${targetAccountId} NOT found in local storage. Available accounts:`, storedAccounts.map(a => a.id));
-          EventEmitter.emit('notification:account_missing', { targetAccountId });
+          // If target account is missing from device storage, still attempt chat navigation on active session if conversationId exists
+          if (isChatNotif && conversationId) {
+            await deepNavigateToChat(conversationId);
+          }
           return;
         }
 
-        console.log(`[ACCOUNT_FORENSIC] Switching account: ${currentUser?.id} → ${targetAccountId}`);
+        console.log(`[ACCOUNT_FORENSIC] Switching active account: ${currentUser?.id} → ${targetAccountId}`);
 
-        // Set up the ready promise BEFORE emitting the event
+        // Set up the ready promise BEFORE emitting the switch event
         const readyPromise = this.waitForReady(targetAccountId);
         EventEmitter.emit('notification:switch_account', { userId: targetAccountId });
 
         try {
           const success = await readyPromise;
           if (!success) {
-            console.warn(`[ACCOUNT_FORENSIC] ❌ Account switch failed. Aborting navigation to prevent Session Expired redirect.`);
-            return;
+            console.warn(`[ACCOUNT_FORENSIC] ❌ Account switch failed or timed out. Attempting best-effort navigation...`);
+          } else {
+            console.log(`[ACCOUNT_FORENSIC] ✅ Account ${targetAccountId} is fully ready.`);
           }
-          console.log(`[ACCOUNT_FORENSIC] ✅ Account ${targetAccountId} is fully ready.`);
         } catch (switchErr) {
-          console.error('[ACCOUNT_FORENSIC] ❌ Account switch timed out or failed:', switchErr);
-          // Don't abort on unknown timeout, try navigation anyway with fresh token
+          console.error('[ACCOUNT_FORENSIC] ❌ Account switch error:', switchErr);
         }
 
-        // Give React one extra tick to commit the setUser() state update
-        // before we fire navigation (prevents stale context in ChatScreen).
+        // Give React one tick to commit context updates before navigation
         await new Promise(resolve => setTimeout(resolve, 150));
       } else {
-        console.log('[ACCOUNT_FORENSIC] Already on correct account — skipping switch.');
+        console.log('[ACCOUNT_FORENSIC] Already on correct target account — skipping switch.');
       }
 
       if (isChatNotif && conversationId) {
         await deepNavigateToChat(conversationId);
       } else {
-        console.log('[ACCOUNT_FORENSIC] Notification type not chat_message/chat_request, no navigation needed:', type);
+        console.log('[ACCOUNT_FORENSIC] Notification type/payload handled without deep chat route:', type);
       }
 
     } catch (err) {
@@ -145,13 +193,12 @@ class NotificationRouterService {
   }
 
   waitForReady(userId: string): Promise<boolean> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       if (!this.resolveReadyQueue[userId]) {
         this.resolveReadyQueue[userId] = [];
       }
       this.resolveReadyQueue[userId].push(resolve);
 
-      // Safety timeout — prevents hanging if AuthContext never signals back
       const timeout = setTimeout(() => {
         const queue = this.resolveReadyQueue[userId];
         if (queue) {
@@ -161,10 +208,9 @@ class NotificationRouterService {
           }
         }
         console.warn(`[ACCOUNT_FORENSIC] ⏰ Timeout waiting for account ready signal: ${userId}`);
-        resolve(false); // Resolve false instead of rejecting to avoid unhandled promise rejections
-      }, 8000);
+        resolve(false);
+      }, 5000);
 
-      // Override resolve to clear timeout
       const originalResolve = resolve;
       this.resolveReadyQueue[userId][this.resolveReadyQueue[userId].length - 1] = (success: boolean | PromiseLike<boolean>) => {
         clearTimeout(timeout);
