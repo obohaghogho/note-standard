@@ -729,8 +729,9 @@ const ChatWindow: React.FC = () => {
             let isMounted = true;
             api.get(`/chat/conversations/${activeConversationId}`)
                 .then(res => {
-                    if (isMounted && res.data?.conversation) {
-                        useChatStore.getState().upsertConversation(res.data.conversation);
+                    const conv = res.data?.conversation || res.data;
+                    if (isMounted && conv && conv.id) {
+                        useChatStore.getState().upsertConversation(conv);
                     }
                 })
                 .catch(err => {

@@ -254,7 +254,7 @@ const ConversationList: React.FC = () => {
                 const peerId = otherMember?.user_id || otherMember?.profile?.id;
 
                 if (peerId) {
-                    if (seenDirectPeerIds.has(peerId)) {
+                    if (seenDirectPeerIds.has(peerId) && conv.id !== activeConversationId) {
                         continue;
                     }
                     seenDirectPeerIds.add(peerId);

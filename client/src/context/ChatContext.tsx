@@ -856,7 +856,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                             const otherMember = conv.members?.find((m: { user_id: string; profile?: { id?: string } }) => (m.user_id || m.profile?.id) !== user?.id);
                             const peerId = otherMember?.user_id || (otherMember as any)?.profile?.id;
                             if (peerId) {
-                                if (seenDirectPeers.has(peerId)) continue;
+                                if (seenDirectPeers.has(peerId) && conv.id !== activeConversationIdRef.current) continue;
                                 seenDirectPeers.add(peerId);
                             }
                         }

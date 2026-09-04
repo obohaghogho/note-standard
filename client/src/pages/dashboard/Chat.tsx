@@ -99,19 +99,6 @@ function ChatContent() {
         }
     }, [searchParams, activeConversationId, setActiveConversationId, startConversation, setSearchParams, user?.id, authReady, isConversationDeleted]);
 
-    // Effect 2: Sync activeConversationId → URL (state drives URL after deletion/eviction)
-    // When activeConversationId is cleared (e.g. by evictConversationLocally setting it to null),
-    // but the URL still has ?id=..., clean it via React Router so Effect 1 doesn't resurrect it.
-    useEffect(() => {
-        if (!activeConversationId) {
-            const urlId = searchParams.get('id') || searchParams.get('conversationId');
-            if (urlId) {
-                console.log(`[Chat] activeConversationId is null but URL has ?id=${urlId} — cleaning URL`);
-                setSearchParams({}, { replace: true });
-            }
-        }
-    }, [activeConversationId, searchParams, setSearchParams]);
-
     const isNavigatingToChat = !!(activeConversationId || searchParams.get('id') || searchParams.get('conversationId') || searchParams.get('username') || searchParams.get('user') || searchParams.get('userId'));
 
     return (
