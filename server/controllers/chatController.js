@@ -498,7 +498,11 @@ exports.createConversation = async (req, res) => {
 
     // 0. Ensure sender profile exists in public.profiles (self-healing)
     const { ensureProfile } = require("../services/userService");
-    await ensureProfile(userId, req.user);
+    try {
+      await ensureProfile(userId, req.user);
+    } catch (profileErr) {
+      console.warn(`[Chat] ensureProfile warning for sender ${userId}:`, profileErr.message);
+    }
 
     // 1. Resolve Usernames/IDs/Emails to Profile Records (with self-healing for new users)
     const cleanIdentifiers = recipientUsernames.map(u => String(u).trim().replace(/^@/, ''));
@@ -517,23 +521,25 @@ exports.createConversation = async (req, res) => {
 
         // Self-healing: If identifier is a valid UUID but profile missing, trigger ensureProfile
         if (!p) {
-          p = await ensureProfile(identifier);
+          try {
+            p = await ensureProfile(identifier);
+          } catch (e) { /* non-fatal */ }
         }
       }
 
       if (!p) {
-        const { data } = await supabase.from("profiles").select("id, username").ilike("username", identifier).maybeSingle();
-        p = data;
+        const { data } = await supabase.from("profiles").select("id, username").ilike("username", identifier).limit(1);
+        p = data?.[0] || null;
       }
 
       if (!p) {
-        const { data } = await supabase.from("profiles").select("id, username").ilike("email", identifier).maybeSingle();
-        p = data;
+        const { data } = await supabase.from("profiles").select("id, username").ilike("email", identifier).limit(1);
+        p = data?.[0] || null;
       }
 
       if (!p) {
-        const { data } = await supabase.from("profiles").select("id, username").ilike("full_name", identifier).maybeSingle();
-        p = data;
+        const { data } = await supabase.from("profiles").select("id, username").ilike("full_name", identifier).limit(1);
+        p = data?.[0] || null;
       }
 
       // Fallback self-healing: If user registered in auth.users but profile missing in public.profiles
@@ -564,7 +570,7 @@ exports.createConversation = async (req, res) => {
       return res.status(404).json({ error: "No valid participants found" });
     }
 
-    const participantIds = finalProfiles.map((p) => p.id).filter(id => id !== userId);
+    const participantIds = [...new Set(finalProfiles.map((p) => p.id).filter(id => id !== userId))];
 
     if (type === "direct" && participantIds.length === 0) {
       return res.status(400).json({ error: "You cannot start a direct chat with yourself." });
@@ -602,7 +608,7 @@ exports.createConversation = async (req, res) => {
             .select("id, type, updated_at, chat_type, name")
             .in("id", finalConvIds)
             .eq("type", "direct")
-            .neq("chat_type", "support")
+            .or("chat_type.is.null,chat_type.neq.support")
             .order("updated_at", { ascending: false });
 
           if (existingConvs && existingConvs.length > 0) {
@@ -612,73 +618,75 @@ exports.createConversation = async (req, res) => {
               .from("conversations")
               .select("*")
               .eq("id", existingId)
-              .single();
+              .maybeSingle();
 
-            // Fetch members
-            const { data: members } = await supabase
-              .from("conversation_members")
-              .select(`
-                user_id, role, status, is_deleted, deleted_at, cleared_at,
-                profile:profiles (id, username, full_name, avatar_url, is_verified)
-              `)
-              .eq("conversation_id", existingId);
+            if (conv) {
+              // Fetch members
+              const { data: members } = await supabase
+                .from("conversation_members")
+                .select(`
+                  user_id, role, status, is_deleted, deleted_at, cleared_at,
+                  profile:profiles (id, username, full_name, avatar_url, is_verified)
+                `)
+                .eq("conversation_id", existingId);
 
-            const memberList = members || [];
+              const memberList = members || [];
 
-            // Re-open the conversation for ALL members IF it was soft-deleted.
-            await supabase
-              .from("conversation_members")
-              .update({ 
-                is_deleted: false, 
-                deleted_at: null 
-              })
-              .eq("conversation_id", existingId)
-              .in("user_id", [userId, recipientId]);
-
-            const myMembership = memberList.find(m => m.user_id === userId);
-            if (myMembership) {
-              myMembership.is_deleted = false;
-              myMembership.deleted_at = null;
-            }
-
-            // Auto-accept if the initiator's current status is pending
-            if (myMembership && myMembership.status === 'pending') {
+              // Re-open the conversation for ALL members IF it was soft-deleted.
               await supabase
                 .from("conversation_members")
-                .update({ status: 'accepted' })
+                .update({ 
+                  is_deleted: false, 
+                  deleted_at: null 
+                })
                 .eq("conversation_id", existingId)
-                .eq("user_id", userId);
-              
-              myMembership.status = 'accepted';
+                .in("user_id", [userId, recipientId]);
 
-              // Notify the other user B
-              try {
-                const otherMember = memberList.find(m => m.user_id !== userId);
-                if (otherMember) {
-                  const { data: accepter } = await supabase.from("profiles").select("username").eq("id", userId).single();
-                  await createNotification({
-                    receiverId: otherMember.user_id,
-                    senderId: userId,
-                    type: "chat_accepted",
-                    title: "Chat Request Accepted",
-                    message: `${accepter?.username || "Someone"} accepted your chat request!`,
-                    link: `/dashboard/chat?id=${existingId}`,
-                  });
-                  await realtime.emitToUser(otherMember.user_id, "chat:conversation_updated", {
-                    conversationId: existingId,
-                    userId,
-                    status: "accepted"
-                  });
-                }
-              } catch (e) {
-                console.warn("[Chat] Accept notification/socket failed in createConversation fallback:", e.message);
+              const myMembership = memberList.find(m => m.user_id === userId);
+              if (myMembership) {
+                myMembership.is_deleted = false;
+                myMembership.deleted_at = null;
               }
-            }
 
-            return res.json({
-              conversation: { ...conv, members: memberList },
-              isExisting: true
-            });
+              // Auto-accept if the initiator's current status is pending
+              if (myMembership && myMembership.status === 'pending') {
+                await supabase
+                  .from("conversation_members")
+                  .update({ status: 'accepted' })
+                  .eq("conversation_id", existingId)
+                  .eq("user_id", userId);
+                
+                myMembership.status = 'accepted';
+
+                // Notify the other user B
+                try {
+                  const otherMember = memberList.find(m => m.user_id !== userId);
+                  if (otherMember) {
+                    const { data: accepter } = await supabase.from("profiles").select("username").eq("id", userId).maybeSingle();
+                    await createNotification({
+                      receiverId: otherMember.user_id,
+                      senderId: userId,
+                      type: "chat_accepted",
+                      title: "Chat Request Accepted",
+                      message: `${accepter?.username || "Someone"} accepted your chat request!`,
+                      link: `/dashboard/chat?id=${existingId}`,
+                    });
+                    await realtime.emitToUser(otherMember.user_id, "chat:conversation_updated", {
+                      conversationId: existingId,
+                      userId,
+                      status: "accepted"
+                    });
+                  }
+                } catch (e) {
+                  console.warn("[Chat] Accept notification/socket failed in createConversation fallback:", e.message);
+                }
+              }
+
+              return res.json({
+                conversation: { ...conv, members: memberList },
+                isExisting: true
+              });
+            }
           }
         }
       }
@@ -687,7 +695,7 @@ exports.createConversation = async (req, res) => {
     // 3. Create New Conversation
     const { data: convData, error: convError } = await supabase
       .from("conversations")
-      .insert([{ type: type || 'direct', name }])
+      .insert([{ type: type || 'direct', name: name || null, chat_type: 'user' }])
       .select()
       .single();
 
@@ -699,9 +707,14 @@ exports.createConversation = async (req, res) => {
     const conversationId = convData.id;
 
     // 4. Add Members (Ensure profiles exist for all participant IDs to prevent FK constraint failure)
-    await ensureProfile(userId, req.user);
+    try {
+      await ensureProfile(userId, req.user);
+    } catch (e) { /* non-fatal */ }
+
     for (const pId of participantIds) {
-      await ensureProfile(pId);
+      try {
+        await ensureProfile(pId);
+      } catch (e) { /* non-fatal */ }
     }
 
     const membersPayload = [
@@ -724,16 +737,21 @@ exports.createConversation = async (req, res) => {
       .insert(membersPayload);
 
     if (memberError) {
-      console.warn("[Chat] Initial members insert warning, retrying with core columns:", memberError.message);
-      const simplePayload = membersPayload.map(({ conversation_id, user_id, role }) => ({
-        conversation_id,
-        user_id,
-        role: role || 'member'
-      }));
-      const retryRes = await supabase
-        .from("conversation_members")
-        .insert(simplePayload);
-      memberError = retryRes.error;
+      console.warn("[Chat] Initial members insert warning, retrying individually:", memberError.message);
+      let anyInserted = false;
+      for (const mPayload of membersPayload) {
+        const { error: singleErr } = await supabase
+          .from("conversation_members")
+          .insert([mPayload]);
+        if (!singleErr) {
+          anyInserted = true;
+        } else {
+          console.warn(`[Chat] Individual member insert error for user ${mPayload.user_id}:`, singleErr.message);
+        }
+      }
+      if (anyInserted) {
+        memberError = null;
+      }
     }
 
     if (memberError) {
@@ -758,7 +776,7 @@ exports.createConversation = async (req, res) => {
 
     // Notify participants via Gateway and Database
     try {
-      const { data: creator } = await supabase.from("profiles").select("username").eq("id", userId).single();
+      const { data: creator } = await supabase.from("profiles").select("username").eq("id", userId).maybeSingle();
       
       await realtime.emitToUser(userId, "chat:new_conversation", result.conversation);
       
@@ -791,7 +809,7 @@ exports.createConversation = async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error("[Chat] createConversation Fatal Error:", err.message);
-    res.status(500).json({ error: "Failed to create conversation", details: err.message });
+    res.status(500).json({ error: err.message || "Failed to create conversation", details: err.message });
   }
 };
 

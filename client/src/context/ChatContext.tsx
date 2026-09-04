@@ -2911,7 +2911,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             return id;
         } catch (err: any) {
             console.error('[ChatContext] startConversation error:', err);
-            const msg = err?.response?.data?.error || err?.response?.data?.details || err?.message || 'Failed to start conversation';
+            const msg = err?.response?.data?.details || err?.response?.data?.error || err?.message || 'Failed to start conversation';
             toast.error(msg);
             return null;
         }
