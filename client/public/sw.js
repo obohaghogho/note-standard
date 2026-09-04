@@ -5,14 +5,14 @@
  * This file is purposefully minimal to resolve caching 
  * and production 'white screen' issues.
  */
-const SW_VERSION = 'v11.1-push-fix-2026-09-04';
+const SW_VERSION = 'v11.2-desktop-actions-fix-2026-09-04';
 
 self.addEventListener('install', (event) => {
     console.log(`[FORENSIC][SW] INSTALL event at ${new Date().toISOString()} | version: ${SW_VERSION}`);
     // Force immediate update to bypass aggressive caching
     self.skipWaiting();
 });
-// Cache Bust Timestamp: 2026-09-04T22:45:00 — v11.1: push notification delivery fix + version tracking
+// Cache Bust Timestamp: 2026-09-04T23:35:00 — v11.2: desktop notification type text TypeError fix
 
 self.addEventListener('activate', (event) => {
     console.log(`[FORENSIC][SW] ACTIVATE event at ${new Date().toISOString()}`);
@@ -115,16 +115,9 @@ self.addEventListener('push', (event) => {
     }
 
     const isChatPush = options.data.type === 'chat_message' || options.data.type === 'message' || options.data.type === 'chat_request' || options.data.type === 'chat_accepted';
-    if (isChatPush && notifConversationId) {
-        options.actions = [
-            {
-                action: 'reply',
-                type: 'text',
-                title: '💬 Reply',
-                placeholder: 'Type a reply...'
-            }
-        ];
-    }
+
+    // Omit actions array on desktop browsers to prevent Chromium notification suppression 
+    // and TypeError: Notification action type 'text' is not supported.
 
     if (isChatPush && options.data.messageId) {
         const targetApiUrl = options.data.apiUrl || 'https://note-standard-api.onrender.com';
