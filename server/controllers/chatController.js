@@ -1529,9 +1529,9 @@ exports.sendMessage = async (req, res) => {
       // We default to "en" to allow instant delivery (<50ms).
       detectedLang = "en";
     }
-    let createdMessageId = null;
-    let isDuplicate = false;
-    const eventId = req.body.eventId || crypto.randomUUID();
+    const isUuid = (val) => typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
+    const rawEventId = req.body.eventId;
+    const eventId = isUuid(rawEventId) ? rawEventId : crypto.randomUUID();
 
     const t2_DbInsertStart = Date.now();
 
@@ -1543,7 +1543,7 @@ exports.sendMessage = async (req, res) => {
 
       if (isTransactional) {
         console.log(`[Chat Controller] Using RPC Transaction for sendMessage (event_id: ${eventId})`);
-        const { data: rpcData, error: rpcError } = await supabase.rpc('rpc_send_message', {
+        let { data: rpcData, error: rpcError } = await supabase.rpc('rpc_send_message', {
             p_conversation_id: conversationId,
             p_sender_id: userId,
             p_content: content || '',
@@ -1554,7 +1554,35 @@ exports.sendMessage = async (req, res) => {
             p_reply_to_id: replyToId || null
         });
 
-        if (rpcError) throw rpcError;
+        if (rpcError) {
+          if (rpcError.code === '23505' && rpcError.message?.includes('messages_conv_seq_key')) {
+            console.warn(`[Chat Controller] Sequence counter desync for conv ${conversationId} — auto-healing seq_counter...`);
+            const { data: maxMsg } = await supabase.from('messages')
+              .select('sequence_number')
+              .eq('conversation_id', conversationId)
+              .not('sequence_number', 'is', null)
+              .order('sequence_number', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            const maxSeq = maxMsg?.sequence_number || 0;
+            await supabase.from('conversations').update({ seq_counter: maxSeq }).eq('id', conversationId);
+
+            const { data: retryData, error: retryErr } = await supabase.rpc('rpc_send_message', {
+                p_conversation_id: conversationId,
+                p_sender_id: userId,
+                p_content: content || '',
+                p_type: type || "text",
+                p_event_id: eventId,
+                p_original_language: detectedLang,
+                p_attachment_id: attachmentId || null,
+                p_reply_to_id: replyToId || null
+            });
+            if (retryErr) throw retryErr;
+            rpcData = retryData;
+          } else {
+            throw rpcError;
+          }
+        }
         
         insertedMessage = rpcData.message;
         isDuplicate = rpcData.is_duplicate;
@@ -2084,6 +2112,7 @@ exports.sendMessage = async (req, res) => {
         }
 
         if (isOffline) {
+          const botSenderId = "00000000-0000-0000-0000-000000000000";
           const { data: autoMsg, error: autoErr } = await supabase
             .from("messages")
             .insert([{
