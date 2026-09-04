@@ -2582,9 +2582,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         setMessages(prev => {
             const current = prev[conversationId] || [];
             const merged = stableMerge(current, [optimisticMessage]);
-            const nextState = { ...prev, [conversationId]: merged as Message[] };
-            messagesRef.current = nextState;
-            return nextState;
+            return { ...prev, [conversationId]: merged as Message[] };
         });
 
         // Instant Chat List Optimistic Sync
@@ -2619,7 +2617,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         // 1. Push Intent to Offline Queue
         await offlineQueue.pushIntent({
             event_id: clientEventId,
-            client_message_id: tempId,
             conversation_id: conversationId,
             payload: { content, type, attachmentId, replyTo, correlationId: cid, clientSendTs: Date.now() },
             created_at: Date.now()

@@ -791,11 +791,9 @@ exports.createConversation = async (req, res) => {
           message: notifMsg,
           link: `/dashboard/chat?id=${conversationId}`,
           conversationId: conversationId,
-          skipPush: true,
         });
         await dispatchFastPush({
           receiverId: pId,
-          senderId: userId,
           type: "chat_request",
           title: notifTitle,
           message: notifMsg,
@@ -879,11 +877,9 @@ exports.acceptConversation = async (req, res) => {
             message: notifMsg,
             link: `/dashboard/chat?id=${conversationId}`,
             conversationId: conversationId,
-            skipPush: true,
           });
           await dispatchFastPush({
             receiverId: m.user_id,
-            senderId: userId,
             type: "chat_accepted",
             title: notifTitle,
             message: notifMsg,
@@ -1529,9 +1525,9 @@ exports.sendMessage = async (req, res) => {
       // We default to "en" to allow instant delivery (<50ms).
       detectedLang = "en";
     }
-    const isUuid = (val) => typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
-    const rawEventId = req.body.eventId;
-    const eventId = isUuid(rawEventId) ? rawEventId : crypto.randomUUID();
+    let createdMessageId = null;
+    let isDuplicate = false;
+    const eventId = req.body.eventId || crypto.randomUUID();
 
     const t2_DbInsertStart = Date.now();
 
@@ -1543,7 +1539,7 @@ exports.sendMessage = async (req, res) => {
 
       if (isTransactional) {
         console.log(`[Chat Controller] Using RPC Transaction for sendMessage (event_id: ${eventId})`);
-        let { data: rpcData, error: rpcError } = await supabase.rpc('rpc_send_message', {
+        const { data: rpcData, error: rpcError } = await supabase.rpc('rpc_send_message', {
             p_conversation_id: conversationId,
             p_sender_id: userId,
             p_content: content || '',
@@ -1554,35 +1550,7 @@ exports.sendMessage = async (req, res) => {
             p_reply_to_id: replyToId || null
         });
 
-        if (rpcError) {
-          if (rpcError.code === '23505' && rpcError.message?.includes('messages_conv_seq_key')) {
-            console.warn(`[Chat Controller] Sequence counter desync for conv ${conversationId} — auto-healing seq_counter...`);
-            const { data: maxMsg } = await supabase.from('messages')
-              .select('sequence_number')
-              .eq('conversation_id', conversationId)
-              .not('sequence_number', 'is', null)
-              .order('sequence_number', { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            const maxSeq = maxMsg?.sequence_number || 0;
-            await supabase.from('conversations').update({ seq_counter: maxSeq }).eq('id', conversationId);
-
-            const { data: retryData, error: retryErr } = await supabase.rpc('rpc_send_message', {
-                p_conversation_id: conversationId,
-                p_sender_id: userId,
-                p_content: content || '',
-                p_type: type || "text",
-                p_event_id: eventId,
-                p_original_language: detectedLang,
-                p_attachment_id: attachmentId || null,
-                p_reply_to_id: replyToId || null
-            });
-            if (retryErr) throw retryErr;
-            rpcData = retryData;
-          } else {
-            throw rpcError;
-          }
-        }
+        if (rpcError) throw rpcError;
         
         insertedMessage = rpcData.message;
         isDuplicate = rpcData.is_duplicate;
@@ -1915,17 +1883,6 @@ exports.sendMessage = async (req, res) => {
           });
       }
 
-      // 2. Authoritative Realtime Broadcast (Socket.IO + Gateway Push via pg_notify)
-      try {
-        await realtime.emitToConversation(conversationId, "chat:message", safePayload, {
-          excludeUserId: userId,
-          correlationId: req.correlationId
-        });
-        console.log(`[Chat/Realtime] Emitted chat:message via pg_notify for messageId: ${msgToSend.id} in conversation: ${conversationId}`);
-      } catch (realtimeErr) {
-        console.error(`[Chat/Realtime] Failed to emit chat:message:`, realtimeErr);
-      }
-
       // 4. Server-side ACK Timeout Recheck (Self-Healing Delivery)
       // After 30s, check if the message was confirmed delivered.
       // If not (delivered_at still null), re-emit to all recipients.
@@ -2004,11 +1961,10 @@ exports.sendMessage = async (req, res) => {
             link: `/dashboard/chat?id=${conversationId}`,
             messageId: createdMessageId,
             conversationId: conversationId,
-            skipPush: true,
+            skipPush: false,
           });
           await dispatchFastPush({
             receiverId: member.user_id,
-            senderId: userId,
             type: "chat_message",
             title: senderName,
             message: previewContent,
@@ -2053,7 +2009,6 @@ exports.sendMessage = async (req, res) => {
             if (mUser.id !== userId) {
               await dispatchFastPush({
                 receiverId: mUser.id,
-                senderId: userId,
                 type: "mention",
                 title: senderName,
                 message: `Mentioned you: ${previewContent}`,
@@ -2096,7 +2051,6 @@ exports.sendMessage = async (req, res) => {
 
     // Offline Hours Auto-Reply Logic
     try {
-      const botSenderId = "00000000-0000-0000-0000-000000000000";
       const { data: settings } = await supabase
         .from("auto_reply_settings")
         .select("*")
@@ -2658,7 +2612,9 @@ exports.markConversationDelivered = async (req, res) => {
       .update({ delivered_at: now })
       .eq("conversation_id", conversationId)
       .neq("sender_id", userId)
-      .is("delivered_at", null);
+      .is("delivered_at", null)
+      .order("created_at", { ascending: false })
+      .limit(100);
 
     if (error) {
       if (error.code === "42703") {
@@ -3037,7 +2993,54 @@ exports.markConversationDelivered = async (req, res, next) => {
   }
 };
 
+/**
+ * PUT /api/chat/conversations/:conversationId/read
+ * Recipient acknowledges reading all messages in conversation.
+ */
+exports.markConversationRead = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { conversationId } = req.params;
+    const now = new Date().toISOString();
 
+    const { data: updated, error } = await supabase
+      .from("messages")
+      .update({ read_at: now })
+      .eq("conversation_id", conversationId)
+      .neq("sender_id", userId)
+      .is("read_at", null)
+      .select("id, sender_id");
+
+    if (error) throw error;
+
+    await supabase
+      .from("conversation_unread_state")
+      .upsert({
+        conversation_id: conversationId,
+        user_id: userId,
+        unread_count: 0,
+        last_reconciled_at: now
+      }, { onConflict: 'conversation_id,user_id' });
+
+    if (updated && updated.length > 0) {
+      const realtime = require("../services/realtimeService");
+      const senderIds = [...new Set(updated.map((m) => m.sender_id))];
+      for (const senderId of senderIds) {
+        await realtime.emitToUser(senderId, "chat:conversation_read", {
+          conversationId,
+          recipientId: userId,
+          read_at: now,
+          count: updated.length,
+        });
+      }
+    }
+
+    console.log(`[Chat/Telemetry] CONVERSATION_READ | convId: ${conversationId} | reader: ${userId} | count: ${updated?.length || 0}`);
+    res.json({ success: true, count: updated?.length || 0 });
+  } catch (err) {
+    next(err);
+  }
+};
 
 /**
  * PATCH /api/chat/messages/ack:batch

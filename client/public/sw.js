@@ -5,14 +5,13 @@
  * This file is purposefully minimal to resolve caching 
  * and production 'white screen' issues.
  */
-const SW_VERSION = 'v11.2-desktop-actions-fix-2026-09-04';
 
 self.addEventListener('install', (event) => {
-    console.log(`[FORENSIC][SW] INSTALL event at ${new Date().toISOString()} | version: ${SW_VERSION}`);
+    console.log(`[FORENSIC][SW] INSTALL event at ${new Date().toISOString()}`);
     // Force immediate update to bypass aggressive caching
     self.skipWaiting();
 });
-// Cache Bust Timestamp: 2026-09-04T23:35:00 — v11.2: desktop notification type text TypeError fix
+// Cache Bust Timestamp: 2026-07-30T18:35:00 — v10: enterprise PWA mobile viewport & layout recovery
 
 self.addEventListener('activate', (event) => {
     console.log(`[FORENSIC][SW] ACTIVATE event at ${new Date().toISOString()}`);
@@ -36,7 +35,7 @@ self.addEventListener('message', (event) => {
 // Handle Push Notifications
 self.addEventListener('push', (event) => {
     const swWakeupTs = Date.now();
-    console.log(`[FORENSIC][SW] PUSH RECEIVED at ${new Date().toISOString()} | version: ${SW_VERSION}`);
+    console.log(`[FORENSIC][SW] PUSH RECEIVED at ${new Date().toISOString()}`);
     
     let data = {};
     if (event.data) {
@@ -115,9 +114,16 @@ self.addEventListener('push', (event) => {
     }
 
     const isChatPush = options.data.type === 'chat_message' || options.data.type === 'message' || options.data.type === 'chat_request' || options.data.type === 'chat_accepted';
-
-    // Omit actions array on desktop browsers to prevent Chromium notification suppression 
-    // and TypeError: Notification action type 'text' is not supported.
+    if (isChatPush && notifConversationId) {
+        options.actions = [
+            {
+                action: 'reply',
+                type: 'text',
+                title: '💬 Reply',
+                placeholder: 'Type a reply...'
+            }
+        ];
+    }
 
     if (isChatPush && options.data.messageId) {
         const targetApiUrl = options.data.apiUrl || 'https://note-standard-api.onrender.com';
@@ -244,23 +250,26 @@ self.addEventListener('push', (event) => {
                             }
                         });
 
-                        // Precise conversation view check: ONLY suppress OS desktop notification popup
-                        // if the target account matches the active account in IndexedDB AND that target user
-                        // is currently visible, focused, and viewing THIS exact conversation ID.
-                        const targetAccountId = options.data?.targetAccountId || options.data?.recipientId || options.data?.targetUserId;
-                        let suppressOSNotification = false;
+                        // Precise conversation view check: only suppress OS desktop notification popup
+                        // if the user is actively focused inside THIS exact conversation ID.
+                        const isActivelyViewingThisChat = !!(notifConversationId && windowClients.find(client => {
+                            try {
+                                const clientUrl = new URL(client.url);
+                                // STRICT CHECK: client must be visible AND focused.
+                                return client.visibilityState === 'visible' && client.focused && clientUrl.searchParams.get('id') === notifConversationId;
+                            } catch (_) {
+                                return false;
+                            }
+                        }));
 
-                        if (targetAccountId && activeAccountId && String(targetAccountId).trim().toLowerCase() === String(activeAccountId).trim().toLowerCase()) {
-                            const isActivelyViewingThisChat = !!(notifConversationId && windowClients.find(client => {
-                                try {
-                                    const clientUrl = new URL(client.url);
-                                    return client.visibilityState === 'visible' && client.focused && clientUrl.searchParams.get('id') === notifConversationId;
-                                } catch (_) {
-                                    return false;
-                                }
-                            }));
-                            if (isActivelyViewingThisChat) {
-                                suppressOSNotification = true;
+                        let suppressOSNotification = isActivelyViewingThisChat;
+
+                        // Account-switch guard: if the visible window is logged into a DIFFERENT account
+                        // than the notification target, we must still show the OS notification.
+                        if (suppressOSNotification && options.data.targetAccountId && activeAccountId) {
+                            if (String(options.data.targetAccountId) !== String(activeAccountId)) {
+                                console.log(`[SW] Account mismatch — visible window is account ${activeAccountId}, push is for ${options.data.targetAccountId}. Will show OS notification.`);
+                                suppressOSNotification = false;
                             }
                         }
 

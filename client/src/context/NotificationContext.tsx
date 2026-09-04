@@ -556,7 +556,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                         // Silently mark as read on the server (fire-and-forget)
                         markAsRead(notification.id);
                         // Still add to list (silently marked read) so history is intact
-                        setNotifications(prev => prev.some(n => n.id === notification.id) ? prev : [{ ...notification, is_read: true }, ...prev]);
+                        setNotifications(prev => [{ ...notification, is_read: true }, ...prev]);
                         return;
                     }
 
@@ -565,7 +565,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                 }
             }
 
-            setNotifications(prev => prev.some(n => n.id === notification.id) ? prev : [notification, ...prev]);
+            setNotifications(prev => [notification, ...prev]);
 
             const resolvedLink = resolveNotificationLink({
                 type: notification.type,
