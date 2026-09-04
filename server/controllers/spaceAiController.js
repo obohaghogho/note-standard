@@ -73,7 +73,7 @@ ${contextString}`;
                 { role: "system", content: systemPrompt },
                 { role: "user", content: query }
             ],
-            model: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
+            model: process.env.GROQ_MODEL || "groq/compound",
             temperature: 0.3,
             max_tokens: 500
         });

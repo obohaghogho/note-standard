@@ -165,7 +165,7 @@ Do not return any conversational text outside of the JSON object.`;
         { role: "system", content: systemPrompt },
         { role: "user", content: `Ledger Context:\n${textContext}` }
       ],
-      model: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
+      model: process.env.GROQ_MODEL || "groq/compound",
       response_format: { type: "json_object" }
     });
 

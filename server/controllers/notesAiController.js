@@ -74,7 +74,7 @@ const handleAiAssist = async (req, res) => {
     ];
 
     // 3. Request Groq API completion
-    const modelName = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
+    const modelName = process.env.GROQ_MODEL || "groq/compound";
     const completion = await groq.chat.completions.create({
       messages,
       model: modelName,
@@ -126,7 +126,7 @@ const handleAiAssist = async (req, res) => {
         `INSERT INTO ai_generations 
           (user_id, note_id, prompt, response, action_type, model, provider, tokens_used, latency_ms, estimated_cost, status) 
          VALUES ($1, $2, $3, $4, $5, $6, 'groq', 0, $7, 0, 'failed')`,
-        [userId, noteId || null, "AI Assist request", err.message, actionType || "assist", process.env.GROQ_MODEL || "openai/gpt-oss-20b", latency]
+        [userId, noteId || null, "AI Assist request", err.message, actionType || "assist", process.env.GROQ_MODEL || "groq/compound", latency]
       );
     } catch (dbErr) {
       logger.error("[NotesAiController] Failed to log failure:", dbErr.message);
@@ -172,7 +172,7 @@ const handleTrendsBriefing = async (req, res) => {
     ];
 
     // 4. Call Groq
-    const modelName = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
+    const modelName = process.env.GROQ_MODEL || "groq/compound";
     const completion = await groq.chat.completions.create({
       messages,
       model: modelName,

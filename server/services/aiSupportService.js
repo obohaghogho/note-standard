@@ -260,8 +260,9 @@ class AiSupportService {
 
       const modelsToTry = [
         process.env.GROQ_MODEL,
-        "llama-3.3-70b-versatile",
-        "llama-3.1-8b-instant"
+        "groq/compound",
+        "groq/compound-mini",
+        "qwen/qwen3.8-27b"
       ].filter(Boolean);
 
       let completion = null;
