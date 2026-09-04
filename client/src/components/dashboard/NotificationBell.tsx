@@ -8,16 +8,6 @@ import { useNotifications } from '../../hooks/useNotifications';
 import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../utils/cn';
 import { safeFormatDistanceToNow } from '../../utils/dateUtils';
-import { useState, useRef, useEffect } from 'react';
-import { 
-    Bell, Check, ExternalLink, MessageSquare, StickyNote, 
-    UserPlus, Globe, Edit3, CreditCard, ArrowRightLeft, ArrowUpRight,
-    ShieldAlert, LifeBuoy, Megaphone 
-} from 'lucide-react';
-import { useNotifications } from '../../hooks/useNotifications';
-import { useAuth } from '../../context/AuthContext';
-import { cn } from '../../utils/cn';
-import { safeFormatDistanceToNow } from '../../utils/dateUtils';
 import { Link, useNavigate } from 'react-router-dom';
 import { resolveNotificationLink } from '../../utils/notificationUtils';
 
