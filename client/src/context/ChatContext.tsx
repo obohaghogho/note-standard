@@ -1273,6 +1273,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     useEffect(() => {
         const handleSWMessage = (event: MessageEvent) => {
+            if (event.data?.type === 'QUICK_REPLY_SUBMITTED') {
+                const { conversationId, content } = event.data;
+                if (conversationId && content) {
+                    console.log(`[SW→Chat] QUICK_REPLY_SUBMITTED | conv:${conversationId} → sending message`);
+                    sendMessageToConversation({ conversationId, content, type: 'text' }).catch(() => {});
+                }
+            }
             if (event.data?.type === 'CHAT_MESSAGE_RECEIVED' || event.data?.type === 'BACKGROUND_PREFETCH') {
                 const { conversationId, message } = event.data;
                 if (conversationId) {

@@ -564,12 +564,24 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                 userRole: user?.role
             });
 
+            let notifConvId: string | undefined = notification.conversationId || (notification as any).conversation_id;
+            if (!notifConvId && notification.link) {
+                try {
+                    const linkUrl = new URL(notification.link, window.location.origin);
+                    notifConvId = linkUrl.searchParams.get('id') || linkUrl.searchParams.get('conversationId') || undefined;
+                } catch {
+                    const match = notification.link.match(/[?&](?:id|conversationId)=([^&]+)/);
+                    if (match) notifConvId = match[1];
+                }
+            }
+
             const toastData: NotificationToastData = {
                 id: notification.id,
                 title: notification.title,
                 message: notification.message,
                 type: notification.type,
                 link: resolvedLink,
+                conversationId: notifConvId,
                 sender: notification.sender,
                 count: 1
             };
@@ -752,11 +764,28 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                         key={currentToast.id}
                         notification={currentToast} 
                         onDismiss={dismissCurrent}
+                        onQuickReply={async (convId: string, text: string) => {
+                            if (!session?.access_token) return;
+                            const res = await fetch(`${API_URL}/api/chat/conversations/${convId}/messages`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${session.access_token}`
+                                },
+                                body: JSON.stringify({
+                                    content: text,
+                                    type: 'text'
+                                })
+                            });
+                            if (!res.ok) {
+                                throw new Error('Failed to send quick reply');
+                            }
+                        }}
                         onClick={() => {
                             const targetLink = resolveNotificationLink({
                                 type: currentToast.type,
                                 link: currentToast.link,
-                                conversationId: (currentToast as any).conversationId || (currentToast as any).conversation_id,
+                                conversationId: currentToast.conversationId || (currentToast as any).conversationId || (currentToast as any).conversation_id,
                                 userRole: user?.role
                             });
                             if (targetLink) {

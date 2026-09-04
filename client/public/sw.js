@@ -114,6 +114,17 @@ self.addEventListener('push', (event) => {
     }
 
     const isChatPush = options.data.type === 'chat_message' || options.data.type === 'message' || options.data.type === 'chat_request' || options.data.type === 'chat_accepted';
+    if (isChatPush && notifConversationId) {
+        options.actions = [
+            {
+                action: 'reply',
+                type: 'text',
+                title: '💬 Reply',
+                placeholder: 'Type a reply...'
+            }
+        ];
+    }
+
     if (isChatPush && options.data.messageId) {
         const targetApiUrl = options.data.apiUrl || 'https://note-standard-api.onrender.com';
 
@@ -311,11 +322,77 @@ self.addEventListener('push', (event) => {
 // Handle Notification Clicks
 self.addEventListener('notificationclick', (event) => {
     console.log(`[FORENSIC][SW] NOTIFICATIONCLICK event at ${new Date().toISOString()} | Action: ${event.action}`);
-    event.notification.close();
+    
+    const data = event.notification.data;
+    const replyText = event.reply || (event.action === 'reply' ? (event.replyText || null) : null);
+
+    // Handle Quick Reply Action from OS System Notification Tray
+    if (event.action === 'reply' || replyText) {
+        event.notification.close();
+
+        if (replyText && String(replyText).trim().length > 0) {
+            const trimmedReply = String(replyText).trim();
+            const convId = data?.conversationId;
+
+            event.waitUntil(
+                (async () => {
+                    // 1. Post message to any active open tab windows
+                    const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+                    for (const client of windowClients) {
+                        if ('postMessage' in client && convId) {
+                            client.postMessage({
+                                type: 'QUICK_REPLY_SUBMITTED',
+                                conversationId: convId,
+                                content: trimmedReply
+                            });
+                        }
+                    }
+
+                    // 2. Direct HTTP POST from Service Worker to API server
+                    try {
+                        const token = await new Promise((resolve) => {
+                            try {
+                                const request = indexedDB.open('NoteStandardDB', 1);
+                                request.onsuccess = (e) => {
+                                    const db = e.target.result;
+                                    if (!db.objectStoreNames.contains('sw_state')) return resolve(null);
+                                    const tx = db.transaction('sw_state', 'readonly');
+                                    const getReq = tx.objectStore('sw_state').get('authToken');
+                                    getReq.onsuccess = () => resolve(getReq.result || null);
+                                    getReq.onerror = () => resolve(null);
+                                };
+                                request.onerror = () => resolve(null);
+                            } catch (_) {
+                                resolve(null);
+                            }
+                        });
+
+                        if (token && convId) {
+                            const targetApiUrl = data?.apiUrl || 'https://note-standard-api.onrender.com';
+                            await fetch(`${targetApiUrl}/api/chat/conversations/${convId}/messages`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${token}`
+                                },
+                                body: JSON.stringify({
+                                    content: trimmedReply,
+                                    type: 'text'
+                                })
+                            });
+                            console.log(`[SW] Quick reply sent directly for conversation: ${convId}`);
+                        }
+                    } catch (err) {
+                        console.error('[SW] Quick reply direct API send error:', err);
+                    }
+                })()
+            );
+        }
+        return;
+    }
 
     if (event.action === 'close') return;
 
-    const data = event.notification.data;
     let urlToOpen = new URL(data?.url || '/dashboard', self.location.origin).href;
 
     const urlObj = new URL(urlToOpen);
