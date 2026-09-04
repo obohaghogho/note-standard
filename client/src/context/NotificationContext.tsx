@@ -795,6 +795,14 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                             if (!res.ok) {
                                 throw new Error('Failed to send quick reply');
                             }
+                            const data = await res.json();
+
+                            // Broadcast QUICK_REPLY_SUBMITTED so ChatContext (and any active window/tab) updates state immediately
+                            window.postMessage({
+                                type: 'QUICK_REPLY_SUBMITTED',
+                                conversationId: convId,
+                                message: data
+                            }, '*');
                         }}
                         onClick={() => {
                             const targetLink = resolveNotificationLink({

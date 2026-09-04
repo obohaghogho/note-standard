@@ -1277,6 +1277,53 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const { conversationId, message } = event.data;
                 if (conversationId) {
                     console.log(`[SW→Chat] ${event.data.type} | conv:${conversationId} → refreshing messages`);
+                    
+                    if (message && typeof message === 'object' && (message.id || message.content)) {
+                        const currentUserId = sessionRef.current?.user?.id;
+                        const isOwn = message.sender_id ? message.sender_id === currentUserId : true;
+                        const msgObj: Message = {
+                            id: message.id || `quick-${Date.now()}`,
+                            event_id: message.event_id,
+                            conversation_id: conversationId,
+                            sender_id: message.sender_id || currentUserId || '',
+                            content: message.content || '',
+                            created_at: message.created_at || new Date().toISOString(),
+                            type: message.type || 'text',
+                            isOwn: isOwn,
+                            status: 'delivered',
+                            sender: message.sender
+                        };
+
+                        setMessages(prev => {
+                            const current = prev[conversationId] || [];
+                            const { merged } = mergeMessages(current, [msgObj]);
+                            return { ...prev, [conversationId]: merged as Message[] };
+                        });
+                        useChatStore.getState().upsertMessages(conversationId, [msgObj], false);
+
+                        setConversations(cPrev => cPrev.map(conv => {
+                            if (conv.id !== conversationId) return conv;
+                            return {
+                                ...conv,
+                                updated_at: msgObj.created_at,
+                                lastMessage: {
+                                    id: msgObj.id,
+                                    content: msgObj.content,
+                                    sender_id: msgObj.sender_id,
+                                    created_at: msgObj.created_at,
+                                    type: msgObj.type
+                                } as any,
+                                last_message: {
+                                    id: msgObj.id,
+                                    content: msgObj.content,
+                                    sender_id: msgObj.sender_id,
+                                    created_at: msgObj.created_at,
+                                    type: msgObj.type
+                                } as any
+                            };
+                        }));
+                    }
+
                     loadMessagesRef.current(conversationId, true).catch(() => {});
                     
                     if (event.data.type === 'CHAT_MESSAGE_RECEIVED' || event.data?.type === 'QUICK_REPLY_SUBMITTED') {

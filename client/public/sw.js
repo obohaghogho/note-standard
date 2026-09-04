@@ -336,19 +336,7 @@ self.addEventListener('notificationclick', (event) => {
 
             event.waitUntil(
                 (async () => {
-                    // 1. Post message to any active open tab windows
-                    const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
-                    for (const client of windowClients) {
-                        if ('postMessage' in client && convId) {
-                            client.postMessage({
-                                type: 'CHAT_MESSAGE_RECEIVED',
-                                conversationId: convId,
-                                content: trimmedReply
-                            });
-                        }
-                    }
-
-                    // 2. Direct HTTP POST from Service Worker to API server
+                    let sentMessage = null;
                     try {
                         const token = await new Promise((resolve) => {
                             try {
@@ -387,7 +375,7 @@ self.addEventListener('notificationclick', (event) => {
 
                         if (token && convId) {
                             const targetApiUrl = data?.apiUrl || 'https://note-standard-api.onrender.com';
-                            await fetch(`${targetApiUrl}/api/chat/conversations/${convId}/messages`, {
+                            const response = await fetch(`${targetApiUrl}/api/chat/conversations/${convId}/messages`, {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
@@ -398,10 +386,26 @@ self.addEventListener('notificationclick', (event) => {
                                     type: 'text'
                                 })
                             });
-                            console.log(`[SW] Quick reply sent directly for conversation: ${convId}`);
+                            if (response.ok) {
+                                sentMessage = await response.json();
+                                console.log(`[SW] Quick reply sent directly for conversation: ${convId}`);
+                            }
                         }
                     } catch (err) {
                         console.error('[SW] Quick reply direct API send error:', err);
+                    }
+
+                    // Post QUICK_REPLY_SUBMITTED with sent message to all active window clients
+                    const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+                    for (const client of windowClients) {
+                        if ('postMessage' in client && convId) {
+                            client.postMessage({
+                                type: 'QUICK_REPLY_SUBMITTED',
+                                conversationId: convId,
+                                message: sentMessage,
+                                content: trimmedReply
+                            });
+                        }
                     }
                 })()
             );
