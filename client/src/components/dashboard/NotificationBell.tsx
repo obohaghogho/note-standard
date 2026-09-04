@@ -131,7 +131,7 @@ export const NotificationBell = () => {
                                 const targetLink = resolveNotificationLink({
                                     type: notif.type,
                                     link: notif.link,
-                                    conversationId: (notif as any).conversationId,
+                                    conversationId: (notif as any).conversationId || (notif as any).conversation_id,
                                     userRole: user?.role
                                 });
 

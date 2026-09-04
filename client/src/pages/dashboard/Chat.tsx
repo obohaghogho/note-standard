@@ -40,7 +40,7 @@ function ChatContent() {
 
     // Effect 1: Sync URL → activeConversationId (URL drives state on navigation/deep-link)
     useEffect(() => {
-        const id = searchParams.get('id');
+        const id = searchParams.get('id') || searchParams.get('conversationId');
         const username = searchParams.get('username') || searchParams.get('user') || searchParams.get('userId');
         const targetAccountId = searchParams.get('targetAccountId');
 
@@ -104,7 +104,7 @@ function ChatContent() {
     // but the URL still has ?id=..., clean it via React Router so Effect 1 doesn't resurrect it.
     useEffect(() => {
         if (!activeConversationId) {
-            const urlId = searchParams.get('id');
+            const urlId = searchParams.get('id') || searchParams.get('conversationId');
             if (urlId) {
                 console.log(`[Chat] activeConversationId is null but URL has ?id=${urlId} — cleaning URL`);
                 setSearchParams({}, { replace: true });
@@ -112,7 +112,7 @@ function ChatContent() {
         }
     }, [activeConversationId, searchParams, setSearchParams]);
 
-    const isNavigatingToChat = !!(activeConversationId || searchParams.get('id') || searchParams.get('username') || searchParams.get('user') || searchParams.get('userId'));
+    const isNavigatingToChat = !!(activeConversationId || searchParams.get('id') || searchParams.get('conversationId') || searchParams.get('username') || searchParams.get('user') || searchParams.get('userId'));
 
     return (
         <div className="flex h-full bg-gray-950 shadow-none rounded-none md:border md:border-gray-800 md:rounded-2xl overflow-hidden md:shadow-2xl relative">

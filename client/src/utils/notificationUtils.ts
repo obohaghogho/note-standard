@@ -2,6 +2,7 @@ export interface NotificationLinkOptions {
     type?: string;
     link?: string;
     conversationId?: string;
+    conversation_id?: string;
     userRole?: string;
 }
 
@@ -22,9 +23,9 @@ export const resolveNotificationLink = (notif: NotificationLinkOptions): string 
         link.includes('support');
 
     if (isSupport) {
-        let convId = notif.conversationId;
+        let convId = notif.conversationId || notif.conversation_id || (notif as any).conversationId || (notif as any).conversation_id;
         if (!convId && link) {
-            const match = link.match(/[?&]id=([^&]+)/);
+            const match = link.match(/[?&](?:id|conversationId)=([^&]+)/);
             if (match) convId = match[1];
         }
 
@@ -44,12 +45,14 @@ export const resolveNotificationLink = (notif: NotificationLinkOptions): string 
         type === 'chat_accepted' ||
         type === 'message' ||
         link.includes('/chat') ||
-        !!notif.conversationId;
+        !!notif.conversationId ||
+        !!notif.conversation_id ||
+        !!(notif as any).conversation_id;
 
     if (isChat) {
-        let convId = notif.conversationId;
+        let convId = notif.conversationId || notif.conversation_id || (notif as any).conversationId || (notif as any).conversation_id;
         if (!convId && link) {
-            const match = link.match(/[?&]id=([^&]+)/) || link.match(/\/chat\/([^&/?]+)/);
+            const match = link.match(/[?&](?:id|conversationId)=([^&]+)/) || link.match(/\/chat\/([^&/?]+)/);
             if (match) convId = match[1];
         }
 

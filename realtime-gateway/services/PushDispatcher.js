@@ -141,6 +141,7 @@ class PushDispatcher {
           body: String(payload.body),
           messageId: String(payload.messageId),
           conversationId: String(payload.conversationId),
+          url: String(payload.url || (payload.conversationId ? `/dashboard/chat?id=${payload.conversationId}` : '/dashboard/chat')),
           deliveryWebhookUrl: String(payload.deliveryWebhookUrl),
           recipientId: String(payload.userId),
           targetAccountId: String(payload.userId),
@@ -245,6 +246,7 @@ class PushDispatcher {
           type: 'chat_message',
           messageId: String(payload.messageId),
           conversationId: String(payload.conversationId),
+          url: String(payload.url || (payload.conversationId ? `/dashboard/chat?id=${payload.conversationId}` : '/dashboard/chat')),
           deliveryWebhookUrl: String(payload.deliveryWebhookUrl)
         },
         apns: {

@@ -37,6 +37,21 @@ if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
   console.log(`[PushService] Web Push (VAPID) initialized. Fingerprint: ${fingerprint}`);
 }
 
+// Helper to ensure push notifications direct to the exact conversation room
+function resolvePushUrl(payload) {
+  let url = payload?.url || payload?.link;
+  const convId = payload?.conversationId || payload?.conversation_id;
+  const isChatType = payload?.type === 'chat_message' || payload?.type === 'chat_request' || payload?.type === 'chat_accepted' || payload?.type === 'message';
+  
+  if (convId && (!url || url === '/dashboard/chat' || url === '/dashboard' || url === '/dashboard/notifications')) {
+    return `/dashboard/chat?id=${convId}`;
+  }
+  if (!url && isChatType && convId) {
+    return `/dashboard/chat?id=${convId}`;
+  }
+  return url || (convId ? `/dashboard/chat?id=${convId}` : '/dashboard/notifications');
+}
+
 // Initialize Firebase Admin (Android FCM)
 let firebaseApp = null;
 if (process.env.FIREBASE_SERVICE_ACCOUNT) {
@@ -632,7 +647,7 @@ async function dispatchV2Push(params, pushTargets, isCall = false) {
           body: String(body || 'You have a new message'),
           conversationId: String(payload?.conversationId || ''),
           messageId: String(payload?.messageId || ''),
-          url: String(payload?.url || '/dashboard/notifications'),
+          url: String(resolvePushUrl(payload)),
           recipientId: String(payload?.recipientId || ''),
           targetUserId: String(payload?.targetUserId || payload?.recipientId || ''),
           targetAccountId: String(payload?.targetAccountId || payload?.recipientId || ''),
@@ -696,7 +711,7 @@ async function dispatchV2Push(params, pushTargets, isCall = false) {
           type: payload?.type || 'chat_message',
           conversationId: payload?.conversationId,
           messageId: payload?.messageId,
-          url: payload?.url,
+          url: resolvePushUrl(payload),
         };
         nativePromises.push(sendApnsWithFallback(notification, t.push_endpoint, 'V2 APNs Push', t.platform, t.type, userId, t.device_id));
       }
@@ -709,7 +724,7 @@ async function dispatchV2Push(params, pushTargets, isCall = false) {
         body,
         icon: '/icon-192.png',
         data: {
-          url: payload?.url || '/dashboard/notifications',
+          url: resolvePushUrl(payload),
           type: payload?.type || 'chat_message',
           messageId: payload?.messageId || null,
           conversationId: payload?.conversationId || null,
@@ -840,7 +855,7 @@ async function sendGenericPush(params) {
               body: String(body || 'You have a new message'),
               conversationId: String(payload.conversationId || ''),
               messageId: String(payload.messageId || ''),
-              url: String(payload.url || '/dashboard/notifications'),
+              url: String(resolvePushUrl(payload)),
               recipientId: String(payload.recipientId || ''),
               targetUserId: String(payload.targetUserId || payload.recipientId || ''),
               targetAccountId: String(payload.targetAccountId || payload.recipientId || ''),
@@ -899,7 +914,7 @@ async function sendGenericPush(params) {
             type: payload.type || 'notification',
             conversationId: payload.conversationId,
             messageId: payload.messageId,
-            url: payload.url || '/dashboard/notifications',
+            url: resolvePushUrl(payload),
             recipientId: payload.recipientId || null,
             targetUserId: payload.targetUserId || payload.recipientId || null,
             targetAccountId: payload.targetAccountId || payload.recipientId || null,
@@ -930,7 +945,7 @@ async function sendGenericPush(params) {
           body,
           icon: '/icon-192.png',
           data: {
-            url: payload.url || '/dashboard/notifications',
+            url: resolvePushUrl(payload),
             type: payload.type || 'chat_message',
             messageId: payload.messageId || null,
             conversationId: payload.conversationId || null,

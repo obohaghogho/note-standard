@@ -523,21 +523,21 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                 
                 if (isChatPage) {
                     // Extract the conversation ID from the notification link (e.g. /dashboard/chat?id=<uuid>)
-                    let notifConversationId: string | null = null;
-                    if (notification.link) {
+                    let notifConversationId: string | null = notification.conversationId || (notification as any).conversation_id || null;
+                    if (!notifConversationId && notification.link) {
                         try {
                             const linkUrl = new URL(notification.link, window.location.origin);
-                            notifConversationId = linkUrl.searchParams.get('id');
+                            notifConversationId = linkUrl.searchParams.get('id') || linkUrl.searchParams.get('conversationId');
                         } catch {
                             // If parsing fails, fall back to string extraction
-                            const match = notification.link.match(/[?&]id=([^&]+)/);
-                            notifConversationId = match ? match[1] : null;
+                            const match = notification.link.match(/[?&](id|conversationId)=([^&]+)/);
+                            notifConversationId = match ? match[2] : null;
                         }
                     }
 
                     // Extract the currently active conversation ID from the browser URL
                     const currentParams = new URLSearchParams(location.search);
-                    const activeConversationId = currentParams.get('id');
+                    const activeConversationId = currentParams.get('id') || currentParams.get('conversationId');
 
                     // If user is already looking at this exact conversation → fully suppress the toast
                     // AND mark it as read immediately so no badge accumulates

@@ -126,6 +126,7 @@ async function sendFcm(fbApp, supabase, target, { userId, title, body, messageId
       body: String(body || 'You have a new message'),
       messageId: String(messageId || ''),
       conversationId: String(conversationId || ''),
+      url: String(conversationId ? `/dashboard/chat?id=${conversationId}` : '/dashboard/chat'),
       deliveryWebhookUrl: String(webhookUrl || ''),
       recipientId: String(userId || ''),
       targetAccountId: String(userId || ''),
