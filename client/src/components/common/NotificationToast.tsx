@@ -10,6 +10,7 @@ export interface NotificationToastData {
     count?: number;
     link?: string;
     conversationId?: string;
+    targetAccountId?: string;
     sender?: {
         username: string;
         avatar_url?: string;
@@ -20,7 +21,7 @@ interface NotificationToastProps {
     notification: NotificationToastData;
     onDismiss: () => void;
     onClick: () => void;
-    onQuickReply?: (conversationId: string, text: string) => Promise<void>;
+    onQuickReply?: (conversationId: string, text: string, targetAccountId?: string) => Promise<void>;
     onInteractChange?: (isInteracting: boolean) => void;
 }
 
@@ -82,7 +83,7 @@ const NotificationToast: React.FC<NotificationToastProps> = ({
         setIsSending(true);
         try {
             if (onQuickReply) {
-                await onQuickReply(convId, replyText.trim());
+                await onQuickReply(convId, replyText.trim(), notification.targetAccountId);
             }
             setSentSuccess(true);
             setTimeout(() => {

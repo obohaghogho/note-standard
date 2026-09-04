@@ -357,9 +357,27 @@ self.addEventListener('notificationclick', (event) => {
                                     const db = e.target.result;
                                     if (!db.objectStoreNames.contains('sw_state')) return resolve(null);
                                     const tx = db.transaction('sw_state', 'readonly');
-                                    const getReq = tx.objectStore('sw_state').get('authToken');
-                                    getReq.onsuccess = () => resolve(getReq.result || null);
-                                    getReq.onerror = () => resolve(null);
+                                    const store = tx.objectStore('sw_state');
+                                    const targetId = data?.targetAccountId ? String(data.targetAccountId).trim().toLowerCase() : null;
+
+                                    if (targetId) {
+                                        const targetReq = store.get(`token_${targetId}`);
+                                        targetReq.onsuccess = () => {
+                                            if (targetReq.result) return resolve(targetReq.result);
+                                            const activeReq = store.get('authToken');
+                                            activeReq.onsuccess = () => resolve(activeReq.result || null);
+                                            activeReq.onerror = () => resolve(null);
+                                        };
+                                        targetReq.onerror = () => {
+                                            const activeReq = store.get('authToken');
+                                            activeReq.onsuccess = () => resolve(activeReq.result || null);
+                                            activeReq.onerror = () => resolve(null);
+                                        };
+                                    } else {
+                                        const activeReq = store.get('authToken');
+                                        activeReq.onsuccess = () => resolve(activeReq.result || null);
+                                        activeReq.onerror = () => resolve(null);
+                                    }
                                 };
                                 request.onerror = () => resolve(null);
                             } catch (_) {

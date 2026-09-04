@@ -61,26 +61,55 @@ export const accountManager = {
     }
 
     try {
+      this.syncToIndexedDB(undefined, id);
+    } catch (err) {
+      console.warn('[AccountManager] Failed to sync activeAccountId to IndexedDB', err);
+    }
+  },
+
+  /**
+   * Sync accounts list and tokens to IndexedDB sw_state for Service Worker access
+   */
+  syncToIndexedDB(accounts?: StoredAccount[], activeId?: string | null) {
+    const list = accounts || this.getAllAccounts();
+    const activeAccountId = activeId !== undefined ? activeId : localStorage.getItem(ACTIVE_ACCOUNT_KEY);
+
+    try {
       const request = indexedDB.open('NoteStandardDB', 1);
-      request.onupgradeneeded = (e) => {
+      request.onupgradeneeded = (e: any) => {
         const db = e.target.result;
         if (!db.objectStoreNames.contains('sw_state')) {
           db.createObjectStore('sw_state');
         }
       };
-      request.onsuccess = (e) => {
+      request.onsuccess = (e: any) => {
         const db = e.target.result;
         if (!db.objectStoreNames.contains('sw_state')) return;
         const tx = db.transaction('sw_state', 'readwrite');
         const store = tx.objectStore('sw_state');
-        if (id) {
-          store.put(id, 'activeAccountId');
+
+        if (activeAccountId) {
+          store.put(activeAccountId, 'activeAccountId');
+          const cleanActiveId = activeAccountId.trim().toLowerCase();
+          const activeAccount = list.find(a => a.id && a.id.trim().toLowerCase() === cleanActiveId);
+          const activeToken = activeAccount?.tokens?.access_token || activeAccount?.session?.access_token;
+          if (activeToken) {
+            store.put(activeToken, 'authToken');
+          }
         } else {
           store.delete('activeAccountId');
+          store.delete('authToken');
         }
+
+        list.forEach(acc => {
+          const token = acc.tokens?.access_token || acc.session?.access_token;
+          if (acc.id && token) {
+            store.put(token, `token_${acc.id.trim().toLowerCase()}`);
+          }
+        });
       };
     } catch (err) {
-      console.warn('[AccountManager] Failed to sync activeAccountId to IndexedDB', err);
+      console.warn('[AccountManager] Failed to sync to IndexedDB', err);
     }
   },
 
@@ -153,6 +182,7 @@ export const accountManager = {
     }
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+    this.syncToIndexedDB(accounts);
   },
 
   /**
@@ -183,6 +213,7 @@ export const accountManager = {
       };
       accounts[index].lastActive = Date.now();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+      this.syncToIndexedDB(accounts);
       return true;
     }
     return false;
@@ -200,6 +231,7 @@ export const accountManager = {
       accounts[index].sessionId = sessionId;
       accounts[index].deviceId = deviceId;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+      this.syncToIndexedDB(accounts);
     }
   },
 
@@ -211,6 +243,7 @@ export const accountManager = {
     const cleanUserId = userId.trim().toLowerCase();
     const accounts = this.getAllAccounts().filter(a => !a.id || a.id.trim().toLowerCase() !== cleanUserId);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+    this.syncToIndexedDB(accounts);
     const activeId = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
     if (activeId && activeId.trim().toLowerCase() === cleanUserId) {
       this.setActiveAccountId(null);

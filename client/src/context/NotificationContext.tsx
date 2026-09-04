@@ -9,6 +9,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { getDeviceId, getDeviceMetadata } from '../utils/deviceId';
 import { Bell } from 'lucide-react';
 import { resolveNotificationLink } from '../utils/notificationUtils';
+import { accountManager } from '../utils/accountManager';
 
 interface Notification {
     id: string;
@@ -582,6 +583,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                 type: notification.type,
                 link: resolvedLink,
                 conversationId: notifConvId,
+                targetAccountId: notification.receiver_id || (notification as any).user_id || (notification as any).targetAccountId,
                 sender: notification.sender,
                 count: 1
             };
@@ -764,13 +766,26 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                         key={currentToast.id}
                         notification={currentToast} 
                         onDismiss={dismissCurrent}
-                        onQuickReply={async (convId: string, text: string) => {
-                            if (!session?.access_token) return;
+                        onQuickReply={async (convId: string, text: string, targetAccountId?: string) => {
+                            let token = session?.access_token;
+                            if (targetAccountId && targetAccountId !== user?.id) {
+                                const storedAccount = accountManager.getAccount(targetAccountId);
+                                const storedTokens = storedAccount?.tokens || storedAccount?.session;
+                                if (storedTokens?.access_token) {
+                                    token = storedTokens.access_token;
+                                    console.log(`[NotificationContext] Using token for target account ${targetAccountId} for quick reply`);
+                                } else {
+                                    console.warn(`[NotificationContext] Target account ${targetAccountId} token not found in accountManager, falling back to active session`);
+                                }
+                            }
+
+                            if (!token) return;
+
                             const res = await fetch(`${API_URL}/api/chat/conversations/${convId}/messages`, {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${session.access_token}`
+                                    'Authorization': `Bearer ${token}`
                                 },
                                 body: JSON.stringify({
                                     content: text,
