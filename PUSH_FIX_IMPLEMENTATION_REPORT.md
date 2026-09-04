@@ -1,6 +1,6 @@
 # PUSH_FIX_IMPLEMENTATION_REPORT
 
-**Generated:** 2026-08-31T12:00:48.262Z
+**Generated:** 2026-09-04T09:08:50.592Z
 
 > [!IMPORTANT]
 > This report is based on REAL data from the live database and environment. No mock data was used.
@@ -47,9 +47,9 @@
 
 ### 2. Subscription Coverage
 
-- ⚠️ Coverage: 18/863 users subscribed (2%)
-- ✅ Total push subscriptions in DB: 51
-- ⚠️ 47 subscriptions have NEVER had a successful push (secondary issue — needs investigation)
+- ⚠️ Coverage: 19/865 users subscribed (2%)
+- ✅ Total push subscriptions in DB: 29
+- ⚠️ 25 subscriptions have NEVER had a successful push (secondary issue — needs investigation)
 - ✅ No subscriptions marked INVALID
 
 ### 3. V2 Routing Configuration
@@ -61,9 +61,11 @@
 
 ### 4. Recent Push Delivery (24h)
 
-- ✅ Last 24h push attempts: 4
-- ✅ Accepted: 4
-- ✅ Push success rate (24h): 100%
+- ✅ Last 24h push attempts: 38
+- ✅ Accepted: 18
+- ⚠️ Failed: 20 (check failure breakdown in dashboard)
+- ❌ Push success rate (24h): 47%
+- ⚠️ Failure codes: {"403":8,"To send a message with a payload, the subscription must have 'auth' and 'p256dh' keys.":8,"The subscription p256dh value should be 65 bytes long.":4}
 
 ### 5. Never-Pushed Subscriptions (Secondary Issue)
 
@@ -71,35 +73,35 @@
 - ⚠️ These users HAVE subscriptions but push service never successfully delivered.
 - ⚠️ Root cause NOT yet confirmed — may be gateway failure, browser rejection, or endpoint expiry.
 - ⚠️ Found 20 subscriptions with 0 successful pushes:
-- ⚠️   #1 user=8677bd57... platform=Android status=healthy created=2026-08-28 lastFail=none
-- ⚠️   #2 user=5089c266... platform=Windows status=healthy created=2026-08-27 lastFail=none
-- ⚠️   #3 user=5089c266... platform=Windows status=healthy created=2026-08-25 lastFail=none
-- ⚠️   #4 user=8677bd57... platform=Windows status=healthy created=2026-08-25 lastFail=none
-- ⚠️   #5 user=8677bd57... platform=Windows status=healthy created=2026-08-25 lastFail=none
-- ⚠️   #6 user=8677bd57... platform=Windows status=healthy created=2026-08-24 lastFail=none
-- ⚠️   #7 user=5089c266... platform=Windows status=healthy created=2026-08-24 lastFail=none
-- ⚠️   #8 user=5089c266... platform=? status=healthy created=2026-08-24 lastFail=none
-- ⚠️   #9 user=bc835ab2... platform=Android status=healthy created=2026-08-22 lastFail=none
-- ⚠️   #10 user=bc835ab2... platform=? status=healthy created=2026-08-22 lastFail=none
-- ⚠️   #11 user=8677bd57... platform=Windows status=healthy created=2026-08-18 lastFail=none
-- ⚠️   #12 user=8677bd57... platform=Windows status=healthy created=2026-08-18 lastFail=none
-- ⚠️   #13 user=8677bd57... platform=? status=healthy created=2026-08-18 lastFail=none
-- ⚠️   #14 user=8677bd57... platform=Windows status=healthy created=2026-08-18 lastFail=none
-- ⚠️   #15 user=8677bd57... platform=? status=healthy created=2026-08-18 lastFail=none
-- ⚠️   #16 user=8677bd57... platform=? status=healthy created=2026-08-17 lastFail=none
-- ⚠️   #17 user=8677bd57... platform=Windows status=healthy created=2026-08-17 lastFail=none
-- ⚠️   #18 user=8677bd57... platform=Windows status=healthy created=2026-08-17 lastFail=none
-- ⚠️   #19 user=8677bd57... platform=? status=healthy created=2026-08-17 lastFail=none
-- ⚠️   #20 user=8677bd57... platform=Windows status=healthy created=2026-08-17 lastFail=none
+- ⚠️   #1 user=573f7943... platform=? status=healthy created=2026-09-04 lastFail=none
+- ⚠️   #2 user=8677bd57... platform=Android status=healthy created=2026-08-28 lastFail=none
+- ⚠️   #3 user=5089c266... platform=Windows status=healthy created=2026-08-27 lastFail=none
+- ⚠️   #4 user=5089c266... platform=Windows status=healthy created=2026-08-25 lastFail=none
+- ⚠️   #5 user=5089c266... platform=Windows status=healthy created=2026-08-24 lastFail=none
+- ⚠️   #6 user=5089c266... platform=? status=healthy created=2026-08-24 lastFail=none
+- ⚠️   #7 user=bc835ab2... platform=Android status=healthy created=2026-08-22 lastFail=none
+- ⚠️   #8 user=4697b099... platform=Windows status=healthy created=2026-08-17 lastFail=none
+- ⚠️   #9 user=5089c266... platform=Windows status=healthy created=2026-08-17 lastFail=none
+- ⚠️   #10 user=5089c266... platform=? status=healthy created=2026-08-17 lastFail=none
+- ⚠️   #11 user=7ed6886b... platform=iOS status=healthy created=2026-08-16 lastFail=none
+- ⚠️   #12 user=7ed6886b... platform=? status=healthy created=2026-08-14 lastFail=none
+- ⚠️   #13 user=ab3f60b5... platform=MacOS status=healthy created=2026-08-11 lastFail=none
+- ⚠️   #14 user=df8eb865... platform=Android status=healthy created=2026-08-10 lastFail=none
+- ⚠️   #15 user=fb579aae... platform=Windows status=healthy created=2026-08-10 lastFail=none
+- ⚠️   #16 user=55668b26... platform=Windows status=healthy created=2026-08-10 lastFail=none
+- ⚠️   #17 user=4ba82765... platform=Android status=healthy created=2026-08-02 lastFail=none
+- ⚠️   #18 user=5367168a... platform=Android status=healthy created=2026-08-01 lastFail=none
+- ⚠️   #19 user=bf20afc2... platform=Android status=healthy created=2026-08-01 lastFail=none
+- ⚠️   #20 user=6872e2a9... platform=? status=healthy created=2026-07-27 lastFail=none
 
 ## Summary
 
 | Metric | Count |
 |--------|-------|
-| ✅ Passed | 19 |
-| ⚠️ Warnings | 26 |
-| ❌ Errors | 0 |
-| Total Checks | 45 |
+| ✅ Passed | 18 |
+| ⚠️ Warnings | 28 |
+| ❌ Errors | 1 |
+| Total Checks | 47 |
 
 ## Open Investigation Items
 

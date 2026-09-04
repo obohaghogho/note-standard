@@ -30,7 +30,7 @@ export const WebNotificationRouter: React.FC = () => {
     if (!authReady || !notificationContext) return;
 
     const targetAccountId = searchParams.get('targetAccountId');
-    const conversationId = searchParams.get('conversationId');
+    const conversationId = searchParams.get('conversationId') || searchParams.get('id');
 
     if (!targetAccountId) return;
 
@@ -47,9 +47,10 @@ export const WebNotificationRouter: React.FC = () => {
                            searchParams.get('type')?.includes('support') || 
                            window.location.pathname.startsWith('/admin/') ||
                            (isAdminOrSupportUser && (searchParams.get('type')?.startsWith('new_support') || searchParams.get('type')?.startsWith('support')));
+    const isChatPath = window.location.pathname.includes('/chat') || searchParams.get('link')?.includes('/chat');
     const destination = isSupportNotif
       ? (conversationId ? `/admin/chats?id=${conversationId}` : '/admin/chats')
-      : (conversationId ? `/dashboard/chat?id=${conversationId}` : '/dashboard');
+      : (conversationId ? `/dashboard/chat?id=${conversationId}` : (isChatPath ? '/dashboard/chat' : '/dashboard'));
 
     const handleNotificationNavigation = async () => {
       console.log('[ACCOUNT_FORENSIC] Notification Account ID:', targetAccountId);

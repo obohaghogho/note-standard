@@ -35,6 +35,11 @@ const createNotification = async (params) => {
   }
 
   try {
+    let resolvedLink = link;
+    if (conversationId && (!resolvedLink || resolvedLink === '/dashboard/chat' || resolvedLink === '/dashboard')) {
+      resolvedLink = `/dashboard/chat?id=${conversationId}`;
+    }
+
     // 1. Persist to Database (supports both user_id and receiver_id columns)
     const { data, error } = await supabase
       .from("notifications")
@@ -45,7 +50,7 @@ const createNotification = async (params) => {
         type,
         title,
         message,
-        link,
+        link: resolvedLink,
         is_read: false,
       }])
       .select()
@@ -59,7 +64,8 @@ const createNotification = async (params) => {
       type,
       title,
       message,
-      link,
+      link: resolvedLink,
+      conversationId: conversationId || null,
       sender_id: senderId,
       created_at: data.created_at,
       is_read: false,
@@ -220,6 +226,11 @@ const dispatchFastPush = (params) => {
       // Normalise Gateway URL (strip trailing slash)
       const baseUrl = gatewayUrlStr.endsWith('/') ? gatewayUrlStr.slice(0, -1) : gatewayUrlStr;
 
+      let resolvedFastLink = link;
+      if (conversationId && (!resolvedFastLink || resolvedFastLink === '/dashboard/chat' || resolvedFastLink === '/dashboard')) {
+        resolvedFastLink = `/dashboard/chat?id=${conversationId}`;
+      }
+
       const payloadObj = {
         userId: receiverId,
         title,
@@ -228,7 +239,7 @@ const dispatchFastPush = (params) => {
           type,
           conversationId: conversationId || null,
           messageId: messageId || null,
-          url: link || '/dashboard/notifications',
+          url: resolvedFastLink || '/dashboard/notifications',
           recipientId: receiverId,
           targetUserId: receiverId,
           targetAccountId: receiverId,

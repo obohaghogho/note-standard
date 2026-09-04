@@ -166,7 +166,7 @@ async function sendWeb(supabase, target, { userId, title, body, messageId, conve
       type: 'chat_message',
       messageId,
       conversationId,
-      url: '/dashboard/chat',
+      url: conversationId ? `/dashboard/chat?id=${conversationId}` : '/dashboard/chat',
       recipientId: userId,
       targetAccountId: userId,
       deliveryWebhookUrl: webhookUrl || '',

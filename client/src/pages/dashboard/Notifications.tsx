@@ -3,12 +3,14 @@ import { useNotifications } from '../../hooks/useNotifications';
 import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../utils/cn';
 import { safeFormatDistanceToNow } from '../../utils/dateUtils';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
+import { resolveNotificationLink } from '../../utils/notificationUtils';
 
 export const Notifications = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const { 
         notifications, 
         unreadCount, 
@@ -18,24 +20,6 @@ export const Notifications = () => {
         clearAllNotifications, 
         loading 
     } = useNotifications();
-
-    const resolveSupportLink = (notif: { type?: string; link?: string; conversationId?: string }) => {
-        const isSupport = notif.type?.startsWith('support') || 
-                          notif.type === 'new_support_ticket' || 
-                          notif.type === 'ai_support_reply' || 
-                          notif.link?.includes('openSupport') ||
-                          notif.link?.includes('support');
-
-        if (isSupport) {
-            if (user?.role === 'admin' || user?.role === 'support') {
-                return notif.link && notif.link.includes('/admin')
-                    ? notif.link
-                    : `/admin/chats?id=${notif.conversationId || ''}`;
-            }
-            return `/dashboard/chat?openSupport=true${notif.conversationId ? `&id=${notif.conversationId}` : ''}`;
-        }
-        return notif.link || '/dashboard';
-    };
 
     const getIcon = (type: string, size = 20) => {
         switch (type) {
@@ -102,92 +86,105 @@ export const Notifications = () => {
                 </Card>
             ) : (
                 <div className="space-y-3">
-                    {notifications.map((notif) => (
-                        <Card
-                            key={notif.id}
-                            className={cn(
-                                "p-4 transition-all hover:bg-white/5 relative group cursor-pointer",
-                                !notif.is_read ? "border-primary/30 bg-primary/5" : "border-white/5"
-                            )}
-                            onClick={() => !notif.is_read && markAsRead(notif.id)}
-                            variant="glass"
-                        >
-                            <div className="flex gap-3 md:gap-4">
-                                <div className="flex-shrink-0">
-                                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 shadow-sm">
-                                        <div className="md:hidden">{getIcon(notif.type, 16)}</div>
-                                        <div className="hidden md:block">{getIcon(notif.type, 20)}</div>
-                                    </div>
-                                </div>
+                    {notifications.map((notif) => {
+                        const targetLink = resolveNotificationLink({
+                            type: notif.type,
+                            link: notif.link,
+                            conversationId: (notif as any).conversationId,
+                            userRole: user?.role
+                        });
 
-                                <div className="flex-1 space-y-1 min-w-0">
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2 flex-wrap">
-                                        <h3 className={cn(
-                                            "text-base md:text-lg font-bold break-words",
-                                            !notif.is_read ? "text-white" : "text-gray-400"
-                                        )}>
-                                            {notif.title}
-                                        </h3>
-                                        <span className="text-[10px] md:text-xs text-gray-500 whitespace-nowrap">
-                                            {safeFormatDistanceToNow(notif.created_at)}
-                                        </span>
-                                    </div>
-                                    <p className="text-gray-400 text-sm leading-relaxed break-words">
-                                        {notif.message}
-                                    </p>
+                        const handleCardClick = () => {
+                            if (!notif.is_read) markAsRead(notif.id);
+                            if (targetLink.includes('openSupport=true')) {
+                                window.dispatchEvent(new CustomEvent('open-support-chat'));
+                            }
+                            navigate(targetLink);
+                        };
 
-                                    <div className="flex items-center justify-between pt-3 mt-2 border-t border-white/5 flex-wrap gap-2">
-                                        <div className="flex items-center gap-4">
-                                            {notif.link && (
+                        return (
+                            <Card
+                                key={notif.id}
+                                className={cn(
+                                    "p-4 transition-all hover:bg-white/5 relative group cursor-pointer",
+                                    !notif.is_read ? "border-primary/30 bg-primary/5" : "border-white/5"
+                                )}
+                                onClick={handleCardClick}
+                                variant="glass"
+                            >
+                                <div className="flex gap-3 md:gap-4">
+                                    <div className="flex-shrink-0">
+                                        <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 shadow-sm">
+                                            <div className="md:hidden">{getIcon(notif.type, 16)}</div>
+                                            <div className="hidden md:block">{getIcon(notif.type, 20)}</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex-1 space-y-1 min-w-0">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2 flex-wrap">
+                                            <h3 className={cn(
+                                                "text-base md:text-lg font-bold break-words",
+                                                !notif.is_read ? "text-white" : "text-gray-400"
+                                            )}>
+                                                {notif.title}
+                                            </h3>
+                                            <span className="text-[10px] md:text-xs text-gray-500 whitespace-nowrap">
+                                                {safeFormatDistanceToNow(notif.created_at)}
+                                            </span>
+                                        </div>
+                                        <p className="text-gray-400 text-sm leading-relaxed break-words">
+                                            {notif.message}
+                                        </p>
+
+                                        <div className="flex items-center justify-between pt-3 mt-2 border-t border-white/5 flex-wrap gap-2">
+                                            <div className="flex items-center gap-4">
                                                 <Link
-                                                    to={resolveSupportLink(notif)}
+                                                    to={targetLink}
                                                     className="text-xs text-primary font-semibold hover:underline flex items-center gap-1.5"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        if (resolveSupportLink(notif).includes('openSupport=true')) {
-                                                            window.dispatchEvent(new CustomEvent('open-support-chat'));
-                                                        }
+                                                        handleCardClick();
                                                     }}
                                                 >
                                                     <ExternalLink size={14} />
                                                     View Details
                                                 </Link>
-                                            )}
-                                            {!notif.is_read && (
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        markAsRead(notif.id);
-                                                    }}
-                                                    className="text-xs text-gray-500 hover:text-white flex items-center gap-1.5 transition-colors"
-                                                >
-                                                    <Check size={14} />
-                                                    Mark as read
-                                                </button>
-                                            )}
+                                                {!notif.is_read && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            markAsRead(notif.id);
+                                                        }}
+                                                        className="text-xs text-gray-500 hover:text-white flex items-center gap-1.5 transition-colors"
+                                                    >
+                                                        <Check size={14} />
+                                                        Mark as read
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    deleteNotification(notif.id);
+                                                }}
+                                                className="text-xs text-red-500/50 hover:text-red-500 flex items-center gap-1.5 transition-colors ml-auto"
+                                            >
+                                                <Trash2 size={14} />
+                                                Delete
+                                            </button>
                                         </div>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                deleteNotification(notif.id);
-                                            }}
-                                            className="text-xs text-red-500/50 hover:text-red-500 flex items-center gap-1.5 transition-colors ml-auto"
-                                        >
-                                            <Trash2 size={14} />
-                                            Delete
-                                        </button>
                                     </div>
-                                </div>
 
-                                {!notif.is_read && (
-                                    <div className="absolute top-2 right-2 md:top-4 md:right-4 w-2 h-2 rounded-full bg-primary animate-pulse" />
-                                )}
-                            </div>
-                        </Card>
-                    ))}
+                                    {!notif.is_read && (
+                                        <div className="absolute top-2 right-2 md:top-4 md:right-4 w-2 h-2 rounded-full bg-primary animate-pulse" />
+                                    )}
+                                </div>
+                            </Card>
+                        );
+                    })}
                 </div>
-            )}
-        </div>
+            );
+        }}</div>
     );
 };
 

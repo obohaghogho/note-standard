@@ -8,6 +8,7 @@ import NotificationToast, { type NotificationToastData } from '../components/com
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getDeviceId, getDeviceMetadata } from '../utils/deviceId';
 import { Bell } from 'lucide-react';
+import { resolveNotificationLink } from '../utils/notificationUtils';
 
 interface Notification {
     id: string;
@@ -17,11 +18,12 @@ interface Notification {
     title: string;
     message?: string;
     link?: string;
+    conversationId?: string;
     is_read: boolean;
     created_at: string;
     sender?: {
         username: string;
-        avatar_url: string;
+        avatar_url?: string;
     };
     status?: string;
 }
@@ -555,12 +557,19 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
 
             setNotifications(prev => [notification, ...prev]);
 
+            const resolvedLink = resolveNotificationLink({
+                type: notification.type,
+                link: notification.link,
+                conversationId: notification.conversationId || (notification as any).conversation_id,
+                userRole: user?.role
+            });
+
             const toastData: NotificationToastData = {
                 id: notification.id,
                 title: notification.title,
                 message: notification.message,
                 type: notification.type,
-                link: notification.link,
+                link: resolvedLink,
                 sender: notification.sender,
                 count: 1
             };
@@ -744,8 +753,17 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                         notification={currentToast} 
                         onDismiss={dismissCurrent}
                         onClick={() => {
-                            if (currentToast.link) {
-                                navigate(currentToast.link);
+                            const targetLink = resolveNotificationLink({
+                                type: currentToast.type,
+                                link: currentToast.link,
+                                conversationId: (currentToast as any).conversationId || (currentToast as any).conversation_id,
+                                userRole: user?.role
+                            });
+                            if (targetLink) {
+                                if (targetLink.includes('openSupport=true')) {
+                                    window.dispatchEvent(new CustomEvent('open-support-chat'));
+                                }
+                                navigate(targetLink);
                             }
                             markAsRead(currentToast.id);
                             dismissCurrent();

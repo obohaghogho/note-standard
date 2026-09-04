@@ -318,17 +318,22 @@ self.addEventListener('notificationclick', (event) => {
     const data = event.notification.data;
     let urlToOpen = new URL(data?.url || '/dashboard', self.location.origin).href;
 
+    const urlObj = new URL(urlToOpen);
     if (data?.targetAccountId) {
-        const urlObj = new URL(urlToOpen);
         urlObj.searchParams.set('targetAccountId', data.targetAccountId);
-        if (data?.conversationId && !urlObj.searchParams.has('conversationId') && !urlObj.searchParams.has('id')) {
+    }
+    if (data?.conversationId) {
+        if (!urlObj.searchParams.has('id')) {
+            urlObj.searchParams.set('id', data.conversationId);
+        }
+        if (!urlObj.searchParams.has('conversationId')) {
             urlObj.searchParams.set('conversationId', data.conversationId);
         }
-        if (urlToOpen.includes('/admin/')) {
-            urlObj.searchParams.set('isSupport', 'true');
-        }
-        urlToOpen = urlObj.href;
     }
+    if (urlToOpen.includes('/admin/')) {
+        urlObj.searchParams.set('isSupport', 'true');
+    }
+    urlToOpen = urlObj.href;
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
             // 1. Try to find an existing tab with the same URL or at least one on the same origin

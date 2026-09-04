@@ -70,7 +70,11 @@ class PushDispatcher {
       ? `${resolvedGatewayUrl.replace(/\/$/, '')}/deliver/${messageId}?recipientId=${userId}&cid=${correlationId || ''}`
       : '';
 
-    const targetUrl = url || link || (conversationId ? `/dashboard/chat?id=${conversationId}` : '/dashboard/chat');
+    let resolvedUrl = url || link;
+    if ((!resolvedUrl || resolvedUrl === '/dashboard/chat' || resolvedUrl === '/dashboard') && conversationId) {
+      resolvedUrl = `/dashboard/chat?id=${conversationId}`;
+    }
+    const targetUrl = resolvedUrl || (conversationId ? `/dashboard/chat?id=${conversationId}` : '/dashboard/chat');
 
     const results = await Promise.allSettled(
       devices.map(device => PushDispatcher.dispatchToDevice(supabase, fbApp, device, {
@@ -192,7 +196,9 @@ class PushDispatcher {
           type: 'chat_message',
           messageId: payload.messageId,
           conversationId: payload.conversationId,
-          url: payload.url || payload.link || (payload.conversationId ? `/dashboard/chat?id=${payload.conversationId}` : '/dashboard/chat'),
+          url: (payload.url && payload.url !== '/dashboard/chat' && payload.url !== '/dashboard')
+            ? payload.url
+            : (payload.conversationId ? `/dashboard/chat?id=${payload.conversationId}` : (payload.url || '/dashboard/chat')),
           recipientId: payload.userId,
           targetAccountId: payload.userId,
           deliveryWebhookUrl: payload.deliveryWebhookUrl,

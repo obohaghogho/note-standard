@@ -8,29 +8,24 @@ import { useNotifications } from '../../hooks/useNotifications';
 import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../utils/cn';
 import { safeFormatDistanceToNow } from '../../utils/dateUtils';
-import { Link } from 'react-router-dom';
+import { useState, useRef, useEffect } from 'react';
+import { 
+    Bell, Check, ExternalLink, MessageSquare, StickyNote, 
+    UserPlus, Globe, Edit3, CreditCard, ArrowRightLeft, ArrowUpRight,
+    ShieldAlert, LifeBuoy, Megaphone 
+} from 'lucide-react';
+import { useNotifications } from '../../hooks/useNotifications';
+import { useAuth } from '../../context/AuthContext';
+import { cn } from '../../utils/cn';
+import { safeFormatDistanceToNow } from '../../utils/dateUtils';
+import { Link, useNavigate } from 'react-router-dom';
+import { resolveNotificationLink } from '../../utils/notificationUtils';
 
 export const NotificationBell = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
 
-    const resolveSupportLink = (notif: { type?: string; link?: string; conversationId?: string }) => {
-        const isSupport = notif.type?.startsWith('support') || 
-                          notif.type === 'new_support_ticket' || 
-                          notif.type === 'ai_support_reply' || 
-                          notif.link?.includes('openSupport') ||
-                          notif.link?.includes('support');
-
-        if (isSupport) {
-            if (user?.role === 'admin' || user?.role === 'support') {
-                return notif.link && notif.link.includes('/admin')
-                    ? notif.link
-                    : `/admin/chats?id=${notif.conversationId || ''}`;
-            }
-            return `/dashboard/chat?openSupport=true${notif.conversationId ? `&id=${notif.conversationId}` : ''}`;
-        }
-        return notif.link || '/dashboard';
-    };
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -142,62 +137,72 @@ export const NotificationBell = () => {
                                 <p className="text-gray-500 text-sm">No notifications yet</p>
                             </div>
                         ) : (
-                            notifications.map((notif) => (
-                                <div
-                                    key={notif.id}
-                                    className={cn(
-                                        "p-4 border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors relative flex gap-3 cursor-pointer",
-                                        !notif.is_read && "bg-primary/5"
-                                    )}
-                                    onClick={() => {
-                                        if (!notif.is_read) markAsRead(notif.id);
-                                    }}
-                                >
-                                    <div className="flex-shrink-0 mt-1">
-                                        <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10 relative overflow-hidden">
-                                            {getIcon(notif.type)}
-                                            {!notif.is_read && (
-                                                <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 border-2 border-[#1a1a1a] rounded-full" />
-                                            )}
-                                        </div>
-                                    </div>
+                            notifications.map((notif) => {
+                                const targetLink = resolveNotificationLink({
+                                    type: notif.type,
+                                    link: notif.link,
+                                    conversationId: (notif as any).conversationId,
+                                    userRole: user?.role
+                                });
 
-                                    <div className="flex-1 space-y-1 min-w-0">
-                                        <div className="flex items-center justify-between gap-2">
-                                            <p className={cn(
-                                                "text-sm font-semibold truncate",
-                                                !notif.is_read ? "text-white" : "text-gray-400"
-                                            )}>
-                                                {notif.title}
+                                const handleItemClick = () => {
+                                    if (!notif.is_read) markAsRead(notif.id);
+                                    setIsOpen(false);
+                                    if (targetLink.includes('openSupport=true')) {
+                                        window.dispatchEvent(new CustomEvent('open-support-chat'));
+                                    }
+                                    navigate(targetLink);
+                                };
+
+                                return (
+                                    <div
+                                        key={notif.id}
+                                        className={cn(
+                                            "p-4 border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors relative flex gap-3 cursor-pointer",
+                                            !notif.is_read && "bg-primary/5"
+                                        )}
+                                        onClick={handleItemClick}
+                                    >
+                                        <div className="flex-shrink-0 mt-1">
+                                            <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10 relative overflow-hidden">
+                                                {getIcon(notif.type)}
+                                                {!notif.is_read && (
+                                                    <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 border-2 border-[#1a1a1a] rounded-full" />
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="flex-1 space-y-1 min-w-0">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <p className={cn(
+                                                    "text-sm font-semibold truncate",
+                                                    !notif.is_read ? "text-white" : "text-gray-400"
+                                                )}>
+                                                    {notif.title}
+                                                </p>
+                                                <span className="text-[10px] text-gray-500 whitespace-nowrap">
+                                                    {safeFormatDistanceToNow(notif.created_at)}
+                                                </span>
+                                            </div>
+                                            <p className="text-[11px] md:text-xs text-gray-400 line-clamp-2 leading-relaxed">
+                                                {notif.message}
                                             </p>
-                                            <span className="text-[10px] text-gray-500 whitespace-nowrap">
-                                                {safeFormatDistanceToNow(notif.created_at)}
-                                            </span>
-                                        </div>
-                                        <p className="text-[11px] md:text-xs text-gray-400 line-clamp-2 leading-relaxed">
-                                            {notif.message}
-                                        </p>
 
-                                        {notif.link && (
                                             <Link
-                                                to={resolveSupportLink(notif)}
+                                                to={targetLink}
                                                 className="text-[10px] text-primary hover:text-primary/80 flex items-center gap-1 w-fit mt-2 font-medium"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    if (!notif.is_read) markAsRead(notif.id);
-                                                    setIsOpen(false);
-                                                    if (resolveSupportLink(notif).includes('openSupport=true')) {
-                                                        window.dispatchEvent(new CustomEvent('open-support-chat'));
-                                                    }
+                                                    handleItemClick();
                                                 }}
                                             >
                                                 View Details
                                                 <ExternalLink size={10} />
                                             </Link>
-                                        )}
+                                        </div>
                                     </div>
-                                </div>
-                            ))
+                                );
+                            })
                         )}
                     </div>
 
