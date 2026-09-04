@@ -3039,54 +3039,7 @@ exports.markConversationDelivered = async (req, res, next) => {
   }
 };
 
-/**
- * PUT /api/chat/conversations/:conversationId/read
- * Recipient acknowledges reading all messages in conversation.
- */
-exports.markConversationRead = async (req, res, next) => {
-  try {
-    const userId = req.user.id;
-    const { conversationId } = req.params;
-    const now = new Date().toISOString();
 
-    const { data: updated, error } = await supabase
-      .from("messages")
-      .update({ read_at: now })
-      .eq("conversation_id", conversationId)
-      .neq("sender_id", userId)
-      .is("read_at", null)
-      .select("id, sender_id");
-
-    if (error) throw error;
-
-    await supabase
-      .from("conversation_unread_state")
-      .upsert({
-        conversation_id: conversationId,
-        user_id: userId,
-        unread_count: 0,
-        last_reconciled_at: now
-      }, { onConflict: 'conversation_id,user_id' });
-
-    if (updated && updated.length > 0) {
-      const realtime = require("../services/realtimeService");
-      const senderIds = [...new Set(updated.map((m) => m.sender_id))];
-      for (const senderId of senderIds) {
-        await realtime.emitToUser(senderId, "chat:conversation_read", {
-          conversationId,
-          recipientId: userId,
-          read_at: now,
-          count: updated.length,
-        });
-      }
-    }
-
-    console.log(`[Chat/Telemetry] CONVERSATION_READ | convId: ${conversationId} | reader: ${userId} | count: ${updated?.length || 0}`);
-    res.json({ success: true, count: updated?.length || 0 });
-  } catch (err) {
-    next(err);
-  }
-};
 
 /**
  * PATCH /api/chat/messages/ack:batch
