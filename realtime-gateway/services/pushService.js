@@ -579,7 +579,8 @@ async function sendCallPush(params) {
 
         const endpointHash = require('crypto').createHash('sha256').update(sub.endpoint).digest('hex').substring(0, 16);
 
-        if (sub.vapid_key_version && sub.vapid_key_version !== process.env.VAPID_PUBLIC_KEY) {
+        const activeVapidPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY;
+        if (sub.vapid_key_version && activeVapidPublicKey && sub.vapid_key_version !== activeVapidPublicKey) {
           console.log(`[PushService] ⚠️ VAPID mismatch for web push sub: ${sub.endpoint.substring(0, 30)}... removing stale sub.`);
           logPushMetric({ platform: 'web', push_type: 'vapid', status: 'invalid_removed', error_code: 'vapid_mismatch', user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
           return supabase.from("push_subscriptions").delete().match({ user_id: userId, endpoint: sub.endpoint });
@@ -715,7 +716,7 @@ async function dispatchV2Push(params, pushTargets, isCall = false) {
         };
         nativePromises.push(sendApnsWithFallback(notification, t.push_endpoint, 'V2 APNs Push', t.platform, t.type, userId, t.device_id));
       }
-    } else if ((t.type === 'vapid' || (t.push_endpoint && !t.push_endpoint.startsWith('fcm:'))) && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    } else if ((t.type === 'vapid' || (t.push_endpoint && !t.push_endpoint.startsWith('fcm:'))) && (process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY) && process.env.VAPID_PRIVATE_KEY) {
       if (isCall) continue; // Web pushes usually don't handle VoIP call pushes the same way
 
       if (payload?.trace) { payload.trace.pushProviderStartTs = Date.now(); }

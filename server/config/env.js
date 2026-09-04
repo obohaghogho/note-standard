@@ -98,6 +98,10 @@ module.exports = {
   // AI Service (Groq)
   GROQ_API_KEY: process.env.GROQ_API_KEY,
   GROQ_MODEL: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
+
+  // Push Notifications (VAPID)
+  VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY,
+  VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY,
 };
 
 // Compute derived rates
