@@ -10,13 +10,18 @@ import {
   Settings
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
-import { useNotifications } from '../../hooks/useNotifications';
+import { useChat } from '../../context/ChatContext';
 
 export const MobileBottomNav: React.FC = () => {
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
-  const { unreadCount } = useNotifications();
+  const { conversations } = useChat();
+
+  const unreadChatCount = (conversations || []).reduce((sum, conv) => {
+    const count = conv.unreadCount ?? (conv as any).unread_count ?? 0;
+    return sum + (typeof count === 'number' ? count : 0);
+  }, 0);
 
   // Hide bottom nav on active chat view on mobile to maximize chat window
   const isChatViewActive = location.pathname.startsWith('/dashboard/chat/') && location.pathname !== '/dashboard/chat';
@@ -26,7 +31,7 @@ export const MobileBottomNav: React.FC = () => {
     { id: 'home', label: t('nav.home', 'Home'), icon: LayoutDashboard, to: '/dashboard' },
     { id: 'notes', label: t('nav.notes', 'Notes'), icon: Notebook, to: '/dashboard/notes' },
     { id: 'wallet', label: t('nav.wallet', 'Wallet'), icon: Wallet, to: '/dashboard/wallet' },
-    { id: 'chat', label: t('nav.chat', 'Chat'), icon: MessageSquare, to: '/dashboard/chat', badge: unreadCount },
+    { id: 'chat', label: t('nav.chat', 'Chat'), icon: MessageSquare, to: '/dashboard/chat', badge: unreadChatCount },
     { id: 'feed', label: t('nav.feed', 'Feed'), icon: Globe, to: '/dashboard/feed' },
   ];
 
