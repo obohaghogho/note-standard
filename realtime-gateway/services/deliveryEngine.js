@@ -147,67 +147,23 @@ async function processIncomingMessage(io, supabase, envelope, deps = {}) {
       console.error('[DeliveryEngine] Background telemetry initial insert failed:', err.message);
     });
 
-    if (socketsCount > 0) {
-      console.log(`[DeliveryEngine] Routing Decision | msgId:${messageId.slice(0, 8)} | recipient:${recipientId.slice(0, 8)} | sender:${senderId.slice(0, 8)} | conv:${conversationId.slice(0, 8)}`);
-      console.log(`[DeliveryEngine] Sockets: ${socketsCount} | Decision: SOCKET_FIRST | Push suppressed for ${ACK_TIMEOUT_MS}ms ACK window`);
+    console.log(`[DeliveryEngine] Dispatching Push | msgId:${messageId.slice(0, 8)} | recipient:${recipientId.slice(0, 8)} | sender:${senderId.slice(0, 8)} | sockets:${socketsCount}`);
 
-      // Recipient has a socket — message was delivered via dispatchSocketEvent.
-      // Start ACK timeout: if no chat:delivered within configured time, send push.
-      const ackKey = `${messageId}:${recipientId}`;
-
-      // Don't double-schedule
-      if (pendingAcks.has(ackKey)) continue;
-
-      const timer = setTimeout(async () => {
-        pendingAcks.delete(ackKey);
-
-        try {
-          const { data: check } = await supabase
-            .from('messages')
-            .select('delivered_at')
-            .eq('id', messageId)
-            .single();
-
-          if (check?.delivered_at) {
-            return;
-          }
-        } catch (e) {
-        }
-
-        console.log(`[DeliveryEngine] ACK Timeout (${ACK_TIMEOUT_MS}ms) — fallback push | msgId:${messageId.slice(0, 8)} | recipient:${recipientId.slice(0, 8)} | conv:${conversationId.slice(0, 8)}`);
-
-        updateTelemetryFallback(supabase, messageId, recipientId).catch(err => {
-          console.error('[DeliveryEngine] Background telemetry fallback update failed:', err.message);
-        });
-
-        await chatPush.sendChatPush({
-          supabase,
-          firebaseApp: deps.firebaseApp || null,
-          userId: recipientId,
-          title: msg.sender?.full_name || msg.sender?.username || 'New Message',
-          body: getPreview(msg.type, msg.content),
-          messageId,
-          conversationId,
-          gatewayUrl: deps.gatewayUrl || process.env.SELF_URL || 'https://realtime-gateway-gsb5.onrender.com',
-        });
-      }, ACK_TIMEOUT_MS);
-
-      pendingAcks.set(ackKey, { timer, recipientId, conversationId });
-    } else {
-      console.log(`[DeliveryEngine] Routing Decision | msgId:${messageId.slice(0, 8)} | recipient:${recipientId.slice(0, 8)} | sender:${senderId.slice(0, 8)} | conv:${conversationId.slice(0, 8)}`);
-      console.log(`[DeliveryEngine] Sockets: 0 | Decision: PUSH_IMMEDIATE | Recipient offline`);
-
-      await chatPush.sendChatPush({
-        supabase,
-        firebaseApp: deps.firebaseApp || null,
-        userId: recipientId,
-        title: msg.sender?.full_name || msg.sender?.username || 'New Message',
-        body: getPreview(msg.type, msg.content),
-        messageId,
-        conversationId,
-        gatewayUrl: deps.gatewayUrl || process.env.SELF_URL || 'https://realtime-gateway-gsb5.onrender.com',
-      });
-    }
+    // Always dispatch push notification. The client-side Service Worker (sw.js) or FCM handler
+    // will deduplicate and display the OS desktop popup if the user is in background, locked, or on another page.
+    chatPush.sendChatPush({
+      supabase,
+      firebaseApp: deps.firebaseApp || null,
+      userId: recipientId,
+      title: msg.sender?.full_name || msg.sender?.username || 'New Message',
+      body: getPreview(msg.type, msg.content),
+      messageId,
+      conversationId,
+      gatewayUrl: deps.gatewayUrl || process.env.SELF_URL || 'https://realtime-gateway-gsb5.onrender.com',
+    }).catch(pushErr => {
+      console.error('[DeliveryEngine] Error sending chat push:', pushErr.message);
+    });
+  }
   }
 }
 
