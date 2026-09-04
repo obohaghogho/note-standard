@@ -36,6 +36,26 @@ const NotificationToast: React.FC<NotificationToastProps> = ({
     const [replyText, setReplyText] = useState('');
     const [isSending, setIsSending] = useState(false);
     const [sentSuccess, setSentSuccess] = useState(false);
+    const successTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
+    // Reset success banner and dismiss timer when a new message arrives in this toast
+    React.useEffect(() => {
+        if (successTimerRef.current) {
+            clearTimeout(successTimerRef.current);
+            successTimerRef.current = null;
+        }
+        setSentSuccess(false);
+        setIsSending(false);
+    }, [notification.id, notification.message, notification.count]);
+
+    // Clean up timer on unmount
+    React.useEffect(() => {
+        return () => {
+            if (successTimerRef.current) {
+                clearTimeout(successTimerRef.current);
+            }
+        };
+    }, []);
 
     const isChatNotif = 
         notification.type === 'chat_message' || 
@@ -85,8 +105,13 @@ const NotificationToast: React.FC<NotificationToastProps> = ({
             if (onQuickReply) {
                 await onQuickReply(convId, replyText.trim(), notification.targetAccountId);
             }
+            setIsSending(false);
             setSentSuccess(true);
-            setTimeout(() => {
+            setReplyText('');
+
+            if (successTimerRef.current) clearTimeout(successTimerRef.current);
+            successTimerRef.current = setTimeout(() => {
+                onInteractChange?.(false);
                 onDismiss();
             }, 1200);
         } catch (err) {

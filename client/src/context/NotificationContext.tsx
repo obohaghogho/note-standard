@@ -53,6 +53,13 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
     const [currentToast, setCurrentToast] = useState<NotificationToastData | null>(null);
     const [queue, setQueue] = useState<NotificationToastData[]>([]);
     const dismissTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const currentToastRef = useRef<NotificationToastData | null>(null);
+    const queueRef = useRef<NotificationToastData[]>([]);
+    const isInteractingRef = useRef<boolean>(false);
+
+    useEffect(() => { currentToastRef.current = currentToast; }, [currentToast]);
+    useEffect(() => { queueRef.current = queue; }, [queue]);
+
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -81,10 +88,12 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                 clearTimeout(dismissTimerRef.current);
             }
             
-            // Set a new 5s timer
-            dismissTimerRef.current = setTimeout(() => {
-                dismissCurrent();
-            }, 5000);
+            // Set a new 5s timer ONLY if user is not actively typing/replying
+            if (!isInteractingRef.current) {
+                dismissTimerRef.current = setTimeout(() => {
+                    dismissCurrent();
+                }, 5000);
+            }
         }
         
         return () => {
@@ -588,28 +597,55 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                 count: 1
             };
 
-            // Grouping logic for messages
+            // Grouping logic for messages: update active toast or queued item in-place
             if (notification.type === 'chat_message' || notification.type === 'message') {
-                // Check current toast
-                if (currentToast && (currentToast.sender?.username === notification.sender?.username || currentToast.title === notification.title)) {
-                    setCurrentToast(prev => prev ? {
-                        ...prev,
+                const cur = currentToastRef.current;
+                const isCurrentMatch = !!cur && (
+                    (cur.conversationId && notifConvId && cur.conversationId === notifConvId) ||
+                    (cur.sender?.username && notification.sender?.username && cur.sender.username === notification.sender.username) ||
+                    (cur.title && notification.title && cur.title === notification.title)
+                );
+
+                if (isCurrentMatch && cur) {
+                    console.log('[Notifications] Updating active toast notification in-place for:', cur.title || notifConvId);
+                    const updatedToast: NotificationToastData = {
+                        ...cur,
+                        id: notification.id,
                         message: notification.message,
-                        count: (prev.count || 1) + 1
-                    } : null);
+                        count: (cur.count || 1) + 1,
+                        conversationId: cur.conversationId || notifConvId,
+                        sender: notification.sender || cur.sender
+                    };
+                    setCurrentToast(updatedToast);
+
+                    // Reset auto-dismiss timer so user has full 5s to view updated notification
+                    if (!isInteractingRef.current) {
+                        if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+                        dismissTimerRef.current = setTimeout(() => {
+                            dismissCurrent();
+                        }, 5000);
+                    }
                     return;
                 }
 
+                const qList = queueRef.current;
+                const queueIndex = qList.findIndex(q => 
+                    (q.conversationId && notifConvId && q.conversationId === notifConvId) ||
+                    (q.sender?.username && notification.sender?.username && q.sender.username === notification.sender.username) ||
+                    (q.title && notification.title && q.title === notification.title)
+                );
 
-                // Check queue
-                const queueIndex = queue.findIndex(q => q.sender?.username === notification.sender?.username || q.title === notification.title);
                 if (queueIndex !== -1) {
+                    console.log('[Notifications] Updating queued toast notification in-place for:', qList[queueIndex].title || notifConvId);
                     setQueue(prev => {
                         const newQueue = [...prev];
                         newQueue[queueIndex] = {
                             ...newQueue[queueIndex],
+                            id: notification.id,
                             message: notification.message,
-                            count: (newQueue[queueIndex].count || 1) + 1
+                            count: (newQueue[queueIndex].count || 1) + 1,
+                            conversationId: newQueue[queueIndex].conversationId || notifConvId,
+                            sender: notification.sender || newQueue[queueIndex].sender
                         };
                         return newQueue;
                     });
@@ -626,7 +662,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         return () => {
             socket.off('notification', onNotification);
         };
-    }, [socket, connected, markAsRead, currentToast, queue, dismissCurrent, location.pathname, location.search]);
+    }, [socket, connected, markAsRead, dismissCurrent, location.pathname, location.search]);
 
     const clearAllNotifications = useCallback(async () => {
         if (!session) return;
@@ -763,9 +799,23 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             <AnimatePresence>
                 {currentToast && (
                     <NotificationToast 
-                        key={currentToast.id}
+                        key={currentToast.conversationId || currentToast.sender?.username || currentToast.title || currentToast.id}
                         notification={currentToast} 
                         onDismiss={dismissCurrent}
+                        onInteractChange={(isInteracting) => {
+                            isInteractingRef.current = isInteracting;
+                            if (isInteracting) {
+                                if (dismissTimerRef.current) {
+                                    clearTimeout(dismissTimerRef.current);
+                                    dismissTimerRef.current = null;
+                                }
+                            } else if (currentToastRef.current) {
+                                if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+                                dismissTimerRef.current = setTimeout(() => {
+                                    dismissCurrent();
+                                }, 5000);
+                            }
+                        }}
                         onQuickReply={async (convId: string, text: string, targetAccountId?: string) => {
                             let token = session?.access_token;
                             if (targetAccountId && targetAccountId !== user?.id) {
