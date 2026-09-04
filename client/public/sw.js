@@ -5,13 +5,14 @@
  * This file is purposefully minimal to resolve caching 
  * and production 'white screen' issues.
  */
+const SW_VERSION = 'v11.1-push-fix-2026-09-04';
 
 self.addEventListener('install', (event) => {
-    console.log(`[FORENSIC][SW] INSTALL event at ${new Date().toISOString()}`);
+    console.log(`[FORENSIC][SW] INSTALL event at ${new Date().toISOString()} | version: ${SW_VERSION}`);
     // Force immediate update to bypass aggressive caching
     self.skipWaiting();
 });
-// Cache Bust Timestamp: 2026-07-30T18:35:00 — v10: enterprise PWA mobile viewport & layout recovery
+// Cache Bust Timestamp: 2026-09-04T22:45:00 — v11.1: push notification delivery fix + version tracking
 
 self.addEventListener('activate', (event) => {
     console.log(`[FORENSIC][SW] ACTIVATE event at ${new Date().toISOString()}`);
@@ -35,7 +36,7 @@ self.addEventListener('message', (event) => {
 // Handle Push Notifications
 self.addEventListener('push', (event) => {
     const swWakeupTs = Date.now();
-    console.log(`[FORENSIC][SW] PUSH RECEIVED at ${new Date().toISOString()}`);
+    console.log(`[FORENSIC][SW] PUSH RECEIVED at ${new Date().toISOString()} | version: ${SW_VERSION}`);
     
     let data = {};
     if (event.data) {

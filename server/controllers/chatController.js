@@ -1995,22 +1995,26 @@ exports.sendMessage = async (req, res) => {
             conversationId: conversationId,
             skipPush: true,
           });
-          await dispatchFastPush({
-            receiverId: member.user_id,
-            senderId: userId,
-            type: "chat_message",
-            title: senderName,
-            message: previewContent,
-            link: `/dashboard/chat?id=${conversationId}`,
-            messageId: createdMessageId,
-            conversationId: conversationId,
-            trace: {
-              clientSendTs,
-              apiReceiveTs: t1_ApiReceived,
-              dbStartTs: t2_DbInsertStart,
-              dbDoneTs: t3_DbInsertDone,
-            }
-          });
+          // v2 pipeline: Gateway deliveryEngine handles push via pg_notify.
+          // Only dispatch from API server in legacy (v1) mode to avoid duplicate pushes.
+          if (PIPELINE_VERSION !== 'v2') {
+            await dispatchFastPush({
+              receiverId: member.user_id,
+              senderId: userId,
+              type: "chat_message",
+              title: senderName,
+              message: previewContent,
+              link: `/dashboard/chat?id=${conversationId}`,
+              messageId: createdMessageId,
+              conversationId: conversationId,
+              trace: {
+                clientSendTs,
+                apiReceiveTs: t1_ApiReceived,
+                dbStartTs: t2_DbInsertStart,
+                dbDoneTs: t3_DbInsertDone,
+              }
+            });
+          }
         });
         Promise.allSettled(notificationPromises).then();
       }
@@ -2038,7 +2042,9 @@ exports.sendMessage = async (req, res) => {
 
           const previewContent = getNotificationPreview(type || 'text', content);
 
-          const mentionPushes = mentionedUsers.map(async (mUser) => {
+          // v2 pipeline: Gateway deliveryEngine handles push via pg_notify.
+          // Only dispatch mention pushes from API server in legacy (v1) mode.
+          const mentionPushes = PIPELINE_VERSION !== 'v2' ? mentionedUsers.map(async (mUser) => {
             if (mUser.id !== userId) {
               await dispatchFastPush({
                 receiverId: mUser.id,
@@ -2057,7 +2063,7 @@ exports.sendMessage = async (req, res) => {
                 }
               });
             }
-          });
+          }) : [];
 
           const mentionDBLogs = mentionedUsers.map(async (mUser) => {
             if (mUser.id !== userId) {
@@ -2085,6 +2091,7 @@ exports.sendMessage = async (req, res) => {
 
     // Offline Hours Auto-Reply Logic
     try {
+      const botSenderId = "00000000-0000-0000-0000-000000000000";
       const { data: settings } = await supabase
         .from("auto_reply_settings")
         .select("*")
@@ -2112,7 +2119,6 @@ exports.sendMessage = async (req, res) => {
         }
 
         if (isOffline) {
-          const botSenderId = "00000000-0000-0000-0000-000000000000";
           const { data: autoMsg, error: autoErr } = await supabase
             .from("messages")
             .insert([{
