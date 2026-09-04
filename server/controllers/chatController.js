@@ -1915,6 +1915,17 @@ exports.sendMessage = async (req, res) => {
           });
       }
 
+      // 2. Authoritative Realtime Broadcast (Socket.IO + Gateway Push via pg_notify)
+      try {
+        await realtime.emitToConversation(conversationId, "chat:message", safePayload, {
+          excludeUserId: userId,
+          correlationId: req.correlationId
+        });
+        console.log(`[Chat/Realtime] Emitted chat:message via pg_notify for messageId: ${msgToSend.id} in conversation: ${conversationId}`);
+      } catch (realtimeErr) {
+        console.error(`[Chat/Realtime] Failed to emit chat:message:`, realtimeErr);
+      }
+
       // 4. Server-side ACK Timeout Recheck (Self-Healing Delivery)
       // After 30s, check if the message was confirmed delivered.
       // If not (delivered_at still null), re-emit to all recipients.
