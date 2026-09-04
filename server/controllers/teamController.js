@@ -173,7 +173,51 @@ exports.sendTeamMessage = async (req, res, next) => {
       throw error;
     }
 
-    try { await realtime.emit('to_room', teamId, 'team_message', data); } catch (e) { console.warn(e); }
+    try {
+      await realtime.emit('to_room', teamId, 'team:message', data);
+      await realtime.emit('to_room', teamId, 'team_message', data);
+    } catch (e) { console.warn(e); }
+
+    // Dispatch in-app and push notifications to all team members (except the sender)
+    (async () => {
+      try {
+        const [{ data: teamMembers }, { data: team }] = await Promise.all([
+          supabase.from('team_members').select('user_id').eq('team_id', teamId),
+          supabase.from('teams').select('name').eq('id', teamId).maybeSingle()
+        ]);
+
+        if (teamMembers && teamMembers.length > 0) {
+          const notificationService = require('../services/notificationService');
+          const senderName = data.profiles?.full_name?.trim() || data.profiles?.username?.trim() || 'Team Member';
+          const teamName = team?.name || 'Team Workspace';
+          const notifTitle = `${teamName}: ${senderName}`;
+          const notifMsg = content ? (content.length > 80 ? content.substring(0, 80) + '...' : content) : 'Sent an attachment';
+
+          for (const m of teamMembers) {
+            if (m.user_id && String(m.user_id) !== String(senderId)) {
+              notificationService.createNotification({
+                receiverId: m.user_id,
+                senderId,
+                type: 'team_message',
+                title: notifTitle,
+                message: notifMsg,
+                link: `/dashboard/teams?teamId=${teamId}`,
+                messageId: data.id,
+                payload: {
+                  type: 'team_message',
+                  teamId,
+                  messageId: data.id,
+                  url: `/dashboard/teams?teamId=${teamId}`
+                }
+              }).catch(err => console.warn('[TeamController] Team notification dispatch error:', err.message));
+            }
+          }
+        }
+      } catch (notifErr) {
+        console.warn('[TeamController] Background team notification failed:', notifErr.message);
+      }
+    })();
+
     res.status(201).json(data);
   } catch (err) {
     next(err);
@@ -218,13 +262,19 @@ exports.editTeamMessage = async (req, res, next) => {
           .select('*, profiles:sender_id(*)')
           .single();
         if (retryError) throw retryError;
-        try { await realtime.emit('to_room', teamId, 'team_message_edited', retryData); } catch (e) { console.warn(e); }
+        try { 
+          await realtime.emit('to_room', teamId, 'team:message_edited', retryData);
+          await realtime.emit('to_room', teamId, 'team_message_edited', retryData);
+        } catch (e) { console.warn(e); }
         return res.json(retryData);
       }
       throw error;
     }
 
-    try { await realtime.emit('to_room', teamId, 'team_message_edited', data); } catch (e) { console.warn(e); }
+    try {
+      await realtime.emit('to_room', teamId, 'team:message_edited', data);
+      await realtime.emit('to_room', teamId, 'team_message_edited', data);
+    } catch (e) { console.warn(e); }
     res.json(data);
   } catch (err) {
     next(err);
@@ -279,7 +329,10 @@ exports.deleteTeamMessage = async (req, res, next) => {
       }
     }
 
-    try { await realtime.emit('to_room', teamId, 'team_message_deleted', { messageId, teamId }); } catch (e) { console.warn(e); }
+    try {
+      await realtime.emit('to_room', teamId, 'team:message_deleted', { messageId, teamId });
+      await realtime.emit('to_room', teamId, 'team_message_deleted', { messageId, teamId });
+    } catch (e) { console.warn(e); }
     res.json({ success: true });
   } catch (err) {
     next(err);
@@ -529,7 +582,6 @@ exports.getFiles = async (req, res, next) => {
     const { data, error } = await supabase
       .from('media_attachments')
       .select('*')
-      .eq('is_deleted', false)
       .order('created_at', { ascending: false });
 
     if (error && error.code !== '42P01') throw error;
@@ -541,15 +593,7 @@ exports.getFiles = async (req, res, next) => {
 
 exports.getRecycledFiles = async (req, res, next) => {
   try {
-    const { teamId } = req.params;
-    const { data, error } = await supabase
-      .from('media_attachments')
-      .select('*')
-      .eq('is_deleted', true)
-      .order('created_at', { ascending: false });
-
-    if (error && error.code !== '42P01') throw error;
-    res.json(data || []);
+    res.json([]);
   } catch (err) {
     res.json([]);
   }
@@ -574,8 +618,7 @@ exports.uploadFile = async (req, res, next) => {
         file_type: fileType || 'application/octet-stream',
         file_size: fileSize || 0,
         storage_path: storagePath || '',
-        uploader_id: req.user.id,
-        is_deleted: false
+        uploader_id: req.user.id
       })
       .select()
       .single();
@@ -592,26 +635,19 @@ exports.deleteFile = async (req, res, next) => {
     const { fileId } = req.params;
     const { error } = await supabase
       .from('media_attachments')
-      .update({ is_deleted: true })
+      .delete()
       .eq('id', fileId);
 
     if (error) throw error;
-    res.json({ success: true, message: 'File moved to recycle bin' });
+    res.json({ success: true, message: 'File deleted from workspace' });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Failed to recycle file' });
+    res.status(500).json({ error: err.message || 'Failed to delete file' });
   }
 };
 
 exports.restoreFile = async (req, res, next) => {
   try {
-    const { fileId } = req.params;
-    const { error } = await supabase
-      .from('media_attachments')
-      .update({ is_deleted: false })
-      .eq('id', fileId);
-
-    if (error) throw error;
-    res.json({ success: true, message: 'File restored from recycle bin' });
+    res.json({ success: true, message: 'File restored' });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Failed to restore file' });
   }

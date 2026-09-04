@@ -12,7 +12,8 @@ import { AuthService } from './AuthService';
 async function deepNavigateToChat(conversationId: string) {
   try {
     if (!navigationRef.isReady()) {
-      console.warn('[ACCOUNT_FORENSIC] Navigation container not ready — aborting navigate');
+      console.warn('[ACCOUNT_FORENSIC] Navigation container not ready — retrying in 100ms');
+      setTimeout(() => deepNavigateToChat(conversationId), 100);
       return;
     }
 
@@ -20,7 +21,7 @@ async function deepNavigateToChat(conversationId: string) {
 
     // Immediate non-blocking navigation so the user lands on the Chat screen instantly
     (navigationRef as any).navigate('MainTabs', {
-      screen: 'Chat',
+      screen: 'ChatTab',
       params: {
         screen: 'Chat',
         params: { conversationId, conversation: null },
@@ -36,7 +37,7 @@ async function deepNavigateToChat(conversationId: string) {
 
       if (conversation && navigationRef.isReady()) {
         (navigationRef as any).navigate('MainTabs', {
-          screen: 'Chat',
+          screen: 'ChatTab',
           params: {
             screen: 'Chat',
             params: { conversationId, conversation },
@@ -51,10 +52,30 @@ async function deepNavigateToChat(conversationId: string) {
   }
 }
 
+async function deepNavigateToTeam(teamId: string) {
+  try {
+    if (!navigationRef.isReady()) {
+      console.warn('[ACCOUNT_FORENSIC] Navigation container not ready — retrying team navigate in 100ms');
+      setTimeout(() => deepNavigateToTeam(teamId), 100);
+      return;
+    }
+
+    console.log(`[ACCOUNT_FORENSIC] Deep navigating to Team screen, teamId=${teamId}`);
+
+    (navigationRef as any).navigate('MainTabs', {
+      screen: 'Teams',
+      params: { teamId },
+    });
+  } catch (err) {
+    console.error('[ACCOUNT_FORENSIC] deepNavigateToTeam error:', err);
+  }
+}
+
 class NotificationRouterService {
   private resolveReadyQueue: Record<string, ((value: boolean | PromiseLike<boolean>) => void)[]> = {};
   private isAppReady = false;
   private pendingTapData: any = null;
+  private processedTapKeys = new Set<string>();
 
   setAppReady() {
     this.isAppReady = true;
@@ -67,6 +88,7 @@ class NotificationRouterService {
           if (response && response.notification?.request?.content?.data) {
             const data = response.notification.request.content.data;
             console.log('[ACCOUNT_FORENSIC] ❄️ Cold boot notification tap detected:', JSON.stringify(data));
+            this.pendingTapData = null; // Clear pending to prevent double-firing
             this.handleNotificationTap(data);
           } else if (this.pendingTapData) {
             const data = this.pendingTapData;
@@ -101,8 +123,16 @@ class NotificationRouterService {
     console.log('[ACCOUNT_FORENSIC] Handling Notification Tap:', JSON.stringify(data));
 
     try {
-      // Support top-level, nested, and Firebase data payload structures
-      const payload = data?.data ?? data;
+      // Support top-level, nested, stringified, and Firebase data payload structures
+      let payload = data?.data ?? data;
+      if (typeof payload === 'string') {
+        try {
+          payload = JSON.parse(payload);
+        } catch (e) {
+          console.warn('[ACCOUNT_FORENSIC] Failed to parse string payload:', e);
+        }
+      }
+
       const targetAccountId =
         payload?.targetAccountId ||
         payload?.target_account_id ||
@@ -113,15 +143,47 @@ class NotificationRouterService {
         payload?.receiver_id ||
         payload?.receiverId;
 
-      const conversationId =
+      let conversationId =
         payload?.conversationId ||
         payload?.conversation_id ||
         payload?.chat_id ||
+        payload?.chatId ||
         payload?.id;
+
+      let teamId =
+        payload?.teamId ||
+        payload?.team_id;
+
+      // Fallback: extract conversationId / teamId from url string if missing from top-level fields
+      if (typeof payload?.url === 'string') {
+        if (!conversationId) {
+          const convMatch = payload.url.match(/(?:id|conversationId|chat_id)=([a-zA-Z0-9_-]+)/);
+          if (convMatch && convMatch[1]) {
+            conversationId = convMatch[1];
+          }
+        }
+        if (!teamId) {
+          const teamMatch = payload.url.match(/(?:teamId|team_id)=([a-zA-Z0-9_-]+)/);
+          if (teamMatch && teamMatch[1]) {
+            teamId = teamMatch[1];
+          }
+        }
+      }
 
       const type = payload?.type || payload?.notification_type;
 
-      console.log(`[ACCOUNT_FORENSIC] Parsed payload — type=${type}, conversationId=${conversationId}, targetAccountId=${targetAccountId}`);
+      // Deduplication check: prevent handling exact same tap twice within 3 seconds
+      const tapKey = `${teamId || ''}:${conversationId || ''}:${payload?.messageId || ''}:${type || ''}`;
+      if (this.processedTapKeys.has(tapKey)) {
+        console.log(`[ACCOUNT_FORENSIC] Skipping duplicate tap execution for key: ${tapKey}`);
+        return;
+      }
+      this.processedTapKeys.add(tapKey);
+      setTimeout(() => this.processedTapKeys.delete(tapKey), 3000);
+
+      console.log(`[ACCOUNT_FORENSIC] Parsed payload — type=${type}, conversationId=${conversationId}, teamId=${teamId}, targetAccountId=${targetAccountId}`);
+
+      const isTeamNotif = !!teamId || ['team_message', 'team_call', 'team_call_ended', 'team_invite'].includes(String(type || '').toLowerCase());
 
       // Any payload with a conversationId is a chat-related notification
       const isChatNotif =
@@ -131,8 +193,10 @@ class NotificationRouterService {
         );
 
       if (!targetAccountId) {
-        console.log('[ACCOUNT_FORENSIC] No targetAccountId in payload — navigating directly to conversation.');
-        if (isChatNotif && conversationId) {
+        console.log('[ACCOUNT_FORENSIC] No targetAccountId in payload — navigating directly.');
+        if (isTeamNotif && teamId) {
+          await deepNavigateToTeam(teamId);
+        } else if (isChatNotif && conversationId) {
           await deepNavigateToChat(conversationId);
         }
         return;
@@ -151,8 +215,9 @@ class NotificationRouterService {
 
         if (!storedAccount) {
           console.error(`[ACCOUNT_FORENSIC] ❌ Account ${targetAccountId} NOT found in local storage. Available accounts:`, storedAccounts.map(a => a.id));
-          // If target account is missing from device storage, still attempt chat navigation on active session if conversationId exists
-          if (isChatNotif && conversationId) {
+          if (isTeamNotif && teamId) {
+            await deepNavigateToTeam(teamId);
+          } else if (isChatNotif && conversationId) {
             await deepNavigateToChat(conversationId);
           }
           return;
@@ -181,10 +246,12 @@ class NotificationRouterService {
         console.log('[ACCOUNT_FORENSIC] Already on correct target account — skipping switch.');
       }
 
-      if (isChatNotif && conversationId) {
+      if (isTeamNotif && teamId) {
+        await deepNavigateToTeam(teamId);
+      } else if (isChatNotif && conversationId) {
         await deepNavigateToChat(conversationId);
       } else {
-        console.log('[ACCOUNT_FORENSIC] Notification type/payload handled without deep chat route:', type);
+        console.log('[ACCOUNT_FORENSIC] Notification type/payload handled without deep route:', type);
       }
 
     } catch (err) {

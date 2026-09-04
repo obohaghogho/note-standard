@@ -44,7 +44,12 @@ export default function ChatScreen({ navigation, route }: Props) {
     const [resolvedConversation, setResolvedConversation] = useState<any>(routeConversation ?? null);
 
     useEffect(() => {
-        if (resolvedConversation) return; // Already have it
+        if (routeConversation && routeConversation.id === conversationId) {
+            setResolvedConversation(routeConversation);
+            return;
+        }
+
+        if (resolvedConversation && resolvedConversation.id === conversationId) return; // Already have correct conversation
         if (!conversationId) return;
 
         // 1. Try conversations already in ChatContext
@@ -62,7 +67,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 if (match) setResolvedConversation(match);
             })
             .catch(err => console.warn('[ChatScreen] Failed to self-heal conversation:', err));
-    }, [conversationId, resolvedConversation, conversations]);
+    }, [conversationId, routeConversation, resolvedConversation, conversations]);
 
     const isFocused = useIsFocused();
     const insets = initialWindowMetrics?.insets || { top: 0, bottom: 0, left: 0, right: 0 };

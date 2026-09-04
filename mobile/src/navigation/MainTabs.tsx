@@ -12,7 +12,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 export type MainTabParamList = {
   Home: undefined;
   Community: undefined;
-  Chat: undefined;
+  ChatTab: undefined;
   Wallet: undefined;
   Teams: undefined;
   Notes: undefined;
@@ -70,7 +70,7 @@ export default function MainTabs() {
         options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="🌐" label="Community" focused={focused} /> }}
       />
       <Tab.Screen
-        name="Chat"
+        name="ChatTab"
         component={ChatStack}
         options={{ tabBarIcon: ({ focused }) => <TabIcon emoji="💬" label="Chat" focused={focused} /> }}
       />

@@ -345,9 +345,24 @@ module.exports = (io, socket) => {
       senderId: userId, // always use authenticated userId, not client-provided
       sender_id: message.sender_id || userId,
       conversation_id: message.conversation_id || conversationId,
+      team_id: message.team_id || teamId,
     };
     socket.to(room).emit('chat:message', outboundMsg);
     socket.to(room).emit('chat:new_message', outboundMsg);
+    if (teamId) {
+      socket.to(room).emit('team:message', outboundMsg);
+      socket.to(room).emit('team_message', outboundMsg);
+    }
+  });
+
+  socket.on('team:message', (data) => {
+    const { teamId, message } = data || {};
+    const room = teamId || data?.team_id;
+    if (!room) return;
+
+    const outboundMsg = message || data;
+    socket.to(room).emit('team:message', outboundMsg);
+    socket.to(room).emit('team_message', outboundMsg);
   });
 
   // ── Immediate Socket Delivery Receipt ─────────────────────────────────

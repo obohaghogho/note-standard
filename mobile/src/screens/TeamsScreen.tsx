@@ -595,25 +595,32 @@ export default function TeamsScreen() {
         const socket = io(GATEWAY_URL, { auth: { token }, transports: ['websocket'] });
         socketRef.current = socket;
         socket.on('connect', () => socket.emit('team:join', activeTeam.id));
-        socket.on('team:message', (msg: TeamMessage) => {
+        const handleNewTeamMsg = (msg: TeamMessage) => {
           setTeamMessages(prev => {
             const current = prev[activeTeam.id] || [];
             if (current.some(m => m.id === msg.id)) return prev;
             return { ...prev, [activeTeam.id]: [...current, msg] };
           });
-        });
-        socket.on('team:message_edited', (editedMsg: TeamMessage) => {
+        };
+        const handleEditedTeamMsg = (editedMsg: TeamMessage) => {
           setTeamMessages(prev => {
             const current = prev[activeTeam.id] || [];
             return { ...prev, [activeTeam.id]: current.map(m => m.id === editedMsg.id ? { ...m, ...editedMsg } : m) };
           });
-        });
-        socket.on('team:message_deleted', ({ messageId }: { messageId: string }) => {
+        };
+        const handleDeletedTeamMsg = ({ messageId }: { messageId: string }) => {
           setTeamMessages(prev => {
             const current = prev[activeTeam.id] || [];
             return { ...prev, [activeTeam.id]: current.filter(m => m.id !== messageId) };
           });
-        });
+        };
+
+        socket.on('team:message', handleNewTeamMsg);
+        socket.on('team_message', handleNewTeamMsg);
+        socket.on('team:message_edited', handleEditedTeamMsg);
+        socket.on('team_message_edited', handleEditedTeamMsg);
+        socket.on('team:message_deleted', handleDeletedTeamMsg);
+        socket.on('team_message_deleted', handleDeletedTeamMsg);
         socket.on('team:member_added', (newMember: any) => {
           // This will be picked up by the TeamChatModal's local state via parent if we passed it,
           // but TeamChatModal has its own fetch. Let's make it simpler and just fetch or emit.
