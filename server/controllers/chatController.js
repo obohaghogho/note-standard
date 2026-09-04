@@ -791,6 +791,7 @@ exports.createConversation = async (req, res) => {
           message: notifMsg,
           link: `/dashboard/chat?id=${conversationId}`,
           conversationId: conversationId,
+          skipPush: true,
         });
         await dispatchFastPush({
           receiverId: pId,
@@ -877,6 +878,7 @@ exports.acceptConversation = async (req, res) => {
             message: notifMsg,
             link: `/dashboard/chat?id=${conversationId}`,
             conversationId: conversationId,
+            skipPush: true,
           });
           await dispatchFastPush({
             receiverId: m.user_id,
@@ -1961,7 +1963,7 @@ exports.sendMessage = async (req, res) => {
             link: `/dashboard/chat?id=${conversationId}`,
             messageId: createdMessageId,
             conversationId: conversationId,
-            skipPush: false,
+            skipPush: true,
           });
           await dispatchFastPush({
             receiverId: member.user_id,
