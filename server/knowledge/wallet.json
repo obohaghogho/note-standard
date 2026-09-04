@@ -1,0 +1,76 @@
+{
+  "feature": "Wallet",
+  "intents": [
+    {
+      "name": "fund_wallet",
+      "keywords": ["fund wallet", "deposit", "add money", "how to deposit", "fund", "top up"],
+      "answer": "To fund your NoteStandard wallet: 1. Navigate to the Wallet Dashboard. 2. Tap 'Add Money' or 'Fund Wallet'. 3. Choose your preferred payment method: Bank Transfer via your dedicated Virtual Account (Paystack / Fincra / Anchor), Card Payment (Visa, Mastercard, Verve), or Crypto Deposit (BTC, ETH, USDT, USDC). Direct bank transfers and card payments credit automatically upon confirmation.",
+      "article_id": "wallet.fund_wallet"
+    },
+    {
+      "name": "usd_payments",
+      "keywords": ["deposit usd", "usd deposit", "usd virtual account", "fund usd", "usd wallet", "how to deposit usd", "usd card deposit"],
+      "answer": "To deposit USD or access your USD virtual account in NoteStandard: 1. Open the Wallet Dashboard. 2. Tap the Currency Selector dropdown at the top of the wallet screen. 3. Select 'USD' (United States Dollar). 4. Tap 'Add Money' or 'Fund Wallet' to view your dedicated USD virtual account transfer details, or select Card Payment to deposit USD via card, or swap from NGN/Crypto.",
+      "article_id": "wallet.usd_payments"
+    },
+    {
+      "name": "supported_currencies",
+      "keywords": ["supported currencies", "currencies", "fiat"],
+      "answer": "NoteStandard currently supports direct local fiat payments in NGN (Nigerian Naira), USD (US Dollar), EUR (Euro), and GBP (British Pound), as well as cryptocurrencies (BTC, ETH, USDT, USDC). Additional international fiat currencies (such as AUD, CAD, ZAR, JPY, NZD) are undergoing regulatory corridor integration; for regional transactions in these regions, users should use USD or USDT/USDC as instant global payment alternatives.",
+      "article_id": "wallet.supported_currencies"
+    },
+    {
+      "name": "unsupported_fiat_currencies",
+      "keywords": ["unsupported currency", "aud", "cad", "zar"],
+      "answer": "If a specific fiat currency (such as AUD - Australian Dollar, CAD - Canadian Dollar, or ZAR - South African Rand) is currently unavailable for direct local bank deposits or payments in your region, NoteStandard recommends using USD (United States Dollar) or stablecoins like USDT/USDC for cross-border funding. Your wallet can seamlessly swap USD or USDT to any local currency at competitive real-time rates.",
+      "article_id": "wallet.unsupported_fiat_currencies"
+    },
+    {
+      "name": "virtual_account",
+      "keywords": ["deposit ngn", "ngn deposit", "bank transfer deposit", "virtual account deposit", "ngn bank transfer"],
+      "answer": "Your NoteStandard Virtual Account allows you to receive direct bank transfers into your wallet 24/7. Go to Wallet > Add Money > Bank Transfer to copy your dedicated bank account number and bank name (powered by Paystack, Fincra, or Anchor BaaS partners). Funds sent to this account are credited to your wallet balance instantly.",
+      "article_id": "wallet.virtual_account"
+    },
+    {
+      "name": "card_funding",
+      "keywords": ["deposit ngn using card", "deposit ngn card", "card funding", "deposit with card", "card payment", "ngn card deposit", "credit card", "debit card", "visa", "mastercard", "verve", "how to deposit card"],
+      "answer": "To fund your wallet using a debit or credit card (Visa, Mastercard, Verve) in NGN or USD: 1. Go to Wallet > Add Money / Fund Wallet. 2. Select 'Card Payment'. 3. Select the currency (e.g. NGN or USD) and enter the deposit amount. 4. Enter your card details and complete the 3D Secure OTP verification from your bank. Card deposits credit to your balance instantly.",
+      "article_id": "wallet.card_funding"
+    },
+    {
+      "name": "bank_withdrawals",
+      "answer": "To withdraw funds to your local bank account: 1. Go to Wallet > Send / Withdraw. 2. Select 'Bank Account'. 3. Choose your bank, enter your account number, and verify the account holder name. 4. Enter the amount and your 4-digit Transaction PIN. Local bank payouts process automatically within 1 to 15 minutes.",
+      "article_id": "wallet.bank_withdrawals"
+    },
+    {
+      "name": "internal_transfers",
+      "answer": "You can send funds instantly to any NoteStandard user with 0% transaction fee. Go to Wallet > Transfer > NoteStandard User, enter the recipient's username or registered email, enter the transfer amount, and authorize with your 4-digit Transaction PIN.",
+      "article_id": "wallet.internal_transfers"
+    },
+    {
+      "name": "wallet_limits",
+      "answer": "Daily and monthly wallet transaction limits depend on your KYC verification tier: Tier 1 daily limit is 50,000 NGN. Tier 2 daily limit is 500,000 NGN. Tier 3 users enjoy unlimited daily transfers and withdrawals. Upgrade your KYC tier under Profile Settings > Verification to increase limits.",
+      "article_id": "wallet.wallet_limits"
+    },
+    {
+      "name": "transaction_history",
+      "answer": "To view your complete transaction history, open the Wallet tab and tap 'Transaction History'. You can filter records by date, currency, or status (Deposit, Withdrawal, Transfer, Swap). Tap any item to inspect full transaction reference details or download an official PDF receipt.",
+      "article_id": "wallet.transaction_history"
+    },
+    {
+      "name": "pending_transaction_troubleshooting",
+      "answer": "If a wallet deposit or withdrawal displays a 'Pending' status: 1. Allow up to 15 minutes for bank network clearing. 2. Verify that your bank reference was generated successfully. 3. If funds leave your bank account but do not reflect in NoteStandard after 30 minutes, provide your transaction reference number to support for manual ledger audit and instant reconciliation.",
+      "article_id": "wallet.pending_transaction_troubleshooting"
+    },
+    {
+      "name": "settlement",
+      "answer": "Merchant and bulk settlements execute automatically twice daily at 8:00 AM and 4:00 PM. Settlement logs and batch reference numbers can be audited directly under Wallet > Settlement History.",
+      "article_id": "wallet.settlement"
+    },
+    {
+      "name": "cross_border_payments",
+      "answer": "Cross-border transfers enable sending funds internationally across supported FX corridors. Applicable exchange rates and clear fee breakdowns are presented before you enter your 4-digit Transaction PIN to finalize execution.",
+      "article_id": "wallet.cross_border_payments"
+    }
+  ]
+}

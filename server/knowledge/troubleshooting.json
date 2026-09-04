@@ -1,0 +1,35 @@
+{
+  "feature": "Troubleshooting",
+  "intents": [
+    {
+      "name": "blank_screen_or_loading_freeze",
+      "answer": "If you experience a blank screen or loading freeze: 1. Refresh your browser window or restart the app. 2. Clear browser cache and site data for NoteStandard. 3. Ensure you have an active internet connection. 4. Verify your browser is updated to the latest version.",
+      "article_id": "troubleshooting.blank_screen_or_loading_freeze"
+    },
+    {
+      "name": "connection_refused_or_socket_disconnect",
+      "answer": "If chat or notifications say disconnected: Check your network connection. If running locally, ensure backend servers on port 5000 and 5001 are active. On web, refreshing the page auto-reconnects your session seamlessly.",
+      "article_id": "troubleshooting.connection_refused_or_socket_disconnect"
+    },
+    {
+      "name": "delayed_bank_deposit",
+      "answer": "Bank transfers via Virtual Account usually credit within 1 to 15 minutes. If delayed beyond 30 minutes: 1. Check your bank app to ensure the transfer status is 'Successful'. 2. Verify the account number used matches your NoteStandard Virtual Account. 3. If funds don't reflect after 30 minutes, provide your transaction reference number to support for instant ledger reconciliation.",
+      "article_id": "troubleshooting.delayed_bank_deposit"
+    },
+    {
+      "name": "wallet_balance_not_updating",
+      "answer": "If you completed a transaction but your wallet balance hasn't updated: 1. Pull down on the Wallet screen to refresh. 2. Check the 'Transaction History' tab to verify if the payment is listed as 'Pending' or 'Completed'. 3. Log out and back into your account to force a fresh data sync with the server.",
+      "article_id": "troubleshooting.wallet_balance_not_updating"
+    },
+    {
+      "name": "missing_push_notifications",
+      "answer": "If you are not receiving push notifications: 1. Open Browser Settings > Site Settings > Notifications, find NoteStandard, and click 'Allow'. 2. In NoteStandard, go to Settings > Notifications and verify Push Alerts are ON. 3. Ensure device notifications are allowed for NoteStandard in your OS settings (Windows/Android/iOS).",
+      "article_id": "troubleshooting.missing_push_notifications"
+    },
+    {
+      "name": "clear_cache_and_reset",
+      "answer": "To resolve persistent UI glitches: Open browser DevTools or app settings, navigate to Storage, and click 'Clear Local Storage and Cache'. Log back into your NoteStandard account to sync fresh data from the server.",
+      "article_id": "troubleshooting.clear_cache_and_reset"
+    }
+  ]
+}

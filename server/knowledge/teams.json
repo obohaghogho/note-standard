@@ -1,0 +1,35 @@
+{
+  "feature": "Teams",
+  "intents": [
+    {
+      "name": "team_creation",
+      "answer": "NoteStandard enables seamless team collaboration. To create a team: 1. Open the Teams tab. 2. Tap 'Create Team'. 3. Enter team name, description, and optional logo. You become the Team Owner and can immediately invite members.",
+      "article_id": "teams.team_creation"
+    },
+    {
+      "name": "invite_members",
+      "answer": "To invite colleagues to your team: 1. Go to Team Settings > Members. 2. Tap 'Invite Member'. 3. Enter their username or email address and select their role (Admin, Member, or Guest). An invitation will be sent to their NoteStandard inbox.",
+      "article_id": "teams.invite_members"
+    },
+    {
+      "name": "team_roles",
+      "answer": "NoteStandard supports 4 team roles: Team Owner (full control, billing, member management), Team Admin (can invite/remove members, manage team folders), Member (can create/edit shared team notes), and Guest (view-only access to assigned notes).",
+      "article_id": "teams.team_roles"
+    },
+    {
+      "name": "shared_workspace",
+      "answer": "Teams share a dedicated workspace folder where members can create joint notes, collaborate in real time, leave inline comments, and track revision history across shared projects.",
+      "article_id": "teams.shared_workspace"
+    },
+    {
+      "name": "team_chat",
+      "answer": "Every team includes a dedicated Team Chat channel. Members can send messages, share files, pin important announcements, and start group audio/video calls directly within the team workspace.",
+      "article_id": "teams.team_chat"
+    },
+    {
+      "name": "team_activity_feed",
+      "answer": "The Team Activity Feed logs all recent member actions including note edits, new uploads, member joins, and role changes, keeping the entire team aligned.",
+      "article_id": "teams.team_activity_feed"
+    }
+  ]
+}

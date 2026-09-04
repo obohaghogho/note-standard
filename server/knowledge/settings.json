@@ -1,0 +1,40 @@
+{
+  "feature": "Settings",
+  "intents": [
+    {
+      "name": "theme_customization",
+      "answer": "To customize app theme and appearance: Go to Settings > Appearance. You can toggle between Dark Mode, Light Mode, or Sync with System Theme. You can also choose custom accent colors, chat wallpapers, and font scale.",
+      "article_id": "settings.theme_customization"
+    },
+    {
+      "name": "advertisements_tab_location",
+      "answer": "To access your Ad Account, view existing promotional campaigns, or create new ad banners: Navigate to Dashboard → Settings → Advertisements tab. Here you can track ad review status, view performance analytics, and fund your ad campaign balance.",
+      "article_id": "settings.advertisements_tab_location"
+    },
+    {
+      "name": "pwa_app_installation",
+      "answer": "NoteStandard can be installed as a standalone app on iOS, Android, Windows, and Mac: On Android/Desktop Chrome, tap the 'Install App' icon in the browser address bar. On iPhone/iPad Safari, tap the Share button and select 'Add to Home Screen'. Installing the PWA provides full-screen performance and instant push notifications.",
+      "article_id": "settings.pwa_app_installation"
+    },
+    {
+      "name": "notification_preferences",
+      "answer": "Manage notification alerts in Settings > Notifications. Customize push alerts, email digests, chat sound effects, and in-app banner preferences for messages, wallet transactions, team invites, and mentions.",
+      "article_id": "settings.notification_preferences"
+    },
+    {
+      "name": "language_localization",
+      "answer": "NoteStandard is localized in multiple languages including English, French, Spanish, Portuguese, German, Arabic, and Chinese. Change your app language under Settings > Language & Region.",
+      "article_id": "settings.language_localization"
+    },
+    {
+      "name": "privacy_controls",
+      "answer": "Control your data and visibility under Settings > Privacy: Toggle online presence visibility, read receipt status, public profile indexing, and search discoverability.",
+      "article_id": "settings.privacy_controls"
+    },
+    {
+      "name": "app_version_update",
+      "answer": "To check your current app version or search for updates, go to Settings > About NoteStandard > Check for Updates. On web, simply refresh your browser window to fetch the latest version.",
+      "article_id": "settings.app_version_update"
+    }
+  ]
+}

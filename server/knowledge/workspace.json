@@ -1,0 +1,45 @@
+{
+  "feature": "Workspace",
+  "intents": [
+    {
+      "name": "notes_management",
+      "answer": "NoteStandard gives you powerful note creation and editing tools. To create a note, tap the '+' button in the Workspace tab. You can use rich text formatting, bullet lists, code blocks, images, and attachments. Notes save automatically as you type.",
+      "article_id": "workspace.notes_management"
+    },
+    {
+      "name": "folders_tags",
+      "answer": "Organize your notes using Folders and Tags: Create folders in the Workspace sidebar to group projects together. Add tags (e.g. #finance, #ideas) inside notes to quickly filter and cross-reference related notes across different folders.",
+      "article_id": "workspace.folders_tags"
+    },
+    {
+      "name": "ai_notes",
+      "answer": "The built-in AI Notes Assistant can automatically summarize long notes, generate content outlines, extract action items, fix grammar, or translate text. Tap the AI Sparkles icon inside any note editor to invoke AI assistance.",
+      "article_id": "workspace.ai_notes"
+    },
+    {
+      "name": "trend_dashboard",
+      "answer": "The Trend Dashboard lets you explore public community notes, trending articles, and viral content shared by creators on NoteStandard. You can browse by popularity, category (Business, Technology, Finance, Education), or search keywords.",
+      "article_id": "workspace.trend_dashboard"
+    },
+    {
+      "name": "community_notes",
+      "answer": "You can publish any note to the NoteStandard Community Feed. Open a note, tap 'Publish to Community', select a category, and confirm. Public notes can receive likes, comments, bookmarks, and shares from other users.",
+      "article_id": "workspace.community_notes"
+    },
+    {
+      "name": "direct_note_sharing",
+      "answer": "To share a private note with specific collaborators: Open the note, tap 'Share', and enter their username or email address. You can set permissions to 'Can View' or 'Can Edit'. Shared collaborators will receive an instant notification.",
+      "article_id": "workspace.direct_note_sharing"
+    },
+    {
+      "name": "note_export",
+      "answer": "You can export your notes at any time. Open a note, tap the options menu (three dots), and select 'Export'. Supported formats include PDF, Markdown (.md), HTML, and Plain Text (.txt).",
+      "article_id": "workspace.note_export"
+    },
+    {
+      "name": "note_search",
+      "answer": "Use the Search Bar at the top of the Workspace screen to search through all your private notes, team notes, and public community notes. NoteStandard supports instant full-text search across titles, tags, and body content.",
+      "article_id": "workspace.note_search"
+    }
+  ]
+}

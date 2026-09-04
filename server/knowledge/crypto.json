@@ -1,0 +1,53 @@
+{
+  "feature": "Crypto",
+  "intents": [
+    {
+      "name": "swaps",
+      "keywords": ["purchase btc", "buy btc", "buy crypto", "purchase bitcoin", "swap btc", "convert ngn to btc", "buy usdt", "swap", "purchase", "buy", "convert", "trade", "exchange"],
+      "answer": "To purchase or buy BTC (Bitcoin) or other crypto in NoteStandard: 1. Open the Wallet Dashboard. 2. Tap 'Swap'. 3. Select your source currency (e.g. NGN or USD) and choose BTC (Bitcoin) as the target asset. 4. Enter the amount to view the live market exchange rate. 5. Confirm the swap with your 4-digit Transaction PIN. The BTC will be credited to your crypto wallet instantly.",
+      "article_id": "crypto.swaps"
+    },
+    {
+      "name": "crypto_deposits",
+      "keywords": ["deposit btc", "deposit crypto", "receive btc", "receive bitcoin", "crypto deposit", "btc deposit", "wallet deposit btc"],
+      "answer": "To deposit crypto into your NoteStandard wallet: 1. Go to Wallet > Receive > Crypto. 2. Select the asset (BTC, ETH, USDT, or USDC). 3. Select the network (e.g., TRC-20 for USDT, ERC-20 for ETH/USDC, or Native Bitcoin). 4. Copy your dedicated deposit address or scan the QR code. Ensure you send funds using the EXACT matching network.",
+      "article_id": "crypto.crypto_deposits"
+    },
+    {
+      "name": "deposit_confirmations",
+      "keywords": ["confirmation", "confirmations", "crypto pending", "blockchain confirmation"],
+      "answer": "Crypto deposits require blockchain network confirmations before being credited to your wallet balance (processed automatically via NOWPayments gateway): Bitcoin requires 2 confirmations (~20 mins). Ethereum and ERC-20 tokens require 12 confirmations (~3 mins). TRON (TRC-20) requires 19 confirmations (~1 min). Once confirmed on-chain, your wallet credits automatically.",
+      "article_id": "crypto.deposit_confirmations"
+    },
+    {
+      "name": "crypto_memo_tag_requirement",
+      "keywords": ["memo", "tag", "destination tag"],
+      "answer": "For cryptocurrencies that require a MEMO or Destination Tag (such as XRP, TON, or XLM), you MUST include your unique NoteStandard MEMO tag when executing the transfer from your external wallet. Missing or incorrect MEMO tags delay automatic processing and require manual support reconciliation.",
+      "article_id": "crypto.crypto_memo_tag_requirement"
+    },
+    {
+      "name": "supported_chains",
+      "keywords": ["supported chains", "blockchain", "networks"],
+      "answer": "NoteStandard supports Bitcoin (Native SegWit), Ethereum (ERC-20), TRON (TRC-20), and Solana. Always verify the correct blockchain network before transferring to avoid loss of funds.",
+      "article_id": "crypto.supported_chains"
+    },
+    {
+      "name": "crypto_withdrawals",
+      "keywords": ["withdraw crypto", "send crypto", "crypto payout"],
+      "answer": "To withdraw crypto to an external wallet address: 1. Go to Wallet > Send > Crypto. 2. Choose the asset and select the correct network. 3. Paste the recipient's external wallet address. 4. Enter the amount. 5. Review the network gas fee and confirm with your 4-digit Transaction PIN.",
+      "article_id": "crypto.crypto_withdrawals"
+    },
+    {
+      "name": "recovery_policy",
+      "keywords": ["wrong address", "lost crypto", "recovery"],
+      "answer": "Cryptocurrency transactions sent to an incorrect address or using an unsupported network cannot be reversed due to blockchain immutability. Always double-check recipient address and network before executing withdrawals.",
+      "article_id": "crypto.recovery_policy"
+    },
+    {
+      "name": "market_rates",
+      "keywords": ["rates", "market rate", "spread", "exchange rate"],
+      "answer": "NoteStandard aggregates real-time market rates from global liquidity providers to offer competitive, tight-spread exchange rates for all crypto and fiat swaps.",
+      "article_id": "crypto.market_rates"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "feature": "Support",
+  "intents": [
+    {
+      "name": "ai_support_overview",
+      "keywords": ["ai", "support", "help", "assistant", "overview", "documentation", "groq", "agent"],
+      "answer": "NoteStandard AI Support provides 24/7 instant assistance for all app features, wallet inquiries, account settings, and troubleshooting. The AI agent evaluates your question against official knowledge documentation to deliver accurate step-by-step guidance.",
+      "article_id": "support.ai_support_overview"
+    },
+    {
+      "name": "human_escalation",
+      "keywords": ["human", "agent", "specialist", "escalate", "escalation", "transfer", "override", "appeal"],
+      "answer": "If your inquiry requires manual human authority (such as account suspension appeals, manual transaction review, compliance overrides, or complex technical issues), AI Support automatically creates an urgent ticket and connects your chat directly to human support specialists on the Admin Dashboard.",
+      "article_id": "support.human_escalation"
+    },
+    {
+      "name": "ticket_status",
+      "keywords": ["ticket", "status", "resolved", "closed", "open", "pending", "escalated", "waiting", "resolution", "mark"],
+      "answer": "Support Ticket Status definitions: 'Open' = AI handling chat. 'Waiting / Escalated' = Ticket assigned to support queue waiting for human agent. 'Pending' = Support agent currently active in chat. 'Resolved' = Ticket successfully resolved.",
+      "article_id": "support.ticket_status"
+    },
+    {
+      "name": "start_new_chat",
+      "keywords": ["start", "new", "fresh", "resolved", "closed", "wipe", "clean", "session", "archive", "reopen"],
+      "answer": "When a support ticket is resolved or closed, your previous support chat history is archived. Sending a new support message automatically wipes the old chat view so you start with a clean, fresh session!",
+      "article_id": "support.start_new_chat"
+    },
+    {
+      "name": "support_hours_and_sla",
+      "keywords": ["hours", "sla", "time", "availability", "operating", "response"],
+      "answer": "NoteStandard AI Support is available 24/7/365. Human support specialists actively operate from 8:00 AM to 10:00 PM GMT daily, with an average response time of 5 to 15 minutes for escalated tickets.",
+      "article_id": "support.support_hours_and_sla"
+    }
+  ]
+}

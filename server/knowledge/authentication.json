@@ -1,0 +1,55 @@
+{
+  "feature": "Authentication",
+  "intents": [
+    {
+      "name": "login_failure",
+      "answer": "If you cannot login, ensure your email address and password are entered correctly (passwords are case-sensitive). If you forgot your password, click 'Forgot Password?' on the login screen to receive a password reset link via email.",
+      "article_id": "authentication.login_failure"
+    },
+    {
+      "name": "signup_and_onboarding",
+      "answer": "To create a NoteStandard account, click 'Sign Up' on the welcome screen, enter your full name, username, email address, and desired password. Accept the Terms of Service to complete registration. You can also sign up using Google OAuth.",
+      "article_id": "authentication.signup_and_onboarding"
+    },
+    {
+      "name": "password_reset",
+      "answer": "To reset your password: 1. On the login page, click 'Forgot Password?'. 2. Enter your registered email address. 3. Check your inbox for the password reset email. 4. Click the reset link in the email and choose a new strong password (at least 8 characters with numbers and symbols).",
+      "article_id": "authentication.password_reset"
+    },
+    {
+      "name": "two_factor_authentication",
+      "answer": "Two-Factor Authentication (2FA) adds an extra layer of security to your NoteStandard account. You can enable 2FA in Account Settings > Security by scanning the QR code with an authenticator app (such as Google Authenticator or Authy) and entering the 6-digit verification code.",
+      "article_id": "authentication.two_factor_authentication"
+    },
+    {
+      "name": "kyc_verification_tiers",
+      "answer": "NoteStandard has 3 KYC Verification Tiers: Tier 1 requires basic profile info & email verification. Tier 2 requires a valid National ID (NIN, Driver's License, or International Passport) and BVN. Tier 3 requires proof of address (utility bill) and selfie verification. Higher tiers unlock higher daily transfer and withdrawal limits.",
+      "article_id": "authentication.kyc_verification_tiers"
+    },
+    {
+      "name": "bvn_nin_privacy",
+      "answer": "BVN (Bank Verification Number) and NIN (National Identity Number) submission is required strictly for regulatory compliance and identity verification to generate dedicated virtual accounts. Your BVN/NIN is encrypted securely and used only to confirm your legal name and date of birth; it cannot be used by anyone to access your bank account or withdraw funds.",
+      "article_id": "authentication.bvn_nin_privacy"
+    },
+    {
+      "name": "transaction_pin",
+      "answer": "A 4-digit Security PIN is required for authorising transfers, crypto withdrawals, and wallet balance changes. You can set or change your Transaction PIN in Profile Settings > Security > Transaction PIN. If you forget your PIN, tap 'Forgot PIN?' to reset via email OTP verification.",
+      "article_id": "authentication.transaction_pin"
+    },
+    {
+      "name": "profile_management",
+      "answer": "To update your profile, go to Settings > Profile. You can update your full name, username, avatar picture, bio, phone number, and preferred language. Username changes are instant across the app.",
+      "article_id": "authentication.profile_management"
+    },
+    {
+      "name": "session_security",
+      "answer": "You can view and manage all active logged-in devices under Settings > Active Sessions. If you suspect unauthorized access, click 'Log Out All Other Devices' to invalidate all other active sessions immediately.",
+      "article_id": "authentication.session_security"
+    },
+    {
+      "name": "account_deletion",
+      "answer": "To delete your NoteStandard account, navigate to Settings > Account > Delete Account. Note that account deletion is permanent: all your private notes, wallet balances, and message history will be removed. Ensure you withdraw remaining wallet funds before initiating deletion.",
+      "article_id": "authentication.account_deletion"
+    }
+  ]
+}

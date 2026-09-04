@@ -18,6 +18,7 @@ result.txt
 !package.json
 !package-lock.json
 !tsconfig*.json
+!knowledge/*.json
 
 # Dependencies
 node_modules/

@@ -116,7 +116,15 @@ class AiSupportService {
 
              if (intent.keywords && Array.isArray(intent.keywords)) {
                  for (const kw of intent.keywords) {
-                     if (kw && queryLower.includes(kw.toLowerCase())) score += 3;
+                     if (kw && queryLower.includes(kw.toLowerCase())) score += 6;
+                 }
+             }
+
+             if (intent.answer) {
+                 const ansLower = intent.answer.toLowerCase();
+                 const queryWords = queryLower.split(/\W+/).filter(w => w.length > 3);
+                 for (const qw of queryWords) {
+                     if (ansLower.includes(qw)) score += 2;
                  }
              }
              
@@ -130,7 +138,7 @@ class AiSupportService {
      }
 
      allIntents.sort((a, b) => b.score - a.score);
-     const topIntents = allIntents.filter(i => i.score > 0).slice(0, 3);
+     const topIntents = allIntents.filter(i => i.score > 0).slice(0, 4);
      
      if (topIntents.length > 0) {
          matchedArticles = topIntents.map(i => i.article_id);

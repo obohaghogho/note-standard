@@ -1,0 +1,60 @@
+{
+  "feature": "Messaging",
+  "intents": [
+    {
+      "name": "direct_messages",
+      "answer": "You can send direct messages to any NoteStandard user. Open the Chat tab, tap the new message icon, search for their username or select from your contacts, and start chatting.",
+      "article_id": "messaging.direct_messages"
+    },
+    {
+      "name": "group_chats",
+      "answer": "To create a group chat: Open the Chat tab, tap 'New Group', select participants, give the group a name, and tap Create. Group admins can add/remove members and change group info.",
+      "article_id": "messaging.group_chats"
+    },
+    {
+      "name": "delivery_ticks",
+      "answer": "NoteStandard message status indicators: Single grey tick (✓) = Sent to server. Double grey ticks (✓✓) = Delivered to recipient's device. Double blue ticks (✓✓) = Read by recipient.",
+      "article_id": "messaging.delivery_ticks"
+    },
+    {
+      "name": "media_sharing",
+      "answer": "You can share photos, videos, audio voice notes, PDF documents, and location pins in chats. Tap the paperclip icon in the message input bar to attach files up to 50MB.",
+      "article_id": "messaging.media_sharing"
+    },
+    {
+      "name": "voice_video_calls",
+      "answer": "NoteStandard supports high-quality 1-on-1 audio and video calls powered by Agora RTC. Open any direct chat and tap the phone icon (Audio Call) or camera icon (Video Call) at the top. Ensure microphone and camera permissions are granted in your browser or device settings.",
+      "article_id": "messaging.voice_video_calls"
+    },
+    {
+      "name": "push_notifications_troubleshooting",
+      "answer": "If you are not receiving push notifications when offline or in background: 1. Go to Settings > Notifications in NoteStandard and ensure Push Alerts are toggled ON. 2. Verify that site notifications are allowed in your browser settings (Chrome/Safari/Edge). 3. On mobile devices, ensure Battery Saver mode is not restricting NoteStandard background activity.",
+      "article_id": "messaging.push_notifications_troubleshooting"
+    },
+    {
+      "name": "disappearing_messages",
+      "answer": "To enable self-destructing messages: Open Chat Options > Disappearing Messages. Choose a duration (e.g., 24 hours, 7 days). Messages sent after turning this on will automatically delete for both parties after the timer expires.",
+      "article_id": "messaging.disappearing_messages"
+    },
+    {
+      "name": "message_translation",
+      "answer": "NoteStandard can automatically translate incoming messages into your preferred language. Long-press any message and tap 'Translate', or enable Auto-Translate in Settings > Chat Preferences > Preferred Language.",
+      "article_id": "messaging.message_translation"
+    },
+    {
+      "name": "user_blocking",
+      "answer": "To block a user: Open their chat, tap their profile name at the top, scroll down and tap 'Block User'. Blocked users cannot message you, call you, or see your online presence. You can unblock them at any time in Settings > Blocked Users.",
+      "article_id": "messaging.user_blocking"
+    },
+    {
+      "name": "mute_notifications",
+      "answer": "To mute a noisy chat or group: Open the chat options menu and tap 'Mute'. Select duration (8 hours, 1 week, or Always). Muted chats will not trigger sound or push notifications.",
+      "article_id": "messaging.mute_notifications"
+    },
+    {
+      "name": "offline_messaging",
+      "answer": "If you send messages while offline, NoteStandard safely queues them locally. Once your internet connection restores, your queued messages auto-deliver automatically.",
+      "article_id": "messaging.offline_messaging"
+    }
+  ]
+}

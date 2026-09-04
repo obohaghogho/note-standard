@@ -1,0 +1,35 @@
+{
+  "feature": "Monetization",
+  "intents": [
+    {
+      "name": "plan_tiers",
+      "answer": "NoteStandard offers 3 subscription plans: Free Tier (Basic notes, 50k NGN daily wallet limit, standard AI features), Pro Plan (Advanced AI notes, unlimited folders, 500k NGN daily limit, priority support), and Business Plan (Unlimited team workspaces, custom branding, unlimited daily limits, dedicated account manager).",
+      "article_id": "monetization.plan_tiers"
+    },
+    {
+      "name": "upgrade_subscription",
+      "answer": "To upgrade your subscription plan: Navigate to Settings > Subscription. Select your desired plan (Pro or Business), choose billing cycle (Monthly or Annual with 20% discount), and complete payment using your NoteStandard Wallet Balance, Debit Card, or Bank Transfer.",
+      "article_id": "monetization.upgrade_subscription"
+    },
+    {
+      "name": "affiliate_program",
+      "answer": "NoteStandard's Affiliate & Referral Program rewards you for inviting new users. Earn a 7% recurring commission on every subscription upgrade and monetized transaction made by your referred users. Find your unique referral link under Settings > Referral Program. Earnings credit directly to your wallet for instant withdrawal.",
+      "article_id": "monetization.affiliate_program"
+    },
+    {
+      "name": "creator_monetization",
+      "answer": "Creators can monetize premium notes and educational content on NoteStandard. Set a price for your note, publish it to the Community Feed as a Paid Note, and earn revenue directly into your NoteStandard NGN/USD wallet whenever users unlock your content.",
+      "article_id": "monetization.creator_monetization"
+    },
+    {
+      "name": "advertising_platform",
+      "answer": "To create and manage promotional ads that appear across the platform: 1. Go to your Dashboard → Settings. 2. Click on the 'Advertisements tab'. 3. Select 'Create Ad' and fill in your ad content, target audience, and budget. 4. Fund your ad account using your NoteStandard wallet or payment card. Created ads undergo review by our team before going live.",
+      "article_id": "monetization.advertising_platform"
+    },
+    {
+      "name": "ad_funding_and_review",
+      "answer": "Before running ads, you must fund your ad account under Dashboard → Settings → Advertisements tab by clicking 'Fund Ad Account'. Once funded and submitted, ads are typically reviewed and approved within 1 to 12 hours. You can monitor impressions, clicks, and remaining balance live on your ad dashboard.",
+      "article_id": "monetization.ad_funding_and_review"
+    }
+  ]
+}
