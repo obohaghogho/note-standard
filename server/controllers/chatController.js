@@ -2658,9 +2658,7 @@ exports.markConversationDelivered = async (req, res) => {
       .update({ delivered_at: now })
       .eq("conversation_id", conversationId)
       .neq("sender_id", userId)
-      .is("delivered_at", null)
-      .order("created_at", { ascending: false })
-      .limit(100);
+      .is("delivered_at", null);
 
     if (error) {
       if (error.code === "42703") {
