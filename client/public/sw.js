@@ -250,26 +250,23 @@ self.addEventListener('push', (event) => {
                             }
                         });
 
-                        // Precise conversation view check: only suppress OS desktop notification popup
-                        // if the user is actively focused inside THIS exact conversation ID.
-                        const isActivelyViewingThisChat = !!(notifConversationId && windowClients.find(client => {
-                            try {
-                                const clientUrl = new URL(client.url);
-                                // STRICT CHECK: client must be visible AND focused.
-                                return client.visibilityState === 'visible' && client.focused && clientUrl.searchParams.get('id') === notifConversationId;
-                            } catch (_) {
-                                return false;
-                            }
-                        }));
+                        // Precise conversation view check: ONLY suppress OS desktop notification popup
+                        // if the target account matches the active account in IndexedDB AND that target user
+                        // is currently visible, focused, and viewing THIS exact conversation ID.
+                        const targetAccountId = options.data?.targetAccountId || options.data?.recipientId || options.data?.targetUserId;
+                        let suppressOSNotification = false;
 
-                        let suppressOSNotification = isActivelyViewingThisChat;
-
-                        // Account-switch guard: if the visible window is logged into a DIFFERENT account
-                        // than the notification target, we must still show the OS notification.
-                        if (suppressOSNotification && options.data.targetAccountId && activeAccountId) {
-                            if (String(options.data.targetAccountId) !== String(activeAccountId)) {
-                                console.log(`[SW] Account mismatch — visible window is account ${activeAccountId}, push is for ${options.data.targetAccountId}. Will show OS notification.`);
-                                suppressOSNotification = false;
+                        if (targetAccountId && activeAccountId && String(targetAccountId).trim().toLowerCase() === String(activeAccountId).trim().toLowerCase()) {
+                            const isActivelyViewingThisChat = !!(notifConversationId && windowClients.find(client => {
+                                try {
+                                    const clientUrl = new URL(client.url);
+                                    return client.visibilityState === 'visible' && client.focused && clientUrl.searchParams.get('id') === notifConversationId;
+                                } catch (_) {
+                                    return false;
+                                }
+                            }));
+                            if (isActivelyViewingThisChat) {
+                                suppressOSNotification = true;
                             }
                         }
 

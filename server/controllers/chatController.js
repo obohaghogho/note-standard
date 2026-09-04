@@ -795,6 +795,7 @@ exports.createConversation = async (req, res) => {
         });
         await dispatchFastPush({
           receiverId: pId,
+          senderId: userId,
           type: "chat_request",
           title: notifTitle,
           message: notifMsg,
@@ -882,6 +883,7 @@ exports.acceptConversation = async (req, res) => {
           });
           await dispatchFastPush({
             receiverId: m.user_id,
+            senderId: userId,
             type: "chat_accepted",
             title: notifTitle,
             message: notifMsg,
@@ -1967,6 +1969,7 @@ exports.sendMessage = async (req, res) => {
           });
           await dispatchFastPush({
             receiverId: member.user_id,
+            senderId: userId,
             type: "chat_message",
             title: senderName,
             message: previewContent,
@@ -2011,6 +2014,7 @@ exports.sendMessage = async (req, res) => {
             if (mUser.id !== userId) {
               await dispatchFastPush({
                 receiverId: mUser.id,
+                senderId: userId,
                 type: "mention",
                 title: senderName,
                 message: `Mentioned you: ${previewContent}`,

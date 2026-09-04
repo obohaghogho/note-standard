@@ -109,6 +109,8 @@ const createNotification = async (params) => {
         recipientId: receiverId,        // legacy compat
         targetUserId: receiverId,       // explicit
         targetAccountId: receiverId,    // explicit (same as userId in this app)
+        senderId: senderId || null,
+        sender_id: senderId || null,
         deliveryWebhookUrl: messageId ? `${gatewayUrlStr}/deliver/${messageId}` : undefined,
         trace,
       },
@@ -243,6 +245,8 @@ const dispatchFastPush = (params) => {
           recipientId: receiverId,
           targetUserId: receiverId,
           targetAccountId: receiverId,
+          senderId: params.senderId || params.sender_id || null,
+          sender_id: params.senderId || params.sender_id || null,
           deliveryWebhookUrl: messageId ? `${baseUrl}/deliver/${messageId}` : undefined,
           trace,
         },

@@ -729,6 +729,8 @@ async function dispatchV2Push(params, pushTargets, isCall = false) {
           messageId: payload?.messageId || null,
           conversationId: payload?.conversationId || null,
           targetAccountId: userId,
+          senderId: payload?.senderId || payload?.sender_id || null,
+          sender_id: payload?.senderId || payload?.sender_id || null,
           apiUrl: process.env.BACKEND_URL || 'https://note-standard-api.onrender.com',
           trace: payload?.trace,
           deliveryWebhookUrl: payload?.messageId
@@ -950,6 +952,8 @@ async function sendGenericPush(params) {
             messageId: payload.messageId || null,
             conversationId: payload.conversationId || null,
             targetAccountId: userId,
+            senderId: payload.senderId || payload.sender_id || null,
+            sender_id: payload.senderId || payload.sender_id || null,
             apiUrl: process.env.BACKEND_URL || 'https://note-standard-api.onrender.com',
             // FAST-PATH FIX: Point directly to the gateway for delivery receipts.
             // The gateway is always awake (it holds the sender's socket).
