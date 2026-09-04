@@ -1273,25 +1273,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     useEffect(() => {
         const handleSWMessage = (event: MessageEvent) => {
-            if (event.data?.type === 'QUICK_REPLY_SUBMITTED') {
-                const { conversationId, content } = event.data;
-                if (conversationId && content) {
-                    console.log(`[SW→Chat] QUICK_REPLY_SUBMITTED | conv:${conversationId} → sending message`);
-                    sendMessageToConversation({ conversationId, content, type: 'text' }).catch(() => {});
-                }
-            }
-            if (event.data?.type === 'CHAT_MESSAGE_RECEIVED' || event.data?.type === 'BACKGROUND_PREFETCH') {
+            if (event.data?.type === 'QUICK_REPLY_SUBMITTED' || event.data?.type === 'CHAT_MESSAGE_RECEIVED' || event.data?.type === 'BACKGROUND_PREFETCH') {
                 const { conversationId, message } = event.data;
                 if (conversationId) {
                     console.log(`[SW→Chat] ${event.data.type} | conv:${conversationId} → refreshing messages`);
-                    // iOS FIX: When iOS suspends the WebSocket, push notifications can arrive
-                    // while the socket is dead. The SW posts CHAT_MESSAGE_RECEIVED to tell us
-                    // a new message exists. We MUST call loadMessages(force=true) to fetch it,
-                    // because the socket.on('chat:message') handler will never fire on a dead socket.
-                    // Without this, iOS users must leave and re-enter the chat room to see new messages.
                     loadMessagesRef.current(conversationId, true).catch(() => {});
                     
-                    if (event.data.type === 'CHAT_MESSAGE_RECEIVED') {
+                    if (event.data.type === 'CHAT_MESSAGE_RECEIVED' || event.data?.type === 'QUICK_REPLY_SUBMITTED') {
                         markConversationReadRef.current(conversationId);
                     }
 

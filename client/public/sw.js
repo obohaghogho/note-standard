@@ -341,7 +341,7 @@ self.addEventListener('notificationclick', (event) => {
                     for (const client of windowClients) {
                         if ('postMessage' in client && convId) {
                             client.postMessage({
-                                type: 'QUICK_REPLY_SUBMITTED',
+                                type: 'CHAT_MESSAGE_RECEIVED',
                                 conversationId: convId,
                                 content: trimmedReply
                             });
