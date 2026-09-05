@@ -266,22 +266,35 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     useEffect(() => {
         if (!socket || !connected) return;
 
-        const onBalanceUpdated = (data: BalanceUpdate) => {
+        const onBalanceUpdated = (data: unknown) => {
             console.log('[WalletContext] Balance update via Socket:', data);
             fetchData(true); // Silent sync
         };
 
         const onNotification = (data: RealtimeNotification) => {
-            if (data.type === 'payment_success' || data.type === 'wallet_update') {
+            const t = String(data.type || '').toLowerCase();
+            if (
+                t === 'payment_success' || 
+                t === 'wallet_update' || 
+                t === 'wallet_deposit' || 
+                t === 'deposit' || 
+                t === 'withdrawal_completed' || 
+                t === 'transaction_confirmed'
+            ) {
+                console.log('[WalletContext] Triggering silent wallet refresh for notification type:', data.type);
                 fetchData(true); // Silent sync
             }
         };
 
         socket.on('balance_updated', onBalanceUpdated);
+        socket.on('wallet_update', onBalanceUpdated);
+        socket.on('wallet_credited', onBalanceUpdated);
         socket.on('notification', onNotification);
 
         return () => {
             socket.off('balance_updated', onBalanceUpdated);
+            socket.off('wallet_update', onBalanceUpdated);
+            socket.off('wallet_credited', onBalanceUpdated);
             socket.off('notification', onNotification);
         };
     }, [socket, connected, fetchData]);

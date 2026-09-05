@@ -394,13 +394,16 @@ class DepositCreditEngine {
     try {
       const realtime = getRealtimeService();
       if (realtime && typeof realtime.emitToUser === 'function') {
-        await realtime.emitToUser(userId, 'wallet_update', {
+        const payload = {
           type:      'deposit',
           currency,
           amount,
           status:    'COMPLETED',
           reference: tx.reference_id,
-        });
+        };
+        await realtime.emitToUser(userId, 'wallet_update', payload);
+        await realtime.emitToUser(userId, 'balance_updated', payload);
+        await realtime.emitToUser(userId, 'wallet_credited', payload);
       }
     } catch (e) {
       logger.warn(`[DepositCreditEngine] Realtime warning: ${e.message}`);
