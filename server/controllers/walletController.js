@@ -1757,6 +1757,9 @@ exports.getLimits = async (req, res, next) => {
     const remainingWithdrawalToday = Math.max(0, withdrawalLimit - usedWithdrawalToday);
     const remainingToday = remainingWithdrawalToday;
 
+    const nextTier = currentTier < 3 ? currentTier + 1 : null;
+    const nextTierLimit = nextTier !== null ? (tierDepositLimits[nextTier] ?? 50000) : null;
+
     const InternationalCardService = require("../services/internationalCardService");
     const cardLimitSummary = InternationalCardService.formatLimitSummary(currentTier, profile.daily_deposit_limit);
 
