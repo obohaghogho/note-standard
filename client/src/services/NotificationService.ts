@@ -31,7 +31,7 @@ export class NotificationService {
     static notifyNewMessage(senderName: string, content: string, conversationId: string) {
         return this.show(`New message from ${senderName}`, {
             body: content,
-            tag: conversationId, // Group notifications by conversation
+            tag: `chat-${conversationId}`, // Group notifications by conversation
             renotify: true
         });
     }

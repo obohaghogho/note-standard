@@ -11,7 +11,7 @@ self.addEventListener('install', (event) => {
     // Force immediate update to bypass aggressive caching
     self.skipWaiting();
 });
-// Cache Bust Timestamp: 2026-09-05T20:45:00 — v11: quick reply notification action fix & window fallback recovery
+// Cache Bust Timestamp: 2026-09-05T22:30:00 — v12: per-conversation notification tag grouping & auto-dismiss on reply
 
 self.addEventListener('activate', (event) => {
     console.log(`[FORENSIC][SW] ACTIVATE event at ${new Date().toISOString()}`);
@@ -49,11 +49,10 @@ self.addEventListener('push', (event) => {
 
     const title = data.title || 'NoteStandard Notification';
 
-    // BUG FIX: Extract conversationId from payload for proper tag scoping.
-    // Previously all notifications shared the tag 'notestandard-push', meaning
-    // each new push silently replaced the previous one instead of stacking.
-    // Now: each conversation gets its own tag (stacks per-conversation),
-    // but new messages in the same conversation update the existing notification.
+    // Group notifications per-conversation tag (WhatsApp style).
+    // All messages in the same chat share `chat-${notifConversationId}` tag,
+    // so new incoming messages update the existing notification in-place
+    // rather than spawning separate stacked notification cards.
     let notifConversationId = data.data?.conversationId || null;
     if (!notifConversationId && data.data?.url) {
         try {
@@ -97,13 +96,13 @@ self.addEventListener('push', (event) => {
             deliveryWebhookUrl: data.data?.deliveryWebhookUrl || null,
             trace: data.data?.trace || null,
         },
-        // Note: actions array omitted on desktop web push to prevent Chromium Windows Action Center notification suppression
-        // Each message gets a unique tag (conversation + messageId) so rapid messages
-        // stack as separate notifications instead of silently replacing each other.
+        // Group notifications by conversation (WhatsApp style).
+        // Each conversation gets tag `chat-${notifConversationId}`, so rapid messages
+        // in the same chat update the existing notification card in-place instead of creating multiple cards.
         tag: notifConversationId
-            ? `chat-${notifConversationId}-${data.data?.messageId || Date.now()}`
-            : (data.tag || `ns-${Date.now()}`),
-        renotify: true,  // Always alert even when updating an existing tag
+            ? `chat-${notifConversationId}`
+            : (data.tag || `ns-general`),
+        renotify: true,  // Always alert/vibrate when updating an existing tag with a new message
     };
 
     // If it's an incoming call, we explicitly enforce high-urgency ringing mappings natively
@@ -345,7 +344,15 @@ self.addEventListener('notificationclick', (event) => {
 
     // Handle Quick Reply Action from OS System Notification Tray
     if (event.action === 'reply' || replyText) {
-        event.notification.close();
+        if (event.notification && typeof event.notification.close === 'function') {
+            event.notification.close();
+        }
+        const convId = data?.conversationId;
+        if (convId && self.registration && self.registration.getNotifications) {
+            self.registration.getNotifications({ tag: `chat-${convId}` }).then(notifs => {
+                notifs.forEach(n => n.close());
+            }).catch(() => {});
+        }
 
         if (replyText && String(replyText).trim().length > 0) {
             const trimmedReply = String(replyText).trim();
