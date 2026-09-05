@@ -21,9 +21,12 @@ class DepositFraudRiskEngine {
     let riskScore = 0;
     const riskFlags = [];
 
-    // 1. Amount Anomaly Check (> $50,000 USD / ₦50M NGN)
+    // 1. Amount Anomaly Check (> $10,000 USD / ₦15M NGN or env config)
     const numAmount = Number(amount || 0);
-    if ((currency === 'USD' && numAmount > 50000) || (currency === 'NGN' && numAmount > 50000000)) {
+    const highValNgn = Number(process.env.HIGH_VALUE_DEPOSIT_THRESHOLD_NGN || 15000000);
+    const highValUsd = Number(process.env.HIGH_VALUE_DEPOSIT_THRESHOLD_USD || 10000);
+
+    if ((currency === 'USD' && numAmount >= highValUsd) || (currency === 'NGN' && numAmount >= highValNgn)) {
       riskScore += 35;
       riskFlags.push('HIGH_VALUE_DEPOSIT_ANOMALY');
     }
