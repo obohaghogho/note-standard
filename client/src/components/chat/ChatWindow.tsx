@@ -276,55 +276,7 @@ const ChatWindow: React.FC = () => {
         }
     }, [activeConversationId, drafts, handleConversationSwitch]);
 
-    // ── QUICK REPLY / DRAFT / FOCUS HANDLER ──────────────────
-    useEffect(() => {
-        if (!activeConversationId) return;
 
-        const draftFromUrl = searchParams.get('draftReply');
-        const focusFromUrl = searchParams.get('focusReply') === 'true';
-
-        if (draftFromUrl) {
-            const decoded = decodeURIComponent(draftFromUrl);
-            setInputValue(decoded);
-            setTimeout(() => {
-                const textarea = document.getElementById('chat-window-input') as HTMLTextAreaElement | null;
-                textarea?.focus();
-            }, 100);
-
-            setSearchParams(prev => {
-                const updated = new URLSearchParams(prev);
-                updated.delete('draftReply');
-                updated.delete('focusReply');
-                return updated;
-            }, { replace: true });
-        } else if (focusFromUrl) {
-            setTimeout(() => {
-                const textarea = document.getElementById('chat-window-input') as HTMLTextAreaElement | null;
-                textarea?.focus();
-            }, 100);
-
-            setSearchParams(prev => {
-                const updated = new URLSearchParams(prev);
-                updated.delete('focusReply');
-                return updated;
-            }, { replace: true });
-        }
-
-        const handleSWMessage = (event: MessageEvent) => {
-            if (event.data?.type === 'QUICK_REPLY_FOCUS' && event.data?.conversationId === activeConversationId) {
-                if (event.data.draftReply) {
-                    setInputValue(event.data.draftReply);
-                }
-                setTimeout(() => {
-                    const textarea = document.getElementById('chat-window-input') as HTMLTextAreaElement | null;
-                    textarea?.focus();
-                }, 100);
-            }
-        };
-
-        window.addEventListener('message', handleSWMessage);
-        return () => window.removeEventListener('message', handleSWMessage);
-    }, [activeConversationId, searchParams, setSearchParams]);
 
     // GUARANTEED INITIAL SCROLL TO BOTTOM ON ROOM OPEN & MESSAGE LOAD (WhatsApp style)
     // Ensures that when opening a room or when the full message batch finishes loading,

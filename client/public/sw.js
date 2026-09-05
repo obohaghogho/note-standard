@@ -343,40 +343,6 @@ self.addEventListener('notificationclick', (event) => {
         urlObj.searchParams.set('isSupport', 'true');
     }
 
-    const openOrFocusClient = async (customUrl, draftText, focusInput) => {
-        const targetUrl = customUrl || urlObj.href;
-        const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
-        for (const client of windowClients) {
-            if (client.url === targetUrl && 'focus' in client) {
-                if (data?.conversationId) {
-                    client.postMessage({
-                        type: 'QUICK_REPLY_FOCUS',
-                        conversationId: data.conversationId,
-                        draftReply: draftText || null,
-                        focusReply: !!focusInput
-                    });
-                }
-                return client.focus();
-            }
-        }
-        for (const client of windowClients) {
-            if ('focus' in client && 'navigate' in client) {
-                if (data?.conversationId) {
-                    client.postMessage({
-                        type: 'QUICK_REPLY_FOCUS',
-                        conversationId: data.conversationId,
-                        draftReply: draftText || null,
-                        focusReply: !!focusInput
-                    });
-                }
-                return client.focus().then(() => client.navigate(targetUrl));
-            }
-        }
-        if (clients.openWindow) {
-            return clients.openWindow(targetUrl);
-        }
-    };
-
     // Handle Quick Reply Action from OS System Notification Tray
     if (event.action === 'reply' || replyText) {
         event.notification.close();
@@ -388,8 +354,6 @@ self.addEventListener('notificationclick', (event) => {
             event.waitUntil(
                 (async () => {
                     let sentMessage = null;
-                    let success = false;
-
                     try {
                         const token = await new Promise((resolve) => {
                             try {
@@ -440,10 +404,8 @@ self.addEventListener('notificationclick', (event) => {
                                     type: 'text'
                                 })
                             });
-
                             if (response.ok) {
                                 sentMessage = await response.json();
-                                success = true;
                                 console.log(`[SW] Quick reply sent directly for conversation: ${convId}`);
                             }
                         }
@@ -451,39 +413,51 @@ self.addEventListener('notificationclick', (event) => {
                         console.error('[SW] Quick reply direct API send error:', err);
                     }
 
-                    if (success && convId) {
-                        const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
-                        for (const client of windowClients) {
-                            if ('postMessage' in client) {
-                                client.postMessage({
-                                    type: 'QUICK_REPLY_SUBMITTED',
-                                    conversationId: convId,
-                                    message: sentMessage,
-                                    content: trimmedReply
-                                });
-                            }
+                    // Post QUICK_REPLY_SUBMITTED with sent message to all active window clients
+                    const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+                    for (const client of windowClients) {
+                        if ('postMessage' in client && convId) {
+                            client.postMessage({
+                                type: 'QUICK_REPLY_SUBMITTED',
+                                conversationId: convId,
+                                message: sentMessage,
+                                content: trimmedReply
+                            });
                         }
-                    } else {
-                        // FALLBACK: If direct API send failed or token was missing, open the app window with draft reply
-                        urlObj.searchParams.set('draftReply', trimmedReply);
-                        await openOrFocusClient(urlObj.href, trimmedReply, true);
                     }
                 })()
             );
-            return;
-        } else {
-            // User tapped "Reply" button without pre-filled text: open app directly to conversation and focus input
-            urlObj.searchParams.set('focusReply', 'true');
-            event.waitUntil(openOrFocusClient(urlObj.href, null, true));
-            return;
         }
+        return;
     }
 
     if (event.action === 'close') return;
 
     event.notification.close();
     urlToOpen = urlObj.href;
-    event.waitUntil(openOrFocusClient(urlToOpen));
+    event.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+            // 1. Try to find an existing tab with the same URL or at least one on the same origin
+            for (const client of windowClients) {
+                if (client.url === urlToOpen && 'focus' in client) {
+                    if (data?.conversationId) {
+                        client.postMessage({ type: 'CHAT_MESSAGE_RECEIVED', conversationId: data.conversationId });
+                    }
+                    return client.focus();
+                }
+            }
+            // 2. If no exact match, focus any tab on our origin and navigate it
+            for (const client of windowClients) {
+                if ('focus' in client && 'navigate' in client) {
+                    return client.focus().then(() => client.navigate(urlToOpen));
+                }
+            }
+            // 3. If no window/tab is open, open a new one
+            if (clients.openWindow) {
+                return clients.openWindow(urlToOpen);
+            }
+        })
+    );
 });
 
 // Handle Push Subscription Change (Token Rotation)
