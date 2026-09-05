@@ -11,6 +11,7 @@ import { Plus, MessageSquare, Menu } from 'lucide-react';
 import { useSearchParams, useOutletContext } from 'react-router-dom';
 import { useChat } from '../../context/ChatContext';
 import { useAuth } from '../../context/AuthContext';
+import { accountManager } from '../../utils/accountManager';
 import { PerformanceDashboardOverlay } from '../../components/debug/PerformanceDashboardOverlay';
 
 
