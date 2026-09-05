@@ -99,6 +99,36 @@ export class ChatCacheEngine {
   }
 
   /**
+   * High-speed single-transaction batch retrieval of all stored messages grouped by conversation_id.
+   * Enables instant 0ms rendering of recent message threads on boot.
+   */
+  public static async batchGetMessagesForAllConversations(): Promise<Record<string, Message[]>> {
+    try {
+      const db = await this.getDB();
+      const tx = db.transaction(STORE_MESSAGES, 'readonly');
+      const store = tx.objectStore(STORE_MESSAGES);
+      const request = store.getAll();
+      return new Promise((resolve) => {
+        request.onsuccess = () => {
+          const allMsgs: Message[] = request.result || [];
+          const grouped: Record<string, Message[]> = {};
+          for (const msg of allMsgs) {
+            if (msg.conversation_id) {
+              if (!grouped[msg.conversation_id]) {
+                grouped[msg.conversation_id] = [];
+              }
+              grouped[msg.conversation_id].push(msg);
+            }
+          }
+          resolve(grouped);
+        };
+      });
+    } catch {
+      return {};
+    }
+  }
+
+  /**
    * Single-transaction eviction of a conversation and all its messages.
    */
   public static async deleteConversation(conversationId: string): Promise<void> {

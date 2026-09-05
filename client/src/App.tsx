@@ -110,6 +110,20 @@ function AuthenticatedProviders() {
   const { user } = useAuth();
   const userKey = user?.id || 'guest';
 
+  // Background Route Pre-warming: Pre-fetch JS bundles for primary dashboard pages
+  // so tab switches render 100% instantly without any bundle loading delays.
+  useEffect(() => {
+    if (!user) return;
+    const prewarmTimer = setTimeout(() => {
+      import('./pages/dashboard/Chat').catch(() => {});
+      import('./pages/dashboard/Notes').catch(() => {});
+      import('./pages/WalletPage').catch(() => {});
+      import('./pages/dashboard/DashboardHome').catch(() => {});
+      import('./pages/dashboard/Settings').catch(() => {});
+    }, 1000);
+    return () => clearTimeout(prewarmTimer);
+  }, [user]);
+
   return (
     <PWAInstallProvider key={userKey}>
       <VersionGuard>

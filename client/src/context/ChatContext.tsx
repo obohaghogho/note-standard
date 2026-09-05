@@ -157,6 +157,7 @@ export interface ChatContextValue {
     sendMessageToConversation: (payload: { conversationId: string; content: string; type?: string; attachmentId?: string; replyTo?: { id: string; content: string; sender_id: string; type?: string } }) => Promise<void>;
     markConversationRead: (conversationId: string) => Promise<void>;
     markConversationDelivered: (conversationId: string) => Promise<void>;
+    preloadMessages: (conversationId: string) => void;
     isActiveWriter: (conversationId: string) => boolean;
     isClaimingLease: (conversationId: string) => boolean;
     // Phase 6: optimistic local read + lease-gated server ACK
@@ -454,6 +455,39 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     // drift from triggering StrictMode re-mount chaos.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [authReady, user?.id]);
+
+    // ── INSTANT ZERO-LATENCY HYDRATION FROM LOCAL CACHE ─────────────────────────
+    // Hydrates cached conversations and recent message threads from IndexedDB instantly
+    // (0ms) so the UI renders before any network call completes.
+    useEffect(() => {
+        if (!user?.id) return;
+
+        let isCancelled = false;
+        (async () => {
+            try {
+                const cachedConvs = await ChatCacheEngine.getConversations();
+                if (!isCancelled && cachedConvs && cachedConvs.length > 0 && isMounted.current) {
+                    console.log(`[ChatContext] Instant hydration: ${cachedConvs.length} conversation(s) loaded from local cache.`);
+                    setConversations(prev => (prev.length === 0 ? cachedConvs : prev));
+                    useChatStore.getState().setConversations(cachedConvs);
+                    setLoading(false);
+                }
+
+                const cachedMsgsMap = await ChatCacheEngine.batchGetMessagesForAllConversations();
+                if (!isCancelled && cachedMsgsMap && Object.keys(cachedMsgsMap).length > 0 && isMounted.current) {
+                    console.log(`[ChatContext] Instant hydration: cached message frames loaded for ${Object.keys(cachedMsgsMap).length} conversation(s).`);
+                    setMessages(prev => ({ ...cachedMsgsMap, ...prev }));
+                    Object.entries(cachedMsgsMap).forEach(([cid, msgs]) => {
+                        useChatStore.getState().upsertMessages(cid, msgs);
+                    });
+                }
+            } catch (err) {
+                console.warn('[ChatContext] Instant local cache hydration notice:', err);
+            }
+        })();
+
+        return () => { isCancelled = true; };
+    }, [user?.id]);
 
 
     const { isActiveWriter, isClaimingLease, markLeaseClaimStart, markLeaseClaimEnd, leases } = useSessionArbitration({
@@ -1030,7 +1064,22 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, [session, isSwitching, user?.id]);
 
     const loadMessages = useCallback(async (conversationId: string, force = false) => {
-        if (!session) return;
+        if (!session || !conversationId) return;
+
+        // Instant Local Cache Warm-up: If memory state for this chat is empty,
+        // instantly hydrate from IndexedDB before awaiting network.
+        if (!messagesRef.current[conversationId] || messagesRef.current[conversationId].length === 0) {
+            try {
+                const cached = await ChatCacheEngine.getMessagesForConversation(conversationId);
+                if (cached && cached.length > 0 && isMounted.current) {
+                    setMessages(prev => {
+                        if (prev[conversationId] && prev[conversationId].length > 0) return prev;
+                        return { ...prev, [conversationId]: cached };
+                    });
+                    useChatStore.getState().upsertMessages(conversationId, cached);
+                }
+            } catch (_) {}
+        }
 
         // Phase 2 Optimization: Staleness gate.
         // Skip the API call if we loaded this conversation's messages within the last 30 seconds
@@ -1060,6 +1109,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     m => !deletedMessageIdsRef.current.has(m.id) && !m.is_deleted &&
                          (!convClearedAtMs || new Date(m.created_at).getTime() > convClearedAtMs)
                 );
+
+                // Save fresh messages to IndexedDB local cache for future 0ms boots
+                if (filtered.length > 0) {
+                    useChatStore.getState().upsertMessages(conversationId, filtered);
+                    ChatCacheEngine.saveMessages(filtered).catch(() => {});
+                }
                 
                 // ── BULK UN-ACKED DELIVERY SWEEP ─────────────────────────────────
                 // Scan incoming messages: if any non-own message has delivered_at === null,
@@ -3145,6 +3200,21 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     };
 
+    const preloadMessages = useCallback((conversationId: string) => {
+        if (!conversationId) return;
+        if (messagesRef.current[conversationId] && messagesRef.current[conversationId].length > 0) return;
+
+        ChatCacheEngine.getMessagesForConversation(conversationId).then(cached => {
+            if (cached && cached.length > 0 && isMounted.current) {
+                setMessages(prev => {
+                    if (prev[conversationId] && prev[conversationId].length > 0) return prev;
+                    return { ...prev, [conversationId]: cached };
+                });
+                useChatStore.getState().upsertMessages(conversationId, cached);
+            }
+        }).catch(() => {});
+    }, []);
+
     const value: ChatContextValue = {
         conversations, messages, activeConversationId, loading, connected,
         setActiveConversationId,
@@ -3165,6 +3235,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         hasMore, sendMessageToConversation,
         isConversationDeleted: (id: string) => deletedConversationIdsRef.current.has(id),
         markConversationRead, markConversationDelivered,
+        preloadMessages,
         isActiveWriter, isClaimingLease,
         onMessageVisible: (conversationId: string, messageId: string) => readReceiptEngine.onMessageVisible(conversationId, messageId),
         clearState,

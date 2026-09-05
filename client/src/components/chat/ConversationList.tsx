@@ -19,7 +19,8 @@ const ConversationItem = React.memo(({
     isActive, 
     typingUsers,
     onClick,
-    onDelete
+    onDelete,
+    onHover
 }: { 
     conv: Conversation, 
     user: { id?: string } | null, 
@@ -27,7 +28,8 @@ const ConversationItem = React.memo(({
     isActive: boolean, 
     typingUsers: string[],
     onClick: (id: string) => void,
-    onDelete: (id: string, e: React.MouseEvent) => void
+    onDelete: (id: string, e: React.MouseEvent) => void,
+    onHover?: (id: string) => void
 }) => {
     let displayName = conv.name;
     let displayAvatar = null;
@@ -50,6 +52,7 @@ const ConversationItem = React.memo(({
     const isLongPressRef = useRef(false);
 
     const handleTouchStart = useCallback((e: React.TouchEvent) => {
+        onHover?.(conv.id);
         isLongPressRef.current = false;
         if (timerRef.current) clearTimeout(timerRef.current);
         timerRef.current = setTimeout(() => {
@@ -59,7 +62,11 @@ const ConversationItem = React.memo(({
             }
             onDelete(conv.id, e as unknown as React.MouseEvent);
         }, 600);
-    }, [conv.id, onDelete]);
+    }, [conv.id, onDelete, onHover]);
+
+    const handleMouseEnter = useCallback(() => {
+        onHover?.(conv.id);
+    }, [conv.id, onHover]);
 
     const handleTouchEnd = useCallback(() => {
         if (timerRef.current) {
@@ -88,6 +95,7 @@ const ConversationItem = React.memo(({
     return (
         <div
             onClick={handleClick}
+            onMouseEnter={handleMouseEnter}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
             onTouchMove={handleTouchMove}
@@ -227,7 +235,7 @@ const ConversationItem = React.memo(({
 });
 
 const ConversationList: React.FC = () => {
-    const { conversations, activeConversationId, setActiveConversationId, deleteConversation, loading, typingUsers } = useChat();
+    const { conversations, activeConversationId, setActiveConversationId, deleteConversation, loading, typingUsers, preloadMessages } = useChat();
     const { user } = useAuth();
     const { isUserOnline } = usePresence();
     const [, setSearchParams] = useSearchParams();
@@ -295,7 +303,7 @@ const ConversationList: React.FC = () => {
         }
     };
 
-    if (loading) return <div className="p-4 text-gray-400">Loading chats...</div>;
+    if (loading && conversations.length === 0) return <div className="p-4 text-gray-400 font-medium">Loading chats...</div>;
 
     if (conversations.length === 0) {
         return (
@@ -336,6 +344,7 @@ const ConversationList: React.FC = () => {
                         typingUsers={convTypingUsers}
                         onClick={handleConversationClick}
                         onDelete={handleDeleteRequest}
+                        onHover={preloadMessages}
                     />
                 );
             })}
