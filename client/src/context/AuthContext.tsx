@@ -298,8 +298,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // Update active account ID
+      // Update active account ID, profile, and user synchronously
       accountManager.setActiveAccountId(userId);
+      if (target.profile) {
+        setProfile(target.profile);
+      }
+      syncUserData(userId, undefined, currentSwitchId).catch(() => {});
       resetRateLimiters();
       window.dispatchEvent(new CustomEvent('account-switched', { 
         detail: { userId, previousUserId } 

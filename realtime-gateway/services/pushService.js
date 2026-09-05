@@ -567,7 +567,7 @@ async function sendCallPush(params) {
           conversationId: payload.conversationId,
           sessionId: payload.sessionId || payload.callId || payload.peerId,
           targetAccountId: userId,
-          apiUrl: process.env.BACKEND_URL || (process.env.NODE_ENV === 'production' ? 'https://note-standard-api.onrender.com' : 'http://127.0.0.1:5001')
+          apiUrl: process.env.BACKEND_URL || (process.env.NODE_ENV === 'production' ? 'https://api.notestandard.com' : 'http://127.0.0.1:5001')
         }
       });
 
@@ -950,7 +950,7 @@ async function sendGenericPush(params) {
             messageId: payload.messageId || null,
             conversationId: payload.conversationId || null,
             targetAccountId: userId,
-            apiUrl: process.env.BACKEND_URL || 'https://note-standard-api.onrender.com',
+            apiUrl: process.env.BACKEND_URL || 'https://api.notestandard.com',
             // FAST-PATH FIX: Point directly to the gateway for delivery receipts.
             // The gateway is always awake (it holds the sender's socket).
             // The API server may be asleep on Render free tier (30-90s cold start).

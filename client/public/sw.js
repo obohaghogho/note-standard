@@ -90,7 +90,7 @@ self.addEventListener('push', (event) => {
             // CRITICAL: persist targetAccountId so notificationclick can read it and
             // pass it to the React app for account switching
             targetAccountId: data.data?.targetAccountId || data.data?.recipientId || null,
-            apiUrl: data.data?.apiUrl || 'https://note-standard-api.onrender.com',
+            apiUrl: data.data?.apiUrl || (typeof self !== 'undefined' && self.location && self.location.origin && self.location.origin.includes('localhost') ? 'http://localhost:5000' : 'https://api.notestandard.com'),
             // FAST-PATH FIX: gateway URL bypasses the sleeping API server (Render cold-start fix).
             // When present, the SW calls the gateway directly — it is always awake because it
             // holds the sender's live socket connection.
@@ -343,19 +343,32 @@ self.addEventListener('notificationclick', (event) => {
         urlObj.searchParams.set('isSupport', 'true');
     }
 
-    const openOrFocusClient = async (customUrl) => {
+    const openOrFocusClient = async (customUrl, draftText, focusInput) => {
         const targetUrl = customUrl || urlObj.href;
         const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
         for (const client of windowClients) {
             if (client.url === targetUrl && 'focus' in client) {
                 if (data?.conversationId) {
-                    client.postMessage({ type: 'CHAT_MESSAGE_RECEIVED', conversationId: data.conversationId });
+                    client.postMessage({
+                        type: 'QUICK_REPLY_FOCUS',
+                        conversationId: data.conversationId,
+                        draftReply: draftText || null,
+                        focusReply: !!focusInput
+                    });
                 }
                 return client.focus();
             }
         }
         for (const client of windowClients) {
             if ('focus' in client && 'navigate' in client) {
+                if (data?.conversationId) {
+                    client.postMessage({
+                        type: 'QUICK_REPLY_FOCUS',
+                        conversationId: data.conversationId,
+                        draftReply: draftText || null,
+                        focusReply: !!focusInput
+                    });
+                }
                 return client.focus().then(() => client.navigate(targetUrl));
             }
         }
@@ -414,7 +427,8 @@ self.addEventListener('notificationclick', (event) => {
                         });
 
                         if (token && convId) {
-                            const targetApiUrl = data?.apiUrl || 'https://note-standard-api.onrender.com';
+                            const defaultApi = typeof self !== 'undefined' && self.location && self.location.origin && self.location.origin.includes('localhost') ? 'http://localhost:5000' : 'https://api.notestandard.com';
+                            const targetApiUrl = data?.apiUrl || defaultApi;
                             const response = await fetch(`${targetApiUrl}/api/chat/conversations/${convId}/messages`, {
                                 method: 'POST',
                                 headers: {
@@ -452,7 +466,7 @@ self.addEventListener('notificationclick', (event) => {
                     } else {
                         // FALLBACK: If direct API send failed or token was missing, open the app window with draft reply
                         urlObj.searchParams.set('draftReply', trimmedReply);
-                        await openOrFocusClient(urlObj.href);
+                        await openOrFocusClient(urlObj.href, trimmedReply, true);
                     }
                 })()
             );
@@ -460,7 +474,7 @@ self.addEventListener('notificationclick', (event) => {
         } else {
             // User tapped "Reply" button without pre-filled text: open app directly to conversation and focus input
             urlObj.searchParams.set('focusReply', 'true');
-            event.waitUntil(openOrFocusClient(urlObj.href));
+            event.waitUntil(openOrFocusClient(urlObj.href, null, true));
             return;
         }
     }
