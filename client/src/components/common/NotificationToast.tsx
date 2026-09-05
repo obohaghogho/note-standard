@@ -209,6 +209,8 @@ const NotificationToast: React.FC<NotificationToastProps> = ({
                             transition={{ duration: 0.2 }}
                             className="px-3.5 pb-3.5 pt-1 border-t border-white/10 bg-black/40"
                             onClick={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onTouchStart={(e) => e.stopPropagation()}
                         >
                             {sentSuccess ? (
                                 <div className="flex items-center justify-center gap-2 py-2 text-emerald-400 text-xs font-bold animate-in fade-in zoom-in-95 duration-200">
@@ -216,14 +218,24 @@ const NotificationToast: React.FC<NotificationToastProps> = ({
                                     <span>Reply Sent Successfully!</span>
                                 </div>
                             ) : (
-                                <form onSubmit={handleSendReply} className="flex items-center gap-2">
+                                <form 
+                                    onSubmit={handleSendReply} 
+                                    className="flex items-center gap-2"
+                                    onClick={(e) => e.stopPropagation()}
+                                    onPointerDown={(e) => e.stopPropagation()}
+                                    onTouchStart={(e) => e.stopPropagation()}
+                                >
                                     <input 
                                         type="text"
                                         autoFocus
                                         value={replyText}
                                         onChange={(e) => setReplyText(e.target.value)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onPointerDown={(e) => e.stopPropagation()}
+                                        onTouchStart={(e) => e.stopPropagation()}
+                                        onFocus={(e) => e.stopPropagation()}
                                         placeholder={`Reply to ${notification.sender?.username || 'message'}...`}
-                                        className="flex-1 bg-white/10 border border-white/15 rounded-xl px-3 py-1.5 text-xs text-white placeholder-gray-400 focus:outline-none focus:border-blue-500/60 transition-all"
+                                        className="flex-1 bg-white/10 border border-white/15 rounded-xl px-3 py-1.5 text-xs text-white placeholder-gray-400 focus:outline-none focus:border-blue-500/60 transition-all pointer-events-auto"
                                         disabled={isSending}
                                     />
                                     <button

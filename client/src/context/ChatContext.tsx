@@ -393,7 +393,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         prevUserIdRef.current = user?.id || null;
 
         window.addEventListener('account-switched', handleAccountSwitch);
-        return () => window.removeEventListener('account-switched', handleAccountSwitch);
+        window.addEventListener('account-switch-start', handleAccountSwitch);
+        return () => {
+            window.removeEventListener('account-switched', handleAccountSwitch);
+            window.removeEventListener('account-switch-start', handleAccountSwitch);
+        };
     }, [user?.id]);
 
     // Chat Boot Kernel: Deterministic State Machine Orchestrator

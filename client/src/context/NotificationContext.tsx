@@ -80,6 +80,24 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         }
     }, [currentToast, queue]);
 
+    useEffect(() => {
+        const handleAccountSwitch = () => {
+            console.log('[NotificationContext] Account switch detected — clearing notification state');
+            setNotifications([]);
+            setCurrentToast(null);
+            setQueue([]);
+            setLoading(true);
+            notificationsFetchRef.current = false;
+        };
+
+        window.addEventListener('account-switched', handleAccountSwitch);
+        window.addEventListener('account-switch-start', handleAccountSwitch);
+        return () => {
+            window.removeEventListener('account-switched', handleAccountSwitch);
+            window.removeEventListener('account-switch-start', handleAccountSwitch);
+        };
+    }, []);
+
     // Dedicated Auto-dismiss timer manager
     useEffect(() => {
         if (currentToast) {

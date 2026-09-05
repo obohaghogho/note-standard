@@ -211,6 +211,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setIsSwitching(true);
       switchInProgress.current = true;
+      window.dispatchEvent(new CustomEvent('account-switch-start', { 
+        detail: { userId, previousUserId } 
+      }));
       
       // Rule 5: switchIdRef
       switchIdRef.current += 1;
