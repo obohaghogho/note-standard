@@ -101,6 +101,7 @@ const createNotification = async (params) => {
       userId: receiverId,
       title,
       body: bodyStr,
+      sound: params.sound || 'default',
       payload: {
         type,
         conversationId: conversationId || null,
@@ -235,6 +236,7 @@ const dispatchFastPush = (params) => {
         userId: receiverId,
         title,
         body: bodyStr,
+        sound: params.sound || 'default',
         payload: {
           type,
           conversationId: conversationId || null,

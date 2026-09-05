@@ -79,6 +79,7 @@ self.addEventListener('push', (event) => {
         body: data.body || 'You have a new update.',
         icon: data.icon || '/icon-192.png',
         badge: '/icon-192.png',
+        sound: data.sound || 'default', // CRITICAL FOR iOS: Enables system alert sound when pop-up notification arrives
         vibrate: [200, 100, 200, 100, 200],
         timestamp: Date.now(),
         data: {
@@ -108,6 +109,7 @@ self.addEventListener('push', (event) => {
     // If it's an incoming call, we explicitly enforce high-urgency ringing mappings natively
     if (options.data.type === 'call_incoming') {
         options.requireInteraction = true; // The notification stays on screen permanently until accepted/dismissed
+        options.sound = data.sound || '/sounds/ringtone.wav';
         options.vibrate = [500, 200, 500, 200, 500, 200, 500, 200, 500]; // Extended vibration mimicry
         options.tag = `incoming-call-${Date.now()}`; // Unique tag so previous calls don't overwrite current ones
     }
