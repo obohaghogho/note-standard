@@ -163,7 +163,11 @@ export const AnchorAccountCard: React.FC<AnchorAccountCardProps> = ({ onSwitchTo
         <div className="space-y-3 bg-gray-950/40 border border-gray-800/80 rounded-xl p-4">
           <div className="flex items-center justify-between">
             <span className="text-xs text-gray-400 font-medium">Bank Name</span>
-            <span className="text-xs font-semibold text-gray-200">{account.bank_name || account.bankName || "9 Payment Service Bank (9PSB)"}</span>
+            <span className="text-xs font-semibold text-emerald-400">{account.bank_name || account.bankName || "9 Payment Service Bank (9PSB)"}</span>
+          </div>
+
+          <div className="p-2 rounded-lg bg-amber-950/40 border border-amber-500/30 text-[11px] text-amber-300 leading-relaxed">
+            💡 <strong>Bank App Instruction:</strong> On OPay, Kuda, GTBank, Zenith, Access, etc., select <strong>9PSB (9 Payment Service Bank)</strong> as destination bank.
           </div>
 
           <div className="flex items-center justify-between">
