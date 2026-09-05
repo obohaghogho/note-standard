@@ -608,7 +608,7 @@ const io = new Server(httpServer, {
     methods: ['GET', 'POST'],
     credentials: true,
   },
-  transports: ['polling', 'websocket'],
+  transports: ['websocket', 'polling'],
   perMessageDeflate: false,
   pingTimeout: 20000,
   pingInterval: 10000,

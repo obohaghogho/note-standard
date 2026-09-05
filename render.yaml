@@ -1,31 +1,7 @@
 services:
-  # 1. Frontend (Static Site)
+  # 1. Main API Server
   - type: web
-    name: note-standard-frontend
-    runtime: static
-    buildCommand: npm install --legacy-peer-deps && npm run build
-    publishPath: client/dist
-    envVars:
-      - key: NODE_VERSION
-        value: 22.x
-      - key: VITE_API_URL
-        fromService:
-          type: web
-          name: note-standard-server
-          property: host
-      - key: VITE_SOCKET_URL
-        fromService:
-          type: web
-          name: note-standard-gateway
-          property: host
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-
-  # 2. Main API Server
-  - type: web
-    name: note-standard-server
+    name: note-standard-api
     runtime: node
     plan: free
     buildCommand: npm install --legacy-peer-deps && npm install --legacy-peer-deps --prefix server
@@ -38,17 +14,14 @@ services:
       - key: PORT
         value: 10000
       - key: CLIENT_URL
-        fromService:
-          type: web
-          name: note-standard-frontend
-          property: host
+        value: https://notestandard.com
       - key: REALTIME_GATEWAY_URL
         fromService:
           type: web
           name: note-standard-gateway
           property: host
 
-  # 3. Realtime Gateway (Socket.IO)
+  # 2. Realtime Gateway (Socket.IO)
   - type: web
     name: note-standard-gateway
     runtime: node
@@ -65,5 +38,6 @@ services:
       - key: SERVER_URL
         fromService:
           type: web
-          name: note-standard-server
+          name: note-standard-api
           property: host
+

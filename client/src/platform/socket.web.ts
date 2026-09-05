@@ -82,7 +82,7 @@ class SocketLifecycleManager {
 
     const socket = io(SOCKET_URL, {
       auth: { token, sessionId, deviceId },
-      transports: ['polling', 'websocket'], // polling first — ensures auth token validated in HTTP handshake
+      transports: ['websocket', 'polling'], // websocket first — avoids heavy HTTP long-polling bandwidth consumption on Render
       reconnection: false, // We manage reconnects ourselves for backoff control
       timeout: 60000,
     });
