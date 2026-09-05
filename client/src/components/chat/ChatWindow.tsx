@@ -788,21 +788,21 @@ const ChatWindow: React.FC = () => {
             <WallpaperEngine chatId={activeConversationId || undefined} />
             {/* ── Selection Action Bar (WhatsApp-style) ── */}
             {isSelectionMode ? (
-                <div className="chat-header border-b border-blue-500/30 bg-blue-600/10 backdrop-blur-md" onClick={(e) => e.stopPropagation()}>
-                    <div className="p-2 md:p-4 flex items-center justify-between gap-4 w-full">
-                        <div className="flex items-center gap-3">
+                <div className="chat-header border-b border-blue-500/30 bg-blue-600/10 backdrop-blur-md min-w-0 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                    <div className="px-2 py-2 md:p-4 flex items-center justify-between gap-1 sm:gap-2 md:gap-4 w-full min-w-0">
+                        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
                             <button 
                                 onClick={clearSelection}
-                                className="p-2 text-gray-300 hover:text-white hover:bg-white/10 rounded-full transition-all active:scale-90"
+                                className="p-1.5 text-gray-300 hover:text-white hover:bg-white/10 rounded-full transition-all active:scale-90 shrink-0"
                                 aria-label="Cancel selection"
                             >
-                                <X size={22} />
+                                <X size={20} />
                             </button>
-                            <span className="text-white font-bold text-base">
+                            <span className="text-white font-bold text-sm md:text-base whitespace-nowrap">
                                 {selectedMessages.size} selected
                             </span>
                         </div>
-                        <div className="flex items-center gap-1 md:gap-2">
+                        <div className="flex items-center gap-0.5 sm:gap-1 md:gap-2 shrink-0 overflow-x-auto no-scrollbar max-w-full">
                             <button 
                                 onClick={() => {
                                     const selectedMsgs = currentMessages
@@ -810,9 +810,10 @@ const ChatWindow: React.FC = () => {
                                         .map(m => ({ id: m.id, content: m.content, type: m.type }));
                                     setForwardModal({ isOpen: true, messages: selectedMsgs });
                                 }}
-                                className="flex items-center gap-2 px-3 md:px-4 py-2 text-sm font-semibold text-blue-300 hover:text-blue-200 hover:bg-blue-500/15 rounded-xl transition-all"
+                                className="flex items-center gap-1 px-2 md:px-4 py-1.5 md:py-2 text-xs md:text-sm font-semibold text-blue-300 hover:text-blue-200 hover:bg-blue-500/15 rounded-xl transition-all shrink-0"
+                                title="Forward"
                             >
-                                <Share2 size={18} />
+                                <Share2 size={17} />
                                 <span className="hidden sm:inline">Forward</span>
                             </button>
                             {selectedMessages.size === 1 && (
@@ -831,9 +832,10 @@ const ChatWindow: React.FC = () => {
                                             clearSelection();
                                         }
                                     }}
-                                    className="flex items-center gap-2 px-3 md:px-4 py-2 text-sm font-semibold text-purple-400 hover:text-purple-300 hover:bg-purple-500/15 rounded-xl transition-all"
+                                    className="flex items-center gap-1 px-2 md:px-4 py-1.5 md:py-2 text-xs md:text-sm font-semibold text-purple-400 hover:text-purple-300 hover:bg-purple-500/15 rounded-xl transition-all shrink-0"
+                                    title="Reply"
                                 >
-                                    <Reply size={18} />
+                                    <Reply size={17} />
                                     <span className="hidden sm:inline">Reply</span>
                                 </button>
                             )}
@@ -851,9 +853,10 @@ const ChatWindow: React.FC = () => {
                                                     }
                                                     clearSelection();
                                                 }}
-                                                className="flex items-center gap-2 px-3 md:px-4 py-2 text-sm font-semibold text-green-400 hover:text-green-300 hover:bg-green-500/15 rounded-xl transition-all"
+                                                className="flex items-center gap-1 px-2 md:px-4 py-1.5 md:py-2 text-xs md:text-sm font-semibold text-green-400 hover:text-green-300 hover:bg-green-500/15 rounded-xl transition-all shrink-0"
+                                                title="Edit"
                                             >
-                                                <Pencil size={18} />
+                                                <Pencil size={17} />
                                                 <span className="hidden sm:inline">Edit</span>
                                             </button>
                                         );
@@ -863,9 +866,10 @@ const ChatWindow: React.FC = () => {
                             )}
                              <button 
                                 onClick={handleCopy}
-                                className="flex items-center gap-2 px-3 md:px-4 py-2 text-sm font-semibold text-gray-300 hover:text-white hover:bg-white/10 rounded-xl transition-all"
+                                className="flex items-center gap-1 px-2 md:px-4 py-1.5 md:py-2 text-xs md:text-sm font-semibold text-gray-300 hover:text-white hover:bg-white/10 rounded-xl transition-all shrink-0"
+                                title="Copy"
                             >
-                                <Copy size={18} />
+                                <Copy size={17} />
                                 <span className="hidden sm:inline">Copy</span>
                             </button>
                             {(isAdmin || currentMessages.filter(m => selectedMessages.has(m.id)).every(m => m.sender_id === user?.id)) && (
@@ -873,9 +877,10 @@ const ChatWindow: React.FC = () => {
                                     onClick={() => {
                                         setConfirmModal({ isOpen: true, type: 'message', messageId: Array.from(selectedMessages)[0] });
                                     }}
-                                    className="flex items-center gap-2 px-3 md:px-4 py-2 text-sm font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/15 rounded-xl transition-all"
+                                    className="flex items-center gap-1 px-2 md:px-4 py-1.5 md:py-2 text-xs md:text-sm font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/15 rounded-xl transition-all shrink-0"
+                                    title="Delete"
                                 >
-                                    <Trash2 size={18} />
+                                    <Trash2 size={17} />
                                     <span className="hidden sm:inline">Delete</span>
                                 </button>
                             )}

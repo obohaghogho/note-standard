@@ -528,19 +528,20 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
       />
       {/* Header - Selection Action Bar or Normal Header */}
       {isSelectionMode ? (
-        <div className="team-chat__header" style={{ background: 'linear-gradient(90deg, rgba(59, 130, 246, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%)', borderColor: 'rgba(59, 130, 246, 0.3)' }}>
-          <div className="flex items-center gap-3">
+        <div className="team-chat__header min-w-0 overflow-hidden flex items-center justify-between gap-1 sm:gap-2 px-2 py-2 md:px-4" style={{ background: 'linear-gradient(90deg, rgba(59, 130, 246, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%)', borderColor: 'rgba(59, 130, 246, 0.3)' }}>
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             <button 
               onClick={clearSelection}
-              className="p-2 text-gray-300 hover:text-white hover:bg-white/10 rounded-full transition-all"
+              className="p-1.5 text-gray-300 hover:text-white hover:bg-white/10 rounded-full transition-all shrink-0"
+              aria-label="Cancel selection"
             >
               <X size={20} />
             </button>
-            <span className="text-white font-bold text-base">
+            <span className="text-white font-bold text-sm md:text-base whitespace-nowrap">
               {selectedMessages.size} selected
             </span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 overflow-x-auto no-scrollbar max-w-full">
             <button 
               onClick={() => {
                 const selectedMsgs = messages
@@ -553,7 +554,8 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
                 }
                 clearSelection();
               }}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-blue-300 hover:text-blue-200 hover:bg-blue-500/15 rounded-xl transition-all"
+              className="flex items-center gap-1 px-2 md:px-3 py-1.5 text-xs md:text-sm font-semibold text-blue-300 hover:text-blue-200 hover:bg-blue-500/15 rounded-xl transition-all shrink-0"
+              title="Copy"
             >
               <Share2 size={16} />
               <span className="hidden sm:inline">Copy</span>
@@ -568,7 +570,8 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
                   inputRef.current?.focus();
                 }
               }}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-blue-300 hover:text-blue-200 hover:bg-blue-500/15 rounded-xl transition-all"
+              className="flex items-center gap-1 px-2 md:px-3 py-1.5 text-xs md:text-sm font-semibold text-blue-300 hover:text-blue-200 hover:bg-blue-500/15 rounded-xl transition-all shrink-0"
+              title="Reply"
             >
               <Share2 size={16} className="rotate-180" />
               <span className="hidden sm:inline">Reply</span>
@@ -585,7 +588,8 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
                         setInput(msg.content || '');
                         clearSelection();
                       }}
-                      className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-green-400 hover:text-green-300 hover:bg-green-500/15 rounded-xl transition-all"
+                      className="flex items-center gap-1 px-2 md:px-3 py-1.5 text-xs md:text-sm font-semibold text-green-400 hover:text-green-300 hover:bg-green-500/15 rounded-xl transition-all shrink-0"
+                      title="Edit"
                     >
                       <Edit3 size={16} />
                       <span className="hidden sm:inline">Edit</span>
@@ -599,7 +603,8 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
               onClick={() => {
                 setConfirmDelete({ isOpen: true, type: 'message', messageId: Array.from(selectedMessages)[0] });
               }}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/15 rounded-xl transition-all"
+              className="flex items-center gap-1 px-2 md:px-3 py-1.5 text-xs md:text-sm font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/15 rounded-xl transition-all shrink-0"
+              title="Delete"
             >
               <Trash2 size={16} />
               <span className="hidden sm:inline">Delete</span>
