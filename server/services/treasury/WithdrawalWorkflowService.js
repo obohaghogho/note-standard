@@ -44,9 +44,9 @@ class WithdrawalWorkflowService {
     // 1. Stage: REQUESTED -> Auth & KYC Check
     const { data: profile, error: pErr } = await supabase
       .from('profiles')
-      .select('id, status, kyc_status, email, full_name')
+      .select('id, status, email, full_name')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
     if (pErr || !profile) {
       throw new Error('[WithdrawalWorkflow] User profile not found');
