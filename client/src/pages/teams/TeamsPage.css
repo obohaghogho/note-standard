@@ -385,7 +385,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 20px 10px;
+    padding: calc(14px + env(safe-area-inset-top, 0px)) 20px 10px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     flex-shrink: 0;
   }
@@ -589,10 +589,10 @@
     flex-shrink: 0;
     z-index: 30;
     position: relative;
-    padding: 6px 4px;
-    /* Safe area for notch phones */
-    padding-bottom: max(6px, env(safe-area-inset-bottom, 6px));
-    gap: 2px;
+    padding: 6px 6px;
+    /* Safe area for notch phones & home indicator */
+    padding-bottom: max(10px, env(safe-area-inset-bottom, 12px));
+    gap: 4px;
     /* GPU glitch fix: no blur, solid background */
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
@@ -605,25 +605,26 @@
     align-items: center;
     justify-content: center;
     gap: 3px;
-    padding: 6px 12px;
-    border-radius: 10px;
+    padding: 8px 12px;
+    border-radius: 12px;
     border: none;
     background: transparent;
-    color: #4b5563;
+    color: #6b7280;
     cursor: pointer;
     flex-shrink: 0;
     transition: all 0.15s ease;
-    min-width: 60px;
+    min-width: 64px;
+    min-height: 48px;
   }
   .teams-content__bottom-tab span {
-    font-size: 0.55rem;
+    font-size: 0.6rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     white-space: nowrap;
   }
   .teams-content__bottom-tab:active {
-    transform: scale(0.9);
+    transform: scale(0.92);
   }
   .teams-content__bottom-tab--active {
     background: rgba(99, 102, 241, 0.15);

@@ -53,11 +53,11 @@ export function DashboardLayout() {
         );
     }
 
-    const isChatActiveOnMobile = location.pathname.startsWith('/dashboard/chat');
+    const isStandalonePageOnMobile = location.pathname.startsWith('/dashboard/chat') || location.pathname.startsWith('/dashboard/teams');
     
-    // Standard Header/Top bar - HIDDEN on mobile when a chat conversation is active
+    // Standard Header/Top bar - HIDDEN on mobile when a chat or team workspace is active
     const renderHeader = () => {
-        if (isChatActiveOnMobile) return null;
+        if (isStandalonePageOnMobile) return null;
         
         return (
             <header className={cn(
@@ -104,15 +104,15 @@ export function DashboardLayout() {
     return (
         <div className={cn(
             "h-screen-safe text-white flex relative overflow-hidden w-full max-w-full",
-            isChatActiveOnMobile ? "bg-gray-950" : "bg-crystal pt-safe pb-safe"
+            isStandalonePageOnMobile ? "bg-gray-950" : "bg-crystal pt-safe pb-safe"
         )}>
-            {!isChatActiveOnMobile && <BroadcastBanner />}
-            {!isChatActiveOnMobile && <BetaWelcomeBanner />}
-            {!isChatActiveOnMobile && <PushNotificationBanner />}
-            {!isChatActiveOnMobile && <PWAAwarenessBanner />}
+            {!isStandalonePageOnMobile && <BroadcastBanner />}
+            {!isStandalonePageOnMobile && <BetaWelcomeBanner />}
+            {!isStandalonePageOnMobile && <PushNotificationBanner />}
+            {!isStandalonePageOnMobile && <PWAAwarenessBanner />}
             
             {/* Inner ambient glow for dashboard depth */}
-            {!isChatActiveOnMobile && <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 via-transparent to-purple-500/5 pointer-events-none -z-10" />}
+            {!isStandalonePageOnMobile && <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 via-transparent to-purple-500/5 pointer-events-none -z-10" />}
 
             <Sidebar 
                 onCreateNote={() => setIsCreateNoteModalOpen(true)} 
@@ -123,15 +123,15 @@ export function DashboardLayout() {
             <main
                 className={cn(
                     "flex-1 transition-all duration-300 min-w-0 flex flex-col h-full relative w-full max-w-full overflow-x-hidden",
-                    !isChatActiveOnMobile && "pb-safe lg:ml-[16rem]",
-                    isChatActiveOnMobile && "absolute inset-0 z-[60] bg-gray-950 m-0 p-0 lg:relative lg:inset-auto lg:z-0 lg:bg-transparent lg:ml-[16rem] overflow-hidden"
+                    !isStandalonePageOnMobile && "pb-safe lg:ml-[16rem]",
+                    isStandalonePageOnMobile && "absolute inset-0 z-[60] bg-gray-950 m-0 p-0 lg:relative lg:inset-auto lg:z-0 lg:bg-transparent lg:ml-[16rem] overflow-hidden"
                 )}
             >
                 {renderHeader()}
 
                 <div className={cn(
                     "flex-1 min-h-0 w-full flex flex-col min-w-0 relative h-full max-w-full overflow-x-hidden",
-                    isChatActiveOnMobile ? "p-0 overflow-hidden" : "p-3 sm:p-4 md:p-8 max-w-7xl mx-auto overflow-y-auto overflow-x-hidden pb-36 pb-safe lg:pb-8"
+                    isStandalonePageOnMobile ? "p-0 overflow-hidden" : "p-3 sm:p-4 md:p-8 max-w-7xl mx-auto overflow-y-auto overflow-x-hidden pb-36 pb-safe lg:pb-8"
                 )}>
                     <ErrorBoundary fallback={
                         <div className="p-8 text-center bg-red-500/10 rounded-xl border border-red-500/20 m-4">
@@ -147,7 +147,7 @@ export function DashboardLayout() {
                 </div>
             </main>
 
-            {!isChatActiveOnMobile && <MobileBottomNav />}
+            {!isStandalonePageOnMobile && <MobileBottomNav />}
 
             <CreateNoteModal
                 isOpen={isCreateNoteModalOpen}

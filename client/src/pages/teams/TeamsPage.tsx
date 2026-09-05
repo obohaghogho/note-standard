@@ -60,7 +60,7 @@ interface TeamHeaderProps {
 const TeamHeader: React.FC<TeamHeaderProps> = ({ team, myRole, onBack, isInfoOpen, onToggleInfo, onInvite, onJoinCall, activeTab, onSelectTab }) => {
 
   return (
-    <div className="teams-page__header flex items-center justify-between p-2.5 md:p-5 bg-gray-900/50 backdrop-blur-3xl border-b border-white/5 z-20 gap-2 min-w-0">
+    <div className="teams-page__header flex items-center justify-between px-3 md:px-5 py-2.5 md:py-5 pt-[max(0.75rem,env(safe-area-inset-top,0px))] md:pt-5 bg-gray-900/50 backdrop-blur-3xl border-b border-white/5 z-20 gap-2 min-w-0">
       <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1 cursor-pointer group" onClick={onToggleInfo}>
          <button 
            className="p-1.5 -ml-1 text-gray-400 hover:text-white md:hidden shrink-0"
@@ -398,25 +398,27 @@ export function TeamsPage() {
                  )}
               </div>
 
-              {/* Mobile bottom tab bar */}
-              <div className="teams-content__bottom-tabs">
-                {TABS.map((tab) => {
-                  const Icon = tab.icon;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => handleSelectTab(tab.id)}
-                      className={cn(
-                        "teams-content__bottom-tab",
-                        activeTab === tab.id ? "teams-content__bottom-tab--active" : ""
-                      )}
-                    >
-                      <Icon size={18} />
-                      <span>{tab.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              {/* Mobile bottom tab bar — hidden during chat to maximize chat window */}
+              {activeTab !== 'chat' && (
+                <div className="teams-content__bottom-tabs">
+                  {TABS.map((tab) => {
+                    const Icon = tab.icon;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => handleSelectTab(tab.id)}
+                        className={cn(
+                          "teams-content__bottom-tab",
+                          activeTab === tab.id ? "teams-content__bottom-tab--active" : ""
+                        )}
+                      >
+                        <Icon size={18} />
+                        <span>{tab.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
           </div>
         </TeamChatProvider>
       ) : (

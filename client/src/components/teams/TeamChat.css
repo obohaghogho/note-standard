@@ -15,18 +15,18 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
-/* ── Cross-Platform Mobile Keyboard Synchronization ── */
+/* ── Cross-Platform Mobile Layout ── */
 @media (max-width: 768px) {
   .team-chat {
-    position: fixed;
-    top: var(--vv-top, 0px);
-    left: 0;
-    right: 0;
-    height: var(--vv-height, 100dvh);
-    bottom: auto;
-    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    flex: 1;
     border-radius: 0;
     border: none;
+    background: transparent;
+    overflow: hidden;
   }
 }
 
@@ -525,6 +525,8 @@
 
   .team-chat__input-container {
     padding: 10px 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
+    flex-shrink: 0;
   }
 
   .team-chat__input {

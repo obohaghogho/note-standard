@@ -268,7 +268,11 @@ export const TeamEnterpriseDashboard: React.FC<TeamEnterpriseDashboardProps> = (
     setLoadingAnalytics(true);
     try {
       const res = await api.get(`/teams/${team.id}/analytics`);
-      setAnalytics(res.data);
+      if (res.data && Array.isArray(res.data.activities_by_day) && Array.isArray(res.data.tasks_by_week)) {
+        setAnalytics(res.data);
+      } else {
+        throw new Error('Malformed analytics payload');
+      }
     } catch {
       setAnalytics({
         online_members: 0,
@@ -373,6 +377,7 @@ export const TeamEnterpriseDashboard: React.FC<TeamEnterpriseDashboardProps> = (
   }, [team.id]); // eslint-disable-line
 
   useEffect(() => {
+    if (activeTab === 'analytics') fetchAnalytics();
     if (activeTab === 'files') fetchFiles();
     if (activeTab === 'settings') fetchWebhookSecret();
   }, [activeTab]); // eslint-disable-line
@@ -937,69 +942,74 @@ export const TeamEnterpriseDashboard: React.FC<TeamEnterpriseDashboardProps> = (
     </div>
   );
 
-  const renderAnalytics = () => (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      {loadingAnalytics ? (
-        <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin text-gray-600" size={28} /></div>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { icon: Users,        label: 'Online Members',   value: analytics?.online_members ?? 0,       color: 'text-blue-400',   badge: 'Live',    bcolor: 'text-green-400' },
-              { icon: CheckCircle2, label: 'Completed Tasks',  value: analytics?.completed_tasks ?? 0,      color: 'text-purple-400', badge: 'Total',   bcolor: 'text-purple-400' },
-              { icon: Clock,        label: 'Pending Invites',  value: analytics?.pending_invitations ?? 0,  color: 'text-yellow-400', badge: 'Invites', bcolor: 'text-yellow-400' },
-              { icon: Heart,        label: 'Workspace Health', value: `${analytics?.workspace_health ?? 100}%`, color: 'text-emerald-400', badge: 'Score', bcolor: 'text-emerald-400' },
-            ].map((kpi, i) => (
-              <div key={i} className="p-4 rounded-2xl bg-gray-900/80 border border-white/10 shadow-xl hover:border-white/20 transition-colors">
-                <div className="flex items-center justify-between mb-2">
-                  <kpi.icon size={20} className={kpi.color} />
-                  <span className={`text-[10px] font-black uppercase tracking-wider ${kpi.bcolor}`}>{kpi.badge}</span>
-                </div>
-                <p className="text-2xl font-black text-white">{kpi.value}</p>
-                <p className="text-xs text-gray-400 font-medium mt-0.5">{kpi.label}</p>
-              </div>
-            ))}
-          </div>
+  const renderAnalytics = () => {
+    const activitiesByDay = Array.isArray(analytics?.activities_by_day) ? analytics.activities_by_day : [];
+    const tasksByWeek = Array.isArray(analytics?.tasks_by_week) ? analytics.tasks_by_week : [];
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="p-5 rounded-2xl bg-gray-900/70 border border-white/10 shadow-2xl">
-              <h3 className="text-sm font-bold text-gray-200 mb-4 flex items-center gap-2">
-                <Activity size={18} className="text-blue-400" />
-                Daily Activity Stream
-              </h3>
-              <div className="h-56">
-                <Line
-                  data={{
-                    labels: analytics?.activities_by_day.map(a => a.day) || [],
-                    datasets: [{ label: 'Activities', data: analytics?.activities_by_day.map(a => a.count) || [], borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.12)', tension: 0.4, fill: true }]
-                  }}
-                  options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af' } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af' } } } }}
-                />
+    return (
+      <div className="space-y-6 animate-in fade-in duration-300">
+        {loadingAnalytics ? (
+          <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin text-gray-600" size={28} /></div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                { icon: Users,        label: 'Online Members',   value: analytics?.online_members ?? 0,       color: 'text-blue-400',   badge: 'Live',    bcolor: 'text-green-400' },
+                { icon: CheckCircle2, label: 'Completed Tasks',  value: analytics?.completed_tasks ?? 0,      color: 'text-purple-400', badge: 'Total',   bcolor: 'text-purple-400' },
+                { icon: Clock,        label: 'Pending Invites',  value: analytics?.pending_invitations ?? 0,  color: 'text-yellow-400', badge: 'Invites', bcolor: 'text-yellow-400' },
+                { icon: Heart,        label: 'Workspace Health', value: `${analytics?.workspace_health ?? 100}%`, color: 'text-emerald-400', badge: 'Score', bcolor: 'text-emerald-400' },
+              ].map((kpi, i) => (
+                <div key={i} className="p-4 rounded-2xl bg-gray-900/80 border border-white/10 shadow-xl hover:border-white/20 transition-colors">
+                  <div className="flex items-center justify-between mb-2">
+                    <kpi.icon size={20} className={kpi.color} />
+                    <span className={`text-[10px] font-black uppercase tracking-wider ${kpi.bcolor}`}>{kpi.badge}</span>
+                  </div>
+                  <p className="text-2xl font-black text-white">{kpi.value}</p>
+                  <p className="text-xs text-gray-400 font-medium mt-0.5">{kpi.label}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="p-5 rounded-2xl bg-gray-900/70 border border-white/10 shadow-2xl">
+                <h3 className="text-sm font-bold text-gray-200 mb-4 flex items-center gap-2">
+                  <Activity size={18} className="text-blue-400" />
+                  Daily Activity Stream
+                </h3>
+                <div className="h-56">
+                  <Line
+                    data={{
+                      labels: activitiesByDay.map(a => a.day),
+                      datasets: [{ label: 'Activities', data: activitiesByDay.map(a => a.count), borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.12)', tension: 0.4, fill: true }]
+                    }}
+                    options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af' } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af' } } } }}
+                  />
+                </div>
+              </div>
+              <div className="p-5 rounded-2xl bg-gray-900/70 border border-white/10 shadow-2xl">
+                <h3 className="text-sm font-bold text-gray-200 mb-4 flex items-center gap-2">
+                  <CheckCircle2 size={18} className="text-purple-400" />
+                  Weekly Task Output
+                </h3>
+                <div className="h-56">
+                  <Bar
+                    data={{
+                      labels: tasksByWeek.map(t => t.week),
+                      datasets: [
+                        { label: 'Completed', data: tasksByWeek.map(t => t.completed), backgroundColor: '#a855f7' },
+                        { label: 'Created',   data: tasksByWeek.map(t => t.created),   backgroundColor: '#3b82f6' }
+                      ]
+                    }}
+                    options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#9ca3af' } } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af' } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af' } } } }}
+                  />
+                </div>
               </div>
             </div>
-            <div className="p-5 rounded-2xl bg-gray-900/70 border border-white/10 shadow-2xl">
-              <h3 className="text-sm font-bold text-gray-200 mb-4 flex items-center gap-2">
-                <CheckCircle2 size={18} className="text-purple-400" />
-                Weekly Task Output
-              </h3>
-              <div className="h-56">
-                <Bar
-                  data={{
-                    labels: analytics?.tasks_by_week.map(t => t.week) || [],
-                    datasets: [
-                      { label: 'Completed', data: analytics?.tasks_by_week.map(t => t.completed) || [], backgroundColor: '#a855f7' },
-                      { label: 'Created',   data: analytics?.tasks_by_week.map(t => t.created)   || [], backgroundColor: '#3b82f6' }
-                    ]
-                  }}
-                  options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#9ca3af' } } }, scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af' } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af' } } } }}
-                />
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
+          </>
+        )}
+      </div>
+    );
+  };
 
   const renderFiles = () => (
     <div className="space-y-5 animate-in fade-in duration-300">
@@ -1362,9 +1372,9 @@ export const TeamEnterpriseDashboard: React.FC<TeamEnterpriseDashboardProps> = (
 
   return (
     <div className="flex h-full bg-gray-950 text-white overflow-hidden">
-      {/* ── Sidebar Navigation ── */}
+      {/* ── Sidebar Navigation (Desktop / Tablet only) ── */}
       <div className={cn(
-        'flex-shrink-0 bg-gray-950/80 border-r border-white/5 flex flex-col transition-all duration-300 overflow-hidden',
+        'hidden md:flex flex-shrink-0 bg-gray-950/80 border-r border-white/5 flex-col transition-all duration-300 overflow-hidden',
         sidebarOpen ? 'w-52' : 'w-16'
       )}>
         {/* Sidebar Header */}
@@ -1427,8 +1437,8 @@ export const TeamEnterpriseDashboard: React.FC<TeamEnterpriseDashboardProps> = (
 
       {/* ── Main Content ── */}
       <div ref={contentRef} className="flex-1 overflow-y-auto custom-scrollbar">
-        {/* Content Header */}
-        <div className="sticky top-0 z-10 bg-gray-950/90 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex items-center justify-between">
+        {/* Content Header (Desktop only) */}
+        <div className="hidden md:flex sticky top-0 z-10 bg-gray-950/90 backdrop-blur-xl border-b border-white/5 px-6 py-4 items-center justify-between">
           <div className="flex items-center gap-3">
             {(() => {
               const nav = NAV_ITEMS.find(n => n.id === activeTab);
@@ -1461,7 +1471,7 @@ export const TeamEnterpriseDashboard: React.FC<TeamEnterpriseDashboardProps> = (
         </div>
 
         {/* Tab Content */}
-        <div className="p-5 md:p-6">
+        <div className="p-3 sm:p-5 md:p-6 pb-24 md:pb-6">
           {renderContent()}
         </div>
       </div>
