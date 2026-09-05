@@ -1,0 +1,33 @@
+# Vercel Ignore - Exclude non-frontend server, mobile, and binary files from deployment storage
+
+server/
+mobile/
+fincra-gateway/
+realtime-gateway/
+artifacts/
+scratch/
+load_tests/
+tests/
+docs/
+documents/
+temp_anchor_package/
+temp_anchor_source/
+patches/
+supabase/
+
+# Binary & Media Files
+*.apk
+*.zip
+*.pdf
+*.docx
+*.jks
+*.mp4
+*.log
+*.aar
+
+# Data dumps and lint reports
+lint*.json
+eslint*.json
+git_show*.txt
+schema_output.json
+audit_script.js
