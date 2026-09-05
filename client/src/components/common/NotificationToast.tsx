@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, MessageSquare, Bell, Info, Send, CornerDownLeft, Check } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 export interface NotificationToastData {
     id: string;
@@ -116,6 +117,7 @@ const NotificationToast: React.FC<NotificationToastProps> = ({
             }, 1200);
         } catch (err) {
             console.error('[NotificationToast] Quick reply failed:', err);
+            toast.error('Failed to send reply. Please try again.');
             setIsSending(false);
         }
     };

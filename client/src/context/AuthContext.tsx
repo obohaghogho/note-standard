@@ -243,7 +243,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           freshSession = {
             access_token: setResult.session.access_token,
             refresh_token: setResult.session.refresh_token,
-          };
+            user: setResult.session.user
+          } as any;
           accountManager.updateAccountTokens(userId, setResult.session);
           console.log('[ACCOUNT_FORENSIC] ACCOUNT_SWITCH_TOKEN_UPDATED setSession succeeded for', target.email);
         } else {
@@ -251,7 +252,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const latestAccount = accountManager.getAccount(userId);
           if (latestAccount) {
             const isolated = await refreshSessionIsolated(latestAccount);
-            if (isolated) freshSession = isolated;
+            if (isolated) {
+              freshSession = isolated as any;
+              await supabase.auth.setSession({
+                access_token: isolated.access_token,
+                refresh_token: isolated.refresh_token,
+              }).catch(() => {});
+            }
           }
         }
       } catch (sessionErr) {
