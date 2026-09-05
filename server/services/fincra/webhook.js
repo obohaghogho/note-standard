@@ -283,6 +283,19 @@ async function handleDepositSuccessful(payload) {
           break;
         }
 
+        // Also check deposit_sessions table
+        const { data: sessionMatch } = await supabase
+          .from("deposit_sessions")
+          .select("user_id")
+          .eq("user_reference", candidateRef)
+          .maybeSingle();
+
+        if (sessionMatch) {
+          userId = sessionMatch.user_id;
+          logger.info(`[Fincra/webhook] Resolved user ${userId} via deposit_sessions narration match (${candidateRef}, len=${len}).`);
+          break;
+        }
+
         // Also check manual_deposits
         const { data: manualMatch } = await supabase
           .from("manual_deposits")
