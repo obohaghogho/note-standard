@@ -56,9 +56,15 @@ export const WebNotificationRouter: React.FC = () => {
       console.log('[ACCOUNT_FORENSIC] Notification Account ID:', targetAccountId);
       console.log('[ACCOUNT_FORENSIC] Active Account ID:', user?.id ?? 'none');
 
-      // Scenario 1: Already on the correct account
-      if (isSameAccount(user?.id, targetAccountId) || isSameAccount(accountManager.getActiveAccountId(), targetAccountId)) {
-        console.log('[ACCOUNT_FORENSIC] Correct account already active — navigating directly to:', destination);
+      const isTargetInMultiAccounts = !!accountManager.getAccount(targetAccountId);
+
+      // Scenario 1: Already on the correct account OR target is not a secondary saved multi-account
+      if (
+        isSameAccount(user?.id, targetAccountId) || 
+        isSameAccount(accountManager.getActiveAccountId(), targetAccountId) ||
+        !isTargetInMultiAccounts
+      ) {
+        console.log('[ACCOUNT_FORENSIC] Correct account active or target is not in secondary multi-accounts — navigating directly to:', destination);
         navigate(destination, { replace: true });
         handledRef.current = null;
         return;

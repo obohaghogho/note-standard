@@ -47,10 +47,12 @@ function ChatContent() {
         const isSameAcc = (a?: string | null, b?: string | null) =>
             !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
 
-        // CRITICAL GUARD: If the notification is for a different account,
+        const isTargetInMultiAccounts = !!accountManager.getAccount(targetAccountId);
+
+        // CRITICAL GUARD: If the notification is for a different secondary account,
         // hold here. WebNotificationRouter will switch the account first.
         // Once user.id commits to targetAccountId this guard releases.
-        if (targetAccountId && authReady && user?.id && !isSameAcc(user.id, targetAccountId)) {
+        if (targetAccountId && authReady && user?.id && !isSameAcc(user.id, targetAccountId) && isTargetInMultiAccounts) {
             console.log('[Chat] Holding conversation load — waiting for account switch.', {
                 targetAccountId,
                 currentUser: user?.id,
@@ -58,9 +60,9 @@ function ChatContent() {
             return;
         }
 
-        // Auth has committed to the correct account. Clean targetAccountId
-        // from URL so it does not interfere with future navigation.
-        if (targetAccountId && user?.id && isSameAcc(user.id, targetAccountId)) {
+        // Auth has committed to the correct account (or target is not a multi-account).
+        // Clean targetAccountId from URL so it does not interfere with future navigation.
+        if (targetAccountId && user?.id && (isSameAcc(user.id, targetAccountId) || !isTargetInMultiAccounts)) {
             const cleaned = new URLSearchParams(searchParams);
             cleaned.delete('targetAccountId');
             setSearchParams(cleaned, { replace: true });

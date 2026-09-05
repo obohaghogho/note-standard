@@ -198,7 +198,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const target = accountManager.getAccount(userId);
     if (!target) {
-      toast.error('Account not found.');
+      console.warn(`[Auth] switchAccount invoked for account ${userId} not present in multi-accounts list.`);
       return;
     }
 
