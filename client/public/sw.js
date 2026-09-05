@@ -11,7 +11,7 @@ self.addEventListener('install', (event) => {
     // Force immediate update to bypass aggressive caching
     self.skipWaiting();
 });
-// Cache Bust Timestamp: 2026-07-30T18:35:00 — v10: enterprise PWA mobile viewport & layout recovery
+// Cache Bust Timestamp: 2026-09-05T20:45:00 — v11: quick reply notification action fix & window fallback recovery
 
 self.addEventListener('activate', (event) => {
     console.log(`[FORENSIC][SW] ACTIVATE event at ${new Date().toISOString()}`);
@@ -323,8 +323,46 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
     console.log(`[FORENSIC][SW] NOTIFICATIONCLICK event at ${new Date().toISOString()} | Action: ${event.action}`);
     
-    const data = event.notification.data;
-    const replyText = event.reply || (event.action === 'reply' ? (event.replyText || null) : null);
+    const data = event.notification.data || {};
+    const replyText = event.reply || (event.notification && event.notification.reply) || event.replyText || (event.action === 'reply' ? (event.replyText || event.reply || null) : null);
+
+    let urlToOpen = new URL(data?.url || '/dashboard', self.location.origin).href;
+    const urlObj = new URL(urlToOpen);
+    if (data?.targetAccountId) {
+        urlObj.searchParams.set('targetAccountId', data.targetAccountId);
+    }
+    if (data?.conversationId) {
+        if (!urlObj.searchParams.has('id')) {
+            urlObj.searchParams.set('id', data.conversationId);
+        }
+        if (!urlObj.searchParams.has('conversationId')) {
+            urlObj.searchParams.set('conversationId', data.conversationId);
+        }
+    }
+    if (urlToOpen.includes('/admin/')) {
+        urlObj.searchParams.set('isSupport', 'true');
+    }
+
+    const openOrFocusClient = async (customUrl) => {
+        const targetUrl = customUrl || urlObj.href;
+        const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+        for (const client of windowClients) {
+            if (client.url === targetUrl && 'focus' in client) {
+                if (data?.conversationId) {
+                    client.postMessage({ type: 'CHAT_MESSAGE_RECEIVED', conversationId: data.conversationId });
+                }
+                return client.focus();
+            }
+        }
+        for (const client of windowClients) {
+            if ('focus' in client && 'navigate' in client) {
+                return client.focus().then(() => client.navigate(targetUrl));
+            }
+        }
+        if (clients.openWindow) {
+            return clients.openWindow(targetUrl);
+        }
+    };
 
     // Handle Quick Reply Action from OS System Notification Tray
     if (event.action === 'reply' || replyText) {
@@ -337,6 +375,8 @@ self.addEventListener('notificationclick', (event) => {
             event.waitUntil(
                 (async () => {
                     let sentMessage = null;
+                    let success = false;
+
                     try {
                         const token = await new Promise((resolve) => {
                             try {
@@ -386,8 +426,10 @@ self.addEventListener('notificationclick', (event) => {
                                     type: 'text'
                                 })
                             });
+
                             if (response.ok) {
                                 sentMessage = await response.json();
+                                success = true;
                                 console.log(`[SW] Quick reply sent directly for conversation: ${convId}`);
                             }
                         }
@@ -395,67 +437,39 @@ self.addEventListener('notificationclick', (event) => {
                         console.error('[SW] Quick reply direct API send error:', err);
                     }
 
-                    // Post QUICK_REPLY_SUBMITTED with sent message to all active window clients
-                    const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
-                    for (const client of windowClients) {
-                        if ('postMessage' in client && convId) {
-                            client.postMessage({
-                                type: 'QUICK_REPLY_SUBMITTED',
-                                conversationId: convId,
-                                message: sentMessage,
-                                content: trimmedReply
-                            });
+                    if (success && convId) {
+                        const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+                        for (const client of windowClients) {
+                            if ('postMessage' in client) {
+                                client.postMessage({
+                                    type: 'QUICK_REPLY_SUBMITTED',
+                                    conversationId: convId,
+                                    message: sentMessage,
+                                    content: trimmedReply
+                                });
+                            }
                         }
+                    } else {
+                        // FALLBACK: If direct API send failed or token was missing, open the app window with draft reply
+                        urlObj.searchParams.set('draftReply', trimmedReply);
+                        await openOrFocusClient(urlObj.href);
                     }
                 })()
             );
+            return;
+        } else {
+            // User tapped "Reply" button without pre-filled text: open app directly to conversation and focus input
+            urlObj.searchParams.set('focusReply', 'true');
+            event.waitUntil(openOrFocusClient(urlObj.href));
+            return;
         }
-        return;
     }
 
     if (event.action === 'close') return;
 
-    let urlToOpen = new URL(data?.url || '/dashboard', self.location.origin).href;
-
-    const urlObj = new URL(urlToOpen);
-    if (data?.targetAccountId) {
-        urlObj.searchParams.set('targetAccountId', data.targetAccountId);
-    }
-    if (data?.conversationId) {
-        if (!urlObj.searchParams.has('id')) {
-            urlObj.searchParams.set('id', data.conversationId);
-        }
-        if (!urlObj.searchParams.has('conversationId')) {
-            urlObj.searchParams.set('conversationId', data.conversationId);
-        }
-    }
-    if (urlToOpen.includes('/admin/')) {
-        urlObj.searchParams.set('isSupport', 'true');
-    }
+    event.notification.close();
     urlToOpen = urlObj.href;
-    event.waitUntil(
-        clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-            // 1. Try to find an existing tab with the same URL or at least one on the same origin
-            for (const client of windowClients) {
-                if (client.url === urlToOpen && 'focus' in client) {
-                    if (data?.conversationId) {
-                        client.postMessage({ type: 'CHAT_MESSAGE_RECEIVED', conversationId: data.conversationId });
-                    }
-                    return client.focus();
-                }
-            }
-            // 2. If no exact match, focus any tab on our origin and navigate it
-            for (const client of windowClients) {
-                if ('focus' in client && 'navigate' in client) {
-                    return client.focus().then(() => client.navigate(urlToOpen));
-                }
-            }
-            // 3. If no window/tab is open, open a new one
-            if (clients.openWindow) {
-                return clients.openWindow(urlToOpen);
-            }
-        })
-    );
+    event.waitUntil(openOrFocusClient(urlToOpen));
 });
 
 // Handle Push Subscription Change (Token Rotation)
