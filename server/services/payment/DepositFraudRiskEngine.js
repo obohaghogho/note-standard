@@ -67,6 +67,23 @@ class DepositFraudRiskEngine {
     if (riskScore >= 75) actionTaken = 'BLOCKED';
     else if (riskScore >= 35) actionTaken = 'MANUAL_REVIEW';
 
+    if (actionTaken === 'MANUAL_REVIEW') {
+      try {
+        const notificationService = require('../notificationService');
+        notificationService.notifyAdminsManualReview({
+          type: 'deposit',
+          amount,
+          currency,
+          userId,
+          reference: userReference,
+          reason: riskFlags.join(', ') || 'High Risk Deposit Screening',
+          metadata: rawPayload
+        }).catch(err => logger.warn(`[DepositFraudRiskEngine] Admin email alert warning: ${err.message}`));
+      } catch (e) {
+        logger.warn(`[DepositFraudRiskEngine] Admin notification load notice: ${e.message}`);
+      }
+    }
+
     // Log screening event
     try {
       await supabase.from('deposit_fraud_logs').insert({

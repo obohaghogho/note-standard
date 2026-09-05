@@ -392,10 +392,31 @@ const broadcastNotification = async ({
   }
 };
 
+/**
+ * Triggers admin email notification whenever a transaction requires manual review.
+ */
+const notifyAdminsManualReview = async ({ type = 'deposit', amount, currency, userId, reference, reason, metadata }) => {
+  try {
+    return await sendgridEmailService.sendAdminManualReviewEmail({
+      type,
+      amount,
+      currency,
+      userId,
+      reference,
+      reason,
+      metadata,
+    });
+  } catch (err) {
+    console.error('[NotificationService] Error notifying admins of manual review:', err.message);
+    return false;
+  }
+};
+
 module.exports = {
   createNotification,
   broadcastNotification,
   dispatchFastPush,
+  notifyAdminsManualReview,
 };
 
 

@@ -79,7 +79,7 @@ class WithdrawalWorkflowService {
       throw new Error(`[WithdrawalWorkflow] ${capCheck.message}`);
     }
 
-    await this._runRiskChecks(userId, numAmount, upCurrency);
+    await this._runRiskChecks(userId, numAmount, upCurrency, reference);
 
     // 3. Stage: FUNDS_RESERVED -> Atomically Freeze Balance in DB
     const newAvailBal = availableBal - numAmount;
@@ -395,9 +395,20 @@ class WithdrawalWorkflowService {
     }).catch(() => {});
   }
 
-  async _runRiskChecks(userId, amount, currency) {
-    if (amount > 50000 && currency === 'USD') {
-      logger.warn(`[WithdrawalWorkflow] Large transaction flagged for user ${userId}: ${amount} ${currency}`);
+  async _runRiskChecks(userId, amount, currency, reference = '') {
+    const highValNgn = Number(process.env.HIGH_VALUE_WITHDRAWAL_THRESHOLD_NGN || 15000000);
+    const highValUsd = Number(process.env.HIGH_VALUE_WITHDRAWAL_THRESHOLD_USD || 10000);
+
+    if ((currency === 'USD' && amount >= highValUsd) || (currency === 'NGN' && amount >= highValNgn)) {
+      logger.warn(`[WithdrawalWorkflow] High value withdrawal flagged for user ${userId}: ${amount} ${currency}`);
+      notificationService.notifyAdminsManualReview({
+        type: 'withdrawal',
+        amount,
+        currency,
+        userId,
+        reference,
+        reason: 'High Value Withdrawal Screening Flag'
+      }).catch(err => logger.warn(`[WithdrawalWorkflow] Admin notification error: ${err.message}`));
     }
   }
 }

@@ -315,6 +315,93 @@ class SendGridEmailService {
     return this.sendEmail({ to, subject, htmlContent: html });
   }
 
+  /**
+   * Send Manual Review Alert Email to System Admins
+   * Triggered whenever a high-value or flagged deposit/withdrawal requires manual review.
+   */
+  async sendAdminManualReviewEmail({ type = 'deposit', amount, currency, userId, reference, reason, metadata }) {
+    try {
+      const supabase = require('../config/database');
+
+      // Fetch admin email addresses
+      const adminEmails = new Set();
+      if (process.env.ADMIN_NOTIFICATION_EMAIL) {
+        process.env.ADMIN_NOTIFICATION_EMAIL.split(',').forEach(e => adminEmails.add(e.trim()));
+      }
+      if (process.env.ADMIN_EMAIL) {
+        process.env.ADMIN_EMAIL.split(',').forEach(e => adminEmails.add(e.trim()));
+      }
+
+      // Fetch admin users from DB
+      const { data: admins } = await supabase
+        .from('profiles')
+        .select('email')
+        .or('role.eq.admin,role.eq.super_admin');
+
+      if (admins) {
+        admins.forEach(a => { if (a.email) adminEmails.add(a.email); });
+      }
+
+      // Always include default admin email if set
+      if (adminEmails.size === 0) {
+        adminEmails.add('obohoboh107@gmail.com');
+      }
+
+      const formattedAmount = `${currency || 'NGN'} ${Number(amount || 0).toLocaleString()}`;
+      const transactionType = String(type).toUpperCase();
+      const subject = `🚨 [Action Required] Manual Review Flagged: ${transactionType} of ${formattedAmount}`;
+
+      const clientUrl = process.env.CLIENT_URL || 'https://notestandard.com';
+      const reviewUrl = `${clientUrl}/admin`;
+
+      const htmlContent = this._wrapTemplate(`
+        <h2 style="color: #dc2626; margin-bottom: 16px;">🚨 Manual Review Required</h2>
+        <p style="font-size: 15px; color: #374151; line-height: 1.5;">
+          A <strong>${transactionType}</strong> transaction has been flagged for manual administrative review in the NoteStandard Dashboard.
+        </p>
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; background: #fef2f2; border-radius: 8px; border: 1px solid #fca5a5;">
+          <tr>
+            <td style="padding: 10px 14px; border-bottom: 1px solid #fecaca; color: #991b1b; font-weight: 600;">Transaction Type</td>
+            <td style="padding: 10px 14px; border-bottom: 1px solid #fecaca; font-weight: 700; color: #111827;">${transactionType}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 14px; border-bottom: 1px solid #fecaca; color: #991b1b; font-weight: 600;">Amount</td>
+            <td style="padding: 10px 14px; border-bottom: 1px solid #fecaca; font-weight: 700; color: #111827;">${formattedAmount}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 14px; border-bottom: 1px solid #fecaca; color: #991b1b; font-weight: 600;">User ID</td>
+            <td style="padding: 10px 14px; border-bottom: 1px solid #fecaca; font-family: monospace;">${userId || 'N/A'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 14px; border-bottom: 1px solid #fecaca; color: #991b1b; font-weight: 600;">Reference</td>
+            <td style="padding: 10px 14px; border-bottom: 1px solid #fecaca; font-family: monospace;">${reference || 'N/A'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 14px; color: #991b1b; font-weight: 600;">Flag Reason</td>
+            <td style="padding: 10px 14px; color: #dc2626; font-weight: 700;">${reason || 'High Value / Compliance Screening Flag'}</td>
+          </tr>
+        </table>
+        <div style="margin-top: 28px; text-align: center;">
+          <a href="${reviewUrl}"
+             style="display: inline-block; background: #dc2626; color: white; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 15px; box-shadow: 0 4px 6px rgba(220, 38, 38, 0.25);">
+             Open Admin Dashboard & Review
+          </a>
+        </div>
+      `);
+
+      const dispatchPromises = Array.from(adminEmails).map(toEmail =>
+        this.sendEmail({ to: toEmail, subject, htmlContent })
+      );
+
+      await Promise.all(dispatchPromises);
+      logger.info(`[SendGridEmailService] Manual review alert emails dispatched to ${adminEmails.size} admin(s) for tx: ${reference || 'N/A'}`);
+      return true;
+    } catch (err) {
+      logger.error(`[SendGridEmailService] Error dispatching manual review email: ${err.message}`);
+      return false;
+    }
+  }
+
   _wrapTemplate(body) {
     return `
     <!DOCTYPE html>
