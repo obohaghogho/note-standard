@@ -1,14 +1,24 @@
 /* Fincra Compliance Demo Stylesheet */
 .fincra-demo-container {
-    padding: 1.5rem;
-    space-y: 1.5rem;
+    padding: 0.75rem;
+    gap: 1rem;
     max-width: 1400px;
     margin: 0 auto;
     color: #f1f5f9;
     font-family: inherit;
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    touch-action: pan-y;
+}
+
+@media (min-width: 640px) {
+    .fincra-demo-container {
+        padding: 1.5rem;
+        gap: 1.5rem;
+    }
 }
 
 /* Presentation Mode Overlay Rules */

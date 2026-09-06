@@ -331,36 +331,36 @@ export default function FincraComplianceDemo() {
             )}
 
             {/* ─── TOP SECTION: DEMO INTRODUCTION & CONTROLS ─── */}
-            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4 relative overflow-hidden backdrop-blur-xl">
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-4 relative overflow-hidden backdrop-blur-xl min-w-0">
                 <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    <div className="space-y-1">
-                        <div className="flex items-center gap-3 flex-wrap">
-                            <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
-                                <ShieldCheck className="w-8 h-8 text-cyan-400" />
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 min-w-0">
+                    <div className="space-y-1.5 min-w-0">
+                        <div className="flex items-center gap-2.5 flex-wrap min-w-0">
+                            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2 break-words">
+                                <ShieldCheck className="w-7 h-7 sm:w-8 sm:h-8 text-cyan-400 shrink-0" />
                                 NoteStandard
                             </h1>
-                            <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                            <span className="px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full text-[11px] sm:text-xs font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shrink-0">
                                 Fincra Compliance Review
                             </span>
                         </div>
-                        <h2 className="text-xl font-semibold text-slate-200">
+                        <h2 className="text-base sm:text-xl font-semibold text-slate-200 leading-snug break-words">
                             Compliance & Transaction Controls Demonstration
                         </h2>
-                        <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
+                        <p className="text-xs text-slate-400 max-w-2xl leading-relaxed break-words">
                             Controlled demonstration of compliance controls, transaction lifecycle, double-entry ledger accounting, and settlement traceability. Prepared for Fincra Compliance Team.
                         </p>
                     </div>
 
                     {/* Quick Control Toolbar */}
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap min-w-0">
                         <button
                             onClick={() => setVoiceNarration(!voiceNarration)}
                             className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border transition ${voiceNarration ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300' : 'bg-slate-800 border-slate-700 text-slate-400'}`}
                             title="Toggle Voice Explanation"
                         >
-                            {voiceNarration ? <Volume2 className="w-4 h-4 text-cyan-400" /> : <VolumeX className="w-4 h-4" />}
+                            {voiceNarration ? <Volume2 className="w-4 h-4 text-cyan-400 shrink-0" /> : <VolumeX className="w-4 h-4 shrink-0" />}
                             Voice: {voiceNarration ? 'ON' : 'OFF'}
                         </button>
 
@@ -368,7 +368,7 @@ export default function FincraComplianceDemo() {
                             onClick={() => setPresentationMode(!presentationMode)}
                             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs transition shadow-lg shadow-cyan-600/30"
                         >
-                            <Maximize2 className="w-4 h-4" />
+                            <Maximize2 className="w-4 h-4 shrink-0" />
                             Presentation Mode
                         </button>
 
@@ -376,175 +376,175 @@ export default function FincraComplianceDemo() {
                             onClick={() => setShowResetConfirm(true)}
                             className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-semibold transition"
                         >
-                            <RotateCcw className="w-4 h-4 text-amber-400" />
+                            <RotateCcw className="w-4 h-4 text-amber-400 shrink-0" />
                             Reset Demo
                         </button>
                     </div>
                 </div>
 
                 {/* Banner */}
-                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                        <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
-                        <div>
-                            <span className="font-mono font-bold text-amber-300 text-xs tracking-wider uppercase block">
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0">
+                    <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+                        <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+                        <div className="min-w-0 flex-1">
+                            <span className="font-mono font-bold text-amber-300 text-[11px] sm:text-xs tracking-wider uppercase block break-words">
                                 DEMO ENVIRONMENT — TEST DATA ONLY — NO REAL MONEY
                             </span>
-                            <span className="text-xs text-slate-300">
+                            <span className="text-xs text-slate-300 leading-relaxed block break-words mt-0.5">
                                 All transactions displayed in this demonstration use controlled test data and do not initiate real external financial movement.
                             </span>
                         </div>
                     </div>
-                    <span className="hidden md:inline-block px-2.5 py-1 rounded bg-amber-500/20 text-amber-200 text-[10px] font-mono font-bold uppercase border border-amber-500/40">
+                    <span className="hidden md:inline-block px-2.5 py-1 rounded bg-amber-500/20 text-amber-200 text-[10px] font-mono font-bold uppercase border border-amber-500/40 shrink-0">
                         ISOLATED DEMO STATE
                     </span>
                 </div>
 
                 {/* Reviewer Account Identity Badge */}
-                <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                    <div className="flex items-center gap-2 flex-wrap">
+                <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap min-w-0">
                         <UserCheck className="w-4 h-4 text-cyan-400 shrink-0" />
                         <span className="text-slate-300">Authenticated Reviewer Identity:</span>
-                        <span className="font-mono font-bold text-cyan-300">fincra-demo@notestandard.com</span>
-                        <span className="font-mono text-slate-400 text-[11px]">(USR-DEMO-FINCRA-8821)</span>
+                        <span className="font-mono font-bold text-cyan-300 break-all">fincra-demo@notestandard.com</span>
+                        <span className="font-mono text-slate-400 text-[11px] shrink-0">(USR-DEMO-FINCRA-8821)</span>
                     </div>
-                    <span className="px-2.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 font-mono font-bold text-[10px] border border-cyan-500/30">
+                    <span className="px-2.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 font-mono font-bold text-[10px] border border-cyan-500/30 shrink-0 self-start sm:self-auto">
                         ISOLATED DEMO ROLE — NO PROD ADMIN ACCESS
                     </span>
                 </div>
             </div>
 
             {/* ─── GRID: SECTION 2 (USER/KYC) & SECTION 3 (WALLETS) ─── */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 min-w-0">
 
                 {/* 2. USER & KYC CONTROL */}
-                <div className="lg:col-span-5 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                        <div className="flex items-center gap-2">
-                            <UserCheck className="w-5 h-5 text-emerald-400" />
-                            <h3 className="font-bold text-white text-base">2. User & KYC Controls</h3>
+                <div className="lg:col-span-5 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl space-y-4 min-w-0">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <UserCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+                            <h3 className="font-bold text-white text-base truncate">2. User & KYC Controls</h3>
                         </div>
-                        <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 shrink-0">
                             DEMO PROFILE
                         </span>
                     </div>
 
-                    <div className="space-y-3 text-xs">
-                        <div className="flex justify-between items-center bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
+                    <div className="space-y-3 text-xs min-w-0">
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center bg-slate-950/60 p-2.5 rounded-lg border border-slate-800 gap-1 min-w-0">
                             <span className="text-slate-400 font-medium">User Identifier:</span>
-                            <span className="font-mono text-cyan-300 font-bold">USR-DEMO-FINCRA-8821</span>
+                            <span className="font-mono text-cyan-300 font-bold break-all">USR-DEMO-FINCRA-8821</span>
                         </div>
-                        <div className="flex justify-between items-center bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
+                        <div className="flex justify-between items-center bg-slate-950/60 p-2.5 rounded-lg border border-slate-800 gap-1 min-w-0">
                             <span className="text-slate-400 font-medium">Account Status:</span>
-                            <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold font-mono">ACTIVE</span>
+                            <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold font-mono shrink-0">ACTIVE</span>
                         </div>
-                        <div className="flex justify-between items-center bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center bg-slate-950/60 p-2.5 rounded-lg border border-slate-800 gap-1 min-w-0">
                             <span className="text-slate-400 font-medium">KYC Tier:</span>
-                            <span className="text-white font-semibold">Tier 1 — Verified Identification</span>
+                            <span className="text-white font-semibold break-words">Tier 1 — Verified Identification</span>
                         </div>
-                        <div className="flex justify-between items-center bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
+                        <div className="flex justify-between items-center bg-slate-950/60 p-2.5 rounded-lg border border-slate-800 gap-1 min-w-0">
                             <span className="text-slate-400 font-medium">Verification Status:</span>
-                            <span className="flex items-center gap-1 text-emerald-400 font-semibold">
+                            <span className="flex items-center gap-1 text-emerald-400 font-semibold shrink-0">
                                 <CheckCircle2 className="w-4 h-4" /> VERIFIED
                             </span>
                         </div>
 
                         {/* Limits Bar */}
-                        <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-2">
-                            <div className="flex justify-between text-slate-300 font-medium">
-                                <span>Daily Limit: ₦1,500,000 / $1,000</span>
+                        <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-2 min-w-0">
+                            <div className="flex flex-col sm:flex-row justify-between text-slate-300 font-medium gap-1 text-xs">
+                                <span className="break-words">Daily Limit: ₦1,500,000 / $1,000</span>
                                 <span className="text-cyan-400 font-bold">Used: ₦375,000 (25%)</span>
                             </div>
                             <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
                                 <div className="bg-cyan-500 h-2 rounded-full" style={{ width: '25%' }}></div>
                             </div>
-                            <div className="flex justify-between text-[11px] text-slate-400">
+                            <div className="flex flex-col sm:flex-row justify-between text-[11px] text-slate-400 gap-1">
                                 <span>Remaining Limit:</span>
-                                <span className="text-emerald-400 font-bold font-mono">₦1,125,000 / $750 DEMO</span>
+                                <span className="text-emerald-400 font-bold font-mono break-words">₦1,125,000 / $750 DEMO</span>
                             </div>
                         </div>
 
-                        <div className="text-[11px] text-slate-400 bg-slate-800/40 p-2.5 rounded-lg border border-slate-700/50 flex items-center gap-2">
-                            <Info className="w-4 h-4 text-cyan-400 shrink-0" />
-                            <span>Rule: Verification pipeline enforces Tier 1 daily limit before dispatching payment intents to Fincra routing engines.</span>
+                        <div className="text-[11px] text-slate-400 bg-slate-800/40 p-2.5 rounded-lg border border-slate-700/50 flex items-start gap-2">
+                            <Info className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                            <span className="leading-relaxed">Rule: Verification pipeline enforces Tier 1 daily limit before dispatching payment intents to Fincra routing engines.</span>
                         </div>
                     </div>
                 </div>
 
                 {/* 3. WALLET CONTROL */}
-                <div className="lg:col-span-7 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                        <div className="flex items-center gap-2">
-                            <Layers className="w-5 h-5 text-cyan-400" />
-                            <h3 className="font-bold text-white text-base">3. Active Wallet Models (6-Asset Infrastructure)</h3>
+                <div className="lg:col-span-7 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl space-y-4 min-w-0">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <Layers className="w-5 h-5 text-cyan-400 shrink-0" />
+                            <h3 className="font-bold text-white text-base truncate">3. Active Wallet Models (6-Asset Infrastructure)</h3>
                         </div>
-                        <span className="text-xs text-slate-400 font-mono">ISOLATED DEMO BALANCES</span>
+                        <span className="text-[11px] text-slate-400 font-mono shrink-0">ISOLATED DEMO BALANCES</span>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-                        <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1">
+                    <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs min-w-0">
+                        <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1 min-w-0">
                             <div className="flex justify-between items-center text-slate-400 font-mono">
                                 <span>NGN Wallet</span>
-                                <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-[9px]">ACTIVE</span>
+                                <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-[9px] shrink-0">ACTIVE</span>
                             </div>
-                            <div className="text-base font-bold text-white font-mono">₦ 2,450,000.00</div>
+                            <div className="text-sm sm:text-base font-bold text-white font-mono break-all">₦ 2,450,000.00</div>
                             <div className="text-[10px] text-slate-500 font-mono">DEMO BALANCE</div>
                         </div>
 
-                        <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1">
+                        <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1 min-w-0">
                             <div className="flex justify-between items-center text-slate-400 font-mono">
                                 <span>USD Wallet</span>
-                                <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-[9px]">ACTIVE</span>
+                                <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-[9px] shrink-0">ACTIVE</span>
                             </div>
-                            <div className="text-base font-bold text-white font-mono">$ 15,200.00</div>
+                            <div className="text-sm sm:text-base font-bold text-white font-mono break-all">$ 15,200.00</div>
                             <div className="text-[10px] text-slate-500 font-mono">DEMO BALANCE</div>
                         </div>
 
-                        <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1">
+                        <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1 min-w-0">
                             <div className="flex justify-between items-center text-slate-400 font-mono">
                                 <span>GHS Wallet</span>
-                                <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-[9px]">ACTIVE</span>
+                                <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-[9px] shrink-0">ACTIVE</span>
                             </div>
-                            <div className="text-base font-bold text-white font-mono">GH₵ 18,500.00</div>
+                            <div className="text-sm sm:text-base font-bold text-white font-mono break-all">GH₵ 18,500.00</div>
                             <div className="text-[10px] text-slate-500 font-mono">DEMO BALANCE</div>
                         </div>
 
-                        <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1">
+                        <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1 min-w-0">
                             <div className="flex justify-between items-center text-slate-400 font-mono">
                                 <span>BTC Wallet</span>
-                                <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-[9px]">ACTIVE</span>
+                                <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-[9px] shrink-0">ACTIVE</span>
                             </div>
-                            <div className="text-base font-bold text-white font-mono">1.25000000 BTC</div>
+                            <div className="text-sm sm:text-base font-bold text-white font-mono break-all">1.25000000 BTC</div>
                             <div className="text-[10px] text-slate-500 font-mono">DEMO BALANCE</div>
                         </div>
 
-                        <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1">
+                        <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1 min-w-0">
                             <div className="flex justify-between items-center text-slate-400 font-mono">
                                 <span>USDT Wallet</span>
-                                <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-[9px]">ACTIVE</span>
+                                <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-[9px] shrink-0">ACTIVE</span>
                             </div>
-                            <div className="text-base font-bold text-white font-mono">10,000.00 USDT</div>
+                            <div className="text-sm sm:text-base font-bold text-white font-mono break-all">10,000.00 USDT</div>
                             <div className="text-[10px] text-slate-500 font-mono">DEMO BALANCE</div>
                         </div>
 
-                        <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1">
+                        <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1 min-w-0">
                             <div className="flex justify-between items-center text-slate-400 font-mono">
                                 <span>USDC Wallet</span>
-                                <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-[9px]">ACTIVE</span>
+                                <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-[9px] shrink-0">ACTIVE</span>
                             </div>
-                            <div className="text-base font-bold text-white font-mono">5,000.00 USDC</div>
+                            <div className="text-sm sm:text-base font-bold text-white font-mono break-all">5,000.00 USDC</div>
                             <div className="text-[10px] text-slate-500 font-mono">DEMO BALANCE</div>
                         </div>
                     </div>
 
                     {/* Unsupported currencies requirement explicitly stated */}
-                    <div className="flex items-center gap-4 bg-slate-950/60 p-3 rounded-xl border border-slate-800 text-xs">
-                        <span className="text-slate-400 font-medium">Restricted Assets:</span>
-                        <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 bg-red-500/10 text-red-400 border border-red-500/30 rounded font-mono text-[11px] flex items-center gap-1">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 bg-slate-950/60 p-3 rounded-xl border border-slate-800 text-xs min-w-0">
+                        <span className="text-slate-400 font-medium shrink-0">Restricted Assets:</span>
+                        <div className="flex items-center gap-2 flex-wrap min-w-0">
+                            <span className="px-2 py-0.5 bg-red-500/10 text-red-400 border border-red-500/30 rounded font-mono text-[11px] flex items-center gap-1 shrink-0">
                                 <X className="w-3 h-3" /> EUR — NOT AVAILABLE
                             </span>
-                            <span className="px-2 py-0.5 bg-red-500/10 text-red-400 border border-red-500/30 rounded font-mono text-[11px] flex items-center gap-1">
+                            <span className="px-2 py-0.5 bg-red-500/10 text-red-400 border border-red-500/30 rounded font-mono text-[11px] flex items-center gap-1 shrink-0">
                                 <X className="w-3 h-3" /> GBP — NOT AVAILABLE
                             </span>
                         </div>
@@ -554,36 +554,36 @@ export default function FincraComplianceDemo() {
             </div>
 
             {/* ─── 4. TRANSACTION LIFECYCLE DEMONSTRATION ─── */}
-            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
-                    <div>
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl space-y-6 min-w-0">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4 min-w-0">
+                    <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                            <Activity className="w-5 h-5 text-cyan-400" />
-                            <h3 className="font-bold text-white text-lg">4. Interactive Transaction Lifecycle</h3>
+                            <Activity className="w-5 h-5 text-cyan-400 shrink-0" />
+                            <h3 className="font-bold text-white text-base sm:text-lg truncate">4. Interactive Transaction Lifecycle</h3>
                         </div>
-                        <p className="text-xs text-slate-400">
+                        <p className="text-xs text-slate-400 mt-0.5 break-words">
                             {failureScenario ? 'Demonstrating Provider Failure & Reversal Workflow' : 'Demonstrating End-to-End Deposit & Settlement Workflow'}
                         </p>
                     </div>
 
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap min-w-0">
                         {failureScenario ? (
                             <button
                                 onClick={handleSimulateSuccess}
-                                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition flex items-center gap-1.5 shadow"
+                                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition flex items-center gap-1.5 shadow shrink-0"
                             >
-                                <CheckCircle2 className="w-4 h-4" /> Load Success Flow
+                                <CheckCircle2 className="w-4 h-4 shrink-0" /> Load Success Flow
                             </button>
                         ) : (
                             <button
                                 onClick={handleSimulateFailure}
-                                className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-semibold text-xs transition flex items-center gap-1.5 shadow"
+                                className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-semibold text-xs transition flex items-center gap-1.5 shadow shrink-0"
                             >
-                                <AlertTriangle className="w-4 h-4" /> Simulate Provider Failure
+                                <AlertTriangle className="w-4 h-4 shrink-0" /> Simulate Provider Failure
                             </button>
                         )}
 
-                        <div className="flex items-center bg-slate-800 rounded-lg p-1 border border-slate-700">
+                        <div className="flex items-center bg-slate-800 rounded-lg p-1 border border-slate-700 shrink-0">
                             <button
                                 onClick={handlePrevStep}
                                 disabled={currentStepIndex === 0}
@@ -606,7 +606,7 @@ export default function FincraComplianceDemo() {
                 </div>
 
                 {/* Timeline Stepper Nodes */}
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 min-w-0">
                     {activeSteps.map((step, idx) => {
                         const isActive = idx === currentStepIndex;
                         const isCompleted = idx < currentStepIndex;
@@ -614,20 +614,20 @@ export default function FincraComplianceDemo() {
                             <div
                                 key={step.id}
                                 onClick={() => setCurrentStepIndex(idx)}
-                                className={`cursor-pointer p-3 rounded-xl border text-xs space-y-1.5 transition-all ${
+                                className={`cursor-pointer p-2.5 sm:p-3 rounded-xl border text-xs space-y-1.5 transition-all min-w-0 ${
                                     isActive
-                                        ? 'bg-cyan-950/80 border-cyan-400 shadow-lg shadow-cyan-500/20 scale-105'
+                                        ? 'bg-cyan-950/80 border-cyan-400 shadow-lg shadow-cyan-500/20 scale-102 sm:scale-105'
                                         : isCompleted
                                             ? 'bg-slate-950/80 border-emerald-500/40 text-slate-300'
                                             : 'bg-slate-950/40 border-slate-800 text-slate-500 opacity-60'
                                 }`}
                             >
-                                <div className="flex justify-between items-center">
+                                <div className="flex justify-between items-center min-w-0">
                                     <span className="font-mono text-[10px] text-slate-400">{step.timestamp}</span>
-                                    {isCompleted && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
-                                    {isActive && <span className="animate-ping h-2 w-2 rounded-full bg-cyan-400"></span>}
+                                    {isCompleted && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+                                    {isActive && <span className="animate-ping h-2 w-2 rounded-full bg-cyan-400 shrink-0"></span>}
                                 </div>
-                                <div className="font-bold font-mono text-[11px] truncate">{step.label}</div>
+                                <div className="font-bold font-mono text-[11px] leading-tight break-words">{step.label}</div>
                                 <div className="text-[10px] text-slate-400 truncate">{step.actor}</div>
                             </div>
                         );
@@ -636,19 +636,19 @@ export default function FincraComplianceDemo() {
 
                 {/* Active Step Detailed Card */}
                 {activeSteps[currentStepIndex] && (
-                    <div className="bg-slate-950 p-4 rounded-xl border border-cyan-500/40 space-y-2">
-                        <div className="flex justify-between items-center flex-wrap gap-2">
-                            <span className="font-mono font-bold text-cyan-300 text-sm">
+                    <div className="bg-slate-950 p-3.5 sm:p-4 rounded-xl border border-cyan-500/40 space-y-2 min-w-0">
+                        <div className="flex justify-between items-center flex-wrap gap-2 min-w-0">
+                            <span className="font-mono font-bold text-cyan-300 text-xs sm:text-sm break-words">
                                 ACTIVE STEP: {activeSteps[currentStepIndex].label}
                             </span>
-                            <span className="px-2.5 py-0.5 rounded text-xs font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                            <span className="px-2.5 py-0.5 rounded text-[11px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700 shrink-0">
                                 ACTOR: {activeSteps[currentStepIndex].actor}
                             </span>
                         </div>
-                        <p className="text-xs text-slate-200 font-medium">
+                        <p className="text-xs text-slate-200 font-medium leading-relaxed break-words">
                             {activeSteps[currentStepIndex].description}
                         </p>
-                        <div className="text-[11px] font-mono text-slate-400 bg-slate-900/80 p-2 rounded border border-slate-800">
+                        <div className="text-[11px] font-mono text-slate-400 bg-slate-900/80 p-2.5 rounded border border-slate-800 break-all whitespace-pre-wrap">
                             {activeSteps[currentStepIndex].details}
                         </div>
                     </div>
@@ -656,66 +656,66 @@ export default function FincraComplianceDemo() {
             </div>
 
             {/* ─── 5. EVIDENCE TRACEABILITY ─── */}
-            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                    <div className="flex items-center gap-2">
-                        <FileText className="w-5 h-5 text-cyan-400" />
-                        <h3 className="font-bold text-white text-base">5. Evidence Traceability Chain</h3>
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl space-y-4 min-w-0">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-5 h-5 text-cyan-400 shrink-0" />
+                        <h3 className="font-bold text-white text-base truncate">5. Evidence Traceability Chain</h3>
                     </div>
-                    <span className="px-2.5 py-0.5 rounded text-xs font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
+                    <span className="px-2.5 py-0.5 rounded text-xs font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 shrink-0">
                         AUDIT VERIFIED
                     </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
+                <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 text-xs min-w-0">
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1 min-w-0">
                         <span className="text-[10px] text-slate-400 uppercase font-mono block">1. Provider Tx ID</span>
-                        <span className="font-mono font-bold text-cyan-300 block truncate">DEMO-PROVIDER-001</span>
+                        <span className="font-mono font-bold text-cyan-300 block break-all">DEMO-PROVIDER-001</span>
                         <span className="text-[10px] text-slate-500">External Evidence</span>
                     </div>
 
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1 min-w-0">
                         <span className="text-[10px] text-slate-400 uppercase font-mono block">2. Webhook Event ID</span>
-                        <span className="font-mono font-bold text-cyan-300 block truncate">DEMO-WEBHOOK-001</span>
+                        <span className="font-mono font-bold text-cyan-300 block break-all">DEMO-WEBHOOK-001</span>
                         <span className="text-[10px] text-slate-500">Signed Inbound Payload</span>
                     </div>
 
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1 min-w-0">
                         <span className="text-[10px] text-slate-400 uppercase font-mono block">3. NoteStandard Tx ID</span>
-                        <span className="font-mono font-bold text-cyan-300 block truncate">DEMO-TX-001</span>
+                        <span className="font-mono font-bold text-cyan-300 block break-all">DEMO-TX-001</span>
                         <span className="text-[10px] text-slate-500">Internal Core Ref</span>
                     </div>
 
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1 min-w-0">
                         <span className="text-[10px] text-slate-400 uppercase font-mono block">4. Ledger Line ID</span>
-                        <span className="font-mono font-bold text-cyan-300 block truncate">DEMO-LEDGER-001</span>
+                        <span className="font-mono font-bold text-cyan-300 block break-all">DEMO-LEDGER-001</span>
                         <span className="text-[10px] text-slate-500">Double-Entry Journal</span>
                     </div>
 
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1 min-w-0">
                         <span className="text-[10px] text-slate-400 uppercase font-mono block">5. Wallet Balance Delta</span>
-                        <span className="font-mono font-bold text-emerald-400 block truncate">+₦500,000 DEMO</span>
+                        <span className="font-mono font-bold text-emerald-400 block break-all">+₦500,000 DEMO</span>
                         <span className="text-[10px] text-slate-500">Custody Allocation</span>
                     </div>
 
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1">
+                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1 min-w-0">
                         <span className="text-[10px] text-slate-400 uppercase font-mono block">6. Settlement Finality</span>
-                        <span className="font-mono font-bold text-emerald-400 block truncate">SETTLED</span>
+                        <span className="font-mono font-bold text-emerald-400 block break-all">SETTLED</span>
                         <span className="text-[10px] text-slate-500">State Machine State</span>
                     </div>
                 </div>
             </div>
 
             {/* ─── 6. DOUBLE-ENTRY LEDGER DEMONSTRATION ─── */}
-            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
-                    <div className="flex items-center gap-2">
-                        <Scale className="w-5 h-5 text-emerald-400" />
-                        <h3 className="font-bold text-white text-base">6. Double-Entry Ledger Demonstration</h3>
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl space-y-4 min-w-0">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <Scale className="w-5 h-5 text-emerald-400 shrink-0" />
+                        <h3 className="font-bold text-white text-base truncate">6. Double-Entry Ledger Demonstration</h3>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <span className="text-xs text-slate-400 font-mono">DYNAMIC EQUALITY CHECK</span>
-                        <span className={`px-3 py-1 rounded-full text-xs font-mono font-bold ${
+                    <div className="flex items-center gap-2 flex-wrap shrink-0">
+                        <span className="text-[11px] text-slate-400 font-mono">DYNAMIC EQUALITY CHECK</span>
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-mono font-bold ${
                             isLedgerBalanced
                                 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
                                 : 'bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse'
@@ -725,12 +725,12 @@ export default function FincraComplianceDemo() {
                     </div>
                 </div>
 
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-400 leading-relaxed">
                     The table below evaluates <code className="text-cyan-300 font-mono">Total Debits === Total Credits</code> dynamically in code. You can edit amounts below to test accounting validation failure handling.
                 </p>
 
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
+                <div className="overflow-x-auto max-w-full border border-slate-800/80 rounded-xl bg-slate-950/60">
+                    <table className="w-full text-left text-xs border-collapse min-w-[700px]">
                         <thead>
                             <tr className="bg-slate-950 text-slate-400 font-mono uppercase text-[10px] border-b border-slate-800">
                                 <th className="p-2.5">Account Code & Name</th>
@@ -755,7 +755,7 @@ export default function FincraComplianceDemo() {
                                             type="number"
                                             value={row.debit}
                                             onChange={(e) => updateLedgerValue(row.id, 'debit', Number(e.target.value))}
-                                            className="w-28 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-right text-emerald-400 font-bold focus:border-cyan-400 outline-none"
+                                            className="w-24 sm:w-28 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-right text-emerald-400 font-bold focus:border-cyan-400 outline-none"
                                         />
                                     </td>
                                     <td className="p-2.5 text-right">
@@ -763,7 +763,7 @@ export default function FincraComplianceDemo() {
                                             type="number"
                                             value={row.credit}
                                             onChange={(e) => updateLedgerValue(row.id, 'credit', Number(e.target.value))}
-                                            className="w-28 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-right text-cyan-400 font-bold focus:border-cyan-400 outline-none"
+                                            className="w-24 sm:w-28 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-right text-cyan-400 font-bold focus:border-cyan-400 outline-none"
                                         />
                                     </td>
                                     <td className="p-2.5 text-slate-400 text-[11px]">{row.reference}</td>
@@ -788,20 +788,20 @@ export default function FincraComplianceDemo() {
             </div>
 
             {/* ─── GRID: SECTION 7 (FEES) & SECTION 10 (RECONCILIATION) ─── */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 min-w-0">
 
                 {/* 7. FEE RECONCILIATION */}
-                <div className="lg:col-span-6 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                        <div className="flex items-center gap-2">
-                            <DollarSign className="w-5 h-5 text-cyan-400" />
-                            <h3 className="font-bold text-white text-base">7. Fee Engine & Net Settlement</h3>
+                <div className="lg:col-span-6 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl space-y-4 min-w-0">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <DollarSign className="w-5 h-5 text-cyan-400 shrink-0" />
+                            <h3 className="font-bold text-white text-base truncate">7. Fee Engine & Net Settlement</h3>
                         </div>
-                        <span className="text-xs text-slate-400 font-mono">FORMULA CALCULATOR</span>
+                        <span className="text-[11px] text-slate-400 font-mono shrink-0">FORMULA CALCULATOR</span>
                     </div>
 
-                    <div className="space-y-3 text-xs">
-                        <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-3 text-xs min-w-0">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                             <div>
                                 <label htmlFor="calc-gross-amount" className="text-[11px] text-slate-400 block mb-1">Gross Amount (₦)</label>
                                 <input
@@ -834,80 +834,80 @@ export default function FincraComplianceDemo() {
                             </div>
                         </div>
 
-                        <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2 font-mono">
-                            <div className="flex justify-between text-slate-400">
+                        <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2 font-mono text-xs min-w-0">
+                            <div className="flex justify-between text-slate-400 flex-wrap gap-1">
                                 <span>Gross Transaction Amount:</span>
                                 <span className="text-white font-bold">₦ {grossAmount.toLocaleString()}</span>
                             </div>
-                            <div className="flex justify-between text-amber-400">
+                            <div className="flex justify-between text-amber-400 flex-wrap gap-1">
                                 <span>- Fincra Provider Fee (0.5%):</span>
                                 <span>- ₦ {providerFee.toLocaleString()}</span>
                             </div>
-                            <div className="flex justify-between text-cyan-400">
+                            <div className="flex justify-between text-cyan-400 flex-wrap gap-1">
                                 <span>- NoteStandard Platform Fee (4.6%):</span>
                                 <span>- ₦ {platformFee.toLocaleString()}</span>
                             </div>
-                            <div className="border-t border-slate-800 pt-2 flex justify-between text-sm font-bold text-emerald-400">
+                            <div className="border-t border-slate-800 pt-2 flex justify-between text-xs sm:text-sm font-bold text-emerald-400 flex-wrap gap-1">
                                 <span>= Net Provider Settlement:</span>
-                                <span>₦ {netProviderSettlement.toLocaleString()} NGN</span>
+                                <span className="break-all">₦ {netProviderSettlement.toLocaleString()} NGN</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 {/* 10. RECONCILIATION VIEW */}
-                <div className="lg:col-span-6 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                        <div className="flex items-center gap-2">
-                            <RefreshCw className="w-5 h-5 text-emerald-400" />
-                            <h3 className="font-bold text-white text-base">10. Dynamic Reconciliation View</h3>
+                <div className="lg:col-span-6 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl space-y-4 min-w-0">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <RefreshCw className="w-5 h-5 text-emerald-400 shrink-0" />
+                            <h3 className="font-bold text-white text-base truncate">10. Dynamic Reconciliation View</h3>
                         </div>
                         <button
                             onClick={() => setMismatchSimulated(!mismatchSimulated)}
-                            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-mono border border-slate-700"
+                            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-mono border border-slate-700 shrink-0"
                         >
                             Toggle Mismatch: {mismatchSimulated ? 'ON' : 'OFF'}
                         </button>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-                        <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
-                            <span className="text-slate-400 text-[10px] block">Provider Settlement Amount</span>
-                            <span className={`font-bold text-sm ${mismatchSimulated ? 'text-red-400' : 'text-emerald-400'}`}>
+                    <div className="grid grid-cols-1 xs:grid-cols-2 gap-2 text-xs font-mono min-w-0">
+                        <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 min-w-0">
+                            <span className="text-slate-400 text-[10px] block truncate">Provider Settlement Amount</span>
+                            <span className={`font-bold text-xs sm:text-sm break-all ${mismatchSimulated ? 'text-red-400' : 'text-emerald-400'}`}>
                                 ₦ {providerAmount.toLocaleString()}
                             </span>
                         </div>
 
-                        <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
-                            <span className="text-slate-400 text-[10px] block">Internal Transaction Record</span>
-                            <span className="font-bold text-sm text-cyan-300">
+                        <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 min-w-0">
+                            <span className="text-slate-400 text-[10px] block truncate">Internal Transaction Record</span>
+                            <span className="font-bold text-xs sm:text-sm text-cyan-300 break-all">
                                 ₦ {internalAmount.toLocaleString()}
                             </span>
                         </div>
 
-                        <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
-                            <span className="text-slate-400 text-[10px] block">Ledger Total Debits</span>
-                            <span className="font-bold text-xs text-white">₦ {totalDebits.toLocaleString()}</span>
+                        <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 min-w-0">
+                            <span className="text-slate-400 text-[10px] block truncate">Ledger Total Debits</span>
+                            <span className="font-bold text-xs text-white break-all">₦ {totalDebits.toLocaleString()}</span>
                         </div>
 
-                        <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
-                            <span className="text-slate-400 text-[10px] block">Ledger Total Credits</span>
-                            <span className="font-bold text-xs text-white">₦ {totalCredits.toLocaleString()}</span>
+                        <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 min-w-0">
+                            <span className="text-slate-400 text-[10px] block truncate">Ledger Total Credits</span>
+                            <span className="font-bold text-xs text-white break-all">₦ {totalCredits.toLocaleString()}</span>
                         </div>
                     </div>
 
-                    <div className={`p-3 rounded-xl border flex items-center justify-between ${
+                    <div className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
                         isReconciled
                             ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
                             : 'bg-red-500/10 border-red-500/40 text-red-300'
                     }`}>
-                        <div className="flex items-center gap-2">
-                            {isReconciled ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> : <AlertTriangle className="w-5 h-5 text-red-400" />}
-                            <span className="font-mono font-bold text-xs">
+                        <div className="flex items-center gap-2 min-w-0">
+                            {isReconciled ? <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" /> : <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />}
+                            <span className="font-mono font-bold text-xs break-words">
                                 RECONCILIATION STATUS: {isReconciled ? 'RECONCILED' : 'MISMATCH DETECTED'}
                             </span>
                         </div>
-                        <span className="text-[10px] font-mono underline">
+                        <span className="text-[10px] font-mono underline shrink-0">
                             {isReconciled ? 'Zero Discrepancy' : 'Provider Discrepancy ₦10,000'}
                         </span>
                     </div>
@@ -916,17 +916,17 @@ export default function FincraComplianceDemo() {
             </div>
 
             {/* ─── 8. COMPLIANCE CONTROLS PANEL ─── */}
-            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                    <div className="flex items-center gap-2">
-                        <Lock className="w-5 h-5 text-cyan-400" />
-                        <h3 className="font-bold text-white text-base">8. Repository Compliance Controls Matrix</h3>
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl space-y-4 min-w-0">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <Lock className="w-5 h-5 text-cyan-400 shrink-0" />
+                        <h3 className="font-bold text-white text-base truncate">8. Repository Compliance Controls Matrix</h3>
                     </div>
-                    <span className="text-xs text-slate-400 font-mono">13 AUDITED CONTROLS</span>
+                    <span className="text-[11px] text-slate-400 font-mono shrink-0">13 AUDITED CONTROLS</span>
                 </div>
 
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
+                <div className="overflow-x-auto max-w-full border border-slate-800/80 rounded-xl bg-slate-950/60">
+                    <table className="w-full text-left text-xs border-collapse min-w-[750px]">
                         <thead>
                             <tr className="bg-slate-950 text-slate-400 font-mono uppercase text-[10px] border-b border-slate-800">
                                 <th className="p-2.5">Control Name</th>
@@ -958,17 +958,17 @@ export default function FincraComplianceDemo() {
             </div>
 
             {/* ─── 11. AUDIT TRAIL ─── */}
-            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                    <div className="flex items-center gap-2">
-                        <Sliders className="w-5 h-5 text-cyan-400" />
-                        <h3 className="font-bold text-white text-base">11. Immutable Demo Audit Log</h3>
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl space-y-4 min-w-0">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <Sliders className="w-5 h-5 text-cyan-400 shrink-0" />
+                        <h3 className="font-bold text-white text-base truncate">11. Immutable Demo Audit Log</h3>
                     </div>
-                    <span className="text-xs text-slate-400 font-mono">CHRONOLOGICAL TRAIL</span>
+                    <span className="text-[11px] text-slate-400 font-mono shrink-0">CHRONOLOGICAL TRAIL</span>
                 </div>
 
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
+                <div className="overflow-x-auto max-w-full border border-slate-800/80 rounded-xl bg-slate-950/60">
+                    <table className="w-full text-left text-xs border-collapse min-w-[680px]">
                         <thead>
                             <tr className="bg-slate-950 text-slate-400 font-mono uppercase text-[10px] border-b border-slate-800">
                                 <th className="p-2.5">Timestamp</th>
