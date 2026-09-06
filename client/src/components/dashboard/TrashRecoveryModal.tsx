@@ -86,7 +86,7 @@ export const TrashRecoveryModal: React.FC<TrashRecoveryModalProps> = ({ isOpen, 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" />
       <div className="w-full max-w-2xl bg-neutral-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col relative z-10 animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}

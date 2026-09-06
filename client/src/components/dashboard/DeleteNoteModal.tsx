@@ -12,7 +12,7 @@ export const DeleteNoteModal = ({ isOpen, onClose, onConfirm, loading }: DeleteN
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
             <div className="modal-content max-w-sm relative z-10 animate-in fade-in zoom-in-95 duration-200">
                 <div className="flex flex-col items-center text-center space-y-4">

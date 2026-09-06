@@ -39,7 +39,7 @@ export const ResponsiveModal: React.FC<ResponsiveModalProps> = ({
   }[maxWidth];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 md:p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
       {/* Backdrop click dismiss */}
       <div className="absolute inset-0" onClick={onClose} />
 
