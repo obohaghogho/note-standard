@@ -1318,7 +1318,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             if (!conversationsRef.current.some(c => c.id === activeConversationId)) {
                 loadSingleConversation(activeConversationId);
             }
-            loadMessages(activeConversationId);
+            loadMessages(activeConversationId, true);
             markConversationRead(activeConversationId);
         }
     }, [activeConversationId, loadMessages, markConversationRead, loadSingleConversation]);

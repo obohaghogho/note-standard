@@ -880,10 +880,16 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                                 userRole: user?.role
                             });
                             if (targetLink) {
-                                if (targetLink.includes('openSupport=true')) {
+                                let finalLink = targetLink;
+                                const targetAccountId = currentToast.targetAccountId || (currentToast as any).targetAccountId || (currentToast as any).receiver_id;
+                                if (targetAccountId && targetAccountId !== user?.id) {
+                                    const separator = finalLink.includes('?') ? '&' : '?';
+                                    finalLink = `${finalLink}${separator}targetAccountId=${targetAccountId}`;
+                                }
+                                if (finalLink.includes('openSupport=true')) {
                                     window.dispatchEvent(new CustomEvent('open-support-chat'));
                                 }
-                                navigate(targetLink);
+                                navigate(finalLink);
                             }
                             markAsRead(currentToast.id);
                             dismissCurrent();
