@@ -203,7 +203,7 @@ export const Transactions: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-[#0a0a0a] text-white overflow-hidden flex flex-col w-full max-w-full">
-            <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 h-full overflow-hidden">
+            <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 pb-32 sm:pb-36 lg:pb-12 h-full overflow-hidden">
                 
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">

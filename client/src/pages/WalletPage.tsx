@@ -173,7 +173,7 @@ function WalletHubContent() {
 
   return (
     <div className="min-h-screen text-white" style={{ background: '#060611' }}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 pb-32 sm:pb-36 lg:pb-12 space-y-6">
 
         {/* ── Page Header ────────────────────────────────────────────── */}
         <div className="flex items-center justify-between">
