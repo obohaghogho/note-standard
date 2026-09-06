@@ -51,13 +51,24 @@ const ChatWindow: React.FC = () => {
     const { startCall } = useWebRTC();
     const { setIsSettingsOpen, setIsGalleryOpen } = useChatTheme();
 
-    const currentMessages = useMemo(() => activeConversationId ? messages[activeConversationId] || [] : [], [messages, activeConversationId]);
+    const rawCurrentMessages = useMemo(() => activeConversationId ? messages[activeConversationId] || [] : [], [messages, activeConversationId]);
     const activeConversation = useMemo(() => {
         if (!activeConversationId) return undefined;
         const found = conversations.find(c => c.id === activeConversationId);
         if (found) return found;
         return useChatStore.getState().conversationsById[activeConversationId];
     }, [conversations, activeConversationId]);
+
+    const isUserMember = useMemo(() => {
+        if (!activeConversation || !user?.id) return false;
+        if (!activeConversation.members || activeConversation.members.length === 0) return true;
+        return activeConversation.members.some((m: { user_id: string }) => m.user_id === user.id);
+    }, [activeConversation, user?.id]);
+
+    const currentMessages = useMemo(() => {
+        if (!isUserMember) return [];
+        return rawCurrentMessages;
+    }, [isUserMember, rawCurrentMessages]);
 
     // ── WhatsApp-Style Selection System ──────────────────────
     const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());

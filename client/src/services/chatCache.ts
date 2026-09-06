@@ -55,14 +55,22 @@ export class ChatCacheEngine {
     }
   }
 
-  public static async getConversations(): Promise<Conversation[]> {
+  public static async getConversations(userId?: string): Promise<Conversation[]> {
     try {
       const db = await this.getDB();
       const tx = db.transaction(STORE_CONVERSATIONS, 'readonly');
       const store = tx.objectStore(STORE_CONVERSATIONS);
       const request = store.getAll();
       return new Promise((resolve) => {
-        request.onsuccess = () => resolve(request.result || []);
+        request.onsuccess = () => {
+          const result: Conversation[] = request.result || [];
+          if (!userId) return resolve(result);
+          const filtered = result.filter(conv => {
+            if (!conv.members || conv.members.length === 0) return true;
+            return conv.members.some(m => m.user_id === userId);
+          });
+          resolve(filtered);
+        };
       });
     } catch {
       return [];
@@ -99,21 +107,22 @@ export class ChatCacheEngine {
   }
 
   /**
-   * High-speed single-transaction batch retrieval of all stored messages grouped by conversation_id.
+   * High-speed single-transaction batch retrieval of stored messages grouped by conversation_id.
    * Enables instant 0ms rendering of recent message threads on boot.
    */
-  public static async batchGetMessagesForAllConversations(): Promise<Record<string, Message[]>> {
+  public static async batchGetMessagesForAllConversations(validConversationIds?: string[]): Promise<Record<string, Message[]>> {
     try {
       const db = await this.getDB();
       const tx = db.transaction(STORE_MESSAGES, 'readonly');
       const store = tx.objectStore(STORE_MESSAGES);
       const request = store.getAll();
+      const validSet = validConversationIds ? new Set(validConversationIds) : null;
       return new Promise((resolve) => {
         request.onsuccess = () => {
           const allMsgs: Message[] = request.result || [];
           const grouped: Record<string, Message[]> = {};
           for (const msg of allMsgs) {
-            if (msg.conversation_id) {
+            if (msg.conversation_id && (!validSet || validSet.has(msg.conversation_id))) {
               if (!grouped[msg.conversation_id]) {
                 grouped[msg.conversation_id] = [];
               }

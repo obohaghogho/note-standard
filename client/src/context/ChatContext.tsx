@@ -375,17 +375,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         return () => clearInterval(interval);
     }, [user, session, connected]);
     // Immediate State Isolation on User Identity Change
-    const prevUserIdRef = useRef<string | null>(null);
-
     useEffect(() => {
         const handleAccountSwitch = () => {
             console.log('[ChatContext] Account switch detected — immediately clearing all chat state');
-            setConversations([]);
-            setMessages({});
-            setActiveConversationId(null);
-            setDrafts({});
-            setTypingUsers({});
-            conversationsFetchRef.current = false;
+            clearState();
         };
 
         if (user?.id && prevUserIdRef.current && prevUserIdRef.current !== user.id) {
@@ -399,7 +392,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             window.removeEventListener('account-switched', handleAccountSwitch);
             window.removeEventListener('account-switch-start', handleAccountSwitch);
         };
-    }, [user?.id]);
+    }, [user?.id, clearState]);
 
     // Chat Boot Kernel: Deterministic State Machine Orchestrator
     useEffect(() => {
@@ -465,21 +458,22 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         let isCancelled = false;
         (async () => {
             try {
-                const cachedConvs = await ChatCacheEngine.getConversations();
+                const cachedConvs = await ChatCacheEngine.getConversations(user.id);
                 if (!isCancelled && cachedConvs && cachedConvs.length > 0 && isMounted.current) {
-                    console.log(`[ChatContext] Instant hydration: ${cachedConvs.length} conversation(s) loaded from local cache.`);
+                    console.log(`[ChatContext] Instant hydration: ${cachedConvs.length} conversation(s) loaded from local cache for user ${user.id}.`);
                     setConversations(prev => (prev.length === 0 ? cachedConvs : prev));
                     useChatStore.getState().setConversations(cachedConvs);
                     setLoading(false);
-                }
 
-                const cachedMsgsMap = await ChatCacheEngine.batchGetMessagesForAllConversations();
-                if (!isCancelled && cachedMsgsMap && Object.keys(cachedMsgsMap).length > 0 && isMounted.current) {
-                    console.log(`[ChatContext] Instant hydration: cached message frames loaded for ${Object.keys(cachedMsgsMap).length} conversation(s).`);
-                    setMessages(prev => ({ ...cachedMsgsMap, ...prev }));
-                    Object.entries(cachedMsgsMap).forEach(([cid, msgs]) => {
-                        useChatStore.getState().upsertMessages(cid, msgs);
-                    });
+                    const validIds = cachedConvs.map(c => c.id);
+                    const cachedMsgsMap = await ChatCacheEngine.batchGetMessagesForAllConversations(validIds);
+                    if (!isCancelled && cachedMsgsMap && Object.keys(cachedMsgsMap).length > 0 && isMounted.current) {
+                        console.log(`[ChatContext] Instant hydration: cached message frames loaded for ${Object.keys(cachedMsgsMap).length} conversation(s).`);
+                        setMessages(prev => ({ ...cachedMsgsMap, ...prev }));
+                        Object.entries(cachedMsgsMap).forEach(([cid, msgs]) => {
+                            useChatStore.getState().upsertMessages(cid, msgs);
+                        });
+                    }
                 }
             } catch (err) {
                 console.warn('[ChatContext] Instant local cache hydration notice:', err);
@@ -1279,10 +1273,30 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, []);
 
     const initialize = useCallback(async () => {
-        console.log(`[ACCOUNT_FORENSIC] CHAT_INITIALIZE - Fetching chat data at ${Date.now()}`);
+        console.log(`[ACCOUNT_FORENSIC] CHAT_INITIALIZE - Fetching chat data for user ${user?.id} at ${Date.now()}`);
+        clearState();
+        if (user?.id) {
+            try {
+                const cachedConvs = await ChatCacheEngine.getConversations(user.id);
+                if (cachedConvs && cachedConvs.length > 0 && isMounted.current) {
+                    setConversations(cachedConvs);
+                    useChatStore.getState().setConversations(cachedConvs);
+                    const validIds = cachedConvs.map(c => c.id);
+                    const cachedMsgsMap = await ChatCacheEngine.batchGetMessagesForAllConversations(validIds);
+                    if (cachedMsgsMap && isMounted.current) {
+                        setMessages(cachedMsgsMap);
+                        Object.entries(cachedMsgsMap).forEach(([cid, msgs]) => {
+                            useChatStore.getState().upsertMessages(cid, msgs);
+                        });
+                    }
+                }
+            } catch (e) {
+                console.warn('[ChatContext] initialize hydration notice:', e);
+            }
+        }
         await loadConversations();
         console.log(`[ACCOUNT_FORENSIC] CONVERSATIONS_READY - Chat data ready at ${Date.now()}`);
-    }, [loadConversations]);
+    }, [loadConversations, clearState, user?.id]);
 
     useEffect(() => {
         if (!authReady) return;
