@@ -504,25 +504,27 @@ router.post("/anchor", async (req, res) => {
         const accountNumber = parsed.accountNumber || parsed.raw?.data?.attributes?.accountNumber || parsed.raw?.data?.accountNumber;
 
         if (accountNumber) {
-          const { data: dedicatedAcc } = await supabase
+          const { data: dedicatedAccs } = await supabase
             .from("dedicated_accounts")
             .select("user_id")
             .eq("account_number", accountNumber)
-            .maybeSingle();
-          if (dedicatedAcc) {
-            resolvedUserId = dedicatedAcc.user_id;
+            .limit(2);
+          if (dedicatedAccs && dedicatedAccs.length === 1) {
+            resolvedUserId = dedicatedAccs[0].user_id;
             logger.info(`[AnchorWebhook] Resolved user ${resolvedUserId} via dedicated_accounts (account_number: ${accountNumber})`);
+          } else if (dedicatedAccs && dedicatedAccs.length > 1) {
+            logger.warn(`[AnchorWebhook] Multiple users (${dedicatedAccs.length}) share account_number ${accountNumber}. Direct account lookup skipped; requiring session/reference match.`);
           }
         }
 
         if (!resolvedUserId && parsed.customerCode) {
-          const { data: custAcc } = await supabase
+          const { data: custAccs } = await supabase
             .from("dedicated_accounts")
             .select("user_id")
             .eq("provider_customer_code", parsed.customerCode)
-            .maybeSingle();
-          if (custAcc) {
-            resolvedUserId = custAcc.user_id;
+            .limit(2);
+          if (custAccs && custAccs.length === 1) {
+            resolvedUserId = custAccs[0].user_id;
             logger.info(`[AnchorWebhook] Resolved user ${resolvedUserId} via customerCode: ${parsed.customerCode}`);
           }
         }
