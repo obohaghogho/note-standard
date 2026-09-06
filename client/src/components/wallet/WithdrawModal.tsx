@@ -275,7 +275,8 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                     </div>
                 )}
 
-                <form onSubmit={handleWithdraw} className="modal-body flex flex-col gap-5">
+                <form onSubmit={handleWithdraw} className="flex flex-col flex-1 min-h-0 overflow-hidden m-0">
+                    <div className="modal-body space-y-4">
                     {/* Active Payout Rails */}
                     {activeWithdrawRails.length > 0 && (
                         <div className="bg-gray-900/90 border border-gray-800 rounded-xl p-3 text-xs space-y-1.5">
@@ -566,7 +567,9 @@ export const WithdrawModal: React.FC<WithdrawModalProps> = ({
                         </div>
                     )}
 
-                    <div className="flex gap-3 justify-end mt-2">
+                    </div>
+
+                    <div className="modal-footer">
                         <Button variant="ghost" onClick={onClose} type="button">
                             Cancel
                         </Button>
