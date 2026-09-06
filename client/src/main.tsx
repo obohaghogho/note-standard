@@ -19,7 +19,16 @@ initKLM();
 // Enforce single canonical origin (https://notestandard.com) to prevent cross-origin
 // session fragmentations, PWA service worker scope mismatches, and auth token loss.
 if (typeof window !== 'undefined' && window.location.hostname === 'www.notestandard.com') {
-  window.location.replace(`https://notestandard.com${window.location.pathname}${window.location.search}${window.location.hash}`);
+  try {
+    const canonicalTarget = `https://notestandard.com${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (window.top === window.self) {
+      window.location.replace(canonicalTarget);
+    } else {
+      (window.top || window).location.href = canonicalTarget;
+    }
+  } catch (_) {
+    window.location.href = `https://notestandard.com${window.location.pathname}${window.location.search}${window.location.hash}`;
+  }
 }
 
 
