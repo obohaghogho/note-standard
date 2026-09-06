@@ -198,14 +198,26 @@ class AnchorService {
 
       if (existingDva && existingDva.account_number && !isStaleRecord) {
         logger.info(`[AnchorService] Found existing dedicated_account for user ${userId}: ${existingDva.account_number} (${existingDva.bank_name})`);
+        const UserBankReferenceService = require('./payment/UserBankReferenceService');
+        const userRefService = new UserBankReferenceService();
+        let userRef = null;
+        try {
+          userRef = await userRefService.getOrCreateUserReference(userId, 'anchor');
+        } catch (e) {}
+
         return {
           id: existingDva.id,
           bankName: existingDva.bank_name,
+          bank_name: existingDva.bank_name,
           accountNumber: existingDva.account_number,
+          account_number: existingDva.account_number,
           accountName: existingDva.account_name,
+          account_name: existingDva.account_name,
           currency: existingDva.currency,
           provider: existingDva.provider,
           customerCode: existingDva.provider_customer_code,
+          userReference: userRef || `NS-${userId.substring(0, 6).toUpperCase()}`,
+          user_reference: userRef || `NS-${userId.substring(0, 6).toUpperCase()}`,
         };
       }
 

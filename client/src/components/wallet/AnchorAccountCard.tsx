@@ -11,9 +11,17 @@ export const AnchorAccountCard: React.FC<AnchorAccountCardProps> = ({ onSwitchTo
   const [account, setAccount] = useState<AnchorAccount | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [creating, setCreating] = useState<boolean>(false);
+  const [copiedRef, setCopiedRef] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
   const [unavailable, setUnavailable] = useState<boolean>(false);
   const [unavailableMessage, setUnavailableMessage] = useState<string>("");
+
+  const handleCopyRef = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedRef(true);
+    toast.success("Deposit Reference Code copied to clipboard!");
+    setTimeout(() => setCopiedRef(false), 2000);
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -166,8 +174,15 @@ export const AnchorAccountCard: React.FC<AnchorAccountCardProps> = ({ onSwitchTo
             <span className="text-xs font-semibold text-emerald-400">{account.bank_name || account.bankName || "9 Payment Service Bank (9PSB)"}</span>
           </div>
 
-          <div className="p-2 rounded-lg bg-amber-950/40 border border-amber-500/30 text-[11px] text-amber-300 leading-relaxed">
-            💡 <strong>Bank App Instruction:</strong> On OPay, Kuda, GTBank, Zenith, Access, etc., select <strong>9PSB (9 Payment Service Bank)</strong> as destination bank.
+          <div className="p-2.5 rounded-lg bg-amber-950/40 border border-amber-500/30 text-[11px] text-amber-300 leading-relaxed space-y-1.5">
+            <div>
+              💡 <strong>Bank App Selection:</strong> On OPay, Kuda, GTBank, Zenith, Access, etc., select <strong>9PSB (9 Payment Service Bank)</strong> as destination bank.
+            </div>
+            {(account.user_reference || account.userReference) && (
+              <div className="text-indigo-300 font-medium pt-1.5 border-t border-amber-500/20">
+                ⚡ <strong>Instant Credit Tip:</strong> Paste your reference code <code className="bg-indigo-950 px-1.5 py-0.5 rounded text-indigo-200 font-mono font-bold">{account.user_reference || account.userReference}</code> into the <strong>Narration / Remark</strong> field when sending money.
+              </div>
+            )}
           </div>
 
           <div className="flex items-center justify-between">
@@ -190,6 +205,29 @@ export const AnchorAccountCard: React.FC<AnchorAccountCardProps> = ({ onSwitchTo
               </button>
             </div>
           </div>
+
+          {(account.user_reference || account.userReference) && (
+            <div className="flex items-center justify-between pt-2 border-t border-gray-800/60">
+              <div>
+                <span className="text-xs text-indigo-300 font-medium flex items-center gap-1">
+                  Deposit Reference Code
+                </span>
+                <p className="text-[10px] text-gray-400">Include in Bank Transfer Narration</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-mono font-bold tracking-wider text-indigo-300 bg-indigo-950/80 px-2.5 py-1 rounded-lg border border-indigo-500/30">
+                  {account.user_reference || account.userReference}
+                </span>
+                <button
+                  onClick={() => handleCopyRef(account.user_reference || account.userReference || "")}
+                  className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 transition-all active:scale-95"
+                  title="Copy Deposit Reference Code"
+                >
+                  {copiedRef ? <Check className="w-3.5 h-3.5 text-indigo-400" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Real-time Deposit Settlement & Credit Status Indicator */}
           <div className="mt-3 p-3 rounded-xl bg-emerald-950/60 border border-emerald-500/30 flex items-center justify-between">

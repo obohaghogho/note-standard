@@ -167,12 +167,25 @@ router.get("/accounts", requireAuth, async (req, res, next) => {
       logger.warn(`[AnchorRoute] GET /accounts auto-sync warning: ${syncErr.message}`);
     }
 
-    // Final validation: don't serve accounts that are known-invalid
+    // Final validation & enrich with persistent user bank reference code
+    const UserBankReferenceService = require("../services/payment/UserBankReferenceService");
+    const userRefService = new UserBankReferenceService();
+    let userReference = null;
+    try {
+      userReference = await userRefService.getOrCreateUserReference(userId, "anchor");
+    } catch (refErr) {
+      logger.warn(`[AnchorRoute] getOrCreateUserReference warning: ${refErr.message}`);
+    }
+
     const validAccounts = (accounts || []).filter(a => {
       const hasValidNum = a.account_number && /^\d{10}$/.test(a.account_number);
       const hasValidBank = a.bank_name && !a.bank_name.toUpperCase().includes('PROVIDUS');
       return hasValidNum && hasValidBank;
-    });
+    }).map(a => ({
+      ...a,
+      user_reference: userReference || a.user_reference || `NS-${userId.substring(0, 6).toUpperCase()}`,
+      userReference: userReference || a.user_reference || `NS-${userId.substring(0, 6).toUpperCase()}`,
+    }));
 
     res.json({
       success: true,

@@ -16,6 +16,8 @@ export type AnchorAccount = {
   accountName?: string;
   currency: string;
   provider: string;
+  user_reference?: string;
+  userReference?: string;
   created_at?: string;
 };
 
