@@ -134,9 +134,9 @@ export const AuditLogs = () => {
             <div className="page-header flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                 <div className="header-title flex items-center gap-3 min-w-0">
                     <HistoryIcon className="header-icon text-indigo-400 shrink-0" size={28} />
-                    <div className="min-w-0">
-                        <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight truncate">Admin Audit Logs</h2>
-                        <p className="text-xs sm:text-sm text-gray-400 truncate">Track all administrative actions and security events</p>
+                    <div className="min-w-0 flex-1">
+                        <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight leading-snug">Admin Audit Logs</h2>
+                        <p className="text-xs sm:text-sm text-gray-400 leading-relaxed mt-0.5">Track all administrative actions and security events</p>
                     </div>
                 </div>
                 <div className="stats-mini self-start sm:self-auto bg-gray-900/60 border border-gray-800 px-3 py-1.5 rounded-lg shrink-0">
@@ -147,8 +147,8 @@ export const AuditLogs = () => {
                 </div>
             </div>
 
-            {/* Sticky Filters Toolbar */}
-            <div className="filters-bar sticky top-14 z-30 bg-[#0F1220]/95 backdrop-blur-md p-2.5 sm:p-3 rounded-xl border border-gray-800/80 mb-4 flex flex-col sm:flex-row gap-2.5 sm:gap-3">
+            {/* Filters Toolbar */}
+            <div className="filters-bar relative sm:sticky sm:top-14 z-20 bg-[#0F1220]/95 backdrop-blur-md p-2.5 sm:p-3 rounded-xl border border-gray-800/80 mb-4 flex flex-col sm:flex-row gap-2.5 sm:gap-3">
                 <div className="filter-group flex-1 flex items-center gap-2 bg-gray-900/80 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 min-w-0">
                     <ActivityIcon size={18} className="text-gray-400 shrink-0" />
                     <select
@@ -159,7 +159,7 @@ export const AuditLogs = () => {
                             setActionFilter(e.target.value);
                             setPagination(prev => ({ ...prev, page: 1 }));
                         }}
-                        className="bg-transparent border-none outline-none text-gray-200 text-sm w-full cursor-pointer truncate"
+                        className="bg-transparent border-none outline-none text-gray-200 text-sm w-full cursor-pointer"
                         aria-label="Filter by action type"
                     >
                         <option value="" className="bg-gray-900">All Actions</option>
@@ -188,7 +188,7 @@ export const AuditLogs = () => {
                             setTargetFilter(e.target.value);
                             setPagination(prev => ({ ...prev, page: 1 }));
                         }}
-                        className="bg-transparent border-none outline-none text-gray-200 text-sm w-full cursor-pointer truncate"
+                        className="bg-transparent border-none outline-none text-gray-200 text-sm w-full cursor-pointer"
                         aria-label="Filter by target type"
                     >
                         <option value="" className="bg-gray-900">All Targets</option>
@@ -228,7 +228,7 @@ export const AuditLogs = () => {
                                             {log.admin?.username?.[0]?.toUpperCase() || 'A'}
                                         </div>
                                     )}
-                                    <span className="text-sm text-gray-200 font-medium truncate max-w-[140px]" title={log.admin?.username || 'System Admin'}>
+                                    <span className="text-sm text-gray-200 font-medium break-words max-w-[180px]" title={log.admin?.username || 'System Admin'}>
                                         {log.admin?.username || 'System Admin'}
                                     </span>
                                 </div>
@@ -255,7 +255,7 @@ export const AuditLogs = () => {
                     const { date, time } = formatDate(log.created_at);
                     const isExpanded = !!expandedCards[log.id];
                     return (
-                        <div className="p-3.5 sm:p-4 rounded-xl bg-gray-900/90 border border-gray-800 space-y-3 shadow-lg w-full min-w-0 overflow-hidden">
+                        <div className="p-3.5 sm:p-4 rounded-xl bg-gray-900/90 border border-gray-800 space-y-3 shadow-lg w-full min-w-0">
                             <div className="flex items-center justify-between gap-2 border-b border-gray-800/60 pb-2.5 min-w-0">
                                 <div className="flex items-center gap-2 min-w-0 flex-1">
                                     {log.admin?.avatar_url ? (
@@ -265,7 +265,7 @@ export const AuditLogs = () => {
                                             {log.admin?.username?.[0]?.toUpperCase() || 'A'}
                                         </div>
                                     )}
-                                    <span className="text-xs sm:text-sm font-bold text-white truncate max-w-[120px] xs:max-w-[160px] sm:max-w-[200px]" title={log.admin?.username || 'System Admin'}>
+                                    <span className="text-xs sm:text-sm font-bold text-white break-words leading-tight" title={log.admin?.username || 'System Admin'}>
                                         {log.admin?.username || 'System Admin'}
                                     </span>
                                 </div>

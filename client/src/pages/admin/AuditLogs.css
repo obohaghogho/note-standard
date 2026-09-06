@@ -1,8 +1,10 @@
 .audit-logs {
-    padding: 1rem;
+    padding: 0.75rem;
     animation: fadeIn 0.3s ease-out;
     width: 100%;
-    overflow: hidden; /* Prevent horizontal overflow from table */
+    max-width: 100%;
+    box-sizing: border-box;
+    touch-action: pan-y;
 }
 
 @media (min-width: 768px) {
