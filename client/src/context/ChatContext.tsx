@@ -258,6 +258,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const deletedConversationIdsRef = useRef<Set<string>>(new Set());
     const deletedPeerIdsRef = useRef<Set<string>>(new Set());
     const clearedAtMapRef = useRef<Map<string, string>>(new Map());
+    const lastUserIdRef = useRef<string | null>(null);
+    const deletedMessageIdsRef = useRef<Set<string>>(new Set());
+    const lastSeenSequenceRef = useRef<Record<string, number>>({});
+    const processedEventIdsRef = useRef<Set<string>>(new Set());
+    const messagesCachedAtRef = useRef<Record<string, number>>({});
 
     const setActiveConversationId = useCallback((id: string | null) => {
         if (id && deletedConversationIdsRef.current.has(id)) {
@@ -272,6 +277,29 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
         setActiveConversationIdState(id);
     }, []);
+
+    const clearState = useCallback(() => {
+        console.log(`[ACCOUNT_FORENSIC] CHAT_CLEAR_STATE - Dropping chat caches at ${Date.now()}`);
+        setConversations([]);
+        setMessages({});
+        setActiveConversationId(null);
+        setLoading(true);
+        setTypingUsers({});
+        setHasMore({});
+        lastUserIdRef.current = null;
+        // Clear message cache timestamps so next account gets a fresh load
+        messagesCachedAtRef.current = {};
+        // Clear deduplication caches on account switch
+        deletedMessageIdsRef.current = new Set();
+        deletedConversationIdsRef.current.clear();
+        deletedPeerIdsRef.current.clear();
+        clearedAtMapRef.current.clear();
+        processedEventIdsRef.current = new Set();
+        lastSeenSequenceRef.current = {};
+        // Clear tick dedup gate so new account starts fresh
+        appliedTicksRef.current = new Map();
+        useChatStore.getState().clearAll();
+    }, [setActiveConversationId]);
 
     // Tab-primary singleton: Only one tab runs ACK batching, reconciliation and heartbeat.
     // Uses a localStorage lease refreshed every 4s. Other tabs detect staleness (>6s).
@@ -526,18 +554,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, [connected, isActiveWriter, readReceiptEngine]);
     const conversationsFetchRef = useRef(false);
     const socketRef = useRef<Socket | null>(null);
-    const lastUserIdRef = useRef<string | null>(null);
     const activeConversationIdRef = useRef<string | null>(null);
     const typingTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-    // Tombstone: permanently tracks deleted message IDs across room switches and reconnects.
-    const deletedMessageIdsRef = useRef<Set<string>>(new Set());
-    // Phase 3: per-conversation sequence high-water mark (mirrors server-side replayGuard)
-    // Sentinel -1 means "not yet seen any sequenced message for this conversation".
-    const lastSeenSequenceRef = useRef<Record<string, number>>({});
-    // Deduplication buffer: tracks processed event_id and canonical id values to prevent
-    // gateway echo (pg_notify broadcasts to ALL room members including sender) from
-    // triggering duplicate merge operations. Bounded at 2000 entries to prevent memory leak.
-    const processedEventIdsRef = useRef<Set<string>>(new Set());
     // ── GLOBAL SOCKET DEDUP GUARD ──────────────────────────────────────────────
     // A single global Set keyed by (event_id || id) that gates every incoming
     // socket message BEFORE it reaches setMessages. Prevents flicker from duplicate
@@ -547,9 +565,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     // Tracks the created_at of the last message we successfully received.
     // Used as the `since` cursor in the reconnect sync API call.
     const lastSyncTimestampRef = useRef<string>(new Date(Date.now() - 30000).toISOString());
-    // Phase 2 Optimization: tracks when each conversation's messages were last loaded.
-    // Prevents redundant API round-trips when a user re-opens a warm conversation (<30s).
-    const messagesCachedAtRef = useRef<Record<string, number>>({});
 
     // PERF FIX: Debounced conversation-level mark-read.
     // Replaces per-message markMessageRead + markMessageDelivered HTTP calls.
@@ -1249,28 +1264,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         loadConversationsRef.current = loadConversations;
     }, [loadMessages, loadConversations]);
 
-    const clearState = useCallback(() => {
-        console.log(`[ACCOUNT_FORENSIC] CHAT_CLEAR_STATE - Dropping chat caches at ${Date.now()}`);
-        setConversations([]);
-        setMessages({});
-        setActiveConversationId(null);
-        setLoading(true);
-        setTypingUsers({});
-        setHasMore({});
-        lastUserIdRef.current = null;
-        // Clear message cache timestamps so next account gets a fresh load
-        messagesCachedAtRef.current = {};
-        // Clear deduplication caches on account switch
-        deletedMessageIdsRef.current = new Set();
-        deletedConversationIdsRef.current.clear();
-        deletedPeerIdsRef.current.clear();
-        clearedAtMapRef.current.clear();
-        processedEventIdsRef.current = new Set();
-        lastSeenSequenceRef.current = {};
-        // Clear tick dedup gate so new account starts fresh
-        appliedTicksRef.current = new Map();
-        useChatStore.getState().clearAll();
-    }, []);
+
 
     const initialize = useCallback(async () => {
         console.log(`[ACCOUNT_FORENSIC] CHAT_INITIALIZE - Fetching chat data for user ${user?.id} at ${Date.now()}`);
