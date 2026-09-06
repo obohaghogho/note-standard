@@ -107,14 +107,16 @@ export const AuditLogs = () => {
     };
 
     const getActionBadgeClass = (action: string) => {
-        if (action.includes('suspend')) return 'danger';
-        if (action.includes('update')) return 'warning';
-        if (action.includes('broadcast')) return 'info';
-        if (action.includes('join') || action.includes('resolve')) return 'success';
+        const act = (action || '').toLowerCase();
+        if (act.includes('suspend') || act.includes('reject') || act.includes('delete') || act.includes('freeze')) return 'danger';
+        if (act.includes('update') || act.includes('override') || act.includes('limit')) return 'warning';
+        if (act.includes('broadcast') || act.includes('toggle') || act.includes('process')) return 'info';
+        if (act.includes('join') || act.includes('resolve') || act.includes('approve') || act.includes('create')) return 'success';
         return 'default';
     };
 
     const formatActionName = (action: string) => {
+        if (!action) return 'Unknown Action';
         return action.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
     };
 
@@ -128,16 +130,16 @@ export const AuditLogs = () => {
     ];
 
     return (
-        <div className="audit-logs px-2 sm:px-4 py-3">
+        <div className="audit-logs px-2 sm:px-4 py-3 pb-28 min-w-0 w-full overflow-x-hidden">
             <div className="page-header flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                <div className="header-title flex items-center gap-3">
+                <div className="header-title flex items-center gap-3 min-w-0">
                     <HistoryIcon className="header-icon text-indigo-400 shrink-0" size={28} />
-                    <div>
-                        <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Admin Audit Logs</h2>
-                        <p className="text-xs sm:text-sm text-gray-400">Track all administrative actions and security events</p>
+                    <div className="min-w-0">
+                        <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight truncate">Admin Audit Logs</h2>
+                        <p className="text-xs sm:text-sm text-gray-400 truncate">Track all administrative actions and security events</p>
                     </div>
                 </div>
-                <div className="stats-mini self-start sm:self-auto bg-gray-900/60 border border-gray-800 px-3 py-1.5 rounded-lg">
+                <div className="stats-mini self-start sm:self-auto bg-gray-900/60 border border-gray-800 px-3 py-1.5 rounded-lg shrink-0">
                     <div className="stat-item flex items-center gap-2 text-xs">
                         <span className="label text-gray-400 font-medium">Total Events:</span>
                         <span className="value font-bold text-indigo-300">{pagination.total}</span>
@@ -146,8 +148,8 @@ export const AuditLogs = () => {
             </div>
 
             {/* Sticky Filters Toolbar */}
-            <div className="filters-bar sticky top-14 z-30 bg-[#0F1220]/95 backdrop-blur-md p-3 rounded-xl border border-gray-800/80 mb-4 flex flex-col sm:flex-row gap-3">
-                <div className="filter-group flex-1 flex items-center gap-2 bg-gray-900/80 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300">
+            <div className="filters-bar sticky top-14 z-30 bg-[#0F1220]/95 backdrop-blur-md p-2.5 sm:p-3 rounded-xl border border-gray-800/80 mb-4 flex flex-col sm:flex-row gap-2.5 sm:gap-3">
+                <div className="filter-group flex-1 flex items-center gap-2 bg-gray-900/80 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 min-w-0">
                     <ActivityIcon size={18} className="text-gray-400 shrink-0" />
                     <select
                         id="audit-action-filter"
@@ -157,18 +159,26 @@ export const AuditLogs = () => {
                             setActionFilter(e.target.value);
                             setPagination(prev => ({ ...prev, page: 1 }));
                         }}
-                        className="bg-transparent border-none outline-none text-gray-200 text-sm w-full cursor-pointer"
+                        className="bg-transparent border-none outline-none text-gray-200 text-sm w-full cursor-pointer truncate"
                         aria-label="Filter by action type"
                     >
                         <option value="" className="bg-gray-900">All Actions</option>
                         <option value="update_user_status" className="bg-gray-900">User Status Updates</option>
                         <option value="update_support_status" className="bg-gray-900">Support Status Updates</option>
-                        <option value="join_support_chat" className="bg-gray-900">Admin Joins</option>
-                        <option value="broadcast" className="bg-gray-900">Broadcast Messages</option>
+                        <option value="join_support_chat" className="bg-gray-900">Admin Support Joins</option>
+                        <option value="create_broadcast" className="bg-gray-900">Broadcast Messages</option>
+                        <option value="update_system_settings" className="bg-gray-900">System Settings</option>
+                        <option value="update_auto_reply" className="bg-gray-900">Auto Reply Settings</option>
+                        <option value="toggle_feature_flag" className="bg-gray-900">Feature Flags</option>
+                        <option value="process_limit_request" className="bg-gray-900">Limit Requests</option>
+                        <option value="APPROVE_MANUAL_WITHDRAWAL" className="bg-gray-900">Withdrawal Approvals</option>
+                        <option value="REJECT_MANUAL_WITHDRAWAL" className="bg-gray-900">Withdrawal Rejections</option>
+                        <option value="resolve_unmatched" className="bg-gray-900">Payment Resolutions</option>
+                        <option value="SYSTEM_STATE_OVERRIDE" className="bg-gray-900">System State Overrides</option>
                     </select>
                 </div>
 
-                <div className="filter-group flex-1 flex items-center gap-2 bg-gray-900/80 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300">
+                <div className="filter-group flex-1 flex items-center gap-2 bg-gray-900/80 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 min-w-0">
                     <Filter size={18} className="text-gray-400 shrink-0" />
                     <select
                         id="audit-target-filter"
@@ -178,13 +188,18 @@ export const AuditLogs = () => {
                             setTargetFilter(e.target.value);
                             setPagination(prev => ({ ...prev, page: 1 }));
                         }}
-                        className="bg-transparent border-none outline-none text-gray-200 text-sm w-full cursor-pointer"
+                        className="bg-transparent border-none outline-none text-gray-200 text-sm w-full cursor-pointer truncate"
                         aria-label="Filter by target type"
                     >
                         <option value="" className="bg-gray-900">All Targets</option>
                         <option value="user" className="bg-gray-900">Users</option>
                         <option value="conversation" className="bg-gray-900">Conversations</option>
                         <option value="broadcast" className="bg-gray-900">Broadcasts</option>
+                        <option value="settings" className="bg-gray-900">System Settings</option>
+                        <option value="fincra_transactions" className="bg-gray-900">Fincra Transactions</option>
+                        <option value="payment" className="bg-gray-900">Payments</option>
+                        <option value="limit_request" className="bg-gray-900">Limit Requests</option>
+                        <option value="SYSTEM_KERNEL" className="bg-gray-900">System Kernel</option>
                     </select>
                 </div>
             </div>
@@ -200,24 +215,26 @@ export const AuditLogs = () => {
                     const { date, time } = formatDate(log.created_at);
                     return (
                         <tr key={log.id} className="hover:bg-white/5 transition-colors">
-                            <td className="time-cell px-4 py-3 text-xs">
+                            <td className="time-cell px-4 py-3 text-xs whitespace-nowrap">
                                 <div className="date font-medium text-gray-200">{date}</div>
                                 <div className="time text-gray-400">{time}</div>
                             </td>
                             <td className="admin-cell px-4 py-3">
-                                <div className="admin-info flex items-center gap-2">
+                                <div className="admin-info flex items-center gap-2 min-w-0">
                                     {log.admin?.avatar_url ? (
-                                        <SecureImage src={log.admin.avatar_url} alt="" fallbackType="profile" className="w-7 h-7 rounded-full object-cover" />
+                                        <SecureImage src={log.admin.avatar_url} alt="" fallbackType="profile" className="w-7 h-7 rounded-full object-cover shrink-0" />
                                     ) : (
-                                        <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-xs text-white">
+                                        <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-xs text-white shrink-0">
                                             {log.admin?.username?.[0]?.toUpperCase() || 'A'}
                                         </div>
                                     )}
-                                    <span className="text-sm text-gray-200 font-medium">{log.admin?.username || 'Unknown Admin'}</span>
+                                    <span className="text-sm text-gray-200 font-medium truncate max-w-[140px]" title={log.admin?.username || 'System Admin'}>
+                                        {log.admin?.username || 'System Admin'}
+                                    </span>
                                 </div>
                             </td>
                             <td className="px-4 py-3">
-                                <span className={`action-badge px-2.5 py-1 rounded-full text-xs font-semibold ${getActionBadgeClass(log.action)}`}>
+                                <span className={`action-badge px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${getActionBadgeClass(log.action)}`}>
                                     {formatActionName(log.action)}
                                 </span>
                             </td>
@@ -225,9 +242,9 @@ export const AuditLogs = () => {
                                 <span className="target-type block text-gray-400 font-medium">{log.target_type}</span>
                                 <TruncatedId id={log.target_id} />
                             </td>
-                            <td className="ip-cell px-4 py-3 text-xs font-mono text-gray-400">{log.ip_address || 'Internal'}</td>
+                            <td className="ip-cell px-4 py-3 text-xs font-mono text-gray-400 whitespace-nowrap">{log.ip_address || 'Internal'}</td>
                             <td className="details-cell px-4 py-3 text-xs">
-                                <pre className="max-w-xs overflow-x-auto text-[11px] bg-gray-900/60 p-2 rounded border border-gray-800 text-gray-300">
+                                <pre className="max-w-xs overflow-x-auto text-[11px] bg-gray-900/60 p-2 rounded border border-gray-800 text-gray-300 break-all whitespace-pre-wrap">
                                     {JSON.stringify(log.details, null, 2)}
                                 </pre>
                             </td>
@@ -238,39 +255,43 @@ export const AuditLogs = () => {
                     const { date, time } = formatDate(log.created_at);
                     const isExpanded = !!expandedCards[log.id];
                     return (
-                        <div className="p-4 rounded-xl bg-gray-900/80 border border-gray-800 space-y-3 shadow-lg">
-                            <div className="flex items-center justify-between gap-2 border-b border-gray-800/60 pb-2.5">
-                                <div className="flex items-center gap-2">
+                        <div className="p-3.5 sm:p-4 rounded-xl bg-gray-900/90 border border-gray-800 space-y-3 shadow-lg w-full min-w-0 overflow-hidden">
+                            <div className="flex items-center justify-between gap-2 border-b border-gray-800/60 pb-2.5 min-w-0">
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
                                     {log.admin?.avatar_url ? (
-                                        <SecureImage src={log.admin.avatar_url} alt="" fallbackType="profile" className="w-7 h-7 rounded-full object-cover" />
+                                        <SecureImage src={log.admin.avatar_url} alt="" fallbackType="profile" className="w-7 h-7 rounded-full object-cover shrink-0" />
                                     ) : (
-                                        <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-xs text-white">
+                                        <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-xs text-white shrink-0">
                                             {log.admin?.username?.[0]?.toUpperCase() || 'A'}
                                         </div>
                                     )}
-                                    <span className="text-sm font-bold text-white">{log.admin?.username || 'Unknown Admin'}</span>
+                                    <span className="text-xs sm:text-sm font-bold text-white truncate max-w-[120px] xs:max-w-[160px] sm:max-w-[200px]" title={log.admin?.username || 'System Admin'}>
+                                        {log.admin?.username || 'System Admin'}
+                                    </span>
                                 </div>
-                                <span className={`action-badge px-2 py-0.5 rounded-full text-[11px] font-semibold ${getActionBadgeClass(log.action)}`}>
+                                <span className={`action-badge px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-semibold shrink-0 whitespace-nowrap ${getActionBadgeClass(log.action)}`}>
                                     {formatActionName(log.action)}
                                 </span>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-2 text-xs">
-                                <div>
-                                    <span className="text-gray-500 block">Time:</span>
-                                    <span className="text-gray-300 font-medium">{date} {time}</span>
+                            <div className="grid grid-cols-2 gap-2 text-xs min-w-0">
+                                <div className="min-w-0">
+                                    <span className="text-gray-500 block text-[11px]">Time:</span>
+                                    <span className="text-gray-300 font-medium text-xs truncate block">{date} {time}</span>
                                 </div>
-                                <div>
-                                    <span className="text-gray-500 block">IP Address:</span>
-                                    <span className="font-mono text-gray-300">{log.ip_address || 'Internal'}</span>
+                                <div className="min-w-0">
+                                    <span className="text-gray-500 block text-[11px]">IP Address:</span>
+                                    <span className="font-mono text-gray-300 text-xs truncate block">{log.ip_address || 'Internal'}</span>
                                 </div>
-                                <div className="col-span-2">
-                                    <span className="text-gray-500 block">Target ({log.target_type}):</span>
-                                    <TruncatedId id={log.target_id} startChars={6} endChars={6} />
+                                <div className="col-span-2 min-w-0">
+                                    <span className="text-gray-500 block text-[11px]">Target ({log.target_type || 'system'}):</span>
+                                    <div className="mt-0.5 min-w-0">
+                                        <TruncatedId id={log.target_id || 'N/A'} startChars={6} endChars={6} />
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className="pt-2 border-t border-gray-800/60">
+                            <div className="pt-2 border-t border-gray-800/60 min-w-0">
                                 <button
                                     onClick={() => toggleExpand(log.id)}
                                     className="flex items-center justify-between w-full text-xs font-semibold text-indigo-400 hover:text-indigo-300 py-1"
@@ -279,7 +300,7 @@ export const AuditLogs = () => {
                                     {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                                 </button>
                                 {isExpanded && (
-                                    <pre className="mt-2 text-[11px] bg-black/50 p-2.5 rounded-lg border border-gray-800 text-gray-300 overflow-x-auto whitespace-pre-wrap word-break">
+                                    <pre className="mt-2 text-[11px] bg-black/60 p-2.5 rounded-lg border border-gray-800/80 text-gray-300 overflow-x-auto whitespace-pre-wrap break-all max-h-60">
                                         {JSON.stringify(log.details, null, 2)}
                                     </pre>
                                 )}

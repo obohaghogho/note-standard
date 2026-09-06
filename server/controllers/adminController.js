@@ -39,11 +39,14 @@ const logAdminAction = async (
   details = {},
 ) => {
   try {
-    const adminId = req.user.id;
-    const ipAddress = req.ip || req.headers["x-forwarded-for"] ||
-      req.connection.remoteAddress;
+    const adminId = req.user?.id || req.user?.userId;
+    const rawIp = req.ip || req.headers["x-forwarded-for"] ||
+      req.connection?.remoteAddress || "Internal";
+    const ipAddress = typeof rawIp === "string" ? rawIp.split(",")[0].trim() : "Internal";
 
-    await supabase
+    const serviceSupabase = getServiceSupabase();
+
+    await serviceSupabase
       .from("admin_audit_logs")
       .insert([{
         admin_id: adminId,
@@ -693,16 +696,20 @@ exports.exportChatTranscript = async (req, res) => {
 exports.getAuditLogs = async (req, res) => {
   try {
     const { action, admin_id, target_type, page = 1, limit = 20 } = req.query;
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit) || 20));
+    const from = (pageNum - 1) * limitNum;
+    const to = from + limitNum - 1;
 
-    let query = supabase
+    const serviceSupabase = getServiceSupabase();
+
+    let query = serviceSupabase
       .from("admin_audit_logs")
       .select(
         `
-                *,
-                admin:profiles!admin_id (username, full_name, avatar_url)
-            `,
+          *,
+          admin:profiles!admin_id (username, full_name, avatar_url)
+        `,
         { count: "exact" },
       );
 
@@ -714,15 +721,27 @@ exports.getAuditLogs = async (req, res) => {
       .order("created_at", { ascending: false })
       .range(from, to);
 
-    if (error) throw error;
+    if (error) {
+      console.error("[getAuditLogs] Query error:", error.message || error);
+      throw error;
+    }
+
+    const formattedLogs = (data || []).map((log) => ({
+      ...log,
+      admin: log.admin || {
+        username: log.details?.admin_name || (log.admin_id ? `Admin (${log.admin_id.slice(0, 6)})` : 'System Admin'),
+        full_name: 'Administrator',
+        avatar_url: ''
+      }
+    }));
 
     res.json({
-      logs: data,
+      logs: formattedLogs,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total: count,
-        totalPages: Math.ceil(count / limit),
+        page: pageNum,
+        limit: limitNum,
+        total: count || 0,
+        totalPages: Math.ceil((count || 0) / limitNum),
       },
     });
   } catch (err) {
