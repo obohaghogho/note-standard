@@ -50,6 +50,7 @@ class PayoutEngine {
     ip = "0.0.0.0",
     deviceId = "unknown",
     userAgent = "unknown",
+    provider: requestedProvider = null,
   }) {
     const correlation_id   = correlationId || `corr_${uuidv4()}`;
     const idempotency_key  = idempotencyKey  || `idemp_${uuidv4()}`;
@@ -91,7 +92,7 @@ class PayoutEngine {
       const riskRoute = complianceRes.status === "MANUAL_REVIEW" || complianceRes.isHold ? "MANUAL_REVIEW" : "AUTO";
 
       // ── STEP 3: Check Merchant Balance Pre-Check & Treasury Routing ─────────
-      const requestedProviderName = params.provider || params.requestedProvider || null;
+      const requestedProviderName = requestedProvider || null;
       let provider;
       if (requestedProviderName) {
         try {

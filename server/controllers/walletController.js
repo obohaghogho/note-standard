@@ -662,84 +662,79 @@ exports.getPendingDeposits = async (req, res, next) => {
   }
 };
 
-exports.withdraw = async (req, res) => {
+exports.withdraw = async (req, res, next) => {
   try {
-    const {
-      currency,
-      amount,
-      address,
-      bank_code,
-      bank_name,
-      account_number,
-      account_name,
-      swift_code,
-      branch_code,
-      sort_code,
-      iban,
-      country,
-      network,
-      idempotencyKey,
-    } = req.body;
+    const destination = req.body.destination || {};
+    const currency = (req.body.currency || "NGN").toString().toUpperCase();
+    const amount = parseFloat(req.body.amount || 0);
 
-    const isCrypto = ["BTC", "ETH", "USDT", "USDC", "TRX", "POLYGON"].includes(String(currency).toUpperCase());
+    const isCrypto = ["BTC", "ETH", "USDT", "USDC", "TRX", "POLYGON"].includes(currency);
 
-    const destination = isCrypto
-      ? { address: address, network: network || "native" }
-      : {
-          bankCode:      bank_code,
-          accountNumber: account_number,
-          accountName:   account_name,
-          bankName:      bank_name,
-          country:       country || (currency === "NGN" ? "NG" : "US"),
-          swiftCode:     swift_code,
-          branchCode:    branch_code,
-          sortCode:      sort_code,
-          iban:          iban,
-        };
-
-    const mappedData = {
-      method: isCrypto ? "crypto" : "bank_transfer",
-      type:   isCrypto ? "crypto" : "fiat",
-      currency,
-      amount,
-      network: network || "native",
-      destination,
-      client_idempotency_key: idempotencyKey,
-    };
-
-    let result;
     if (isCrypto) {
+      const address = req.body.address || destination.address;
+      const network = req.body.network || destination.network || "native";
+      const idempotencyKey = req.body.idempotencyKey || req.body.client_idempotency_key;
+
+      const mappedData = {
+        method: "crypto",
+        type: "crypto",
+        currency,
+        amount,
+        network,
+        destination: { address, network },
+        client_idempotency_key: idempotencyKey,
+      };
+
       const CryptoWalletService = require("../services/CryptoWalletService");
-      result = await CryptoWalletService.withdraw(req.user.id, mappedData);
-    } else {
-      const payoutEngine = require("../withdrawal/payoutEngine");
-      const correlationId = req.body.correlationId || req.headers["x-correlation-id"] || req.headers["x-request-id"] || `corr_${Date.now()}`;
-      console.log(`[E2E_CORRELATION_TRACE] [${correlationId}] [Stage 2/10] Controller Entry (/api/wallet/withdraw) | User: ${req.user.id}, Amount: ${amount} ${currency}`);
-
-      // Fetch user email to pass to Fincra beneficiary (required by Fincra API)
-      const { data: userProfile } = await supabase.from('profiles').select('email').eq('id', req.user.id).single();
-      const userEmail = userProfile?.email || req.user?.email || null;
-
-      result = await payoutEngine.processWithdrawal({
-        userId: req.user.id,
-        amount: parseFloat(amount),
-        currency: String(currency).toUpperCase(),
-        bankCode: bank_code,
-        accountNumber: account_number,
-        accountName: account_name,
-        userEmail,
-        narration: `NoteStandard ${currency} withdrawal`,
-        idempotencyKey,
-        correlationId,
-        ip: req.ip || req.socket?.remoteAddress,
-        deviceId: req.headers["x-device-id"] || "browser",
-        userAgent: req.headers["user-agent"] || "unknown",
-      });
+      const result = await CryptoWalletService.withdraw(req.user.id, mappedData);
+      return res.json(result);
     }
+
+    // ── FIAT WITHDRAWAL (PROCESSED VIA ENTERPRISE PAYOUT ENGINE) ─────────────
+    const bankCode = req.body.bankCode || req.body.bank_code || destination.bank_code || destination.bankCode || destination.bank_name;
+    const accountNumber = req.body.accountNumber || req.body.account_number || destination.account_number || destination.accountNumber;
+    const accountName = req.body.accountName || req.body.account_name || destination.account_name || destination.accountName || "Valued Customer";
+    const narration = req.body.narration || req.body.description || `NoteStandard ${currency} withdrawal`;
+    const idempotencyKey = req.body.idempotencyKey || req.body.client_idempotency_key;
+    const correlationId = req.body.correlationId || req.headers["x-correlation-id"] || req.headers["x-request-id"] || `corr_${Date.now()}`;
+    const provider = req.body.provider || req.body.requestedProvider || null;
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ success: false, error: "Withdrawal amount must be greater than 0." });
+    }
+
+    if (!accountNumber) {
+      return res.status(400).json({ success: false, error: "Account number is required for withdrawal." });
+    }
+
+    // Fetch user email for beneficiary record
+    const { data: userProfile } = await supabase.from('profiles').select('email').eq('id', req.user.id).single();
+    const userEmail = userProfile?.email || req.user?.email || null;
+
+    const payoutEngine = require("../withdrawal/payoutEngine");
+    const result = await payoutEngine.processWithdrawal({
+      userId: req.user.id,
+      amount,
+      currency,
+      bankCode: bankCode || "058",
+      accountNumber,
+      accountName,
+      userEmail,
+      narration,
+      idempotencyKey,
+      correlationId,
+      provider,
+      ip: req.ip || req.socket?.remoteAddress,
+      deviceId: req.headers["x-device-id"] || "browser",
+      userAgent: req.headers["user-agent"] || "unknown",
+    });
+
     console.log(`[E2E_CORRELATION_TRACE] [Stage 10/10] Controller Returning Result to Express Response | Payload:`, JSON.stringify(result, null, 2));
-    res.json(result);
+    return res.json({ success: true, ...result });
   } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+    console.error("[WalletController] Withdrawal Error:", err);
+    if (next) return next(err);
+    res.status(500).json({ success: false, error: err.message || "Withdrawal failed." });
   }
 };
 
@@ -1624,56 +1619,6 @@ exports.getCurrencyAuditLogs = async (req, res) => {
 };
 
 
-/**
- * POST /api/wallet/withdraw
- * Consolidated withdrawal controller delegating to PayoutEngine
- */
-exports.withdraw = async (req, res, next) => {
-  try {
-    const userId = req.user.id;
-    const correlationId = req.headers["x-correlation-id"] || req.headers["x-request-id"];
-    
-    // Normalize payload parameters from both web & mobile formats
-    const amount = parseFloat(req.body.amount || 0);
-    const currency = (req.body.currency || "NGN").toUpperCase();
-    const destination = req.body.destination || {};
-    
-    const bankCode = req.body.bankCode || req.body.bank_code || destination.bank_code || destination.bankCode || destination.bank_name;
-    const accountNumber = req.body.accountNumber || req.body.account_number || destination.account_number || destination.accountNumber;
-    const accountName = req.body.accountName || req.body.account_name || destination.account_name || destination.accountName || "Valued Customer";
-    const narration = req.body.narration || req.body.description || "NoteStandard Withdrawal";
-    const idempotencyKey = req.body.idempotencyKey || req.body.client_idempotency_key;
-
-    if (!amount || amount <= 0) {
-      return res.status(400).json({ success: false, error: "Withdrawal amount must be greater than 0." });
-    }
-
-    if (!accountNumber) {
-      return res.status(400).json({ success: false, error: "Account number is required for withdrawal." });
-    }
-
-    const payoutEngine = require("../withdrawal/payoutEngine");
-    const result = await payoutEngine.processWithdrawal({
-      userId,
-      amount,
-      currency,
-      bankCode: bankCode || "058",
-      accountNumber,
-      accountName,
-      narration,
-      idempotencyKey,
-      correlationId,
-      ip: req.ip || req.socket?.remoteAddress,
-      deviceId: req.headers["x-device-id"] || "mobile",
-      userAgent: req.headers["user-agent"] || "mobile-apk",
-    });
-
-    res.json({ success: true, ...result });
-  } catch (err) {
-    console.error("[WalletController] Withdrawal Error:", err.message);
-    res.status(500).json({ success: false, error: err.message });
-  }
-};
 
 /**
  * GET /api/wallet/limits
