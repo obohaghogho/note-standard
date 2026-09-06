@@ -15,6 +15,13 @@ initSentry();
 // Initialize Keyboard Layout Manager immediately
 initKLM();
 
+// ─── CANONICAL HOST NORMALIZATION ─────────────────────────────────────────────
+// Enforce single canonical origin (https://notestandard.com) to prevent cross-origin
+// session fragmentations, PWA service worker scope mismatches, and auth token loss.
+if (typeof window !== 'undefined' && window.location.hostname === 'www.notestandard.com') {
+  window.location.replace(`https://notestandard.com${window.location.pathname}${window.location.search}${window.location.hash}`);
+}
+
 
 // 🚀 SERVICE WORKER REGISTRATION & UPDATE DETECTION
 if ('serviceWorker' in navigator) {
