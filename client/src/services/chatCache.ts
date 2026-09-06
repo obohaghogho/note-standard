@@ -91,6 +91,38 @@ export class ChatCacheEngine {
     }
   }
 
+  public static async replaceMessagesForConversation(conversationId: string, freshMessages: Message[]): Promise<void> {
+    try {
+      const db = await this.getDB();
+      const tx = db.transaction(STORE_MESSAGES, 'readwrite');
+      const msgStore = tx.objectStore(STORE_MESSAGES);
+      const index = msgStore.index('conversation_id');
+      
+      // Step 1: Delete old cached messages for this conversation
+      const request = index.openKeyCursor(IDBKeyRange.only(conversationId));
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (cursor) {
+          msgStore.delete(cursor.primaryKey);
+          cursor.continue();
+        }
+      };
+
+      // Step 2: Put fresh server messages into the store
+      freshMessages.forEach((msg) => {
+        if (msg && msg.id) {
+          msgStore.put(msg);
+        }
+      });
+
+      return new Promise((resolve) => {
+        tx.oncomplete = () => resolve();
+      });
+    } catch (err) {
+      console.warn('[ChatCache] Failed to replace messages for conversation:', err);
+    }
+  }
+
   public static async getMessagesForConversation(conversationId: string): Promise<Message[]> {
     try {
       const db = await this.getDB();
@@ -99,7 +131,11 @@ export class ChatCacheEngine {
       const index = store.index('conversation_id');
       const request = index.getAll(conversationId);
       return new Promise((resolve) => {
-        request.onsuccess = () => resolve(request.result || []);
+        request.onsuccess = () => {
+          const list: Message[] = request.result || [];
+          list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+          resolve(list);
+        };
       });
     } catch {
       return [];

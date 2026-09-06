@@ -1082,11 +1082,19 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             try {
                 const cached = await ChatCacheEngine.getMessagesForConversation(conversationId);
                 if (cached && cached.length > 0 && isMounted.current) {
-                    setMessages(prev => {
-                        if (prev[conversationId] && prev[conversationId].length > 0) return prev;
-                        return { ...prev, [conversationId]: cached };
-                    });
-                    useChatStore.getState().upsertMessages(conversationId, cached);
+                    const convClearedAt = clearedAtMapRef.current.get(conversationId);
+                    const convClearedAtMs = convClearedAt ? new Date(convClearedAt).getTime() : 0;
+                    const validCached = cached.filter(m =>
+                        !deletedMessageIdsRef.current.has(m.id) && !m.is_deleted &&
+                        (!convClearedAtMs || new Date(m.created_at).getTime() > convClearedAtMs)
+                    );
+                    if (validCached.length > 0) {
+                        setMessages(prev => {
+                            if (prev[conversationId] && prev[conversationId].length > 0) return prev;
+                            return { ...prev, [conversationId]: validCached };
+                        });
+                        useChatStore.getState().upsertMessages(conversationId, validCached);
+                    }
                 }
             } catch (_) {}
         }
@@ -1120,10 +1128,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                          (!convClearedAtMs || new Date(m.created_at).getTime() > convClearedAtMs)
                 );
 
-                // Save fresh messages to IndexedDB local cache for future 0ms boots
+                // Atomically replace IndexedDB local cache with fresh server snapshot
                 if (filtered.length > 0) {
                     useChatStore.getState().upsertMessages(conversationId, filtered);
-                    ChatCacheEngine.saveMessages(filtered).catch(() => {});
+                    ChatCacheEngine.replaceMessagesForConversation(conversationId, filtered).catch(() => {});
                 }
                 
                 // ── BULK UN-ACKED DELIVERY SWEEP ─────────────────────────────────
