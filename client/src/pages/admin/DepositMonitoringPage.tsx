@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Activity, ShieldAlert, UserCheck, RefreshCw } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { API_URL } from '../../lib/api';
+import api from '../../api/axiosInstance';
 import ResponsiveTableWrapper from '../../components/common/ResponsiveTableWrapper';
 import BottomSheet from '../../components/common/BottomSheet';
 import TruncatedId from '../../components/common/TruncatedId';
@@ -30,14 +30,14 @@ export const DepositMonitoringPage: React.FC = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/v1/admin/deposit-monitoring`);
-      if (res.ok) {
-        const json = await res.json();
-        setStats(json.stats);
-        setUnallocated(json.unallocated || []);
+      const res = await api.get('/v1/admin/deposit-monitoring');
+      if (res.data && res.data.success) {
+        setStats(res.data.stats);
+        setUnallocated(res.data.unallocated || []);
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      console.error('[DepositMonitoringPage] Error fetching metrics:', e);
+      toast.error(e?.response?.data?.error || 'Failed to fetch deposit monitoring metrics');
     } finally {
       setLoading(false);
     }
@@ -53,22 +53,19 @@ export const DepositMonitoringPage: React.FC = () => {
       return;
     }
     try {
-      const res = await fetch(`${API_URL}/api/v1/admin/unallocated-deposits/${assignModalId}/assign`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: assignUserId })
+      const res = await api.post(`/v1/admin/unallocated-deposits/${assignModalId}/assign`, {
+        userId: assignUserId
       });
-      if (res.ok) {
+      if (res.data && res.data.success) {
         toast.success('Customer assigned and PostingService replayed successfully!');
         setAssignModalId(null);
         setAssignUserId('');
         fetchData();
       } else {
-        const json = await res.json();
-        toast.error(json.error || 'Failed to assign customer');
+        toast.error(res.data?.error || 'Failed to assign customer');
       }
-    } catch (e) {
-      toast.error('Error assigning customer');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error || 'Error assigning customer');
     }
   };
 
