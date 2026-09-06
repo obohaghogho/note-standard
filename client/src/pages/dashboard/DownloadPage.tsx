@@ -62,7 +62,7 @@ export const DownloadPage: React.FC = () => {
     <div className="min-h-screen bg-[#080808] text-white overflow-y-auto">
 
       {/* ── Top nav ── */}
-      <div className="sticky top-0 z-40 flex items-center gap-3 px-4 py-3 bg-[#080808]/80 backdrop-blur-lg border-b border-white/5">
+      <div className="sticky top-0 z-40 pt-safe flex items-center gap-3 px-4 py-3 bg-[#080808]/80 backdrop-blur-lg border-b border-white/5">
         <button
           onClick={() => navigate('/dashboard')}
           className="p-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-all text-gray-400 hover:text-white"

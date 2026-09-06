@@ -12,7 +12,7 @@ export const Navbar = () => {
     const { installApp } = usePWAInstall();
 
     return (
-        <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-white/10">
+        <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-white/10 pt-safe">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
                 <Link to="/" className="flex items-center gap-3 group">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-[1px] shadow-lg shadow-emerald-500/20 group-hover:scale-105 transition-transform">
@@ -57,7 +57,7 @@ export const Navbar = () => {
                 <motion.div
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="absolute top-20 left-0 right-0 bg-background/95 backdrop-blur-xl border-b border-white/10 p-6 md:hidden flex flex-col gap-4"
+                    className="absolute top-full left-0 right-0 bg-background/95 backdrop-blur-xl border-b border-white/10 p-6 md:hidden flex flex-col gap-4 shadow-2xl"
                 >
                     <a href="#demo" onClick={() => setIsOpen(false)} className="text-base font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />

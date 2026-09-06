@@ -9,7 +9,7 @@ export const Hero = () => {
     const { installApp } = usePWAInstall();
 
     return (
-        <section className="relative min-h-[100dvh] flex items-center justify-center pt-20 sm:pt-28 pb-12 overflow-hidden w-full">
+        <section className="relative min-h-[100dvh] flex items-center justify-center pt-[calc(5rem+1.5rem+env(safe-area-inset-top,0px))] sm:pt-[calc(5rem+3rem+env(safe-area-inset-top,0px))] pb-12 overflow-hidden w-full">
             {/* Crystal Shards Background - Responsive constrained */}
             <motion.div
                 animate={{ y: [-20, 20, -20], rotate: [0, 6, 0] }}
