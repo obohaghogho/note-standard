@@ -103,6 +103,8 @@ const ChatRedirect = () => {
   return <Navigate to={`/dashboard/chat?id=${id}`} replace />;
 };
 
+import { preloadCoreDashboardRoutes } from './utils/routePreloader';
+
 // Phase 6.2: Replay Debugger UI
 const ReplayPage = lazyWithRetry(() => import('./debug/replay/ReplayPage'), 'ReplayPage');
 
@@ -110,18 +112,11 @@ function AuthenticatedProviders() {
   const { user } = useAuth();
   const userKey = user?.id || 'guest';
 
-  // Background Route Pre-warming: Pre-fetch JS bundles for primary dashboard pages
-  // so tab switches render 100% instantly without any bundle loading delays.
+  // Background Route Pre-warming: Pre-fetch JS bundles for all primary dashboard pages
+  // during idle time so every tab click renders in milliseconds like WhatsApp.
   useEffect(() => {
     if (!user) return;
-    const prewarmTimer = setTimeout(() => {
-      import('./pages/dashboard/Chat').catch(() => {});
-      import('./pages/dashboard/Notes').catch(() => {});
-      import('./pages/WalletPage').catch(() => {});
-      import('./pages/dashboard/DashboardHome').catch(() => {});
-      import('./pages/dashboard/Settings').catch(() => {});
-    }, 1000);
-    return () => clearTimeout(prewarmTimer);
+    preloadCoreDashboardRoutes();
   }, [user]);
 
   return (

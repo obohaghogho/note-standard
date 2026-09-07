@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { useChat } from '../../context/ChatContext';
+import { preloadRoute } from '../../utils/routePreloader';
 
 export const MobileBottomNav: React.FC = () => {
   const { t } = useTranslation();
@@ -47,6 +48,9 @@ export const MobileBottomNav: React.FC = () => {
           return (
             <button
               key={item.id}
+              onMouseEnter={() => preloadRoute(item.to)}
+              onTouchStart={() => preloadRoute(item.to)}
+              onPointerDown={() => preloadRoute(item.to)}
               onClick={() => navigate(item.to)}
               className={cn(
                 "flex flex-col items-center justify-center flex-1 min-h-[44px] min-w-[44px] py-1 transition-all duration-200 relative rounded-xl",

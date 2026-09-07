@@ -8,6 +8,7 @@ const routeImports: Record<string, () => Promise<unknown>> = {
   '/dashboard/chat': () => import('../pages/dashboard/Chat'),
   '/dashboard/shared': () => import('../pages/dashboard/Shared'),
   '/dashboard/feed': () => import('../pages/dashboard/Feed'),
+  '/dashboard/reels': () => import('../pages/dashboard/Reels'),
   '/dashboard/trends': () => import('../pages/dashboard/Trends'),
   '/dashboard/search': () => import('../pages/dashboard/Search'),
   '/dashboard/teams': () => import('../pages/teams/TeamsPage'),
@@ -60,13 +61,16 @@ export function preloadRoute(path: string): void {
  */
 export function preloadCoreDashboardRoutes(): void {
   const coreRoutes = [
+    '/dashboard',
     '/dashboard/notes',
     '/dashboard/chat',
-    '/dashboard/teams',
     '/dashboard/wallet',
+    '/dashboard/feed',
+    '/dashboard/reels',
+    '/dashboard/teams',
     '/dashboard/settings',
-    '/dashboard/trends',
     '/dashboard/notifications',
+    '/dashboard/search',
   ];
 
   const runPreload = () => {
