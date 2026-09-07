@@ -8,6 +8,12 @@ BEGIN;
 
 -- 1. CLEANUP: Drop problematic policies
 -- We drop all to ensure a clean state
+DROP POLICY IF EXISTS "notes_select_policy" ON notes;
+DROP POLICY IF EXISTS "notes_select_policy_v2" ON notes;
+DROP POLICY IF EXISTS "notes_select_policy_v4" ON notes;
+DROP POLICY IF EXISTS "notes_insert_policy" ON notes;
+DROP POLICY IF EXISTS "notes_update_policy" ON notes;
+DROP POLICY IF EXISTS "notes_delete_policy" ON notes;
 DROP POLICY IF EXISTS "Users can view own notes" ON notes;
 DROP POLICY IF EXISTS "Users can view shared notes" ON notes;
 DROP POLICY IF EXISTS "Users can view public notes" ON notes;
