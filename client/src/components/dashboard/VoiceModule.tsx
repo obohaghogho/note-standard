@@ -111,10 +111,9 @@ export const VoiceModule: React.FC<VoiceModuleProps> = ({ noteId }) => {
 
                 <div className="flex items-center gap-2">
                   <audio
-                    src={`${API_URL}/api/notes/${noteId}/files/${audio.id}/download`}
+                    src={`${API_URL}/api/notes/${noteId}/files/${audio.id}/download?redirect=true`}
                     controls
                     className="h-8 w-40"
-                    crossOrigin="use-credentials"
                   />
                   <a 
                     href={`${API_URL}/api/notes/${noteId}/files/${audio.id}/download`}

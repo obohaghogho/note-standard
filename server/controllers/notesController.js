@@ -764,6 +764,12 @@ const downloadNoteFile = async (req, res) => {
       });
 
     if (error) throw error;
+
+    // If query string has redirect=true or accept header indicates media playback, redirect directly
+    if (req.query.redirect === 'true' || req.headers.accept?.includes('audio/') || req.headers.accept?.includes('video/')) {
+      return res.redirect(data.signedUrl);
+    }
+
     res.json({ url: data.signedUrl });
   } catch (err) {
     console.error("[notesController] downloadNoteFile error:", err.message);

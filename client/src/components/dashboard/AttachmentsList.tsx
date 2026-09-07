@@ -195,7 +195,14 @@ export const AttachmentsList: React.FC<AttachmentsListProps> = ({ noteId }) => {
                 </div>
               </div>
 
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2">
+                {file.mime_type.startsWith('audio/') && (
+                  <audio
+                    src={`${API_URL}/api/notes/${noteId}/files/${file.id}/download?redirect=true`}
+                    controls
+                    className="h-8 w-36 sm:w-44"
+                  />
+                )}
                 <button
                   type="button"
                   onClick={() => handleDownload(file.id, file.file_name)}

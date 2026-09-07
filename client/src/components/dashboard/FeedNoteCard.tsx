@@ -17,8 +17,9 @@ export interface FeedNoteData {
     owner_id: string;
     is_private: boolean;
     likes_count: number;
-    comments_count: number;
     user_has_liked: boolean;
+    comments_count: number;
+    note_type?: string;
     owner?: {
         username?: string;
         email?: string;
@@ -160,8 +161,13 @@ export const FeedNoteCard = ({ note, onCommentClick, onTagClick }: FeedNoteCardP
 
                 {/* Note Content */}
                 <div onClick={() => onCommentClick(note)} className="cursor-pointer">
-                    <h3 className="font-bold text-xl mb-2 group-hover:text-primary transition-colors leading-tight">
+                    <h3 className="font-bold text-xl mb-2 group-hover:text-primary transition-colors leading-tight flex items-center gap-2">
                         {note.title || 'Untitled'}
+                        {note.note_type === 'voice' && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 font-bold border border-pink-500/30">
+                                🎤 Voice Note
+                            </span>
+                        )}
                     </h3>
                     <p className="text-gray-400 text-sm line-clamp-4 mb-4 leading-relaxed group-hover:text-gray-300 transition-colors">
                         {note.content || 'No content...'}
