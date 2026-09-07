@@ -149,7 +149,17 @@ function AuthenticatedProviders() {
                       <Route path="/contact" element={<ContactPage />} />
                       <Route path="/reset-password" element={<ResetPassword />} />
                       <Route path="/download" element={<DownloadPage />} />
-                      
+
+                      {/* Common SEO & Crawlers Redirect Aliases */}
+                      <Route path="/register" element={<Navigate to="/signup" replace />} />
+                      <Route path="/signin" element={<Navigate to="/login" replace />} />
+                      <Route path="/sign-in" element={<Navigate to="/login" replace />} />
+                      <Route path="/home" element={<Navigate to="/" replace />} />
+                      <Route path="/features" element={<Navigate to="/" replace />} />
+                      <Route path="/pricing" element={<Navigate to="/" replace />} />
+                      <Route path="/faq" element={<Navigate to="/contact" replace />} />
+                      <Route path="/app" element={<Navigate to="/dashboard" replace />} />
+
                       <Route path="/chat/:id" element={<ChatRedirect />} />
 
                       {/* Phase 6.2: Replay Debugger UI */}
