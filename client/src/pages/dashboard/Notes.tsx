@@ -8,7 +8,7 @@ import { EditNoteModal } from "../../components/dashboard/EditNoteModal";
 import { ViewNoteModal } from "../../components/dashboard/ViewNoteModal";
 import { ShareNoteModal } from "../../components/dashboard/ShareNoteModal";
 import { DeleteNoteModal } from "../../components/dashboard/DeleteNoteModal";
-import { Grid, List as ListIcon, Edit2, Share2, Trash2, Pin, Calendar, Flame, Keyboard, Layout, Settings2, Plus, Sparkles, FolderOpen, AlignLeft, Clock } from "lucide-react";
+import { Grid, List as ListIcon, Edit2, Share2, Trash2, Pin, Calendar, Flame, Keyboard, Layout, Settings2, Plus, Sparkles, FolderOpen, AlignLeft, Clock, Mic, CheckSquare, PenTool, FileText, Image as ImageIcon } from "lucide-react";
 import { supabase } from "../../lib/supabaseSafe";
 import { useAuth } from "../../context/AuthContext";
 import { useNotes } from "../../context/NotesContext";
@@ -39,6 +39,7 @@ function NotesContent() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [sortBy, setSortBy] = useState<"latest" | "oldest" | "title">("latest");
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [selectedNoteType, setSelectedNoteType] = useState<string>("all");
   const [isConfiguringLayout, setIsConfiguringLayout] = useState(false);
   const [isTrashOpen, setIsTrashOpen] = useState(false);
 
@@ -116,10 +117,12 @@ function NotesContent() {
     setSearchParams({}, { replace: true });
   };
 
-  // Filter notes by selected category locally
-  const filteredNotes = selectedCategoryId
-    ? notes.filter((n) => n.category_id === selectedCategoryId)
-    : notes;
+  // Filter notes by selected category & note_type locally
+  const filteredNotes = notes.filter((n) => {
+    if (selectedCategoryId && n.category_id !== selectedCategoryId) return false;
+    if (selectedNoteType !== "all" && n.note_type !== selectedNoteType) return false;
+    return true;
+  });
 
   const handleDelete = (noteId: string) => {
     setDeletingNoteId(noteId);
@@ -342,14 +345,41 @@ function NotesContent() {
           </div>
         </div>
 
+        {/* Note Type Filter Bar */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+          {[
+            { id: 'all', label: 'All Notes', icon: <FolderOpen className="w-3.5 h-3.5" /> },
+            { id: 'text', label: 'Text Notes', icon: <FileText className="w-3.5 h-3.5" /> },
+            { id: 'voice', label: 'Voice Notes', icon: <Mic className="w-3.5 h-3.5 text-pink-400" /> },
+            { id: 'checklist', label: 'Checklists', icon: <CheckSquare className="w-3.5 h-3.5 text-emerald-400" /> },
+            { id: 'drawing', label: 'Canvas', icon: <PenTool className="w-3.5 h-3.5 text-indigo-400" /> },
+            { id: 'image', label: 'Images', icon: <ImageIcon className="w-3.5 h-3.5 text-amber-400" /> },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setSelectedNoteType(tab.id)}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap border",
+                selectedNoteType === tab.id
+                  ? "bg-white/10 text-white border-white/20 shadow-sm"
+                  : "bg-neutral-900/40 text-neutral-400 border-white/5 hover:text-white hover:bg-neutral-900"
+              )}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         {loading ? (
           <div className="text-neutral-400 text-center py-10">Loading notes directory...</div>
         ) : filteredNotes.length === 0 ? (
           <div className="text-neutral-500 text-center py-12 border border-dashed border-white/5 rounded-2xl bg-white/[0.01]">
             <FolderOpen className="w-10 h-10 mx-auto mb-2 text-neutral-600" />
-            <p className="text-sm font-semibold">No notes in this category.</p>
+            <p className="text-sm font-semibold">No notes in this view.</p>
             <button
-              onClick={() => handleCreateNoteTrigger("text")}
+              onClick={() => handleCreateNoteTrigger(selectedNoteType !== 'all' ? selectedNoteType : "text")}
               className="mt-3 text-xs text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1.5 mx-auto cursor-pointer"
             >
               <Plus className="w-4 h-4" /> Create a note
@@ -380,10 +410,22 @@ function NotesContent() {
                 )}
 
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-2 relative z-10">
+                  <div className="flex items-center gap-2 mb-2 relative z-10 flex-wrap">
                     <span className="text-[10px] text-neutral-500 font-bold">
                       {new Date(note.created_at).toLocaleDateString()}
                     </span>
+                    {note.note_type === 'voice' && (
+                      <span className="text-[9px] bg-pink-500/20 text-pink-300 font-extrabold px-1.5 py-0.5 rounded flex items-center gap-1 border border-pink-500/30">
+                        <Mic className="w-2.5 h-2.5 text-pink-400" />
+                        Voice Note
+                      </span>
+                    )}
+                    {note.note_type === 'checklist' && (
+                      <span className="text-[9px] bg-emerald-500/20 text-emerald-300 font-extrabold px-1.5 py-0.5 rounded flex items-center gap-1 border border-emerald-500/30">
+                        <CheckSquare className="w-2.5 h-2.5 text-emerald-400" />
+                        Checklist
+                      </span>
+                    )}
                     {!note.is_private && (
                       <span className="text-[8px] bg-emerald-500/20 text-emerald-400 font-extrabold px-1.5 py-0.5 rounded uppercase">
                         Public
@@ -399,7 +441,12 @@ function NotesContent() {
                   <h3 className="font-bold text-base text-white group-hover:text-emerald-400 transition-colors truncate mb-1 relative z-10">
                     {note.title || "Untitled Note"}
                   </h3>
-                  {viewMode === "grid" && (
+                  {note.note_type === 'voice' ? (
+                    <div className="flex items-center gap-2 text-xs text-pink-300 font-semibold bg-pink-500/10 px-2.5 py-1.5 rounded-xl border border-pink-500/20 my-1">
+                      <Mic className="w-3.5 h-3.5 text-pink-400 shrink-0" />
+                      <span className="truncate text-[11px]">Voice Recording Memo</span>
+                    </div>
+                  ) : viewMode === "grid" && (
                     <p className="text-neutral-400 text-xs line-clamp-3 leading-relaxed relative z-10">
                       {note.content || "No content..."}
                     </p>

@@ -23,6 +23,7 @@ export const CreateNoteModal = ({ isOpen, onClose, onSuccess }: CreateNoteModalP
     const [content, setContent] = useState('');
     const [tags, setTags] = useState('');
     const [isPrivate, setIsPrivate] = useState(true);
+    const [noteType, setNoteType] = useState<'text' | 'checklist' | 'voice'>('text');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -45,14 +46,15 @@ export const CreateNoteModal = ({ isOpen, onClose, onSuccess }: CreateNoteModalP
             // Parse tags: split by comma, trim, filter empty
             const tagArray = tags.split(',').map(t => t.trim()).filter(t => t.length > 0);
 
-            const { error } = await supabase // Changed variable name from insertError to error
+            const { error } = await supabase
                 .from('notes')
                 .insert({
-                    title,
+                    title: title || (noteType === 'voice' ? 'Voice Recording Note' : 'Untitled Note'),
                     content,
                     tags: tagArray,
-                    owner_id: user.id, // Kept user.id as per original, but user?.id was in snippet. Sticking to original for minimal change.
-                    is_private: isPrivate // Notes are now private by default
+                    owner_id: user.id,
+                    is_private: isPrivate,
+                    note_type: noteType
                 });
 
             if (error) throw error; // Used new error variable
@@ -125,17 +127,40 @@ export const CreateNoteModal = ({ isOpen, onClose, onSuccess }: CreateNoteModalP
                             </div>
                         )}
 
+                        <div className="flex items-center gap-2 mb-2 bg-neutral-900/60 p-1 rounded-xl border border-white/5 w-fit">
+                            <button
+                                type="button"
+                                onClick={() => setNoteType('text')}
+                                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${noteType === 'text' ? 'bg-white/10 text-white shadow' : 'text-neutral-400 hover:text-white'}`}
+                            >
+                                📝 Text
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setNoteType('voice')}
+                                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${noteType === 'voice' ? 'bg-pink-500/20 text-pink-300 border border-pink-500/30' : 'text-neutral-400 hover:text-white'}`}
+                            >
+                                🎤 Voice Note
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setNoteType('checklist')}
+                                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${noteType === 'checklist' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'text-neutral-400 hover:text-white'}`}
+                            >
+                                ☑️ Checklist
+                            </button>
+                        </div>
+
                         <div>
                             <label htmlFor="noteTitle" className="sr-only">Note Title</label>
                             <input
                                 id="noteTitle"
                                 name="title"
                                 type="text"
-                                placeholder="Note Title"
+                                placeholder={noteType === 'voice' ? 'Voice Recording Note Title' : 'Note Title'}
                                 value={title}
                                 onChange={(e) => setTitle(e.target.value)}
                                 className="w-full bg-transparent text-2xl font-bold placeholder-gray-500 focus:outline-none border-none p-0"
-                                required
                                 autoComplete="off"
                             />
                         </div>
