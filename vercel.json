@@ -1,8 +1,8 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "npm run build --workspace=client",
   "outputDirectory": "client/dist",
   "installCommand": "npm install --legacy-peer-deps",
-  "framework": null,
+  "framework": "vite",
   "routes": [
     {
       "src": "/(.*)",
