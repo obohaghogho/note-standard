@@ -248,15 +248,22 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
              )
              .subscribe();
 
-        // 3. Automatic Background Sync Interval (Every 15 seconds when tab is active)
-        const autoSyncInterval = setInterval(() => {
+        // 3. Automatic Background Sync Interval & Window Focus / Visibility Auto-Sync
+        const handleVisibilityOrFocus = () => {
             if (document.visibilityState === 'visible' && !fetchingRef.current) {
                 fetchData(true); // Silent background sync
             }
-        }, 15000);
+        };
+
+        window.addEventListener('focus', handleVisibilityOrFocus);
+        document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+        const autoSyncInterval = setInterval(handleVisibilityOrFocus, 15000);
 
         return () => {
             clearInterval(autoSyncInterval);
+            window.removeEventListener('focus', handleVisibilityOrFocus);
+            document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
             supabase.removeChannel(ledgerChannel);
             supabase.removeChannel(txChannel);
         };
@@ -279,6 +286,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 t === 'wallet_deposit' || 
                 t === 'deposit' || 
                 t === 'withdrawal_completed' || 
+                t === 'withdrawal_settled' ||
                 t === 'transaction_confirmed'
             ) {
                 console.log('[WalletContext] Triggering silent wallet refresh for notification type:', data.type);
