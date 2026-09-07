@@ -1,9 +1,10 @@
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
-import { X, Edit2, Share2, Calendar, Lock, Globe, User, CheckSquare, FileText } from 'lucide-react';
+import { X, Edit2, Share2, Calendar, Lock, Globe, User, CheckSquare, FileText, Mic, PenTool, Image as ImageIcon } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import DOMPurify from 'dompurify';
 import { AttachmentsList } from './AttachmentsList';
+import { VoiceModule } from './VoiceModule';
 
 import type { Note } from '../../types/note';
 
@@ -22,6 +23,21 @@ export const ViewNoteModal = ({ isOpen, onClose, onEdit, onShare, note }: ViewNo
     const isOwner = user?.id === note.owner_id;
     const canEdit = isOwner; // We don't have explicit permission column on the note object yet, default to owner-only for now
 
+    const getHeaderIcon = () => {
+        switch (note.note_type) {
+            case 'voice':
+                return <Mic className="w-5 h-5 text-pink-400" />;
+            case 'checklist':
+                return <CheckSquare className="w-5 h-5 text-emerald-400" />;
+            case 'drawing':
+                return <PenTool className="w-5 h-5 text-indigo-400" />;
+            case 'image':
+                return <ImageIcon className="w-5 h-5 text-amber-400" />;
+            default:
+                return <FileText className="w-5 h-5 text-primary" />;
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" />
@@ -29,11 +45,11 @@ export const ViewNoteModal = ({ isOpen, onClose, onEdit, onShare, note }: ViewNo
                 {/* Header */}
                 <div className="p-6 border-b border-white/10 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-primary/10 text-primary">
-                            <FileText size={20} />
+                        <div className="p-2 rounded-lg bg-white/5 border border-white/10">
+                            {getHeaderIcon()}
                         </div>
                         <div>
-                            <h2 className="text-2xl font-bold text-white leading-tight">{note.title || 'Untitled'}</h2>
+                            <h2 className="text-2xl font-bold text-white leading-tight">{note.title || 'Untitled Note'}</h2>
                             <div className="flex items-center gap-3 mt-1">
                                 <span className="flex items-center gap-1 text-xs text-gray-500">
                                     <Calendar size={12} />
@@ -58,11 +74,24 @@ export const ViewNoteModal = ({ isOpen, onClose, onEdit, onShare, note }: ViewNo
 
                 {/* Content */}
                 <div className="flex-grow overflow-y-auto p-6 space-y-6">
-                    {note.note_type === 'checklist' && note.metadata?.items ? (
+                    {note.note_type === 'voice' ? (
+                        <div className="space-y-4">
+                            <VoiceModule noteId={note.id} />
+                            {note.content && (
+                                <div className="pt-4 border-t border-white/10">
+                                    <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-2">Note Description</h4>
+                                    <div 
+                                        className="text-gray-200 text-sm leading-relaxed prose dark:prose-invert max-w-none"
+                                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(note.content) }}
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    ) : note.note_type === 'checklist' && note.metadata?.items ? (
                         <div className="space-y-3 bg-neutral-900/20 border border-white/5 p-4 rounded-2xl">
                             <span className="text-[10px] text-neutral-500 font-bold uppercase tracking-wider block mb-2 flex items-center gap-1">
                               <CheckSquare className="w-3.5 h-3.5" />
-                              Checklist Checklist Items
+                              Checklist Items
                             </span>
                             {note.metadata.items.map((item: any) => (
                                 <div

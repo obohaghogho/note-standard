@@ -153,15 +153,37 @@ function NotesContent() {
     }
   };
 
+  const getDefaultTitle = (type = "text") => {
+    const timeStr = new Date().toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    switch (type) {
+      case "voice":
+        return `Voice Recording - ${timeStr}`;
+      case "checklist":
+        return `Checklist - ${timeStr}`;
+      case "drawing":
+        return `Canvas Drawing - ${timeStr}`;
+      case "image":
+        return `Image Note - ${timeStr}`;
+      default:
+        return `Untitled Note`;
+    }
+  };
+
   const handleCreateNoteTrigger = async (type = "text") => {
     if (!user) return;
     try {
+      const defaultTitle = getDefaultTitle(type);
       const { data, error } = await supabase
         .from("notes")
         .insert([
           {
             owner_id: user.id,
-            title: "Untitled Note",
+            title: defaultTitle,
             content: "",
             note_type: type,
             is_private: true,
@@ -172,12 +194,16 @@ function NotesContent() {
         .select();
 
       if (error) throw error;
-      toast.success("Blank note created!");
+      toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} note created!`);
       const newNote = data[0] as Note;
       setNotes((prev) => [newNote, ...prev]);
       refreshNotes("", sortBy);
       refreshDashboard();
-      setEditingNote(newNote);
+      if (type === 'voice') {
+        setViewingNote(newNote);
+      } else {
+        setEditingNote(newNote);
+      }
     } catch (err) {
       console.error(err);
       toast.error("Failed to create note");
@@ -346,21 +372,21 @@ function NotesContent() {
         </div>
 
         {/* Note Type Filter Bar */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-1 scrollbar-none w-full max-w-full flex-nowrap shrink-0">
           {[
-            { id: 'all', label: 'All Notes', icon: <FolderOpen className="w-3.5 h-3.5" /> },
-            { id: 'text', label: 'Text Notes', icon: <FileText className="w-3.5 h-3.5" /> },
-            { id: 'voice', label: 'Voice Notes', icon: <Mic className="w-3.5 h-3.5 text-pink-400" /> },
-            { id: 'checklist', label: 'Checklists', icon: <CheckSquare className="w-3.5 h-3.5 text-emerald-400" /> },
-            { id: 'drawing', label: 'Canvas', icon: <PenTool className="w-3.5 h-3.5 text-indigo-400" /> },
-            { id: 'image', label: 'Images', icon: <ImageIcon className="w-3.5 h-3.5 text-amber-400" /> },
+            { id: 'all', label: 'All Notes', icon: <FolderOpen className="w-3.5 h-3.5 shrink-0" /> },
+            { id: 'text', label: 'Text Notes', icon: <FileText className="w-3.5 h-3.5 shrink-0" /> },
+            { id: 'voice', label: 'Voice Notes', icon: <Mic className="w-3.5 h-3.5 text-pink-400 shrink-0" /> },
+            { id: 'checklist', label: 'Checklists', icon: <CheckSquare className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> },
+            { id: 'drawing', label: 'Canvas', icon: <PenTool className="w-3.5 h-3.5 text-indigo-400 shrink-0" /> },
+            { id: 'image', label: 'Images', icon: <ImageIcon className="w-3.5 h-3.5 text-amber-400 shrink-0" /> },
           ].map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => setSelectedNoteType(tab.id)}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap border",
+                "shrink-0 min-w-max flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap border flex-nowrap",
                 selectedNoteType === tab.id
                   ? "bg-white/10 text-white border-white/20 shadow-sm"
                   : "bg-neutral-900/40 text-neutral-400 border-white/5 hover:text-white hover:bg-neutral-900"
