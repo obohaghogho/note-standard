@@ -22,6 +22,12 @@ DROP POLICY IF EXISTS "Users can update own notes" ON notes;
 DROP POLICY IF EXISTS "Users can edit shared notes" ON notes;
 DROP POLICY IF EXISTS "Users can delete own notes" ON notes;
 
+DROP POLICY IF EXISTS "shared_notes_select_policy" ON shared_notes;
+DROP POLICY IF EXISTS "shared_notes_insert_policy" ON shared_notes;
+DROP POLICY IF EXISTS "shared_notes_delete_policy" ON shared_notes;
+DROP POLICY IF EXISTS "shared_notes_direct_select_policy" ON shared_notes;
+DROP POLICY IF EXISTS "shared_notes_direct_all_policy" ON shared_notes;
+DROP POLICY IF EXISTS "shared_notes_select_comprehensive_v4" ON shared_notes;
 DROP POLICY IF EXISTS "Owner can view share records" ON shared_notes;
 DROP POLICY IF EXISTS "Recipient can view share records" ON shared_notes;
 DROP POLICY IF EXISTS "Owner can share notes" ON shared_notes;

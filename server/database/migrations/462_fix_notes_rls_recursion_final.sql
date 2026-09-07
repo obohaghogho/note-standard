@@ -1,6 +1,7 @@
 -- ==============================================================================
--- MIGRATION 462: DEFINITIVE FIX FOR NOTES RLS RECURSION (ERROR 42P17)
+-- MIGRATION 462: DEFINITIVE FIX FOR NOTES & SHARED_NOTES RLS RECURSION (ERROR 42P17 & 42710)
 -- Resolves: infinite recursion detected in policy for relation "notes"
+-- Resolves: duplicate policy object errors (42710)
 -- ==============================================================================
 
 BEGIN;
@@ -20,6 +21,22 @@ DROP POLICY IF EXISTS "Users can update own notes" ON public.notes;
 DROP POLICY IF EXISTS "Users can edit shared notes" ON public.notes;
 DROP POLICY IF EXISTS "Users can delete own notes" ON public.notes;
 DROP POLICY IF EXISTS "Public notes are viewable by everyone" ON public.notes;
+
+DROP POLICY IF EXISTS "shared_notes_select_policy" ON public.shared_notes;
+DROP POLICY IF EXISTS "shared_notes_insert_policy" ON public.shared_notes;
+DROP POLICY IF EXISTS "shared_notes_delete_policy" ON public.shared_notes;
+DROP POLICY IF EXISTS "shared_notes_direct_select_policy" ON public.shared_notes;
+DROP POLICY IF EXISTS "shared_notes_direct_all_policy" ON public.shared_notes;
+DROP POLICY IF EXISTS "shared_notes_select_comprehensive_v4" ON public.shared_notes;
+DROP POLICY IF EXISTS "Owner can view share records" ON public.shared_notes;
+DROP POLICY IF EXISTS "Recipient can view share records" ON public.shared_notes;
+DROP POLICY IF EXISTS "Owner can share notes" ON public.shared_notes;
+DROP POLICY IF EXISTS "Owner can revoke share" ON public.shared_notes;
+DROP POLICY IF EXISTS "Team members can view shared notes" ON public.shared_notes;
+DROP POLICY IF EXISTS "Users can view share records" ON public.shared_notes;
+DROP POLICY IF EXISTS "Team members can share their notes" ON public.shared_notes;
+DROP POLICY IF EXISTS "Sharers can update note permissions" ON public.shared_notes;
+DROP POLICY IF EXISTS "Sharers or admins can unshare notes" ON public.shared_notes;
 
 -- 2. CREATE / UPDATE SECURITY DEFINER HELPER FUNCTIONS
 -- Using SECURITY DEFINER bypasses RLS on the queried table inside helper logic, eliminating circular evaluation.
@@ -125,7 +142,32 @@ CREATE POLICY "notes_delete_policy"
   TO authenticated
   USING (owner_id = (SELECT auth.uid()));
 
--- 4. GRANT PERMISSIONS
+-- 4. REBUILD HARDENED, NON-RECURSIVE RLS POLICIES ON public.shared_notes
+
+CREATE POLICY "shared_notes_select_policy"
+  ON public.shared_notes FOR SELECT
+  TO authenticated
+  USING (
+    shared_by = (SELECT auth.uid())
+    OR shared_with_user_id = (SELECT auth.uid())
+    OR public.check_is_note_owner(note_id, (SELECT auth.uid()))
+    OR (team_id IS NOT NULL AND team_id IN (SELECT public.get_user_teams_v3((SELECT auth.uid()))))
+  );
+
+CREATE POLICY "shared_notes_insert_policy"
+  ON public.shared_notes FOR INSERT
+  TO authenticated
+  WITH CHECK (public.check_is_note_owner(note_id, (SELECT auth.uid())));
+
+CREATE POLICY "shared_notes_delete_policy"
+  ON public.shared_notes FOR DELETE
+  TO authenticated
+  USING (
+    shared_by = (SELECT auth.uid())
+    OR public.check_is_note_owner(note_id, (SELECT auth.uid()))
+  );
+
+-- 5. GRANT PERMISSIONS
 GRANT EXECUTE ON FUNCTION public.check_is_note_owner(UUID, UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_note_owner_id(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.check_is_note_shared_with(UUID, UUID) TO authenticated;
