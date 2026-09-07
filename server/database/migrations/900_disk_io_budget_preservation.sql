@@ -259,21 +259,30 @@ BEGIN
     -- NOTES
     IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'notes') THEN
         BEGIN
+            DROP POLICY IF EXISTS "notes_select_policy" ON public.notes;
+            DROP POLICY IF EXISTS "notes_select_policy_v2" ON public.notes;
+            DROP POLICY IF EXISTS "notes_select_policy_v4" ON public.notes;
+            DROP POLICY IF EXISTS "notes_insert_policy" ON public.notes;
+            DROP POLICY IF EXISTS "notes_update_policy" ON public.notes;
+            DROP POLICY IF EXISTS "notes_delete_policy" ON public.notes;
             DROP POLICY IF EXISTS "Users can view own notes" ON public.notes;
             CREATE POLICY "Users can view own notes" ON public.notes FOR SELECT USING (owner_id = (SELECT auth.uid()));
         EXCEPTION WHEN OTHERS THEN NULL; END;
 
         BEGIN
+            DROP POLICY IF EXISTS "notes_insert_policy" ON public.notes;
             DROP POLICY IF EXISTS "Users can insert own notes" ON public.notes;
             CREATE POLICY "Users can insert own notes" ON public.notes FOR INSERT WITH CHECK (owner_id = (SELECT auth.uid()));
         EXCEPTION WHEN OTHERS THEN NULL; END;
 
         BEGIN
+            DROP POLICY IF EXISTS "notes_update_policy" ON public.notes;
             DROP POLICY IF EXISTS "Users can update own notes" ON public.notes;
             CREATE POLICY "Users can update own notes" ON public.notes FOR UPDATE USING (owner_id = (SELECT auth.uid()));
         EXCEPTION WHEN OTHERS THEN NULL; END;
 
         BEGIN
+            DROP POLICY IF EXISTS "notes_delete_policy" ON public.notes;
             DROP POLICY IF EXISTS "Users can delete own notes" ON public.notes;
             CREATE POLICY "Users can delete own notes" ON public.notes FOR DELETE USING (owner_id = (SELECT auth.uid()));
         EXCEPTION WHEN OTHERS THEN NULL; END;

@@ -43,6 +43,17 @@ AS $$
   );
 $$;
 
+-- Safely retrieve existing note owner ID without triggering RLS
+CREATE OR REPLACE FUNCTION get_note_owner_id(p_note_id UUID)
+RETURNS UUID
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT owner_id FROM notes WHERE id = p_note_id;
+$$;
+
 -- Check if a note is shared with a user (Directly or via Team)
 CREATE OR REPLACE FUNCTION check_is_note_shared_with(p_note_id UUID, p_user_id UUID)
 RETURNS BOOLEAN
@@ -105,7 +116,7 @@ CREATE POLICY "notes_update_policy"
   )
   WITH CHECK (
     -- Ensure they don't change ownership via update
-    (owner_id = auth.uid() OR (SELECT owner_id FROM notes WHERE id = notes.id) = owner_id)
+    (owner_id = auth.uid() OR owner_id = get_note_owner_id(id))
   );
 
 -- DELETE: Only owner can delete
