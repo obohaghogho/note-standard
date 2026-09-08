@@ -276,7 +276,7 @@ const ConversationList: React.FC = () => {
 
     const handleConversationClick = useCallback((convId: string) => {
         setActiveConversationId(convId);
-        setSearchParams({ id: convId });
+        setSearchParams({ id: convId }, { replace: true });
     }, [setActiveConversationId, setSearchParams]);
 
     const handleDeleteRequest = useCallback((convId: string, e: React.MouseEvent) => {

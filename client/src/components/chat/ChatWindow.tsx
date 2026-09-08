@@ -905,9 +905,11 @@ const ChatWindow: React.FC = () => {
                 <div className="px-3 py-2.5 md:px-5 md:py-4 flex items-center justify-between gap-4 w-full">
                     <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                         <button 
-                            onClick={() => {
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
                                 setActiveConversationId(null);
-                                setSearchParams({});
+                                setSearchParams({}, { replace: true });
                             }}
                             className="p-2 -ml-2 text-gray-400 active:text-white md:hover:text-white md:hidden active:scale-90 transition-transform"
                             aria-label="Back to conversations"
