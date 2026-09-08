@@ -68,9 +68,10 @@ async function processReminders() {
 }
 
 function start() {
-  logger.info("[ReminderWorker] Started background reminders scheduler.");
-  // Run every 15 seconds
-  setInterval(processReminders, 15000);
+  const intervalMs = parseInt(process.env.WORKER_REMINDER_INTERVAL_MS || '180000', 10);
+  logger.info(`[ReminderWorker] Started background reminders scheduler (interval: ${intervalMs / 1000}s).`);
+  // Run every 3 minutes by default to conserve database Disk I/O budget
+  setInterval(processReminders, intervalMs);
 }
 
 module.exports = {

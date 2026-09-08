@@ -40,9 +40,10 @@ async function verifySearchIndices() {
 }
 
 function start() {
-  logger.info("[SearchIndexWorker] Started background search index validator.");
-  // Run every 60 seconds (since trigger handles active entries)
-  setInterval(verifySearchIndices, 60000);
+  const intervalMs = parseInt(process.env.WORKER_SEARCH_INDEX_INTERVAL_MS || '600000', 10);
+  logger.info(`[SearchIndexWorker] Started background search index validator (interval: ${intervalMs / 1000}s).`);
+  // Run every 10 minutes by default
+  setInterval(verifySearchIndices, intervalMs);
 }
 
 module.exports = {

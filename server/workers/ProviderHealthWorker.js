@@ -23,7 +23,7 @@ const axios               = require('axios');
 const logger              = require('../utils/logger');
 const ProviderHealthEngine = require('../services/treasury/ProviderHealthEngine');
 
-const PROBE_INTERVAL_MS   = parseInt(process.env.PROVIDER_PROBE_INTERVAL_MS || '60000', 10); // 60s
+const PROBE_INTERVAL_MS   = parseInt(process.env.PROVIDER_PROBE_INTERVAL_MS || '300000', 10); // 5 min default
 const PROBE_TIMEOUT_MS    = 8000;
 const BOOT_DELAY_MS       = 30000; // 30s after server start
 

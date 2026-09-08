@@ -20,13 +20,13 @@ const WithdrawalWorkflowService = require('../services/treasury/WithdrawalWorkfl
 class StuckPayoutRecoveryWorker {
   constructor() {
     this.greyProvider = new GreySettlementProvider();
-    this.intervalMs = 60000; // Poll every 60 seconds
+    this.intervalMs = parseInt(process.env.WORKER_STUCK_PAYOUT_INTERVAL_MS || '300000', 10); // Poll every 5 minutes by default
     this.timer = null;
     this.isProcessing = false;
   }
 
   start() {
-    logger.info('[StuckPayoutRecoveryWorker] Background recovery worker started (60s interval)...');
+    logger.info(`[StuckPayoutRecoveryWorker] Background recovery worker started (${this.intervalMs / 1000}s interval)...`);
     this.timer = setInterval(() => this.processStuckPayouts().catch(e => {
       logger.error(`[StuckPayoutRecoveryWorker] Error in poll loop: ${e.message}`);
     }), this.intervalMs);

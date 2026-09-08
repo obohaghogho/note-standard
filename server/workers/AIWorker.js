@@ -42,9 +42,10 @@ async function auditAiUsage() {
 }
 
 function start() {
-  logger.info("[AIWorker] Started background AI usage auditor.");
-  // Run every 2 minutes
-  setInterval(auditAiUsage, 120000);
+  const intervalMs = parseInt(process.env.WORKER_AI_AUDIT_INTERVAL_MS || '900000', 10);
+  logger.info(`[AIWorker] Started background AI usage auditor (interval: ${intervalMs / 1000}s).`);
+  // Run every 15 minutes by default
+  setInterval(auditAiUsage, intervalMs);
 }
 
 module.exports = {

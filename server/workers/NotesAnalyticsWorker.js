@@ -42,9 +42,10 @@ async function processAnalytics() {
 }
 
 function start() {
-  logger.info("[NotesAnalyticsWorker] Started background analytics scheduler.");
-  // Run every 10 seconds
-  setInterval(processAnalytics, 10000);
+  const intervalMs = parseInt(process.env.WORKER_NOTES_ANALYTICS_INTERVAL_MS || '300000', 10);
+  logger.info(`[NotesAnalyticsWorker] Started background analytics scheduler (interval: ${intervalMs / 1000}s).`);
+  // Run every 5 minutes by default to conserve database Disk I/O budget
+  setInterval(processAnalytics, intervalMs);
 }
 
 module.exports = {

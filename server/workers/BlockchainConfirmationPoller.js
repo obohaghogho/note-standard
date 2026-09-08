@@ -14,9 +14,9 @@ const logger   = require('../utils/logger');
 let intervalId = null;
 
 const BlockchainConfirmationPoller = {
-  start(intervalMs = 60000) {
+  start(intervalMs = parseInt(process.env.WORKER_BLOCKCHAIN_CONFIRMATION_INTERVAL_MS || '300000', 10)) {
     if (intervalId) return;
-    logger.info('[BlockchainConfirmationPoller] Starting poller...');
+    logger.info(`[BlockchainConfirmationPoller] Starting poller (interval: ${intervalMs / 1000}s)...`);
 
     intervalId = setInterval(() => {
       this.pollPendingConfirmations().catch(err => {

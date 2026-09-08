@@ -53,9 +53,10 @@ async function processNotifications() {
 }
 
 function start() {
-  logger.info("[NotificationWorker] Started background notification delivery queue.");
-  // Run every 10 seconds
-  setInterval(processNotifications, 10000);
+  const intervalMs = parseInt(process.env.WORKER_NOTIFICATION_INTERVAL_MS || '300000', 10);
+  logger.info(`[NotificationWorker] Started background notification delivery queue (interval: ${intervalMs / 1000}s).`);
+  // Run every 5 minutes by default to conserve database Disk I/O budget
+  setInterval(processNotifications, intervalMs);
 }
 
 module.exports = {
