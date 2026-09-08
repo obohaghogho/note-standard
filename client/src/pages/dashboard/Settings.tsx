@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { API_URL } from '../../lib/api';
+import api from '../../api/axiosInstance';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -128,21 +129,19 @@ export default function Settings() {
         setUploading(true);
 
         try {
-            // Upload via server endpoint
+            // Upload via authenticated server endpoint
             const formData = new FormData();
             formData.append('file', file);
 
-            const response = await fetch(`${API_URL}/api/upload/image`, {
-                method: 'POST',
-                body: formData,
+            const res = await api.post('/upload/image', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
             });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Upload failed');
+            const data = res.data;
+            if (!data?.url) {
+                throw new Error('Upload succeeded but no image URL was returned');
             }
 
-            const data = await response.json();
             setAvatarUrl(data.url);
             toast.success('Image uploaded! Click Save to apply.');
         } catch (error: unknown) {
@@ -173,17 +172,15 @@ export default function Settings() {
             const formData = new FormData();
             formData.append('file', file);
 
-            const response = await fetch(`${API_URL}/api/upload/image?type=cover`, {
-                method: 'POST',
-                body: formData,
+            const res = await api.post('/upload/image?type=cover', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
             });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Upload failed');
+            const data = res.data;
+            if (!data?.url) {
+                throw new Error('Upload succeeded but no cover URL was returned');
             }
 
-            const data = await response.json();
             setCoverUrl(data.url);
             toast.success('Cover banner uploaded! Click Save to apply.');
         } catch (error: unknown) {
