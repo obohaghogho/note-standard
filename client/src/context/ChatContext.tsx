@@ -259,7 +259,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const deletedPeerIdsRef = useRef<Set<string>>(new Set());
     const clearedAtMapRef = useRef<Map<string, string>>(new Map());
     const lastUserIdRef = useRef<string | null>(null);
-    const prevUserIdRef = useRef<string | null>(null);
+    const prevUserIdRef = lastUserIdRef;
     const deletedMessageIdsRef = useRef<Set<string>>(new Set());
     const lastSeenSequenceRef = useRef<Record<string, number>>({});
     const processedEventIdsRef = useRef<Set<string>>(new Set());
