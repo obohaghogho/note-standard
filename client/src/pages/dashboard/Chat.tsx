@@ -103,13 +103,13 @@ function ChatContent() {
             initiateChat();
         } else {
             // URL has no ?id= or ?username= query params.
-            // Only clear activeConversationId if URL query params actually changed from
-            // containing an id/username to empty (e.g. browser back/forward navigation).
-            if (activeConversationId && prevParamsString !== null && prevParamsString !== currentParamsString && (prevParamsString.includes('id=') || prevParamsString.includes('user'))) {
+            // Synchronize activeConversationId to null if currently active.
+            if (activeConversationId) {
                 setActiveConversationId(null);
             }
         }
-    }, [searchParams, activeConversationId, setActiveConversationId, startConversation, setSearchParams, user?.id, authReady, isConversationDeleted]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams, startConversation, setSearchParams, user?.id, authReady, isConversationDeleted]);
 
     // On mobile, whether we display the active chat room is strictly driven by activeConversationId state.
     const isNavigatingToChat = !!activeConversationId;
