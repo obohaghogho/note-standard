@@ -113,7 +113,7 @@ const ConversationItem = React.memo(({
                 }
             }}
             draggable={false}
-            className={`p-4 md:p-5 cursor-pointer active:bg-white/[0.04] md:hover:bg-white/[0.02] transition-all flex items-center gap-4 relative group ${
+            className={`p-4 md:p-5 cursor-pointer active:bg-white/[0.04] md:hover:bg-white/[0.02] transition-colors flex items-center gap-4 relative group ${
                 isActive ? 'bg-white/[0.04]' : ''
             }`}
             style={{
@@ -124,7 +124,7 @@ const ConversationItem = React.memo(({
         >
             {/* Avatar Container */}
             <div className="relative flex-shrink-0">
-                <div className="w-14 h-14 rounded-[20px] bg-gradient-to-br from-blue-600/20 to-indigo-600/20 border border-white/10 flex items-center justify-center overflow-hidden shadow-xl active:scale-105 md:group-hover:scale-105 transition-transform duration-300">
+                <div className="w-14 h-14 rounded-[20px] bg-gradient-to-br from-blue-600/20 to-indigo-600/20 border border-white/10 flex items-center justify-center overflow-hidden shadow-xl md:group-hover:scale-105 transition-transform duration-300">
                     {displayAvatar ? (
                         <SecureImage src={displayAvatar} alt={displayName} className="w-full h-full object-cover" fallbackType="profile" />
                     ) : (

@@ -111,8 +111,9 @@ function ChatContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchParams, startConversation, setSearchParams, user?.id, authReady, isConversationDeleted]);
 
-    // On mobile, whether we display the active chat room is strictly driven by activeConversationId state.
-    const isNavigatingToChat = !!activeConversationId;
+    // On mobile, whether we display the active chat room is strictly driven by URL or activeConversationId state.
+    const urlId = searchParams.get('id') || searchParams.get('conversationId');
+    const isNavigatingToChat = !!(activeConversationId || urlId);
 
     return (
         <div className="flex h-full w-full bg-gray-950 shadow-none rounded-none md:border md:border-gray-800 md:rounded-2xl overflow-hidden md:shadow-2xl relative">

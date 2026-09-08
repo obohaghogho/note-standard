@@ -904,7 +904,7 @@ const ChatWindow: React.FC = () => {
                                 setActiveConversationId(null);
                                 setSearchParams({}, { replace: true });
                             }}
-                            className="p-2 -ml-2 text-gray-400 active:text-white md:hover:text-white md:hidden active:scale-90 transition-transform touch-none"
+                            className="p-2 -ml-2 text-gray-400 active:text-white md:hover:text-white md:hidden touch-none"
                             aria-label="Back to conversations"
                         >
                             <ArrowLeft size={24} />
