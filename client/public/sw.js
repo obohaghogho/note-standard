@@ -363,6 +363,7 @@ self.addEventListener('notificationclick', (event) => {
             event.waitUntil(
                 (async () => {
                     let sentMessage = null;
+                    let success = false;
                     try {
                         const token = await new Promise((resolve) => {
                             try {
@@ -415,6 +416,7 @@ self.addEventListener('notificationclick', (event) => {
                             });
                             if (response.ok) {
                                 sentMessage = await response.json();
+                                success = true;
                                 console.log(`[SW] Quick reply sent directly for conversation: ${convId}`);
                             }
                         }
@@ -422,7 +424,7 @@ self.addEventListener('notificationclick', (event) => {
                         console.error('[SW] Quick reply direct API send error:', err);
                     }
 
-                    // Post QUICK_REPLY_SUBMITTED with sent message to all active window clients
+                    // Post QUICK_REPLY_SUBMITTED to active window clients
                     const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
                     for (const client of windowClients) {
                         if ('postMessage' in client && convId) {
@@ -430,14 +432,33 @@ self.addEventListener('notificationclick', (event) => {
                                 type: 'QUICK_REPLY_SUBMITTED',
                                 conversationId: convId,
                                 message: sentMessage,
-                                content: trimmedReply
+                                content: trimmedReply,
+                                success: success
                             });
+                        }
+                    }
+
+                    // Fallback: If reply failed, focus or open window to avoid losing user intent
+                    if (!success) {
+                        urlToOpen = urlObj.href;
+                        for (const client of windowClients) {
+                            if ('focus' in client) {
+                                if ('navigate' in client && client.url !== urlToOpen) {
+                                    client.navigate(urlToOpen);
+                                }
+                                return client.focus();
+                            }
+                        }
+                        if (clients.openWindow) {
+                            return clients.openWindow(urlToOpen);
                         }
                     }
                 })()
             );
+            return;
+        } else {
+            console.log('[SW] Reply action tapped without inline replyText — falling through to open chat window.');
         }
-        return;
     }
 
     if (event.action === 'close') return;

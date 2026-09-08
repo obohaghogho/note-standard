@@ -550,8 +550,13 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                 const isChatPage = location.pathname.includes('/chat');
                 
                 if (isChatPage) {
-                    // Extract the conversation ID from the notification link (e.g. /dashboard/chat?id=<uuid>)
-                    let notifConversationId: string | null = notification.conversationId || (notification as any).conversation_id || null;
+                    // Extract the conversation ID from the notification link or payload data
+                    let notifConversationId: string | null = 
+                        notification.conversationId || 
+                        (notification as any).conversation_id || 
+                        (notification as any).data?.conversationId || 
+                        (notification as any).data?.conversation_id || 
+                        null;
                     if (!notifConversationId && notification.link) {
                         try {
                             const linkUrl = new URL(notification.link, window.location.origin);
@@ -585,14 +590,12 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
 
             setNotifications(prev => [notification, ...prev]);
 
-            const resolvedLink = resolveNotificationLink({
-                type: notification.type,
-                link: notification.link,
-                conversationId: notification.conversationId || (notification as any).conversation_id,
-                userRole: user?.role
-            });
-
-            let notifConvId: string | undefined = notification.conversationId || (notification as any).conversation_id;
+            let notifConvId: string | undefined = 
+                notification.conversationId || 
+                (notification as any).conversation_id || 
+                (notification as any).data?.conversationId || 
+                (notification as any).data?.conversation_id || 
+                undefined;
             if (!notifConvId && notification.link) {
                 try {
                     const linkUrl = new URL(notification.link, window.location.origin);
@@ -603,6 +606,13 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                 }
             }
 
+            const resolvedLink = resolveNotificationLink({
+                type: notification.type,
+                link: notification.link,
+                conversationId: notifConvId || notification.conversationId || (notification as any).conversation_id,
+                userRole: user?.role
+            });
+
             const toastData: NotificationToastData = {
                 id: notification.id,
                 title: notification.title,
@@ -610,7 +620,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                 type: notification.type,
                 link: resolvedLink,
                 conversationId: notifConvId,
-                targetAccountId: notification.receiver_id || (notification as any).user_id || (notification as any).targetAccountId,
+                targetAccountId: notification.receiver_id || (notification as any).user_id || (notification as any).targetAccountId || (notification as any).data?.targetAccountId,
                 sender: notification.sender,
                 count: 1
             };
@@ -817,7 +827,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             <AnimatePresence>
                 {currentToast && (
                     <NotificationToast 
-                        key={currentToast.conversationId || currentToast.sender?.username || currentToast.title || currentToast.id}
+                        key={currentToast.conversationId ? `toast-${currentToast.conversationId}` : (currentToast.sender?.username ? `toast-sender-${currentToast.sender.username}` : `toast-title-${currentToast.title || currentToast.id}`)}
                         notification={currentToast} 
                         onDismiss={dismissCurrent}
                         onInteractChange={(isInteracting) => {

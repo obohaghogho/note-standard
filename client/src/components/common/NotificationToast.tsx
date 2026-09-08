@@ -64,9 +64,10 @@ const NotificationToast: React.FC<NotificationToastProps> = ({
         notification.type === 'chat_request' || 
         notification.type === 'chat_accepted' ||
         !!notification.conversationId ||
+        !!(notification as any).conversation_id ||
         (notification.link && notification.link.includes('/chat'));
 
-    const convId = notification.conversationId || ((): string | undefined => {
+    const convId = notification.conversationId || (notification as any).conversation_id || ((): string | undefined => {
         if (!notification.link) return undefined;
         const match = notification.link.match(/[?&](?:id|conversationId)=([^&]+)/);
         return match ? match[1] : undefined;
@@ -99,7 +100,13 @@ const NotificationToast: React.FC<NotificationToastProps> = ({
     const handleSendReply = async (e: React.FormEvent | React.MouseEvent) => {
         e.stopPropagation();
         e.preventDefault();
-        if (!replyText.trim() || !convId || isSending) return;
+        if (!replyText.trim() || isSending) return;
+
+        if (!convId) {
+            console.error('[NotificationToast] Cannot send reply: missing conversationId', notification);
+            toast.error('Unable to send reply: conversation ID is missing.');
+            return;
+        }
 
         setIsSending(true);
         try {
@@ -229,11 +236,17 @@ const NotificationToast: React.FC<NotificationToastProps> = ({
                                         type="text"
                                         autoFocus
                                         value={replyText}
-                                        onChange={(e) => setReplyText(e.target.value)}
+                                        onChange={(e) => {
+                                            setReplyText(e.target.value);
+                                            onInteractChange?.(true);
+                                        }}
                                         onClick={(e) => e.stopPropagation()}
                                         onPointerDown={(e) => e.stopPropagation()}
                                         onTouchStart={(e) => e.stopPropagation()}
-                                        onFocus={(e) => e.stopPropagation()}
+                                        onFocus={(e) => {
+                                            e.stopPropagation();
+                                            onInteractChange?.(true);
+                                        }}
                                         placeholder={`Reply to ${notification.sender?.username || 'message'}...`}
                                         className="flex-1 bg-white/10 border border-white/15 rounded-xl px-3 py-1.5 text-xs text-white placeholder-gray-400 focus:outline-none focus:border-blue-500/60 transition-all pointer-events-auto"
                                         disabled={isSending}
