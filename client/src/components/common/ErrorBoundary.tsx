@@ -31,9 +31,11 @@ export class ErrorBoundary extends Component<Props, State> {
     componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
         console.error('ErrorBoundary caught an error:', error, errorInfo);
         
-        // Handle chunk load errors (often due to new deployments on mobile/PWA)
+        // Handle chunk load and stale reference errors (often due to new deployments on mobile/PWA)
         const isChunkLoadError = 
             error.name === 'ChunkLoadError' || 
+            error.name === 'ReferenceError' ||
+            error.message?.includes('is not defined') ||
             error.message?.includes('Failed to fetch dynamically imported module') ||
             error.message?.includes('Loading chunk') ||
             error.message?.includes('Importing a module script failed') ||

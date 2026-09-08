@@ -283,19 +283,74 @@ function App() {
   return (
     <Router>
       <ErrorBoundary 
-        fallbackRender={({ error }) => (
-          <div style={{ padding: '2rem', textAlign: 'center', color: '#ef4444' }}>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Something went wrong</h2>
-            <p style={{ marginTop: '0.5rem', color: '#9ca3af' }}>{error?.message || 'Unknown error'}</p>
-            <p style={{ marginTop: '0.5rem', color: '#ef4444', fontSize: '0.8rem', textAlign: 'left', whiteSpace: 'pre-wrap' }}>{error?.stack}</p>
-            <button 
-              onClick={() => window.location.reload()}
-              style={{ marginTop: '1rem', padding: '0.5rem 1rem', background: '#3b82f6', color: 'white', borderRadius: '0.5rem', border: 'none', cursor: 'pointer' }}
-            >
-              Reload Page
-            </button>
-          </div>
-        )}
+        fallbackRender={({ error }) => {
+          const isStaleBundleOrRefError = 
+            error?.name === 'ReferenceError' ||
+            error?.name === 'ChunkLoadError' ||
+            error?.message?.includes('is not defined') ||
+            error?.message?.includes('Failed to fetch') ||
+            error?.message?.includes('Loading chunk') ||
+            error?.message?.includes('Importing a module script failed');
+
+          // Auto-recovery for stale PWA chunks or stale cached JS bundles
+          if (isStaleBundleOrRefError) {
+            const lastAutoReload = sessionStorage.getItem('auto_repair_stale_error');
+            const now = Date.now();
+            if (!lastAutoReload || (now - parseInt(lastAutoReload, 10)) > 10000) {
+              sessionStorage.setItem('auto_repair_stale_error', now.toString());
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(regs => {
+                  regs.forEach(r => r.unregister());
+                }).catch(() => {});
+              }
+              caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).catch(() => {});
+              setTimeout(() => {
+                window.location.reload();
+              }, 150);
+            }
+          }
+
+          const handleClearAndReload = async () => {
+            try {
+              if ('serviceWorker' in navigator) {
+                const regs = await navigator.serviceWorker.getRegistrations();
+                for (const r of regs) await r.unregister();
+              }
+              const keys = await caches.keys();
+              for (const k of keys) await caches.delete(k);
+              sessionStorage.clear();
+            } catch (e) {
+              console.warn('Cache clear error:', e);
+            }
+            window.location.reload();
+          };
+
+          return (
+            <div style={{ padding: '2rem', textAlign: 'center', color: '#ef4444', minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0a0a0a' }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Something went wrong</h2>
+              <p style={{ marginTop: '0.5rem', color: '#9ca3af', maxWidth: '400px' }}>
+                {error?.message || 'An unexpected error occurred.'}
+              </p>
+              {import.meta.env.DEV && (
+                <p style={{ marginTop: '0.5rem', color: '#ef4444', fontSize: '0.8rem', textAlign: 'left', whiteSpace: 'pre-wrap', maxHeight: '150px', overflowY: 'auto', background: 'rgba(0,0,0,0.5)', padding: '0.5rem', borderRadius: '0.5rem' }}>{error?.stack}</p>
+              )}
+              <div style={{ marginTop: '1.5rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+                <button 
+                  onClick={handleClearAndReload}
+                  style={{ padding: '0.6rem 1.2rem', background: '#10b981', color: 'white', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                >
+                  Clear Cache & Update App
+                </button>
+                <button 
+                  onClick={() => window.location.reload()}
+                  style={{ padding: '0.6rem 1.2rem', background: '#3b82f6', color: 'white', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                >
+                  Reload Page
+                </button>
+              </div>
+            </div>
+          );
+        }}
       >
         <Suspense fallback={
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#0a0a0a' }}>
