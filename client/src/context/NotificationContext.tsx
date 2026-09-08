@@ -891,8 +891,8 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
                             });
                             if (targetLink) {
                                 let finalLink = targetLink;
-                                const targetAccountId = currentToast.targetAccountId || (currentToast as any).targetAccountId || (currentToast as any).receiver_id;
-                                if (targetAccountId && targetAccountId !== user?.id) {
+                                const targetAccountId = currentToast.targetAccountId || (currentToast as any).targetAccountId || (currentToast as any).receiver_id || user?.id;
+                                if (targetAccountId && !finalLink.includes('targetAccountId=')) {
                                     const separator = finalLink.includes('?') ? '&' : '?';
                                     finalLink = `${finalLink}${separator}targetAccountId=${targetAccountId}`;
                                 }

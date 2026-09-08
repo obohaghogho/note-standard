@@ -467,7 +467,7 @@ self.addEventListener('notificationclick', (event) => {
     urlToOpen = urlObj.href;
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-            // 1. Try to find an existing tab with the same URL or at least one on the same origin
+            // 1. Try to find an existing tab with the exact URL
             for (const client of windowClients) {
                 if (client.url === urlToOpen && 'focus' in client) {
                     if (data?.conversationId) {
@@ -476,10 +476,13 @@ self.addEventListener('notificationclick', (event) => {
                     return client.focus();
                 }
             }
-            // 2. If no exact match, focus any tab on our origin and navigate it
+            // 2. If no exact match, navigate any existing tab on our origin FIRST, then focus it
             for (const client of windowClients) {
-                if ('focus' in client && 'navigate' in client) {
-                    return client.focus().then(() => client.navigate(urlToOpen));
+                if ('focus' in client) {
+                    if ('navigate' in client) {
+                        return client.navigate(urlToOpen).then(() => client.focus()).catch(() => client.focus());
+                    }
+                    return client.focus();
                 }
             }
             // 3. If no window/tab is open, open a new one

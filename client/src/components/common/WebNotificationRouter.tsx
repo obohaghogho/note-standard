@@ -37,7 +37,7 @@ export const WebNotificationRouter: React.FC = () => {
     const isSameAccount = (id1?: string | null, id2?: string | null) => 
       !!id1 && !!id2 && id1.trim().toLowerCase() === id2.trim().toLowerCase();
 
-    const handledKey = `${targetAccountId}`;
+    const handledKey = `${targetAccountId}_${conversationId || ''}_${searchParams.get('isSupport') || ''}_${searchParams.get('link') || ''}`;
     if (handledRef.current === handledKey) return;
     handledRef.current = handledKey;
 
