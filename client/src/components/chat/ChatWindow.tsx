@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback, startTransition } from 'react';
 import { useChatViewportEngine } from '../../hooks/useChatViewportEngine';
 import { useChatGesture } from '../../hooks/useChatGesture';
 import { AnimatePresence } from 'framer-motion';
@@ -35,7 +35,6 @@ import { useChatTheme } from '../../context/ChatThemeContext';
 import { ChatWallpaper } from './ChatWallpaper';
 import { ChatThemeSettingsModal } from './ChatThemeSettingsModal';
 import { ThemeGalleryModal } from './ThemeGalleryModal';
-import { triggerNavigationLock, isNavigationLocked } from '../../utils/navigationLock';
 
 const ChatWindow: React.FC = () => {
     const { 
@@ -890,21 +889,13 @@ const ChatWindow: React.FC = () => {
                 <div className="px-3 py-2.5 md:px-5 md:py-4 flex items-center justify-between gap-4 w-full">
                     <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                         <button 
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                triggerNavigationLock();
-                                setActiveConversationId(null);
-                                setSearchParams({}, { replace: true });
+                            onClick={() => {
+                                startTransition(() => {
+                                    setActiveConversationId(null);
+                                    setSearchParams({});
+                                });
                             }}
-                            onTouchEnd={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                triggerNavigationLock();
-                                setActiveConversationId(null);
-                                setSearchParams({}, { replace: true });
-                            }}
-                            className="p-2 -ml-2 text-gray-400 active:text-white md:hover:text-white md:hidden touch-none"
+                            className="p-2 -ml-2 text-gray-400 active:text-white md:hover:text-white md:hidden active:scale-90 transition-transform"
                             aria-label="Back to conversations"
                         >
                             <ArrowLeft size={24} />

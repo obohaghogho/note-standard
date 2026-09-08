@@ -101,25 +101,19 @@ function ChatContent() {
                 }
             };
             initiateChat();
-        } else {
-            // URL has no ?id= or ?username= query params.
-            // Synchronize activeConversationId to null if currently active.
-            if (activeConversationId) {
-                setActiveConversationId(null);
-            }
+        } else if (activeConversationId) {
+            // URL has no ?id= but we have an active conversation — clear it
+            setActiveConversationId(null);
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchParams, startConversation, setSearchParams, user?.id, authReady, isConversationDeleted]);
+    }, [searchParams, activeConversationId, setActiveConversationId, startConversation, setSearchParams, user?.id, authReady, isConversationDeleted]);
 
-    // On mobile, whether we display the active chat room is strictly driven by URL or activeConversationId state.
-    const urlId = searchParams.get('id') || searchParams.get('conversationId');
-    const isNavigatingToChat = !!(activeConversationId || urlId);
+    const isNavigatingToChat = !!(activeConversationId || searchParams.get('id') || searchParams.get('conversationId') || searchParams.get('username') || searchParams.get('user') || searchParams.get('userId'));
 
     return (
-        <div className="flex h-full w-full bg-gray-950 shadow-none rounded-none md:border md:border-gray-800 md:rounded-2xl overflow-hidden md:shadow-2xl relative">
-            {/* Sidebar */}
+        <div className="flex h-full bg-gray-950 shadow-none rounded-none md:border md:border-gray-800 md:rounded-2xl overflow-hidden md:shadow-2xl relative">
+            {/* Sidebar - Keeps state mounted always, uses CSS to hide on mobile when chat is active */}
             <div 
-                className={`${isNavigatingToChat ? 'hidden md:flex' : 'flex'} w-full md:w-80 h-full border-r border-gray-800 flex-col bg-gray-950 flex-shrink-0`}
+                className={`${isNavigatingToChat ? 'hidden md:flex' : 'flex'} w-full md:w-80 h-full border-r border-gray-800 flex-col bg-gray-950 absolute md:relative inset-0 md:inset-auto z-10 transition-none`}
             >
                 {/* Header with Safe Area Handling */}
                 <div className="pt-safe flex-shrink-0 bg-gray-950/80 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20">

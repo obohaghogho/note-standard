@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useCallback, useState } from 'react';
+import React, { useMemo, useRef, useCallback, useState, startTransition } from 'react';
 import { useChat } from '../../context/ChatContext';
 import type { Conversation } from '../../context/ChatContext';
 import { useAuth } from '../../context/AuthContext';
@@ -9,7 +9,6 @@ import { useSearchParams } from 'react-router-dom';
 import SecureImage from '../common/SecureImage';
 import { UserBadge } from '../common/UserBadge';
 import { toast } from 'react-hot-toast';
-import { isNavigationLocked, triggerNavigationLock } from '../../utils/navigationLock';
 
 // Extracting ConversationItem and wrapping with React.memo prevents the entire list
 // from re-rendering when one item changes (e.g., typing status or active state).
@@ -88,11 +87,6 @@ const ConversationItem = React.memo(({
             e.stopPropagation();
             e.preventDefault();
             isLongPressRef.current = false;
-            return;
-        }
-        if (isNavigationLocked()) {
-            e.stopPropagation();
-            e.preventDefault();
             return;
         }
         onClick(conv.id);
@@ -280,11 +274,16 @@ const ConversationList: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sortKeys, user?.id]);
 
+    const lastClickTimeRef = useRef(0);
+
     const handleConversationClick = useCallback((convId: string) => {
-        if (isNavigationLocked()) return;
-        triggerNavigationLock();
-        setActiveConversationId(convId);
-        setSearchParams({ id: convId }, { replace: true });
+        const now = Date.now();
+        if (now - lastClickTimeRef.current < 400) return;
+        lastClickTimeRef.current = now;
+        startTransition(() => {
+            setActiveConversationId(convId);
+            setSearchParams({ id: convId });
+        });
     }, [setActiveConversationId, setSearchParams]);
 
     const handleDeleteRequest = useCallback((convId: string, e: React.MouseEvent) => {
