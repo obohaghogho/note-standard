@@ -35,6 +35,7 @@ import { useChatTheme } from '../../context/ChatThemeContext';
 import { ChatWallpaper } from './ChatWallpaper';
 import { ChatThemeSettingsModal } from './ChatThemeSettingsModal';
 import { ThemeGalleryModal } from './ThemeGalleryModal';
+import { triggerNavigationLock, isNavigationLocked } from '../../utils/navigationLock';
 
 const ChatWindow: React.FC = () => {
     const { 
@@ -908,10 +909,18 @@ const ChatWindow: React.FC = () => {
                             onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
+                                triggerNavigationLock();
                                 setActiveConversationId(null);
                                 setSearchParams({}, { replace: true });
                             }}
-                            className="p-2 -ml-2 text-gray-400 active:text-white md:hover:text-white md:hidden active:scale-90 transition-transform"
+                            onTouchEnd={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                triggerNavigationLock();
+                                setActiveConversationId(null);
+                                setSearchParams({}, { replace: true });
+                            }}
+                            className="p-2 -ml-2 text-gray-400 active:text-white md:hover:text-white md:hidden active:scale-90 transition-transform touch-none"
                             aria-label="Back to conversations"
                         >
                             <ArrowLeft size={24} />

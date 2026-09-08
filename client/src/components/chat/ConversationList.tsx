@@ -9,6 +9,7 @@ import { useSearchParams } from 'react-router-dom';
 import SecureImage from '../common/SecureImage';
 import { UserBadge } from '../common/UserBadge';
 import { toast } from 'react-hot-toast';
+import { isNavigationLocked, triggerNavigationLock } from '../../utils/navigationLock';
 
 // Extracting ConversationItem and wrapping with React.memo prevents the entire list
 // from re-rendering when one item changes (e.g., typing status or active state).
@@ -87,6 +88,11 @@ const ConversationItem = React.memo(({
             e.stopPropagation();
             e.preventDefault();
             isLongPressRef.current = false;
+            return;
+        }
+        if (isNavigationLocked()) {
+            e.stopPropagation();
+            e.preventDefault();
             return;
         }
         onClick(conv.id);
@@ -275,6 +281,8 @@ const ConversationList: React.FC = () => {
     }, [sortKeys, user?.id]);
 
     const handleConversationClick = useCallback((convId: string) => {
+        if (isNavigationLocked()) return;
+        triggerNavigationLock();
         setActiveConversationId(convId);
         setSearchParams({ id: convId }, { replace: true });
     }, [setActiveConversationId, setSearchParams]);
