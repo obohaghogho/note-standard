@@ -1,4 +1,4 @@
-import React, { useMemo, startTransition, useRef, useCallback, useState } from 'react';
+import React, { useMemo, useRef, useCallback, useState } from 'react';
 import { useChat } from '../../context/ChatContext';
 import type { Conversation } from '../../context/ChatContext';
 import { useAuth } from '../../context/AuthContext';
@@ -239,7 +239,6 @@ const ConversationList: React.FC = () => {
     const { user } = useAuth();
     const { isUserOnline } = usePresence();
     const [, setSearchParams] = useSearchParams();
-    const lastClickTimeRef = useRef(0);
     const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
     const sortKeys = conversations.map(c =>
@@ -276,13 +275,8 @@ const ConversationList: React.FC = () => {
     }, [sortKeys, user?.id]);
 
     const handleConversationClick = useCallback((convId: string) => {
-        const now = Date.now();
-        if (now - lastClickTimeRef.current < 400) return;
-        lastClickTimeRef.current = now;
-        startTransition(() => {
-            setActiveConversationId(convId);
-            setSearchParams({ id: convId });
-        });
+        setActiveConversationId(convId);
+        setSearchParams({ id: convId });
     }, [setActiveConversationId, setSearchParams]);
 
     const handleDeleteRequest = useCallback((convId: string, e: React.MouseEvent) => {
