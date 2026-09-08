@@ -38,6 +38,7 @@ function ChatContent() {
     const { openMobileMenu } = useOutletContext<{ openMobileMenu?: () => void }>() || {};
     const { user, authReady } = useAuth();
     const initiatingRef = useRef<string | null>(null);
+    const lastProcessedParamsRef = useRef<string | null>(null);
 
     // Effect 1: Sync URL → activeConversationId (URL drives state on navigation/deep-link)
     useEffect(() => {
@@ -70,6 +71,10 @@ function ChatContent() {
             // Don't return — fall through to load the conversation below.
         }
 
+        const currentParamsString = searchParams.toString();
+        const prevParamsString = lastProcessedParamsRef.current;
+        lastProcessedParamsRef.current = currentParamsString;
+
         if (id) {
             if (isConversationDeleted && isConversationDeleted(id)) {
                 console.log(`[Chat] URL contains tombstoned ?id=${id} — cleaning URL`);
@@ -96,13 +101,18 @@ function ChatContent() {
                 }
             };
             initiateChat();
-        } else if (activeConversationId) {
-            // URL has no ?id= but we have an active conversation — clear it
-            setActiveConversationId(null);
+        } else {
+            // URL has no ?id= or ?username= query params.
+            // Only clear activeConversationId if URL query params actually changed from
+            // containing an id/username to empty (e.g. browser back/forward navigation).
+            if (activeConversationId && prevParamsString !== null && prevParamsString !== currentParamsString && (prevParamsString.includes('id=') || prevParamsString.includes('user'))) {
+                setActiveConversationId(null);
+            }
         }
     }, [searchParams, activeConversationId, setActiveConversationId, startConversation, setSearchParams, user?.id, authReady, isConversationDeleted]);
 
-    const isNavigatingToChat = !!(activeConversationId || searchParams.get('id') || searchParams.get('conversationId') || searchParams.get('username') || searchParams.get('user') || searchParams.get('userId'));
+    // On mobile, whether we display the active chat room is strictly driven by activeConversationId state.
+    const isNavigatingToChat = !!activeConversationId;
 
     return (
         <div className="flex h-full bg-gray-950 shadow-none rounded-none md:border md:border-gray-800 md:rounded-2xl overflow-hidden md:shadow-2xl relative">
