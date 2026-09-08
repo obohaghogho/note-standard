@@ -4,6 +4,7 @@ import { useChat } from './ChatContext';
 import toast from 'react-hot-toast';
 import { CallOverlay } from '../components/chat/CallOverlay';
 import api from '../api/axiosInstance';
+import { safeAuth } from '../lib/supabaseSafe';
 import { resolveLocalUrl } from '../lib/networkUtils';
 
 // Fix #3: ICE servers are served by the gateway, not the API server.
@@ -212,9 +213,10 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         try {
             callTrace('Fetching ICE servers from gateway', { url: `${GATEWAY_URL}/webrtc/ice-servers` });
-            const authHeader = api.defaults.headers.common?.['Authorization'];
+            const session = await safeAuth();
+            const token = session?.access_token;
             const res = await fetch(`${GATEWAY_URL}/webrtc/ice-servers`, {
-                headers: authHeader ? { Authorization: String(authHeader) } : {},
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
             if (res.ok) {
                 const data = await res.json();
