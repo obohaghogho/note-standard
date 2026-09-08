@@ -408,11 +408,23 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             return;
         }
 
+        const resolvedOtherUser: CallState['otherUser'] = (typeof otherUser === 'object' && otherUser !== null && 'id' in otherUser)
+            ? {
+                id: (otherUser as { id?: string }).id || targetUserId,
+                full_name: (otherUser as { full_name?: string }).full_name || 'User',
+                avatar_url: (otherUser as { avatar_url?: string }).avatar_url || undefined,
+            }
+            : {
+                id: targetUserId,
+                full_name: typeof otherUser === 'string' ? otherUser : 'User',
+                avatar_url: undefined,
+            };
+
         targetUserIdRef.current   = targetUserId;
         callTypeRef.current       = type;
         conversationIdRef.current = conversationId;
         currentStatus.current     = 'calling';
-        setCallState({ type, status: 'calling', otherUser, conversationId, connectedAt: null, sessionId: null });
+        setCallState({ type, status: 'calling', otherUser: resolvedOtherUser, conversationId, connectedAt: null, sessionId: null });
 
         try {
             // ACQUIRE MEDIA FIRST: Secure user gesture context before any network awaits

@@ -425,7 +425,11 @@ export const ChatWidget = () => {
         }
 
         toast.loading(`Starting ${type} call...`, { duration: 2000, id: 'widget-call' });
-        startCall(otherMember.user_id, supportChat.id, type)
+        startCall(otherMember.user_id, supportChat.id, type, {
+            id: otherMember.user_id,
+            full_name: otherMember.profile?.full_name || otherMember.profile?.username || 'Agent',
+            avatar_url: otherMember.profile?.avatar_url || undefined
+        })
             .catch(() => toast.error('Failed to start call'));
     };
 

@@ -419,7 +419,11 @@ export const AdminChat = () => {
             return;
         }
         toast.loading(`Starting ${type} call...`, { duration: 2000, id: 'call-start' });
-        startCall(otherUser.user_id, activeChat.id, type, otherUser.profile?.username, otherUser.profile?.avatar_url)
+        startCall(otherUser.user_id, activeChat.id, type, {
+            id: otherUser.user_id,
+            full_name: otherUser.profile?.full_name || otherUser.profile?.username || 'User',
+            avatar_url: otherUser.profile?.avatar_url || undefined
+        })
             .catch(() => {
                 toast.error('Failed to start call. Check camera/mic permissions.');
             });
