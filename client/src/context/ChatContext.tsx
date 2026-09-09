@@ -281,6 +281,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     const clearState = useCallback(() => {
         console.log(`[ACCOUNT_FORENSIC] CHAT_CLEAR_STATE - Dropping chat caches at ${Date.now()}`);
+        conversationsFetchRef.current = false;
+        try {
+            ChatBootKernel.getInstance().reset();
+        } catch (_) {}
         setConversations([]);
         setMessages({});
         setActiveConversationId(null);
@@ -288,6 +292,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         setTypingUsers({});
         setHasMore({});
         lastUserIdRef.current = null;
+        prevUserIdRef.current = null;
         // Clear message cache timestamps so next account gets a fresh load
         messagesCachedAtRef.current = {};
         // Clear deduplication caches on account switch
@@ -300,6 +305,22 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         // Clear tick dedup gate so new account starts fresh
         appliedTicksRef.current = new Map();
         useChatStore.getState().clearAll();
+
+        if (typeof window !== 'undefined' && window.location.search) {
+            try {
+                const url = new URL(window.location.href);
+                let changed = false;
+                ['id', 'conversationId', 'username', 'user', 'userId'].forEach(param => {
+                    if (url.searchParams.has(param)) {
+                        url.searchParams.delete(param);
+                        changed = true;
+                    }
+                });
+                if (changed) {
+                    window.history.replaceState({}, '', url.pathname + (url.searchParams.toString() ? '?' + url.searchParams.toString() : ''));
+                }
+            } catch (_) {}
+        }
     }, [setActiveConversationId]);
 
     // Tab-primary singleton: Only one tab runs ACK batching, reconciliation and heartbeat.
@@ -490,7 +511,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const cachedConvs = await ChatCacheEngine.getConversations(user.id);
                 if (!isCancelled && cachedConvs && cachedConvs.length > 0 && isMounted.current) {
                     console.log(`[ChatContext] Instant hydration: ${cachedConvs.length} conversation(s) loaded from local cache for user ${user.id}.`);
-                    setConversations(prev => (prev.length === 0 ? cachedConvs : prev));
+                    setConversations(cachedConvs);
                     useChatStore.getState().setConversations(cachedConvs);
                     setLoading(false);
 
@@ -864,7 +885,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
                 // Synchronize Zustand store and IndexedDB cache with server-authoritative snapshot
                 useChatStore.getState().setConversations(filteredServerData);
-                ChatCacheEngine.saveConversations(filteredServerData).catch(() => {});
+                ChatCacheEngine.saveConversations(filteredServerData, user?.id).catch(() => {});
 
                 setConversations(prev => {
                     const existingMap = new Map(filteredServerData.map(c => [c.id, c]));
@@ -874,13 +895,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     // (guards the startConversation race where Supabase hasn't replicated yet).
                     const RECENT_MS = 8000;
                     const now = Date.now();
+                    const currentUserId = user?.id;
                     prev.forEach(p => {
                         if (!existingMap.has(p.id) && !tombstones.has(p.id)) {
+                            const isOwn = !currentUserId || !p.members || p.members.length === 0 || p.members.some(m => m.user_id === currentUserId);
                             const isActive  = p.id === activeConversationIdRef.current;
                             const isTemp    = p.id.startsWith('temp-');
                             const isRecent  = !!(p as any)._localCreatedAt &&
                                               (now - (p as any)._localCreatedAt) < RECENT_MS;
-                            if (isActive || isTemp || isRecent) {
+                            if (isOwn && (isActive || isTemp || isRecent)) {
                                 existingMap.set(p.id, p);
                             }
                         }

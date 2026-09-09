@@ -41,12 +41,15 @@ export class ChatCacheEngine {
     return this.dbPromise;
   }
 
-  public static async saveConversations(conversations: Conversation[]): Promise<void> {
+  public static async saveConversations(conversations: Conversation[], userId?: string): Promise<void> {
     try {
       const db = await this.getDB();
       const tx = db.transaction(STORE_CONVERSATIONS, 'readwrite');
       const store = tx.objectStore(STORE_CONVERSATIONS);
-      conversations.forEach((conv) => store.put(conv));
+      conversations.forEach((conv) => {
+        const toSave = userId ? { ...conv, owner_user_id: userId } : conv;
+        store.put(toSave);
+      });
       return new Promise((resolve) => {
         tx.oncomplete = () => resolve();
       });
@@ -63,11 +66,16 @@ export class ChatCacheEngine {
       const request = store.getAll();
       return new Promise((resolve) => {
         request.onsuccess = () => {
-          const result: Conversation[] = request.result || [];
+          const result: (Conversation & { owner_user_id?: string })[] = request.result || [];
           if (!userId) return resolve(result);
           const filtered = result.filter(conv => {
-            if (!conv.members || conv.members.length === 0) return true;
-            return conv.members.some(m => m.user_id === userId);
+            if (conv.owner_user_id && conv.owner_user_id !== userId) {
+              return false;
+            }
+            if (conv.members && Array.isArray(conv.members) && conv.members.length > 0) {
+              return conv.members.some(m => m && (m.user_id === userId || (m.profile && (m.profile as any).id === userId)));
+            }
+            return conv.owner_user_id === userId;
           });
           resolve(filtered);
         };

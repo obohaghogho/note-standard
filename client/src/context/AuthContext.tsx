@@ -214,6 +214,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       window.dispatchEvent(new CustomEvent('account-switch-start', { 
         detail: { userId, previousUserId } 
       }));
+
+      if (typeof window !== 'undefined' && window.location.search) {
+        try {
+          const url = new URL(window.location.href);
+          let changed = false;
+          ['id', 'conversationId', 'username', 'user', 'userId'].forEach(param => {
+            if (url.searchParams.has(param)) {
+              url.searchParams.delete(param);
+              changed = true;
+            }
+          });
+          if (changed) {
+            window.history.replaceState({}, '', url.pathname + (url.searchParams.toString() ? '?' + url.searchParams.toString() : ''));
+          }
+        } catch (_) {}
+      }
       
       // Rule 5: switchIdRef
       switchIdRef.current += 1;
