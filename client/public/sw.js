@@ -32,6 +32,22 @@ self.addEventListener('message', (event) => {
 
 
 
+// Helper for resilient notification display across desktop & mobile
+async function safeShowNotification(title, options) {
+    try {
+        await self.registration.showNotification(title, options);
+    } catch (e) {
+        console.warn('[SW] Primary showNotification failed, retrying without actions array:', e);
+        const fallbackOptions = Object.assign({}, options);
+        delete fallbackOptions.actions;
+        try {
+            await self.registration.showNotification(title, fallbackOptions);
+        } catch (err) {
+            console.error('[SW] Fallback showNotification also failed:', err);
+        }
+    }
+}
+
 // Handle Push Notifications
 self.addEventListener('push', (event) => {
     const swWakeupTs = Date.now();
@@ -115,7 +131,8 @@ self.addEventListener('push', (event) => {
     }
 
     const isChatPush = options.data.type === 'chat_message' || options.data.type === 'message' || options.data.type === 'chat_request' || options.data.type === 'chat_accepted';
-    if (isChatPush && notifConversationId) {
+    const isMobileBrowser = typeof self !== 'undefined' && self.navigator && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(self.navigator.userAgent || '');
+    if (isChatPush && notifConversationId && isMobileBrowser) {
         options.actions = [
             {
                 action: 'reply',
@@ -200,7 +217,7 @@ self.addEventListener('push', (event) => {
                     if (!hasWindows) {
                         console.log('[FORENSIC][SW] No window clients found (app is closed). Showing notification immediately.');
                         return Promise.all([
-                            self.registration.showNotification(title, options),
+                            safeShowNotification(title, options),
                             sendDeliveryReceipt()
                         ]);
                     }
@@ -305,18 +322,18 @@ self.addEventListener('push', (event) => {
                         });
 
                         return Promise.all([
-                            self.registration.showNotification(title, options),
+                            safeShowNotification(title, options),
                             sendDeliveryReceipt()
                         ]);
                     });
                 })
                 .catch(err => {
                     console.error('[SW] Push handler error, falling back to show notification:', err);
-                    return self.registration.showNotification(title, options);
+                    return safeShowNotification(title, options);
                 })
         );
     } else {
-        event.waitUntil(self.registration.showNotification(title, options));
+        event.waitUntil(safeShowNotification(title, options));
     }
 });
 
