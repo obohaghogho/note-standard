@@ -22,7 +22,7 @@ import { WallpaperProvider } from './context/WallpaperContext';
 import { ChatWidget } from './components/chat/ChatWidget';
 import { ErrorBoundary } from 'react-error-boundary';
 import { VersionGuard } from './components/common/VersionGuard';
-import { IOSInstallPrompt } from './components/common/IOSInstallPrompt';
+import { PWAInstallPrompt } from './components/common/PWAInstallPrompt';
 import { WebNotificationRouter } from './components/common/WebNotificationRouter';
 import { BetaFeedbackModal } from './components/common/BetaFeedbackModal';
 import { lazyWithRetry } from './utils/lazyWithRetry';
@@ -235,8 +235,8 @@ function AuthenticatedProviders() {
                     <ChatWidget />
                     {/* Global Beta Feedback Widget */}
                     <BetaFeedbackModal />
-                    {/* iOS install prompt — shown after 8s to iOS Safari users not running as PWA */}
-                    <IOSInstallPrompt />
+                    {/* Universal Mobile & Desktop PWA Install Prompt — shown automatically on Android & iOS */}
+                    <PWAInstallPrompt />
                     </NotesDashboardProvider>
                   </NotesProvider>
                 </WalletProvider>
