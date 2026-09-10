@@ -364,24 +364,24 @@ export const PostComposer: React.FC<Props> = ({ onClose, onPosted, editPost }) =
         <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-gray-800">
           <div className="flex items-center gap-2">
             {(postType === 'image' || postType === 'video') && (
-              <>
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="p-2 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
-                  aria-label="Attach media"
-                >
-                  <ImageIcon size={18} />
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept={postType === 'video' ? 'video/*' : 'image/*'}
-                  multiple
-                  className="hidden"
-                  onChange={handleFileSelect}
-                />
-              </>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="p-2 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
+                aria-label="Attach media"
+              >
+                <ImageIcon size={18} />
+              </button>
             )}
+            {/* ALWAYS mounted so fileInputRef is valid on the very first tap.
+                Only `accept` changes when postType switches — no remount needed. */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={postType === 'video' ? 'video/*' : 'image/*'}
+              multiple
+              className="hidden"
+              onChange={handleFileSelect}
+            />
             <button className="p-2 text-gray-500 dark:text-gray-400 hover:text-purple-500 dark:hover:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-full transition-colors" aria-label="Mention user">
               <AtSign size={18} />
             </button>
