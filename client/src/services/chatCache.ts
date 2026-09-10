@@ -182,6 +182,36 @@ export class ChatCacheEngine {
   }
 
   /**
+   * Atomically delete ALL cached conversations owned by a given userId.
+   * Called on account switch so the stale conversation list (with stale lastMessage previews)
+   * is never re-hydrated for the new account. Mirrors the dc34a78c / 5c60d7f4 pattern.
+   */
+  public static async clearConversationsForUser(userId: string): Promise<void> {
+    if (!userId) return;
+    try {
+      const db = await this.getDB();
+      const tx = db.transaction(STORE_CONVERSATIONS, 'readwrite');
+      const store = tx.objectStore(STORE_CONVERSATIONS);
+      const request = store.getAll();
+      request.onsuccess = () => {
+        const all: (Conversation & { owner_user_id?: string })[] = request.result || [];
+        all.forEach(conv => {
+          if (conv.owner_user_id === userId) {
+            store.delete(conv.id);
+          }
+        });
+      };
+      await new Promise<void>((resolve) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve(); // non-fatal
+      });
+      console.log(`[ChatCache] Cleared cached conversations for user ${userId}`);
+    } catch (err) {
+      console.warn('[ChatCache] clearConversationsForUser error (non-fatal):', err);
+    }
+  }
+
+  /**
    * Single-transaction eviction of a conversation and all its messages.
    */
   public static async deleteConversation(conversationId: string): Promise<void> {

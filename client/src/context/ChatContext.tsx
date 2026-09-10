@@ -312,6 +312,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         appliedTicksRef.current = new Map();
         useChatStore.getState().clearAll();
 
+        // Evict the stale conversation cache for the outgoing user.
+        // Without this, initialize() re-hydrates cached conversations that still carry
+        // the old lastMessage snapshot — causing the stale preview text until the server
+        // responds. Pattern established in commits dc34a78c and 5c60d7f4.
+        const outgoingUserId = lastUserIdRef.current || prevUserIdRef.current;
+        if (outgoingUserId) {
+            ChatCacheEngine.clearConversationsForUser(outgoingUserId).catch(() => {});
+        }
+
         if (typeof window !== 'undefined' && window.location.search) {
             try {
                 const url = new URL(window.location.href);
@@ -517,8 +526,17 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const cachedConvs = await ChatCacheEngine.getConversations(user.id);
                 if (!isCancelled && cachedConvs && cachedConvs.length > 0 && isMounted.current) {
                     console.log(`[ChatContext] Instant hydration: ${cachedConvs.length} conversation(s) loaded from local cache for user ${user.id}.`);
-                    setConversations(cachedConvs);
-                    useChatStore.getState().setConversations(cachedConvs);
+                    // Strip lastMessage/last_message before hydrating so stale preview text
+                    // never shows. Server data (arriving ~200ms later) fills the real last messages.
+                    // Pattern: commit 161fa819 + dc34a78c.
+                    const freshConvs = cachedConvs.map(c => ({
+                        ...c,
+                        lastMessage: undefined,
+                        last_message: undefined,
+                        unreadCount: 0,
+                    }));
+                    setConversations(freshConvs);
+                    useChatStore.getState().setConversations(freshConvs);
                     setLoading(false);
 
                     const validIds = cachedConvs.map(c => c.id);
@@ -1311,8 +1329,16 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             try {
                 const cachedConvs = await ChatCacheEngine.getConversations(user.id);
                 if (cachedConvs && cachedConvs.length > 0 && isMounted.current) {
-                    setConversations(cachedConvs);
-                    useChatStore.getState().setConversations(cachedConvs);
+                    // Strip lastMessage so stale preview is never shown during the switch window.
+                    // Server loadConversations() below fills the real last messages immediately after.
+                    const freshConvs = cachedConvs.map(c => ({
+                        ...c,
+                        lastMessage: undefined,
+                        last_message: undefined,
+                        unreadCount: 0,
+                    }));
+                    setConversations(freshConvs);
+                    useChatStore.getState().setConversations(freshConvs);
                     const validIds = cachedConvs.map(c => c.id);
                     const cachedMsgsMap = await ChatCacheEngine.batchGetMessagesForAllConversations(validIds);
                     if (cachedMsgsMap && isMounted.current) {
