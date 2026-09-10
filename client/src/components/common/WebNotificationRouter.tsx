@@ -26,6 +26,42 @@ export const WebNotificationRouter: React.FC = () => {
   const [isSwitchingOverlay, setIsSwitchingOverlay] = useState(false);
   const handledRef = useRef<string | null>(null);
 
+  // ── SW_NAVIGATE listener ─────────────────────────────────────────────────
+  // The service worker posts SW_NAVIGATE after it focus()es the PWA window.
+  // client.navigate() is unreliable on backgrounded Android PWA clients;
+  // letting React Router handle the URL change from inside the live app
+  // is the only guaranteed approach (WhatsApp / Telegram pattern).
+  useEffect(() => {
+    const handleSwMessage = (event: MessageEvent) => {
+      if (!event.data || event.data.type !== 'SW_NAVIGATE') return;
+
+      const rawUrl: string = event.data.url || '';
+      if (!rawUrl) return;
+
+      try {
+        const targetUrl = new URL(rawUrl, window.location.origin);
+        // Only handle navigation for our own origin
+        if (targetUrl.origin !== window.location.origin) return;
+
+        const swPath = targetUrl.pathname + targetUrl.search;
+        console.log('[SW_NAVIGATE] Received navigation request →', swPath);
+
+        // Reset the dedup ref so the notification params in the new URL
+        // will be processed by the existing notification routing logic below
+        handledRef.current = null;
+
+        // Navigate within the React Router context — this is always reliable
+        // because we are inside the live app, not the service worker.
+        navigate(swPath, { replace: true });
+      } catch (err) {
+        console.warn('[SW_NAVIGATE] Failed to parse URL:', rawUrl, err);
+      }
+    };
+
+    navigator.serviceWorker?.addEventListener('message', handleSwMessage);
+    return () => navigator.serviceWorker?.removeEventListener('message', handleSwMessage);
+  }, [navigate]);
+
   useEffect(() => {
     if (!authReady || !notificationContext) return;
 

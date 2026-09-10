@@ -11,7 +11,7 @@ self.addEventListener('install', (event) => {
     // Force immediate update to bypass aggressive caching
     self.skipWaiting();
 });
-// Cache Bust Timestamp: 2026-09-05T22:30:00 — v12: per-conversation notification tag grouping & auto-dismiss on reply
+// Cache Bust Timestamp: 2026-09-10T13:00:00 — v13: notificationclick mobile-safe SW_NAVIGATE pattern (fix tap-does-nothing)
 
 self.addEventListener('activate', (event) => {
     console.log(`[FORENSIC][SW] ACTIVATE event at ${new Date().toISOString()}`);
@@ -482,28 +482,53 @@ self.addEventListener('notificationclick', (event) => {
 
     event.notification.close();
     urlToOpen = urlObj.href;
+
+    // ── Mobile-safe navigation (WhatsApp / Telegram pattern) ────────────────
+    // WHY: client.navigate() silently fails on backgrounded Android PWA clients.
+    // Android Chrome requires the client to be FOCUSED before navigate() is honoured.
+    // Even then, many mobile browsers drop it. The reliable fix is:
+    //   1. Find any existing client on OUR origin (no exact URL match required)
+    //   2. focus() it — this brings the PWA to the foreground
+    //   3. postMessage SW_NAVIGATE with the destination URL
+    //      → WebNotificationRouter in React calls navigate() from inside the app
+    //        where React Router is fully alive and URL changes always work.
+    //   4. If no window exists at all, open a new one with the full URL.
+    // ────────────────────────────────────────────────────────────────────────
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-            // 1. Try to find an existing tab with the exact URL
-            for (const client of windowClients) {
-                if (client.url === urlToOpen && 'focus' in client) {
-                    if (data?.conversationId) {
-                        client.postMessage({ type: 'CHAT_MESSAGE_RECEIVED', conversationId: data.conversationId });
-                    }
-                    return client.focus();
-                }
+            // Filter to clients on our own origin to avoid accidentally controlling other pages
+            const ownClients = windowClients.filter(c => {
+                try { return new URL(c.url).origin === self.location.origin; } catch (_) { return false; }
+            });
+
+            if (ownClients.length > 0) {
+                // Prefer a visible client; fall back to any client
+                const target = ownClients.find(c => {
+                    try { return c.visibilityState === 'visible'; } catch(_) { return false; }
+                }) || ownClients[0];
+
+                // Step 1: Focus first — this is required on Android before any navigation
+                return target.focus().then(() => {
+                    // Step 2: Tell the React app where to go via postMessage.
+                    // WebNotificationRouter listens for SW_NAVIGATE and calls
+                    // React Router's navigate() from inside the live app context.
+                    target.postMessage({
+                        type: 'SW_NAVIGATE',
+                        url: urlToOpen,
+                        conversationId: data?.conversationId || null,
+                        targetAccountId: data?.targetAccountId || null,
+                    });
+                    console.log(`[FORENSIC][SW] SW_NAVIGATE posted → ${urlToOpen}`);
+                }).catch((focusErr) => {
+                    // focus() failed (e.g. browser blocked it). Fall back to opening a new window.
+                    console.warn('[SW] focus() failed, opening new window:', focusErr);
+                    if (clients.openWindow) return clients.openWindow(urlToOpen);
+                });
             }
-            // 2. If no exact match, navigate any existing tab on our origin FIRST, then focus it
-            for (const client of windowClients) {
-                if ('focus' in client) {
-                    if ('navigate' in client) {
-                        return client.navigate(urlToOpen).then(() => client.focus()).catch(() => client.focus());
-                    }
-                    return client.focus();
-                }
-            }
-            // 3. If no window/tab is open, open a new one
+
+            // No existing window — open a fresh one with the full URL including all params
             if (clients.openWindow) {
+                console.log(`[FORENSIC][SW] No existing window, opening new → ${urlToOpen}`);
                 return clients.openWindow(urlToOpen);
             }
         })

@@ -205,6 +205,11 @@ const mergeMessageStatus = (oldMsg: Message, newMsg: Partial<Message>): Message 
     };
 };
 
+// Module-scope ref: survives React background reconnection (recursivelyTraverseReconnectPassiveEffects).
+// A useRef() inside the component body is subject to TDZ when React replays passive-effect closures
+// after a background restore before the render body has re-run. Plain module objects are always in scope.
+const prevUserIdRef = { current: null as string | null };
+
 export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const { user, session, authReady, isSwitching } = useAuth();
     const { socket, connected, initialize: connectSocket } = useSocket();
@@ -259,7 +264,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const deletedPeerIdsRef = useRef<Set<string>>(new Set());
     const clearedAtMapRef = useRef<Map<string, string>>(new Map());
     const lastUserIdRef = useRef<string | null>(null);
-    const prevUserIdRef = useRef<string | null>(null);
+    // prevUserIdRef is intentionally declared at module scope above ChatProvider
+    // to prevent TDZ ReferenceError during React background reconnection.
     const deletedMessageIdsRef = useRef<Set<string>>(new Set());
     const lastSeenSequenceRef = useRef<Record<string, number>>({});
     const processedEventIdsRef = useRef<Set<string>>(new Set());
