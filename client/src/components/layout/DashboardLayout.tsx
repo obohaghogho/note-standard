@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { Sidebar } from './Sidebar';
 import { CreateNoteModal } from '../dashboard/CreateNoteModal';
 import { BroadcastBanner } from '../chat/BroadcastBanner';
-import { PushNotificationBanner } from '../common/PushNotificationBanner';
 import PWAAwarenessBanner from '../PWAAwarenessBanner';
 import { BetaWelcomeBanner } from '../common/BetaWelcomeBanner';
 import { useAuth } from '../../context/AuthContext';
@@ -108,7 +107,6 @@ export function DashboardLayout() {
         )}>
             {!isStandalonePageOnMobile && <BroadcastBanner />}
             {!isStandalonePageOnMobile && <BetaWelcomeBanner />}
-            {!isStandalonePageOnMobile && <PushNotificationBanner />}
             {!isStandalonePageOnMobile && <PWAAwarenessBanner />}
             
             {/* Inner ambient glow for dashboard depth */}
