@@ -358,7 +358,7 @@ export default function StatusCreator() {
       <div className="w-full h-full md:w-[420px] md:h-[840px] md:max-h-[90vh] bg-gray-950 border-0 sm:border border-gray-800 relative md:rounded-3xl flex flex-col shadow-2xl overflow-hidden max-w-full">
         
         {/* Header */}
-        <div className="px-3 py-2.5 sm:px-4 sm:py-3 border-b border-gray-800 flex items-center justify-between gap-1.5 bg-gray-900/50 backdrop-blur-md shrink-0 max-w-full overflow-hidden">
+        <div className="px-3 py-2.5 sm:px-4 sm:py-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] md:pt-3 border-b border-gray-800 flex items-center justify-between gap-1.5 bg-gray-900/50 backdrop-blur-md shrink-0 max-w-full overflow-hidden">
           <button onClick={closeCreator} className="text-gray-400 hover:text-white p-1.5 sm:p-2 bg-gray-800 rounded-full transition-colors shrink-0">
             <X size={18} className="sm:w-5 sm:h-5" />
           </button>
@@ -652,7 +652,7 @@ export default function StatusCreator() {
         </div>
 
         {/* Footer */}
-        <div className="p-3 sm:p-4 border-t border-gray-800 bg-gray-900 flex justify-between items-center gap-2 max-w-full shrink-0">
+        <div className="p-3 sm:p-4 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] md:pb-4 border-t border-gray-800 bg-gray-900 flex justify-between items-center gap-2 max-w-full shrink-0">
           <select 
             value={privacy} 
             onChange={e => setPrivacy(e.target.value)}

@@ -271,7 +271,7 @@ export default function StatusViewer() {
       <div className="w-full h-full md:w-[400px] md:h-[800px] md:max-h-[90vh] bg-black relative md:rounded-3xl overflow-hidden flex flex-col shadow-2xl">
         
         {/* Progress Bars */}
-        <div className="absolute top-0 left-0 right-0 p-3 flex gap-1 z-20">
+        <div className="absolute top-0 left-0 right-0 p-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] md:pt-3 flex gap-1 z-20">
           {userEntry.statuses.map((_, i) => (
             <div key={i} className="flex-1 h-1 bg-white/20 rounded-full overflow-hidden">
               <div 
@@ -286,7 +286,7 @@ export default function StatusViewer() {
         </div>
 
         {/* Header */}
-        <div className="absolute top-8 left-0 right-0 px-4 flex items-center justify-between z-20">
+        <div className="absolute top-[calc(2rem+env(safe-area-inset-top,0px))] md:top-8 left-0 right-0 px-4 flex items-center justify-between z-20">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-[46px] h-[46px] relative flex items-center justify-center shrink-0">
               <StatusRing 
