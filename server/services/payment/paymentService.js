@@ -866,13 +866,22 @@ class PaymentService {
     
     return await LockService.withLock(reference, async () => {
         // 1. Fetch transaction record
-        const { data: tx, error: fetchError } = await supabase
+        // Fix: fetch all matching rows and prefer already-completed ones so the
+        // idempotency guard fires correctly on duplicate webhook deliveries.
+        const { data: txRows, error: fetchError } = await supabase
           .from("transactions")
           .select("*")
           .or(`reference_id.eq.${reference},provider_reference.eq.${reference}`)
           .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .limit(10);
+
+        const tx = txRows && txRows.length > 0
+          ? (txRows.find(r =>
+              r.status === 'COMPLETED' || r.status === 'SUCCESS' ||
+              r.wallet_credit_status === 'WALLET_CREDITED' ||
+              r.payment_status === 'WALLET_CREDITED'
+            ) || txRows[0])
+          : null;
 
         if (fetchError) {
           logger.error(`[Finalize] DB error fetching transaction for ${reference}: ${fetchError.message}`);
@@ -1076,7 +1085,7 @@ class PaymentService {
    * Helper: Credit Ad Wallet after payment confirmation
    */
   async _creditAdWallet(tx) {
-    const userId = tx.user_id;
+    const userId    = tx.user_id;
     const usdAmount = Number(tx.metadata?.usdAmount || tx.amount || 0);
 
     if (!userId || usdAmount <= 0) {
@@ -1084,34 +1093,57 @@ class PaymentService {
       return;
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("ad_wallet_balance")
-      .eq("id", userId)
-      .single();
+    // ── 1. Idempotency guard ────────────────────────────────────────────────
+    // Prevents double-credit when finalizeTransaction is called twice for the
+    // same reference (e.g. two concurrent webhooks or a retry storm).
+    const { data: existingCredit } = await supabase
+      .from('wallet_transactions')
+      .select('id')
+      .eq('user_id', userId)
+      .contains('metadata', { transaction_id: tx.id })
+      .maybeSingle();
 
-    const currentBalance = Number(profile?.ad_wallet_balance || 0);
-    const newBalance = currentBalance + usdAmount;
-
-    await supabase
-      .from("profiles")
-      .update({ ad_wallet_balance: newBalance })
-      .eq("id", userId);
-
-    try {
-      await supabase
-        .from("wallet_transactions")
-        .insert({
-          user_id: userId,
-          amount: usdAmount,
-          type: "deposit",
-          metadata: { reference: tx.reference_id, transaction_id: tx.id }
-        });
-    } catch (err) {
-      logger.warn(`[PaymentService] wallet_transactions insert warning: ${err.message}`);
+    if (existingCredit) {
+      logger.info(`[PaymentService] Idempotency hit: ad_wallet already credited for tx ${tx.id}. Skipping.`);
+      return;
     }
 
-    logger.info(`[PaymentService] ✅ Authoritatively credited $${usdAmount} to ad_wallet_balance for user ${userId} (New balance: $${newBalance})`);
+    // ── 2. Record ledger entry (write-ahead log before balance change) ──────
+    const { error: ledgerErr } = await supabase
+      .from('wallet_transactions')
+      .insert({
+        user_id:  userId,
+        amount:   usdAmount,
+        type:     'deposit',
+        metadata: { reference: tx.reference_id, transaction_id: tx.id },
+      });
+
+    if (ledgerErr) {
+      logger.warn(`[PaymentService] wallet_transactions insert warning for tx ${tx.id}: ${ledgerErr.message}`);
+    }
+
+    // ── 3. Atomic balance increment via Postgres RPC ────────────────────────
+    // increment_ad_wallet uses UPDATE … RETURNING for atomic read-modify-write
+    // at the DB level, eliminating the race condition between concurrent workers.
+    const { data: newBalance, error: rpcErr } = await supabase
+      .rpc('increment_ad_wallet', { p_user_id: userId, p_amount: usdAmount });
+
+    if (!rpcErr) {
+      logger.info(`[PaymentService] ✅ Credited $${usdAmount} to ad_wallet_balance for user ${userId}. New balance: $${newBalance} (tx: ${tx.id})`);
+      return;
+    }
+
+    // ── 4. Fallback: read-modify-write (used only if migration 465 not yet applied) ──
+    logger.warn(`[PaymentService] increment_ad_wallet RPC unavailable (${rpcErr.message}). Using read-modify-write fallback.`);
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('ad_wallet_balance')
+      .eq('id', userId)
+      .single();
+
+    const newBal = Number(profile?.ad_wallet_balance || 0) + usdAmount;
+    await supabase.from('profiles').update({ ad_wallet_balance: newBal }).eq('id', userId);
+    logger.info(`[PaymentService] ✅ Credited $${usdAmount} (fallback) to ad_wallet_balance for user ${userId}. New balance: $${newBal} (tx: ${tx.id})`);
   }
 
   /**
