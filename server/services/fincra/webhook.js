@@ -365,12 +365,16 @@ async function handleDepositSuccessful(payload) {
       const FiatWalletService = require("../FiatWalletService");
       wallet = await FiatWalletService.createWallet(userId, currency);
     } catch (createErr) {
-      // Fallback: direct insert into wallets_v6
-      const { data: insertedWallet } = await supabase
-        .from("wallets_v6")
-        .insert({ user_id: userId, currency, balance: 0, available_balance: 0, pending_balance: 0 })
+      // wallets_v6 is a VIEW — inserts must go to the underlying wallets_store base table
+      logger.warn(`[Fincra/webhook] FiatWalletService.createWallet failed (${createErr.message}). Using wallets_store fallback.`);
+      const { data: insertedWallet, error: insertErr } = await supabase
+        .from("wallets_store")
+        .insert({ user_id: userId, currency, balance: 0, available_balance: 0, pending_balance: 0, network: 'native', provider: 'internal' })
         .select("id, balance, available_balance, pending_balance")
         .single();
+      if (insertErr) {
+        logger.error(`[Fincra/webhook] wallets_store fallback insert failed: ${insertErr.message}`);
+      }
       wallet = insertedWallet;
     }
   }
