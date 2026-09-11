@@ -13,6 +13,14 @@ const PaymentFactory = require("./payment/PaymentFactory");
 const logger = require("../utils/logger");
 const realtime = require("./realtimeService");
 
+/**
+ * PLATFORM_SETTLEMENT_NUBAN
+ * The Anchor settlement account shared by the platform itself. Must never be
+ * treated as a valid user dedicated account — any DB record with this number
+ * is a stale placeholder and should be ignored so fresh provisioning occurs.
+ */
+const PLATFORM_SETTLEMENT_NUBAN = '6179630721';
+
 class VirtualAccountService {
   /**
    * Get all virtual accounts for a user
@@ -49,6 +57,15 @@ class VirtualAccountService {
       logger.error(`[VirtualAccountService] Failed to fetch account for ${upperCurrency}: ${error.message}`);
       throw error;
     }
+
+    // Defence-in-depth: treat any record holding the platform settlement NUBAN as non-existent.
+    // Such records are stale placeholders — returning them would show the wrong account number
+    // to users and cause deposits to be mis-attributed (the root cause of the Olivia John bug).
+    if (data && data.account_number === PLATFORM_SETTLEMENT_NUBAN) {
+      logger.warn(`[VirtualAccountService] Suppressing stale platform-settlement placeholder for user ${userId} (${upperCurrency}). Fresh provisioning will be triggered.`);
+      return null;
+    }
+
     return data || null;
   }
 
@@ -62,10 +79,10 @@ class VirtualAccountService {
     const upperCurrency = (currency || "").toUpperCase();
     logger.info(`[VirtualAccountService] Provisioning request for ${upperCurrency} (User: ${userId})`);
 
-    // 1. Double check if one already exists
+    // 1. Double check if one already exists (getVirtualAccount already filters platform NUBANs)
     const existing = await this.getVirtualAccount(userId, upperCurrency);
     if (existing) {
-      logger.info(`[VirtualAccountService] Dedicated account already exists for ${upperCurrency} (User: ${userId})`);
+      logger.info(`[VirtualAccountService] Valid dedicated account already exists for ${upperCurrency} (User: ${userId}): ${existing.account_number}`);
       return existing;
     }
 

@@ -189,14 +189,25 @@ class GreyProvider extends BaseProvider {
   }
 
   async transfer(data) {
-    return { success: true, status: "success", reference: `tr_grey_${Date.now()}` };
+    // ⚠️  STUB NOT IMPLEMENTED — DO NOT USE FOR REAL PAYOUTS
+    // GreyProvider is a deposit-instructions provider only. For actual USD/EUR/GBP
+    // outbound transfers use GreySettlementProvider.createPayout() which calls
+    // the real Grey Business API (/v1/charge/payout or /v1/charge/p2p).
+    logger.error('[GreyProvider] transfer() stub called — this does NOT move real money. Use GreySettlementProvider.createPayout() for outbound payments.');
+    throw new Error('NOT_IMPLEMENTED: GreyProvider.transfer() is a stub. Use GreySettlementProvider.createPayout() for outbound Grey payments.');
   }
 
   async reverse(reference, reason) {
-    return { success: true, status: "reversed", reference: `re_grey_${Date.now()}` };
+    // ⚠️  STUB NOT IMPLEMENTED — DO NOT USE FOR REAL REVERSALS
+    // For actual Grey transaction reversals use GreySettlementProvider.reverseTransaction()
+    // which calls the real Grey Business API (/v1/payouts/{reference}/reverse).
+    logger.error('[GreyProvider] reverse() stub called — this does NOT perform a real reversal. Use GreySettlementProvider.reverseTransaction() instead.');
+    throw new Error('NOT_IMPLEMENTED: GreyProvider.reverse() is a stub. Use GreySettlementProvider.reverseTransaction() for actual Grey reversals.');
   }
 
   async balanceInquiry(currency) {
+    // ⚠️  STUB — returns a hardcoded value. For real Grey treasury balances use
+    // GreySettlementProvider.getBalance() or GreyBalanceFetcher.
     return { balance: 100000.0, currency: (currency || 'USD').toUpperCase() };
   }
 
