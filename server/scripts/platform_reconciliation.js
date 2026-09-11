@@ -23,7 +23,11 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const DRY_RUN = process.env.DRY_RUN !== "false"; // default: dry run
+// Cross-platform: pass --live flag to apply corrections (works on Windows PowerShell, Mac, Linux)
+// Examples:
+//   Dry run:  node scripts/platform_reconciliation.js
+//   Live run: node scripts/platform_reconciliation.js --live
+const DRY_RUN = !process.argv.includes("--live");
 const MAX_SAFE_AUTO_CORRECTION = 5000; // NGN — only auto-correct amounts below this
 const BATCH_SIZE = 50;
 
@@ -196,7 +200,8 @@ async function run() {
   // ── Phase 6: Apply corrections ────────────────────────────────────────────
   if (DRY_RUN) {
     console.log("\n\n⚠️  DRY RUN — no corrections applied.");
-    console.log("   To apply, run:  DRY_RUN=false node scripts/platform_reconciliation.js");
+    console.log("   To apply corrections, run from the server/ directory:");
+    console.log("   node scripts/platform_reconciliation.js --live");
     return;
   }
 
