@@ -316,6 +316,7 @@ async function handleGreyDepositWebhook(payload) {
   }
 
   // ── Get or create wallet ────────────────────────────────────────────
+  // Read via wallets_v6 view (read-only); create/fallback via wallets_store base table.
   let { data: wallet } = await supabase
     .from("wallets_v6")
     .select("id, balance, available_balance")
@@ -328,12 +329,17 @@ async function handleGreyDepositWebhook(payload) {
     try {
       const walletService = require("../services/walletService");
       wallet = await walletService.createWallet(userId, currency, 'native');
-    } catch {
-      const { data: insertedWallet } = await supabase
-        .from("wallets_v6")
-        .insert({ user_id: userId, currency, balance: 0, available_balance: 0, pending_balance: 0 })
+    } catch (walletErr) {
+      logger.warn(`[Grey Webhook/Deposit] walletService.createWallet failed (${walletErr.message}). Using wallets_store fallback.`);
+      // wallets_v6 is a VIEW — inserts must go to the underlying wallets_store table
+      const { data: insertedWallet, error: insertErr } = await supabase
+        .from("wallets_store")
+        .insert({ user_id: userId, currency, balance: 0, available_balance: 0, pending_balance: 0, network: 'native', provider: 'internal' })
         .select("id, balance, available_balance")
         .single();
+      if (insertErr) {
+        logger.error(`[Grey Webhook/Deposit] wallets_store insert also failed: ${insertErr.message}`);
+      }
       wallet = insertedWallet;
     }
   }

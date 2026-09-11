@@ -60,6 +60,12 @@ async function run() {
     .from("profiles")
     .select("id, email");
 
+  // Platform admin/system operator accounts whose wallets are operationally
+  // funded and don't have matching transaction records by design.
+  const EXCLUDED_USER_IDS = new Set([
+    "5089c266-1ad6-4a83-b23f-064d65995345", // admin@notestandard — system operator account
+  ]);
+
   const testUserIds = new Set(
     (profiles || [])
       .filter(p => p.email && (
@@ -73,7 +79,10 @@ async function run() {
       .map(p => p.id)
   );
 
-  const realWallets = wallets.filter(w => !testUserIds.has(w.user_id));
+  const realWallets = wallets.filter(w =>
+    !testUserIds.has(w.user_id) &&
+    !EXCLUDED_USER_IDS.has(w.user_id)
+  );
   console.log(`  Test/seed accounts excluded: ${wallets.length - realWallets.length}`);
   console.log(`  Real user wallets to reconcile: ${realWallets.length}`);
 
@@ -108,7 +117,9 @@ async function run() {
     const amt = round2(tx.amount);
     const fee = round2(tx.fee);
 
-    if (tx.type === "DEPOSIT") {
+    if (tx.type === "DEPOSIT" ||
+        tx.type === "WALLET_TOPUP" ||
+        tx.type === "wallet_topup") {
       ledgerMap[key].credits += amt;
     } else if (["WITHDRAWAL", "DEBIT", "TRANSFER_OUT"].includes(tx.type)) {
       ledgerMap[key].debits += (amt + fee);
