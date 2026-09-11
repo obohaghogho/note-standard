@@ -551,11 +551,11 @@ export default function StatusCreator() {
           )}
 
           {tab === 'media' && (
-            <div className="flex-1 flex flex-col p-4 gap-4">
+            <div className="flex-1 flex flex-col p-3 sm:p-4 gap-3 sm:gap-4 min-h-0 relative">
               {!mediaPreview ? (
                 <div 
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full aspect-[9/16] border-2 border-dashed border-gray-700 hover:border-blue-500 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer bg-gray-900/50 hover:bg-gray-800/50 transition-colors"
+                  className="w-full flex-1 min-h-[300px] border-2 border-dashed border-gray-700 hover:border-blue-500 rounded-2xl flex flex-col items-center justify-center gap-4 cursor-pointer bg-gray-900/50 hover:bg-gray-800/50 transition-colors"
                 >
                   <div className="flex gap-2 w-20 h-20 rounded-full bg-gray-800 items-center justify-center text-blue-500">
                     <ImageIcon size={28} />
@@ -564,7 +564,7 @@ export default function StatusCreator() {
                   <div className="text-gray-400 font-medium">Click to select photo or video</div>
                 </div>
               ) : (
-                <div className="w-full aspect-[9/16] relative rounded-2xl overflow-hidden group bg-black flex items-center justify-center">
+                <div className="w-full flex-1 relative rounded-2xl overflow-hidden group bg-black flex items-center justify-center min-h-[250px] shadow-inner">
                   {mediaFile?.type.startsWith('video/') ? (
                     <div className="relative w-full h-full flex items-center justify-center bg-black">
                       <video 
@@ -591,14 +591,37 @@ export default function StatusCreator() {
                   ) : (
                     <img src={mediaPreview || ''} alt="Preview" className="w-full h-full object-contain" />
                   )}
+                  
                   <button 
                     onClick={() => { setMediaFile(null); if (mediaPreview) URL.revokeObjectURL(mediaPreview); setMediaPreview(null); setVideoDuration(0); }}
-                    className="absolute top-4 right-4 p-2 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-md border border-white/20 hover:bg-red-500/80 z-20"
+                    className="absolute top-4 right-4 p-2 bg-black/60 text-white rounded-full opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-md border border-white/20 hover:bg-red-500/80 z-20"
+                    title="Remove media"
                   >
                     <X size={20} />
                   </button>
+
+                  {/* Overlaid WhatsApp-style floating caption input on media preview */}
+                  <div className="absolute bottom-3 left-3 right-3 z-20">
+                    <div className="bg-black/75 backdrop-blur-xl border border-white/20 rounded-2xl p-2 sm:p-2.5 shadow-2xl flex items-center gap-2 transition-all focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
+                      <textarea
+                        id="status-media-caption"
+                        name="status-media-caption"
+                        placeholder="Add a caption..."
+                        rows={1}
+                        value={caption}
+                        onChange={e => setCaption(e.target.value)}
+                        onInput={(e) => {
+                          const target = e.currentTarget;
+                          target.style.height = 'auto';
+                          target.style.height = `${Math.min(target.scrollHeight, 100)}px`;
+                        }}
+                        className="w-full bg-transparent text-white text-sm placeholder-white/60 focus:outline-none resize-none no-scrollbar font-medium max-h-[100px] leading-relaxed"
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
+              
               <input 
                 type="file" 
                 id="status-media-file"
@@ -608,15 +631,20 @@ export default function StatusCreator() {
                 accept="image/*,video/*" 
                 className="hidden" 
               />
-              <input
-                type="text"
-                id="status-media-caption"
-                name="status-media-caption"
-                placeholder="Add a caption..."
-                value={caption}
-                onChange={e => setCaption(e.target.value)}
-                className="w-full bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
-              />
+
+              {!mediaPreview && (
+                <div className="w-full">
+                  <input
+                    type="text"
+                    id="status-media-caption-fallback"
+                    name="status-media-caption-fallback"
+                    placeholder="Add a caption..."
+                    value={caption}
+                    onChange={e => setCaption(e.target.value)}
+                    className="w-full bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors text-sm font-medium"
+                  />
+                </div>
+              )}
             </div>
           )}
 
