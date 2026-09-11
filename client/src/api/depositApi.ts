@@ -64,8 +64,17 @@ export interface ManualDeposit {
   reference: string;
   proof_url?: string;
   isUnified?: boolean;
-  status: "pending" | "approved" | "rejected";
+  /** Core status — pending_admin_review means high-value, needs human approval */
+  status: "pending" | "approved" | "rejected" | "pending_admin_review";
   admin_notes?: string;
+  /** True once the wallet has been credited (auto or manual). Blocks re-approval. */
+  wallet_credited?: boolean;
+  /** True if this deposit was credited automatically (within auto-credit limit). */
+  auto_credit_applied?: boolean;
+  /** Reason the deposit was routed to admin review (e.g. exceeds limit). */
+  review_reason?: string;
+  /** UUID of the transactions row that performed the credit. */
+  credited_tx_id?: string;
   created_at: string;
   updated_at: string;
   profile?: {
@@ -273,7 +282,9 @@ const depositApi = {
   /**
    * Admin: Fetch manual deposits (All, Pending, Approved, or Rejected).
    */
-  getAdminPending: async (status: string = "all"): Promise<ManualDeposit[]> => {
+  getAdminPending: async (
+    status: "all" | "pending" | "pending_admin_review" | "approved" | "rejected" = "all"
+  ): Promise<ManualDeposit[]> => {
     const response = await axiosInstance.get(`/deposit/admin/pending?status=${encodeURIComponent(status)}`);
     return response.data;
   },

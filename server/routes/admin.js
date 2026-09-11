@@ -92,6 +92,87 @@ router.put("/settings", adminController.updateSystemSettings);
 router.post("/system/state", adminController.updateSystemState);
 router.get("/system/status", adminController.getSystemStatus);
 
+// ── Deposit Auto-Credit Settings (Admin-configurable limit gate) ──────────────
+// GET  /api/admin/deposit-settings  → retrieve current auto-credit limit config
+// PUT  /api/admin/deposit-settings  → update limit per currency, enable/disable
+router.get("/deposit-settings", async (req, res) => {
+  try {
+    const supabase = require("../config/database");
+    const { data, error } = await supabase
+      .from("admin_settings")
+      .select("value, updated_at")
+      .eq("key", "deposit_auto_credit_config")
+      .maybeSingle();
+
+    if (error) throw error;
+    res.json(data || {
+      value: {
+        enabled: true,
+        limit_ngn: 50000,
+        limit_usd: 50,
+        limit_eur: 50,
+        limit_gbp: 40,
+        require_proof: true,
+        notify_admin_on_high: true,
+      },
+      updated_at: null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put("/deposit-settings", async (req, res) => {
+  try {
+    const supabase = require("../config/database");
+    const { enabled, limit_ngn, limit_usd, limit_eur, limit_gbp, require_proof, notify_admin_on_high } = req.body;
+
+    if (typeof enabled !== "boolean") {
+      return res.status(400).json({ error: "'enabled' (boolean) is required" });
+    }
+
+    const newConfig = {
+      enabled,
+      limit_ngn:             parseFloat(limit_ngn)  || 50000,
+      limit_usd:             parseFloat(limit_usd)  || 50,
+      limit_eur:             parseFloat(limit_eur)  || 50,
+      limit_gbp:             parseFloat(limit_gbp)  || 40,
+      require_proof:         require_proof !== false,
+      notify_admin_on_high:  notify_admin_on_high !== false,
+      description:           "Deposits at or below the limit are auto-credited. Above the limit requires admin approval.",
+    };
+
+    const { error } = await supabase
+      .from("admin_settings")
+      .upsert({
+        key:        "deposit_auto_credit_config",
+        value:      newConfig,
+        updated_by: req.user.id,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "key" });
+
+    if (error) throw error;
+
+    const logger = require("../utils/logger");
+    logger.info(`[Admin] Deposit auto-credit settings updated by ${req.user.id}:`, newConfig);
+
+    res.json({ message: "Deposit auto-credit settings updated successfully", config: newConfig });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Deposit Queue — pending_admin_review high-value deposits ─────────────────
+router.get("/deposit-queue", async (req, res) => {
+  try {
+    const manualDepositController = require("../controllers/deposit/manualDepositController");
+    req.query.status = req.query.status || "pending_admin_review";
+    return manualDepositController.getPendingDeposits(req, res);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Monetization Management
 router.get("/monetization/stats", adminController.getMonetizationStats);
 router.get("/monetization/settings", adminController.getMonetizationSettings);
