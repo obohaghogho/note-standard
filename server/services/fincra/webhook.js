@@ -177,21 +177,40 @@ async function handleDepositSuccessful(payload) {
   }
 
   // 2. Resolve via direct references (customerReference, merchantReference, reference, narration)
+  //
+  //    ⚠️  BUG FIX: maybeSingle() previously returned an arbitrary row when
+  //    multiple rows share the same reference_id (e.g. a reference re-used across
+  //    two deposit sessions). It could return a PENDING row even though another
+  //    row with the same reference was already WALLET_CREDITED, bypassing the
+  //    early-exit guard and causing a double-credit.
+  //
+  //    Fix: fetch up to 5 rows, check ALL of them for a credited state first.
   if (!userId) {
     const searchRef = data.customerReference || data.merchantReference || data.reference || data.narration;
     if (searchRef) {
-      const { data: txMatch } = await supabase
+      const { data: txRows } = await supabase
         .from("transactions")
         .select("user_id, status, wallet_credit_status, payment_status")
         .or(`reference_id.eq.${searchRef},metadata->>display_ref.eq.${searchRef}`)
-        .maybeSingle();
+        .order("created_at", { ascending: false })
+        .limit(5);
 
-      if (txMatch) {
-        if (txMatch.status === 'COMPLETED' || txMatch.wallet_credit_status === 'WALLET_CREDITED' || txMatch.payment_status === 'WALLET_CREDITED') {
-          logger.info(`[Fincra/webhook] Transaction ${searchRef} already credited. Skipping double credit.`);
+      if (txRows && txRows.length > 0) {
+        // Check if ANY row with this reference has already been credited
+        const alreadyCredited = txRows.find(
+          r => r.status === 'COMPLETED' ||
+               r.status === 'SUCCESS' ||
+               r.wallet_credit_status === 'WALLET_CREDITED' ||
+               r.payment_status === 'WALLET_CREDITED'
+        );
+
+        if (alreadyCredited) {
+          logger.info(`[Fincra/webhook] Reference ${searchRef} already credited (found ${txRows.length} row(s)). Skipping double credit.`);
           return { handled: true, status: 'SUCCESSFUL', reason: 'Already credited' };
         }
-        userId = txMatch.user_id;
+
+        // No credited row found — use the most recent pending row's user_id
+        userId = txRows[0].user_id;
       } else {
         const { data: sessionMatch } = await supabase
           .from("deposit_sessions")

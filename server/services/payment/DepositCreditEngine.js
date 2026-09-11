@@ -282,21 +282,52 @@ class DepositCreditEngine {
    * Prefers ID lookup; falls back to reference_id / provider_reference.
    */
   async _fetchTransaction(transactionId, reference) {
-    let query = supabase.from('transactions').select('*');
-
     if (transactionId) {
-      query = query.eq('id', transactionId);
-    } else if (reference) {
-      query = query.or(`reference_id.eq.${reference},provider_reference.eq.${reference}`);
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('id', transactionId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
     }
 
-    const { data, error } = await query
+    if (!reference) return null;
+
+    // When looking up by reference, fetch ALL matching rows and prefer
+    // already-completed/credited ones so the idempotency guard fires correctly.
+    // This prevents double-credit when the same reference appears more than once
+    // (e.g. a Fincra collection webhook fires twice with different payloads but
+    // the deposit_session maps to the same reference_id).
+    const { data: rows, error } = await supabase
+      .from('transactions')
+      .select('*')
+      .or(`reference_id.eq.${reference},provider_reference.eq.${reference}`)
       .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(10);
 
     if (error) throw error;
-    return data;
+    if (!rows || rows.length === 0) return null;
+
+    // Prefer the row that is already credited — this forces the idempotency
+    // guard to fire and prevents re-crediting the same deposit.
+    const creditedRow = rows.find(
+      r => r.status === 'COMPLETED' ||
+           r.status === 'SUCCESS' ||
+           r.wallet_credit_status === 'WALLET_CREDITED' ||
+           r.payment_status === 'WALLET_CREDITED'
+    );
+
+    if (creditedRow) {
+      logger.info(
+        `[DepositCreditEngine] Reference ${reference} has ${rows.length} match(es); ` +
+        `returning already-credited row ${creditedRow.id} to enforce idempotency.`
+      );
+      return creditedRow;
+    }
+
+    // No credited row found — return the most recent pending one
+    return rows[0];
   }
 
   /**
