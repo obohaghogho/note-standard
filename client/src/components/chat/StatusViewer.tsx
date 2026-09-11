@@ -400,16 +400,36 @@ export default function StatusViewer() {
             </div>
           )}
 
+          {/* Media Caption Overlay for Image, GIF, and Video Status Posts */}
+          {status.content && ['image', 'gif', 'video'].includes(status.type) && (
+            <div 
+              className={`absolute ${isOwn ? 'bottom-[76px]' : 'bottom-[130px]'} left-4 right-4 z-30 pointer-events-auto flex justify-center`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div 
+                className="max-w-[92%] bg-black/75 backdrop-blur-xl border border-white/20 rounded-2xl px-4 py-2.5 text-white shadow-2xl max-h-28 overflow-y-auto no-scrollbar cursor-text text-center"
+                onMouseEnter={() => setPaused(true)}
+                onMouseLeave={() => setPaused(false)}
+                onTouchStart={() => setPaused(true)}
+                onTouchEnd={() => setPaused(false)}
+              >
+                <div className="text-sm font-medium leading-relaxed break-words text-white drop-shadow-md">
+                  {parseFormattedText(status.content)}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Tap Zones - limited vertical height to prevent overlapping top header and bottom footer controls */}
           <div 
-            className="absolute top-20 bottom-36 left-0 w-1/3 z-10" 
+            className="absolute top-20 bottom-44 left-0 w-1/3 z-10" 
             onMouseDown={handlePressStart}
             onMouseUp={(e) => handlePressEnd(e, 'prev')}
             onTouchStart={handlePressStart}
             onTouchEnd={(e) => handlePressEnd(e, 'prev')}
           />
           <div 
-            className="absolute top-20 bottom-36 right-0 w-2/3 z-10" 
+            className="absolute top-20 bottom-44 right-0 w-2/3 z-10" 
             onMouseDown={handlePressStart}
             onMouseUp={(e) => handlePressEnd(e, 'next')}
             onTouchStart={handlePressStart}
@@ -417,37 +437,19 @@ export default function StatusViewer() {
           />
         </div>
 
-        {/* Footer (Replies / Viewers / Caption) */}
-        <div 
-          className="absolute bottom-0 left-0 right-0 p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] bg-gradient-to-t from-black/95 via-black/75 to-transparent z-30 flex flex-col gap-2.5 pointer-events-auto"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Media Caption Overlay for Image, GIF, and Video Status Posts */}
-          {status.content && ['image', 'gif', 'video'].includes(status.type) && (
-            <div 
-              className="w-full bg-black/60 backdrop-blur-md border border-white/15 rounded-2xl p-3 text-white shadow-xl max-h-32 overflow-y-auto no-scrollbar cursor-text mb-1"
-              onMouseEnter={() => setPaused(true)}
-              onMouseLeave={() => setPaused(false)}
-              onTouchStart={() => setPaused(true)}
-              onTouchEnd={() => setPaused(false)}
-            >
-              <div className="text-sm font-medium leading-relaxed break-words text-white text-center sm:text-left drop-shadow-sm">
-                {parseFormattedText(status.content)}
-              </div>
-            </div>
-          )}
-
+        {/* Footer (Replies / Viewers) */}
+        <div className="absolute bottom-0 left-0 right-0 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] bg-gradient-to-t from-black/95 via-black/60 to-transparent z-20 pointer-events-auto">
           {isOwn ? (
-            <div className="flex flex-col items-center gap-2">
+            <div className="relative flex items-center justify-center min-h-[44px]">
               {/* WhatsApp-style Interactive Viewer Bar */}
               <button 
                 onClick={(e) => { e.stopPropagation(); setShowViewers(true); setPaused(true); }}
-                className="flex items-center gap-3 bg-black/60 backdrop-blur-xl border border-white/15 hover:border-emerald-500/50 rounded-full px-5 py-2.5 text-white active:scale-95 transition-all shadow-xl group cursor-pointer"
+                className="flex items-center gap-2.5 bg-black/75 backdrop-blur-xl border border-white/20 hover:border-emerald-500/60 rounded-full px-4 py-2 text-white active:scale-95 transition-all shadow-xl group cursor-pointer"
               >
-                <ChevronUp size={16} className="text-emerald-400 animate-bounce" />
-                <div className="flex items-center gap-2">
-                  <Eye size={18} className="text-emerald-400" />
-                  <span className="text-sm font-bold">
+                <ChevronUp size={15} className="text-emerald-400 animate-bounce" />
+                <div className="flex items-center gap-1.5">
+                  <Eye size={17} className="text-emerald-400" />
+                  <span className="text-xs sm:text-sm font-bold tracking-wide">
                     {(status.viewers || []).length || status.view_count || 0} {((status.viewers || []).length || status.view_count) === 1 ? 'View' : 'Views'}
                   </span>
                 </div>
@@ -456,7 +458,7 @@ export default function StatusViewer() {
                 {(status.viewers || []).length > 0 && (
                   <div className="flex items-center -space-x-2 ml-1">
                     {(status.viewers || []).slice(0, 3).map((v, i) => (
-                      <div key={i} className="w-6 h-6 rounded-full ring-2 ring-black overflow-hidden bg-gray-800">
+                      <div key={i} className="w-5 h-5 rounded-full ring-2 ring-black overflow-hidden bg-gray-800">
                         <SecureImage
                           src={v.avatar_url}
                           alt={v.display_name}
@@ -469,13 +471,13 @@ export default function StatusViewer() {
                 )}
               </button>
 
-              <div className="w-full flex justify-end px-2">
+              <div className="absolute right-1 top-1/2 -translate-y-1/2">
                 <button 
                   onClick={(e) => { e.stopPropagation(); handleDelete(); }}
                   className="text-gray-400 hover:text-red-400 p-2 rounded-full hover:bg-white/10 transition-colors"
                   title="Delete Status"
                 >
-                  <Trash2 size={20} />
+                  <Trash2 size={18} />
                 </button>
               </div>
             </div>
