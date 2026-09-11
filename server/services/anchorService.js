@@ -483,7 +483,19 @@ class AnchorService {
     if (!this.isEnabled()) return [];
     try {
       let query = supabase.from("dedicated_accounts").select("*").eq("provider", "anchor");
-      if (userId) query = query.eq("user_id", userId);
+      if (userId) {
+        query = query.eq("user_id", userId);
+      } else {
+        // Batch sync: skip test/seed accounts to avoid crediting fake wallets
+        // with real platform deposits. Test emails end with .test or @notestandard.test.
+        const { data: testIds } = await supabase
+          .from("profiles")
+          .select("id")
+          .or("email.ilike.%@notestandard.test,email.ilike.%.test,email.ilike.loadtest%");
+        if (testIds && testIds.length > 0) {
+          query = query.not("user_id", "in", `(${testIds.map(t => t.id).join(",")})`);
+        }
+      }
 
       const { data: dedicatedAccs, error: dvaErr } = await query;
       if (dvaErr || !dedicatedAccs || dedicatedAccs.length === 0) return [];
@@ -498,12 +510,23 @@ class AnchorService {
           try {
             const accRes = await this.client.get("/accounts");
             const accList = accRes.data?.data || [];
-            const matchingAcc = accList.find((a) => (a.attributes?.accountNumber || a.accountNumber || "").endsWith(dva.account_number.slice(-4))) || accList[0];
+            const last4 = (dva.account_number || "").slice(-4);
+            const matchingAcc = accList.find((a) =>
+              (a.attributes?.accountNumber || a.accountNumber || "").endsWith(last4)
+            );
+            // CRITICAL: Never fall back to accList[0] — that would be the platform's
+            // settlement account, causing ALL platform deposits to be attributed to
+            // this user. Only sync if there is a REAL, SPECIFIC account match.
             if (matchingAcc) {
               accountId = matchingAcc.id;
+              logger.info(`[AnchorSync] Resolved placeholder account ${dva.account_number} -> real Anchor ID ${accountId} for user ${dva.user_id}`);
+            } else {
+              logger.warn(`[AnchorSync] No real Anchor account found matching last-4 '${last4}' for user ${dva.user_id}. Skipping sync for this dedicated_account to avoid mis-attribution.`);
+              continue; // ← SKIP this entry rather than fall through to platform account
             }
           } catch (e) {
             logger.warn(`[AnchorSync] Could not resolve deposit account ID for ${dva.account_number}: ${e.message}`);
+            continue; // Skip on error too
           }
         }
 
