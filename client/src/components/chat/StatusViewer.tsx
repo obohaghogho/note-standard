@@ -400,26 +400,6 @@ export default function StatusViewer() {
             </div>
           )}
 
-          {/* Media Caption Overlay for Image, GIF, and Video Status Posts */}
-          {status.content && ['image', 'gif', 'video'].includes(status.type) && (
-            <div 
-              className="absolute bottom-20 left-3 right-3 z-30 pointer-events-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div 
-                className="bg-black/75 backdrop-blur-xl border border-white/20 rounded-2xl p-3 text-white shadow-2xl max-h-36 overflow-y-auto no-scrollbar cursor-text"
-                onMouseEnter={() => setPaused(true)}
-                onMouseLeave={() => setPaused(false)}
-                onTouchStart={() => setPaused(true)}
-                onTouchEnd={() => setPaused(false)}
-              >
-                <div className="text-sm font-medium leading-relaxed break-words text-white text-center sm:text-left drop-shadow-sm">
-                  {parseFormattedText(status.content)}
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Tap Zones - limited vertical height to prevent overlapping top header and bottom footer controls */}
           <div 
             className="absolute top-20 bottom-36 left-0 w-1/3 z-10" 
@@ -437,8 +417,26 @@ export default function StatusViewer() {
           />
         </div>
 
-        {/* Footer (Replies / Viewers) */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 via-black/50 to-transparent z-20">
+        {/* Footer (Replies / Viewers / Caption) */}
+        <div 
+          className="absolute bottom-0 left-0 right-0 p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] bg-gradient-to-t from-black/95 via-black/75 to-transparent z-30 flex flex-col gap-2.5 pointer-events-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Media Caption Overlay for Image, GIF, and Video Status Posts */}
+          {status.content && ['image', 'gif', 'video'].includes(status.type) && (
+            <div 
+              className="w-full bg-black/60 backdrop-blur-md border border-white/15 rounded-2xl p-3 text-white shadow-xl max-h-32 overflow-y-auto no-scrollbar cursor-text mb-1"
+              onMouseEnter={() => setPaused(true)}
+              onMouseLeave={() => setPaused(false)}
+              onTouchStart={() => setPaused(true)}
+              onTouchEnd={() => setPaused(false)}
+            >
+              <div className="text-sm font-medium leading-relaxed break-words text-white text-center sm:text-left drop-shadow-sm">
+                {parseFormattedText(status.content)}
+              </div>
+            </div>
+          )}
+
           {isOwn ? (
             <div className="flex flex-col items-center gap-2">
               {/* WhatsApp-style Interactive Viewer Bar */}
