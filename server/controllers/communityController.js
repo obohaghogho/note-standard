@@ -281,6 +281,22 @@ const toggleBookmark = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+const sharePost = async (req, res, next) => {
+  try {
+    const { id: userId } = req.user;
+    const { postId } = req.params;
+
+    await activityService.logActivity({
+      userId,
+      actionType: 'shared_post',
+      entityType: 'community_post',
+      entityId: postId,
+    }).catch(err => logger.warn('[Community] Share activity log failed:', err.message));
+
+    res.json({ success: true, message: 'Post shared successfully' });
+  } catch (err) { next(err); }
+};
+
 const deletePost = async (req, res, next) => {
   try {
     const { id: userId, role } = req.user;
@@ -651,5 +667,6 @@ module.exports = {
   reportUser,
   votePollOption,
   getReels,
-  createReel
+  createReel,
+  sharePost
 };

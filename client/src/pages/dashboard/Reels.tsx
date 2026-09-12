@@ -235,17 +235,23 @@ export const Reels: React.FC = () => {
 
       {/* Slide-Up Comment Drawer */}
       {selectedCommentsReelId && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex justify-end flex-col sm:items-center sm:justify-center p-0 sm:p-4">
-          <div className="bg-gray-900 border border-white/10 w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl h-[65vh] flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-300">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedCommentsReelId(null);
+          }}
+          className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex justify-end flex-col sm:items-center sm:justify-center p-0 sm:p-4"
+        >
+          <div className="bg-gray-900 border border-white/10 w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl h-[70vh] sm:h-[65vh] flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-300">
             {/* Drawer Header */}
-            <div className="p-4 border-b border-white/10 flex items-center justify-between">
+            <div className="p-4 border-b border-white/10 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2 font-bold text-white text-sm">
                 <MessageCircle size={18} className="text-primary" />
                 <span>Comments</span>
               </div>
               <button
                 onClick={() => setSelectedCommentsReelId(null)}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10"
+                className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
+                title="Close comments"
               >
                 <X size={20} />
               </button>
@@ -283,8 +289,8 @@ export const Reels: React.FC = () => {
               )}
             </div>
 
-            {/* Comment Input */}
-            <form onSubmit={handlePostComment} className="p-3 border-t border-white/10 flex gap-2">
+            {/* Comment Input Form */}
+            <form onSubmit={handlePostComment} className="p-3 sm:p-4 bg-gray-950 border-t border-white/10 flex gap-2 shrink-0">
               <label htmlFor="reel-comment-input" className="sr-only">Add a comment</label>
               <input
                 id="reel-comment-input"
@@ -294,12 +300,12 @@ export const Reels: React.FC = () => {
                 onChange={(e) => setNewCommentText(e.target.value)}
                 placeholder="Add a comment to this Reel..."
                 aria-label="Add a comment to this Reel"
-                className="flex-1 bg-black/40 border border-white/10 rounded-full px-4 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-primary"
+                className="flex-1 bg-black/60 border border-white/15 rounded-full px-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-primary"
               />
               <button
                 type="submit"
                 disabled={submittingComment || !newCommentText.trim()}
-                className="p-2.5 rounded-full bg-primary hover:bg-primary/90 text-white disabled:opacity-50 transition-all"
+                className="p-2.5 rounded-full bg-primary hover:bg-primary/90 text-white disabled:opacity-50 transition-all cursor-pointer shrink-0"
               >
                 {submittingComment ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
               </button>
