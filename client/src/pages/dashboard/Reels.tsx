@@ -157,18 +157,18 @@ export const Reels: React.FC = () => {
 
   return (
     <div className="relative w-full h-[calc(100dvh-8rem)] lg:h-[calc(100vh-4rem)] bg-black flex flex-col overflow-hidden">
-      {/* Top Header */}
-      <div className="absolute top-0 left-0 right-0 z-30 p-4 flex items-center justify-between pointer-events-auto">
-        <div className="flex items-center gap-2 text-white font-bold text-lg drop-shadow-md">
-          <Sparkles className="text-yellow-400" size={22} />
-          <span>NoteStandard Reels</span>
+      {/* Top Navigation Header */}
+      <div className="w-full px-4 py-3 bg-black/90 backdrop-blur-md border-b border-white/10 flex items-center justify-between shrink-0 z-30 shadow-md">
+        <div className="flex items-center gap-2 text-white font-bold text-base sm:text-lg">
+          <Sparkles className="text-yellow-400 shrink-0" size={20} />
+          <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent">NoteStandard Reels</span>
         </div>
 
         <button
           onClick={() => setShowUploadModal(true)}
-          className="flex items-center gap-1.5 bg-primary hover:bg-primary/90 text-white px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-lg transition-all"
+          className="flex items-center gap-1.5 bg-gradient-to-r from-indigo-500 via-primary to-purple-600 hover:brightness-110 text-white px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-lg shadow-primary/20 transition-all active:scale-95 cursor-pointer"
         >
-          <Plus size={16} />
+          <Plus size={15} />
           <span>Post Reel</span>
         </button>
       </div>
@@ -176,7 +176,7 @@ export const Reels: React.FC = () => {
       {/* Main Snap-Scroll Container */}
       <div
         ref={containerRef}
-        className="w-full h-full overflow-y-scroll snap-y snap-mandatory scrollbar-none py-0 sm:py-2 px-1 sm:px-0"
+        className="w-full flex-1 overflow-y-scroll snap-y snap-mandatory scrollbar-none py-2 px-1 sm:px-0"
       >
         {loading ? (
           <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 gap-3">
@@ -208,7 +208,7 @@ export const Reels: React.FC = () => {
                 if (el) cardRefs.current.set(reel.id, el);
                 else cardRefs.current.delete(reel.id);
               }}
-              className="w-full h-[calc(100dvh-8.5rem)] lg:h-[calc(100vh-4.5rem)] max-h-[720px] flex items-center justify-center p-1 sm:p-3 snap-start shrink-0 my-auto"
+              className="w-full h-full max-h-[700px] flex items-center justify-center p-1 sm:p-3 snap-start shrink-0 my-auto"
             >
               <ReelCard
                 reel={reel}
