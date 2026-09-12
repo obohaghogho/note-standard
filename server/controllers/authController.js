@@ -595,6 +595,38 @@ const registerSession = async (req, res) => {
       expires_at: expiresAt
     });
 
+    // Automatically provision V2 Push Installation & Account Link for every logged-in device
+    // so background push routing works seamlessly without requiring custom prompt popups.
+    try {
+      const { data: inst } = await supabase
+        .from('device_installations')
+        .upsert({
+          device_id: deviceId,
+          platform: platform || 'android',
+          type: platform === 'android' ? 'fcm' : 'vapid',
+          endpoint_status: 'VALID',
+          token_updated_at: new Date().toISOString(),
+          last_seen_at: new Date().toISOString(),
+          last_registration_source: 'AUTO_SESSION_PROVISION'
+        }, { onConflict: 'device_id' })
+        .select('installation_id')
+        .maybeSingle();
+
+      if (inst && inst.installation_id) {
+        await supabase
+          .from('installation_accounts')
+          .upsert({
+            installation_id: inst.installation_id,
+            user_id: user.id,
+            session_state: 'ACTIVE',
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'installation_id,user_id' });
+        console.log(`[Push V2 Auto-Provision] Linked device ${deviceId} to user ${user.id} (installation: ${inst.installation_id})`);
+      }
+    } catch (v2AutoErr) {
+      console.warn('[RegisterSession] V2 installation auto-link warning:', v2AutoErr.message);
+    }
+
     res.status(200).json({ success: true, session_id: sessionId, device_id: deviceId });
 
     // FIX: Invalidate the chatPush installation cache in the gateway.
