@@ -253,25 +253,25 @@ export const ReelCard: React.FC<ReelCardProps> = ({
       )}
 
       {/* Top Gradient Overlay */}
-      <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-black/80 via-black/40 to-transparent pointer-events-none z-10" />
+      <div className="absolute top-0 left-0 right-0 h-28 bg-gradient-to-b from-black/80 via-black/30 to-transparent pointer-events-none z-10" />
 
-      {/* Top Header Controls Bar (Positioned inside top video overlay) */}
-      <div className="absolute top-0 left-0 right-0 z-30 p-3 sm:p-4 flex items-center justify-between pointer-events-none">
+      {/* Top Header Overlay Bar (Mute Sound on Left, Delete on Right) */}
+      <div className="absolute top-3 left-3 right-3 z-30 flex items-center justify-between pointer-events-none">
         {/* Mute/Unmute Speaker Button */}
         <button
           onClick={toggleMute}
-          className="px-3 py-1.5 rounded-full bg-black/50 backdrop-blur-md text-white pointer-events-auto hover:bg-black/75 transition-all border border-white/20 flex items-center gap-1.5 shadow-xl active:scale-95 cursor-pointer"
+          className="px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-white pointer-events-auto hover:bg-black/80 transition-all border border-white/20 flex items-center gap-1.5 shadow-lg active:scale-95 cursor-pointer"
           title={isMuted ? "Click to Unmute Sound" : "Click to Mute Sound"}
         >
           {isMuted ? (
             <>
-              <VolumeX size={14} className="text-red-400" />
-              <span className="text-[11px] font-medium text-gray-200">Tap to Unmute</span>
+              <VolumeX size={13} className="text-red-400 shrink-0" />
+              <span className="text-[10px] font-medium text-gray-200">Tap to Unmute</span>
             </>
           ) : (
             <>
-              <Volume2 size={14} className="text-emerald-400 animate-pulse" />
-              <span className="text-[11px] font-semibold text-emerald-300">Sound On</span>
+              <Volume2 size={13} className="text-emerald-400 animate-pulse shrink-0" />
+              <span className="text-[10px] font-semibold text-emerald-300">Sound On</span>
             </>
           )}
         </button>
@@ -280,11 +280,11 @@ export const ReelCard: React.FC<ReelCardProps> = ({
         {canDelete && (
           <button
             onClick={handleDeleteClick}
-            className="px-3 py-1.5 rounded-full bg-black/50 backdrop-blur-md text-red-400 hover:text-white hover:bg-red-600/90 hover:border-red-500/60 pointer-events-auto transition-all border border-white/20 shadow-xl active:scale-95 cursor-pointer flex items-center gap-1.5 group"
+            className="px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-red-400 hover:text-white hover:bg-red-600/90 hover:border-red-500/60 pointer-events-auto transition-all border border-white/20 shadow-lg active:scale-95 cursor-pointer flex items-center gap-1.5 group"
             title="Delete Reel Video"
           >
-            <Trash2 size={13} className="group-hover:scale-110 transition-transform" />
-            <span className="text-[11px] font-semibold">Delete</span>
+            <Trash2 size={12} className="group-hover:scale-110 transition-transform shrink-0" />
+            <span className="text-[10px] font-semibold">Delete</span>
           </button>
         )}
       </div>
@@ -310,137 +310,132 @@ export const ReelCard: React.FC<ReelCardProps> = ({
       )}
 
       {/* Bottom Gradient Overlay */}
-      <div className="absolute bottom-0 left-0 right-0 h-80 bg-gradient-to-t from-black/95 via-black/75 to-transparent pointer-events-none z-10" />
+      <div className="absolute bottom-0 left-0 right-0 h-72 bg-gradient-to-t from-black/95 via-black/75 to-transparent pointer-events-none z-10" />
 
-      {/* Bottom Content Bar & Right Action Column */}
-      <div className="relative z-20 p-3 sm:p-4 pb-3.5 sm:pb-5 flex items-end justify-between gap-2 min-w-0">
-        {/* Author Info & Caption Area */}
-        <div className="flex-1 min-w-0 pr-1 space-y-1.5 max-h-[80%] overflow-hidden">
-          {/* Author Header Row */}
-          <div className="flex items-center gap-2 flex-wrap min-w-0">
-            <img
-              src={
-                reel.author?.avatar_url ||
-                `https://ui-avatars.com/api/?name=${reel.author?.username || 'User'}&background=6366f1&color=fff`
-              }
-              alt={reel.author?.username}
-              className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover border-2 border-white/30 shrink-0 shadow-md"
-            />
-            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-              <span className="font-bold text-white text-xs sm:text-sm drop-shadow-md truncate max-w-[110px] xs:max-w-[150px] sm:max-w-[190px]">
-                @{reel.author?.username || 'creator'}
-              </span>
+      {/* Bottom Left Author Info & Caption Area */}
+      <div className="absolute bottom-3 left-3 right-14 sm:right-16 z-20 flex flex-col gap-1.5 pointer-events-auto max-h-[75%] overflow-hidden pr-1">
+        {/* Author Header Row */}
+        <div className="flex items-center gap-2 min-w-0">
+          <img
+            src={
+              reel.author?.avatar_url ||
+              `https://ui-avatars.com/api/?name=${reel.author?.username || 'User'}&background=6366f1&color=fff`
+            }
+            alt={reel.author?.username}
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover border border-white/30 shrink-0 shadow-md"
+          />
+          <span className="font-bold text-white text-xs sm:text-sm drop-shadow-md truncate shrink min-w-0 max-w-[120px] sm:max-w-[160px]">
+            @{reel.author?.username || 'creator'}
+          </span>
 
-              <button
-                onClick={handleFollow}
-                className={`px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold flex items-center gap-1 transition-all shadow-md ${
-                  following
-                    ? 'bg-white/20 text-white border border-white/20 backdrop-blur-md'
-                    : 'bg-primary text-white hover:bg-primary/90'
-                }`}
-              >
-                {following ? (
-                  <>
-                    <Check size={11} /> Following
-                  </>
-                ) : (
-                  <>
-                    <UserPlus size={11} /> Follow
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Reel Topic Caption */}
-          {reel.content && (
-            <p className="text-white text-[11px] sm:text-xs line-clamp-2 leading-snug font-sans drop-shadow-md pr-1">
-              {reel.content}
-            </p>
-          )}
-
-          {/* Tags & Topic Pill */}
-          <div className="flex items-center gap-1 flex-wrap pt-0.5">
-            {reel.tags && reel.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {reel.tags.slice(0, 3).map((tag, idx) => (
-                  <span
-                    key={idx}
-                    className="text-[10px] text-blue-300 bg-blue-500/20 backdrop-blur-md px-2 py-0.5 rounded-full font-medium border border-blue-500/30"
-                  >
-                    #{tag}
-                  </span>
-                ))}
-              </div>
+          <button
+            onClick={handleFollow}
+            className={`shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1 transition-all shadow-md ${
+              following
+                ? 'bg-white/20 text-white border border-white/20 backdrop-blur-md'
+                : 'bg-primary text-white hover:bg-primary/90'
+            }`}
+          >
+            {following ? (
+              <>
+                <Check size={10} /> Following
+              </>
+            ) : (
+              <>
+                <UserPlus size={10} /> Follow
+              </>
             )}
-            <div className="flex items-center gap-1 text-[10px] text-gray-300 bg-white/10 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/10">
-              <Sparkles size={10} className="text-yellow-400" />
-              <span>NoteStandard Topic</span>
+          </button>
+        </div>
+
+        {/* Reel Topic Caption */}
+        {reel.content && (
+          <p className="text-white text-[11px] sm:text-xs line-clamp-2 leading-snug font-sans drop-shadow-md">
+            {reel.content}
+          </p>
+        )}
+
+        {/* Tags & Topic Pill */}
+        <div className="flex items-center gap-1 flex-wrap pt-0.5">
+          {reel.tags && reel.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {reel.tags.slice(0, 3).map((tag, idx) => (
+                <span
+                  key={idx}
+                  className="text-[9px] sm:text-[10px] text-blue-300 bg-blue-500/20 backdrop-blur-md px-2 py-0.5 rounded-full font-medium border border-blue-500/30"
+                >
+                  #{tag}
+                </span>
+              ))}
             </div>
+          )}
+          <div className="flex items-center gap-1 text-[9px] sm:text-[10px] text-gray-300 bg-white/10 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/10">
+            <Sparkles size={9} className="text-yellow-400" />
+            <span>NoteStandard Topic</span>
           </div>
         </div>
+      </div>
 
-        {/* Right Floating Actions Column */}
-        <div className="flex flex-col items-center gap-2 sm:gap-3 shrink-0">
-          {/* Like */}
-          <button
-            onClick={handleLike}
-            className="flex flex-col items-center gap-0.5 text-white group"
-          >
-            <div className="p-2 sm:p-2.5 rounded-full bg-black/40 backdrop-blur-md group-hover:scale-110 transition-transform border border-white/10">
-              <Heart
-                size={18}
-                className={liked ? 'text-red-500 fill-red-500' : 'text-white'}
-              />
-            </div>
-            <span className="text-[10px] sm:text-xs font-medium text-gray-200">
-              {likesCount.toLocaleString()}
-            </span>
-          </button>
+      {/* Bottom Right Floating Action Icons Column */}
+      <div className="absolute bottom-3 right-2 sm:right-3 z-20 flex flex-col items-center gap-2.5 sm:gap-3 pointer-events-auto">
+        {/* Like */}
+        <button
+          onClick={handleLike}
+          className="flex flex-col items-center gap-0.5 text-white group cursor-pointer"
+        >
+          <div className="p-2 sm:p-2.5 rounded-full bg-black/40 backdrop-blur-md group-hover:scale-110 transition-transform border border-white/10 shadow-lg">
+            <Heart
+              size={18}
+              className={liked ? 'text-red-500 fill-red-500' : 'text-white'}
+            />
+          </div>
+          <span className="text-[10px] font-medium text-gray-200 drop-shadow">
+            {likesCount.toLocaleString()}
+          </span>
+        </button>
 
-          {/* Comment */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenComments(reel.id);
-            }}
-            className="flex flex-col items-center gap-0.5 text-white group"
-          >
-            <div className="p-2 sm:p-2.5 rounded-full bg-black/40 backdrop-blur-md group-hover:scale-110 transition-transform border border-white/10">
-              <MessageCircle size={18} />
-            </div>
-            <span className="text-[10px] sm:text-xs font-medium text-gray-200">
-              {(reel.comments_count || 0).toLocaleString()}
-            </span>
-          </button>
+        {/* Comment */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenComments(reel.id);
+          }}
+          className="flex flex-col items-center gap-0.5 text-white group cursor-pointer"
+        >
+          <div className="p-2 sm:p-2.5 rounded-full bg-black/40 backdrop-blur-md group-hover:scale-110 transition-transform border border-white/10 shadow-lg">
+            <MessageCircle size={18} />
+          </div>
+          <span className="text-[10px] font-medium text-gray-200 drop-shadow">
+            {(reel.comments_count || 0).toLocaleString()}
+          </span>
+        </button>
 
-          {/* Bookmark */}
-          <button
-            onClick={handleBookmark}
-            className="flex flex-col items-center gap-0.5 text-white group"
-          >
-            <div className="p-2 sm:p-2.5 rounded-full bg-black/40 backdrop-blur-md group-hover:scale-110 transition-transform border border-white/10">
-              <Bookmark
-                size={18}
-                className={
-                  bookmarked ? 'text-yellow-400 fill-yellow-400' : 'text-white'
-                }
-              />
-            </div>
-            <span className="text-[10px] sm:text-xs font-medium text-gray-200">Save</span>
-          </button>
+        {/* Bookmark */}
+        <button
+          onClick={handleBookmark}
+          className="flex flex-col items-center gap-0.5 text-white group cursor-pointer"
+        >
+          <div className="p-2 sm:p-2.5 rounded-full bg-black/40 backdrop-blur-md group-hover:scale-110 transition-transform border border-white/10 shadow-lg">
+            <Bookmark
+              size={18}
+              className={
+                bookmarked ? 'text-yellow-400 fill-yellow-400' : 'text-white'
+              }
+            />
+          </div>
+          <span className="text-[10px] font-medium text-gray-200 drop-shadow">Save</span>
+        </button>
 
-          {/* Share */}
-          <button
-            onClick={handleShare}
-            className="flex flex-col items-center gap-0.5 text-white group"
-          >
-            <div className="p-2 sm:p-2.5 rounded-full bg-black/40 backdrop-blur-md group-hover:scale-110 transition-transform border border-white/10">
-              <Share2 size={18} />
-            </div>
-            <span className="text-[10px] sm:text-xs font-medium text-gray-200">Share</span>
-          </button>
-        </div>
+        {/* Share */}
+        <button
+          onClick={handleShare}
+          className="flex flex-col items-center gap-0.5 text-white group cursor-pointer"
+        >
+          <div className="p-2 sm:p-2.5 rounded-full bg-black/40 backdrop-blur-md group-hover:scale-110 transition-transform border border-white/10 shadow-lg">
+            <Share2 size={18} />
+          </div>
+          <span className="text-[10px] font-medium text-gray-200 drop-shadow">Share</span>
+        </button>
       </div>
     </div>
   );
