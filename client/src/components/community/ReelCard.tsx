@@ -255,36 +255,29 @@ export const ReelCard: React.FC<ReelCardProps> = ({
       {/* Top Gradient Overlay */}
       <div className="absolute top-0 left-0 right-0 h-28 bg-gradient-to-b from-black/80 via-black/30 to-transparent pointer-events-none z-10" />
 
-      {/* Top Header Overlay Bar (Mute Sound on Left, Delete on Right) */}
-      <div className="absolute top-3 left-3 right-3 z-30 flex items-center justify-between pointer-events-none">
-        {/* Mute/Unmute Speaker Button */}
+      {/* Top Header Overlay Bar (Mute Icon on Left, Delete Icon on Right) */}
+      <div className="absolute top-2.5 left-2.5 right-2.5 z-30 flex items-center justify-between pointer-events-none">
+        {/* Mute/Unmute Speaker Icon Button */}
         <button
           onClick={toggleMute}
-          className="px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-white pointer-events-auto hover:bg-black/80 transition-all border border-white/20 flex items-center gap-1.5 shadow-lg active:scale-95 cursor-pointer"
-          title={isMuted ? "Click to Unmute Sound" : "Click to Mute Sound"}
+          className="w-8 h-8 rounded-full bg-black/60 backdrop-blur-md text-white pointer-events-auto hover:bg-black/80 transition-all border border-white/20 flex items-center justify-center shadow-lg active:scale-95 cursor-pointer"
+          title={isMuted ? "Unmute Sound" : "Mute Sound"}
         >
           {isMuted ? (
-            <>
-              <VolumeX size={13} className="text-red-400 shrink-0" />
-              <span className="text-[10px] font-medium text-gray-200">Tap to Unmute</span>
-            </>
+            <VolumeX size={16} className="text-red-400" />
           ) : (
-            <>
-              <Volume2 size={13} className="text-emerald-400 animate-pulse shrink-0" />
-              <span className="text-[10px] font-semibold text-emerald-300">Sound On</span>
-            </>
+            <Volume2 size={16} className="text-emerald-400 animate-pulse" />
           )}
         </button>
 
-        {/* Delete Reel Button (Visible for author or admin) */}
+        {/* Delete Reel Icon Button (Visible for author or admin) */}
         {canDelete && (
           <button
             onClick={handleDeleteClick}
-            className="px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-red-400 hover:text-white hover:bg-red-600/90 hover:border-red-500/60 pointer-events-auto transition-all border border-white/20 shadow-lg active:scale-95 cursor-pointer flex items-center gap-1.5 group"
+            className="w-8 h-8 rounded-full bg-black/60 backdrop-blur-md text-red-400 hover:text-white hover:bg-red-600 hover:border-red-500/60 pointer-events-auto transition-all border border-white/20 shadow-lg active:scale-95 cursor-pointer flex items-center justify-center group"
             title="Delete Reel Video"
           >
-            <Trash2 size={12} className="group-hover:scale-110 transition-transform shrink-0" />
-            <span className="text-[10px] font-semibold">Delete</span>
+            <Trash2 size={15} className="group-hover:scale-110 transition-transform" />
           </button>
         )}
       </div>
