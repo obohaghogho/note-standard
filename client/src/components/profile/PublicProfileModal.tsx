@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Loader2, ArrowLeft, UserPlus, UserCheck, MessageCircle, Share2, Sparkles, TrendingUp, Users, MoreVertical, Plus, Edit3, Upload } from 'lucide-react';
+import { X, Loader2, ArrowLeft, UserCheck, MessageCircle, Share2, Sparkles, TrendingUp, Users, MoreVertical, Plus, Edit3, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -31,6 +31,8 @@ export interface PublicProfile {
   followers_count: number;
   following_count: number;
   posts_count: number;
+  notes_count?: number;
+  likes_count?: number;
 }
 
 export interface PublicPost {
@@ -38,6 +40,9 @@ export interface PublicPost {
   author_id: string;
   content: string;
   media_url?: string;
+  media_urls?: string[];
+  post_type?: string;
+  category?: string;
   created_at: string;
   likes_count: number;
   comments_count: number;
@@ -58,6 +63,91 @@ interface PublicProfileModalProps {
   isPage?: boolean;
 }
 
+const UserListModal: React.FC<{
+  profileId: string;
+  type: 'followers' | 'following';
+  onClose: () => void;
+  onSelectUser: (username: string) => void;
+}> = ({ profileId, type, onClose, onSelectUser }) => {
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      setLoading(true);
+      try {
+        const res = await api.get(`/community/profile/${profileId}/${type}`);
+        setUsers(res.data || []);
+      } catch (err) {
+        console.error(`Failed to fetch ${type}:`, err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUsers();
+  }, [profileId, type]);
+
+  return (
+    <div className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+      <div className="bg-gray-900 border border-white/10 w-full max-w-md rounded-3xl p-5 space-y-4 text-white shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <h3 className="font-bold text-base capitalize flex items-center gap-2">
+            <Users size={18} className="text-emerald-400" />
+            {type} ({users.length})
+          </h3>
+          <button onClick={onClose} className="p-1 rounded-full text-gray-400 hover:text-white hover:bg-white/10">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="max-h-[350px] overflow-y-auto space-y-3 pr-1 scrollbar-thin">
+          {loading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 size={24} className="animate-spin text-emerald-400" />
+            </div>
+          ) : users.length === 0 ? (
+            <div className="text-center text-xs text-gray-500 py-8">
+              No {type} yet.
+            </div>
+          ) : (
+            users.map((u) => (
+              <div key={u.id} className="flex items-center justify-between p-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 transition-colors">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-full bg-gray-800 overflow-hidden shrink-0 border border-white/10">
+                    {u.avatar_url ? (
+                      <img src={u.avatar_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center font-bold text-sm text-gray-400">
+                        {(u.username || 'U')[0].toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-bold text-sm text-white truncate flex items-center gap-1">
+                      {u.full_name || u.username}
+                      {u.is_verified && <CheckCircle size={13} className="text-blue-400 fill-blue-500/20" />}
+                    </div>
+                    <div className="text-xs text-gray-400 truncate">@{u.username}</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    onClose();
+                    onSelectUser(u.username);
+                  }}
+                  className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-semibold transition-all border border-white/10 shrink-0"
+                >
+                  View
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
   userId,
   username,
@@ -76,12 +166,18 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
   const [activeTab, setActiveTab] = useState<ProfileTab>('posts');
   const [featuredNote, setFeaturedNote] = useState<any>(null);
   const [notes, setNotes] = useState<any[]>([]);
+  const [notesMeta, setNotesMeta] = useState<{ totalCount: number; publicCount: number; privateCount: number }>({ totalCount: 0, publicCount: 0, privateCount: 0 });
+  const [likedPosts, setLikedPosts] = useState<PublicPost[]>([]);
+  const [bookmarkedPosts, setBookmarkedPosts] = useState<PublicPost[]>([]);
+  const [userListModalType, setUserListModalType] = useState<'followers' | 'following' | null>(null);
+
   const [isFetchingTab, setIsFetchingTab] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
-  
+  const [isMuted, setIsMuted] = useState(false);
+
   const [suggestedUsers, setSuggestedUsers] = useState<any[]>([]);
   const [trendingNotes, setTrendingNotes] = useState<any[]>([]);
   
@@ -90,6 +186,21 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
   const isSelf = currentUser?.id === profile?.id;
+
+  const setNotesFromData = (data: any) => {
+    if (Array.isArray(data)) {
+      setNotes(data);
+      setNotesMeta({ totalCount: data.length, publicCount: data.length, privateCount: 0 });
+    } else if (data && typeof data === 'object') {
+      const list = Array.isArray(data.notes) ? data.notes : [];
+      setNotes(list);
+      setNotesMeta({
+        totalCount: typeof data.totalCount === 'number' ? data.totalCount : list.length,
+        publicCount: typeof data.publicCount === 'number' ? data.publicCount : list.length,
+        privateCount: typeof data.privateCount === 'number' ? data.privateCount : 0
+      });
+    }
+  };
 
   useEffect(() => {
     if (modalRef.current) {
@@ -145,21 +256,37 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
     fetchFeatured();
   }, [profile?.id]);
 
+  // Initial fetch of public notes for profile
+  useEffect(() => {
+    if (!profile?.id) return;
+    const fetchInitialNotes = async () => {
+      try {
+        const res = await api.get(`/community/profile/${profile.id}/notes`);
+        if (res.data) setNotesFromData(res.data);
+      } catch (e) {
+        console.error('Failed to fetch initial profile notes:', e);
+      }
+    };
+    fetchInitialNotes();
+  }, [profile?.id]);
+
   useEffect(() => {
     if (!profile || activeTab === 'posts' || activeTab === 'about') return;
     const fetchTabData = async () => {
       setIsFetchingTab(true);
       try {
-        if (activeTab === 'notes' && isSelf) {
-          const { data } = await supabase
-            .from('notes')
-            .select('*')
-            .eq('owner_id', profile.id)
-            .order('created_at', { ascending: false });
-          setNotes(data || []);
+        if (activeTab === 'notes') {
+          const res = await api.get(`/community/profile/${profile.id}/notes`);
+          if (res.data) setNotesFromData(res.data);
+        } else if (activeTab === 'likes') {
+          const res = await api.get(`/community/profile/${profile.id}/likes`);
+          setLikedPosts(res.data || []);
+        } else if (activeTab === 'bookmarks' && isSelf) {
+          const res = await api.get(`/community/feed?tab=saved`);
+          setBookmarkedPosts(res.data?.posts || []);
         }
       } catch (e) {
-        console.error(e);
+        console.error('Failed to fetch tab data:', e);
       } finally {
         setIsFetchingTab(false);
       }
@@ -267,8 +394,6 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
       }
     }
   };
-
-  const [isMuted, setIsMuted] = useState(false);
 
   const handleMuteUser = async () => {
     if (!profile) return;
@@ -422,7 +547,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
   };
 
   const MainContent = (
-    <div className="flex flex-col w-full bg-gray-950 border-x sm:border border-white/10 sm:rounded-3xl shadow-2xl relative min-h-screen sm:min-h-0">
+    <div className="flex flex-col w-full bg-gray-950 border-x sm:border border-white/10 sm:rounded-3xl shadow-2xl relative min-h-full">
       
       {/* Top Navigation Overlay & Sticky Header */}
       <div className={`sticky top-0 left-0 right-0 z-40 transition-all duration-300 pt-[env(safe-area-inset-top,8px)] ${scrolled ? 'bg-gray-950/95 backdrop-blur-xl border-b border-white/10 py-2.5' : 'bg-gradient-to-b from-black/80 via-black/40 to-transparent py-3'}`}>
@@ -460,9 +585,16 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
           postsCount={profile.posts_count} 
           followersCount={profile.followers_count} 
           followingCount={profile.following_count} 
-          notesCount={notes.length} 
-          likesCount={posts.filter(p => p.is_liked).length}
-          onStatClick={(stat) => toast.success(`Viewing ${stat}`)}
+          notesCount={profile.notes_count ?? notesMeta.totalCount ?? notes.length} 
+          likesCount={profile.likes_count ?? 0}
+          onStatClick={(stat) => {
+            if (stat === 'notes') setActiveTab('notes');
+            else if (stat === 'posts') setActiveTab('posts');
+            else if (stat === 'likes') setActiveTab('likes');
+            else if (stat === 'followers' || stat === 'following') {
+              setUserListModalType(stat);
+            }
+          }}
         />
         
         {/* Action Buttons Row */}
@@ -563,11 +695,16 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
             )}
             
             {activeTab === 'notes' && (
-              <div className="flex flex-col">
+              <div className="flex flex-col p-4 gap-4">
+                {notesMeta.privateCount > 0 && !isSelf && (
+                  <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-200 text-xs font-medium flex items-center justify-between">
+                    <span>🔒 Showing {notes.length} public note{notes.length === 1 ? '' : 's'}. ({notesMeta.privateCount} private note{notesMeta.privateCount === 1 ? '' : 's'} hidden by author)</span>
+                  </div>
+                )}
                 {notes.length === 0 ? (
                   <ProfileEmptyStates type="notes" isOwner={isSelf} onAction={() => navigate('/dashboard')} />
                 ) : (
-                  <div className="p-4 grid gap-4">
+                  <div className="grid gap-4">
                     {notes.map(note => (
                       <div key={note.id} className="p-5 bg-gray-900/50 hover:bg-gray-900 border border-white/5 hover:border-white/10 rounded-2xl text-white transition-all cursor-pointer">
                         <h4 className="font-bold text-lg mb-1">{note.title || 'Untitled Note'}</h4>
@@ -579,9 +716,62 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
               </div>
             )}
 
-            {activeTab === 'media' && <ProfileEmptyStates type="media" isOwner={isSelf} />}
-            {activeTab === 'likes' && <ProfileEmptyStates type="likes" isOwner={isSelf} />}
-            {activeTab === 'bookmarks' && <ProfileEmptyStates type="bookmarks" isOwner={isSelf} />}
+            {activeTab === 'media' && (
+              <div className="flex flex-col">
+                {(() => {
+                  const mediaPosts = posts.filter(p => p.media_url || (Array.isArray(p.media_urls) && p.media_urls.length > 0));
+                  if (mediaPosts.length === 0) {
+                    return <ProfileEmptyStates type="media" isOwner={isSelf} />;
+                  }
+                  return mediaPosts.map(post => (
+                    <ProfilePostCard 
+                      key={post.id} 
+                      post={post} 
+                      onClick={() => navigate(`/dashboard/post/${post.id}`)}
+                      onLike={() => {}} 
+                      onComment={() => navigate(`/dashboard/post/${post.id}`)} 
+                    />
+                  ));
+                })()}
+              </div>
+            )}
+
+            {activeTab === 'likes' && (
+              <div className="flex flex-col">
+                {likedPosts.length === 0 ? (
+                  <ProfileEmptyStates type="likes" isOwner={isSelf} />
+                ) : (
+                  likedPosts.map(post => (
+                    <ProfilePostCard 
+                      key={post.id} 
+                      post={post} 
+                      onClick={() => navigate(`/dashboard/post/${post.id}`)}
+                      onLike={() => {}} 
+                      onComment={() => navigate(`/dashboard/post/${post.id}`)} 
+                    />
+                  ))
+                )}
+              </div>
+            )}
+
+            {activeTab === 'bookmarks' && (
+              <div className="flex flex-col">
+                {bookmarkedPosts.length === 0 ? (
+                  <ProfileEmptyStates type="bookmarks" isOwner={isSelf} />
+                ) : (
+                  bookmarkedPosts.map(post => (
+                    <ProfilePostCard 
+                      key={post.id} 
+                      post={post} 
+                      onClick={() => navigate(`/dashboard/post/${post.id}`)}
+                      onLike={() => {}} 
+                      onComment={() => navigate(`/dashboard/post/${post.id}`)} 
+                    />
+                  ))
+                )}
+              </div>
+            )}
+
             {activeTab === 'about' && (
               <div className="p-6">
                 <h3 className="text-xl font-bold text-white mb-6">About</h3>
@@ -612,12 +802,23 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
           </>
         )}
       </div>
+
+      {userListModalType && profile && (
+        <UserListModal
+          profileId={profile.id}
+          type={userListModalType}
+          onClose={() => setUserListModalType(null)}
+          onSelectUser={(un) => {
+            navigate(`/profile/${un}`);
+          }}
+        />
+      )}
     </div>
   );
 
   if (isPage) {
     return (
-      <div className="min-h-screen bg-black pt-0 pb-20 sm:pb-8 sm:p-4 md:p-6 lg:p-8 overflow-x-hidden">
+      <div className="min-h-screen bg-black pt-0 pb-20 sm:pb-8 sm:p-4 md:p-6 lg:p-8 overflow-x-hidden touch-pan-y">
         <div className="max-w-[1050px] mx-auto flex flex-col lg:flex-row gap-6 relative items-start">
           
           {/* Main Content Column */}
@@ -689,10 +890,15 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-0 sm:p-4 overflow-hidden">
+    <div 
+      className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-0 sm:p-4 overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose?.();
+      }}
+    >
       <div 
         ref={modalRef}
-        className="w-full max-w-2xl h-full sm:h-auto sm:max-h-[90vh] overflow-y-auto overflow-x-hidden scrollbar-hide relative bg-gray-950 sm:rounded-3xl"
+        className="w-full max-w-2xl h-full sm:h-[88vh] sm:max-h-[88vh] overflow-y-auto overflow-x-hidden relative bg-gray-950 sm:rounded-3xl shadow-2xl my-auto touch-pan-y scrollbar-thin"
         onScroll={handleScroll}
       >
         {MainContent}

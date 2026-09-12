@@ -64,6 +64,7 @@ const PaymentCallback = lazyWithRetry(() => import('./pages/PaymentCallback'), '
 const NotFoundPage = lazyWithRetry(() => import('./pages/NotFoundPage'), 'NotFoundPage');
 
 const PublicProfilePage = lazyWithRetry(() => import('./pages/dashboard/PublicProfilePage'), 'PublicProfilePage');
+const PostDetailPage = lazyWithRetry(() => import('./pages/dashboard/PostDetailPage'), 'PostDetailPage');
 
 // Dashboard pages are now static for performance and reliability
 
@@ -101,6 +102,11 @@ const KycCompliancePage = lazyWithRetry(() => import('./pages/admin/KycComplianc
 const ChatRedirect = () => {
   const { id } = useParams();
   return <Navigate to={`/dashboard/chat?id=${id}`} replace />;
+};
+
+const PostRedirect = () => {
+  const { postId } = useParams();
+  return <Navigate to={`/dashboard/post/${postId}`} replace />;
 };
 
 import { preloadCoreDashboardRoutes } from './utils/routePreloader';
@@ -156,6 +162,8 @@ function AuthenticatedProviders() {
                       <Route path="/app" element={<Navigate to="/dashboard" replace />} />
 
                       <Route path="/chat/:id" element={<ChatRedirect />} />
+                      <Route path="/post/:postId" element={<PostRedirect />} />
+                      <Route path="/community/post/:postId" element={<PostRedirect />} />
 
                       {/* Phase 6.2: Replay Debugger UI */}
                       <Route path="/debug/replay" element={<ReplayPage />} />
@@ -191,6 +199,8 @@ function AuthenticatedProviders() {
                           <Route path="feedback" element={<UserIssueTracker />} />
                           <Route path="profile/:userId" element={<PublicProfilePage />} />
                           <Route path="community/profile/:userId" element={<PublicProfilePage />} />
+                          <Route path="post/:postId" element={<PostDetailPage />} />
+                          <Route path="community/post/:postId" element={<PostDetailPage />} />
                         </Route>
                       </Route>
 

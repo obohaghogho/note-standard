@@ -91,9 +91,12 @@
     background-color: #030712 !important;
   }
 
-  /* Remove tap highlight globally and enforce fast tap response */
+  /* Remove tap highlight globally and enforce fast tap response on interactive controls */
   * {
     -webkit-tap-highlight-color: transparent;
+  }
+
+  button, a, [role="button"], input, select, textarea {
     touch-action: manipulation;
   }
 

@@ -177,6 +177,12 @@ export async function getFeed(params: {
   return res.json();
 }
 
+export async function getPostById(postId: string): Promise<CommunityPost> {
+  const res = await authFetch(`${API_URL}/api/community/post/${postId}`);
+  if (!res.ok) throw new Error(`Get post failed (${res.status})`);
+  return res.json();
+}
+
 // ─── Post CRUD ─────────────────────────────────────────────────────────────────
 export async function createPost(payload: {
   title?: string;

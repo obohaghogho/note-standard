@@ -651,6 +651,47 @@ const createReel = async (req, res, next) => {
   }
 };
 
+const getPostById = async (req, res, next) => {
+  try {
+    const { postId } = req.params;
+    const userId = req.user?.id;
+
+    const { data: post, error } = await supabase
+      .from('community_posts')
+      .select('*, profiles!author_id(id, username, full_name, avatar_url, is_verified), community_likes(user_id), community_bookmarks(user_id), community_comments(id)')
+      .eq('id', postId)
+      .maybeSingle();
+
+    if (error || !post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    if (post.post_type === 'poll') {
+      const { data: poll } = await supabase.from('community_polls').select('id').eq('post_id', post.id).maybeSingle();
+      if (poll) {
+        const { data: optionsData } = await supabase.from('community_poll_options').select('*').eq('poll_id', poll.id);
+        post.poll_options = optionsData || [];
+      }
+    }
+
+    const clean = {
+      ...post,
+      comments_count: post.community_comments?.length || 0,
+      likes_count: post.community_likes?.length || 0,
+      is_liked: (post.community_likes || []).some(l => l.user_id === userId),
+      is_bookmarked: (post.community_bookmarks || []).some(b => b.user_id === userId),
+      media_url: Array.isArray(post.media_urls) && post.media_urls.length > 0 ? post.media_urls[0] : (post.media_url || null),
+    };
+    delete clean.community_comments;
+    delete clean.community_likes;
+    delete clean.community_bookmarks;
+
+    res.json(clean);
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   createCommunityPost,
   addComment,
@@ -668,5 +709,7 @@ module.exports = {
   votePollOption,
   getReels,
   createReel,
-  sharePost
+  sharePost,
+  getPostById
 };
+

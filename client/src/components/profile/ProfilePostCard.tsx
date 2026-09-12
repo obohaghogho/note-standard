@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Heart, MessageCircle, Share2, Bookmark, MoreVertical, CheckCircle } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Bookmark, MoreVertical, CheckCircle, Play } from 'lucide-react';
 import SecureImage from '../common/SecureImage';
 import type { PublicPost } from './PublicProfileModal';
 import { formatDistanceToNow } from 'date-fns';
@@ -13,6 +13,19 @@ interface ProfilePostCardProps {
 }
 
 export const ProfilePostCard: React.FC<ProfilePostCardProps> = ({ post, onLike, onComment, onClick }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const mediaUrl = post.media_url || (Array.isArray(post.media_urls) && post.media_urls.length > 0 ? post.media_urls[0] : null);
+
+  const isVideo = Boolean(
+    mediaUrl && (
+      /\.(mp4|webm|mov|m3u8|ogg)($|\?)/i.test(mediaUrl) ||
+      post.post_type === 'reel' ||
+      post.post_type === 'video' ||
+      post.category === 'reel'
+    )
+  );
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 15 }}
@@ -58,14 +71,53 @@ export const ProfilePostCard: React.FC<ProfilePostCardProps> = ({ post, onLike, 
         </div>
 
         {/* Content */}
-        <div className="text-[15px] text-gray-200 mb-4 whitespace-pre-wrap ml-0 sm:ml-13 leading-relaxed">
-          {post.content}
-        </div>
+        {post.content && (
+          <div className="text-[15px] text-gray-200 mb-4 whitespace-pre-wrap ml-0 sm:ml-13 leading-relaxed">
+            {post.content}
+          </div>
+        )}
 
         {/* Media */}
-        {post.media_url && (
-          <div className="ml-0 sm:ml-13 mb-4 rounded-2xl overflow-hidden border border-white/10 max-h-[400px] bg-gray-900 shadow-lg">
-            <SecureImage src={post.media_url} alt="Post media" className="w-full h-full object-cover" />
+        {mediaUrl && (
+          <div 
+            className="ml-0 sm:ml-13 mb-4 rounded-2xl overflow-hidden border border-white/10 max-h-[420px] bg-gray-900 shadow-lg relative group/media"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {isVideo ? (
+              <div className="relative w-full h-full min-h-[220px] bg-black flex items-center justify-center">
+                <video
+                  src={mediaUrl}
+                  controls={isPlaying}
+                  preload="metadata"
+                  playsInline
+                  className="w-full max-h-[400px] object-contain rounded-2xl"
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                />
+                {!isPlaying && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const container = e.currentTarget.parentElement;
+                      const videoEl = container?.querySelector('video') as HTMLVideoElement;
+                      if (videoEl) {
+                        videoEl.play();
+                        setIsPlaying(true);
+                      }
+                    }}
+                    className="absolute inset-0 m-auto w-14 h-14 rounded-full bg-emerald-500/80 hover:bg-emerald-500 text-neutral-950 flex items-center justify-center shadow-xl backdrop-blur-sm transition-all transform hover:scale-105"
+                    title="Play Reel Video"
+                  >
+                    <Play size={24} className="fill-current ml-1" />
+                  </button>
+                )}
+                <span className="absolute top-3 left-3 bg-black/60 backdrop-blur-md text-xs text-white font-semibold px-2.5 py-1 rounded-full border border-white/10 flex items-center gap-1">
+                  🎬 Reel
+                </span>
+              </div>
+            ) : (
+              <SecureImage src={mediaUrl} alt="Post media" className="w-full h-full object-cover" />
+            )}
           </div>
         )}
 
@@ -108,3 +160,4 @@ export const ProfilePostCard: React.FC<ProfilePostCardProps> = ({ post, onLike, 
     </motion.div>
   );
 };
+
