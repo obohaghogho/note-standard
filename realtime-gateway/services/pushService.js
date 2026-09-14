@@ -756,7 +756,7 @@ async function dispatchV2Push(params, pushTargets, isCall = false) {
           .then(() => logPushMetric({ platform: 'web', push_type: 'vapid', status: 'accepted', user_id: userId, device_id: t.device_id, endpoint_hash: endpointHash }))
           .catch(err => {
             logPushMetric({ platform: 'web', push_type: 'vapid', status: 'failed', error_code: String(err.statusCode || err.message), user_id: userId, device_id: t.device_id, endpoint_hash: endpointHash });
-            if (err.statusCode === 410 || err.statusCode === 404) {
+            if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 403) {
                console.log(`[FORENSIC][V2Router] ⚠️ Marking V2 Installation INVALID (${t.device_id}): ${t.push_endpoint.substring(0, 30)}... (Permanent Status: ${err.statusCode})`);
                supabase.from('device_installations')
                  .update({ 
@@ -815,7 +815,7 @@ async function dispatchV2Push(params, pushTargets, isCall = false) {
               { headers: { Urgency: 'high' }, TTL: 86400 }
             ).catch(err => {
               console.error(`[V2Router] V1 Push Sub fail for ${sub.endpoint.substring(0, 30)}:`, err.message);
-              if (err.statusCode === 410 || err.statusCode === 404) {
+              if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 403) {
                 supabase.from('push_subscriptions').delete().match({ user_id: userId, endpoint: sub.endpoint }).then();
               }
             })
@@ -1038,8 +1038,8 @@ async function sendGenericPush(params) {
             return supabase.from('push_subscriptions').update({ last_successful_push_at: new Date().toISOString() }).match({ user_id: userId, endpoint: sub.endpoint });
           }).catch(err => {
             logPushMetric({ platform: 'web', push_type: 'vapid', status: 'failed', error_code: String(err.statusCode || err.message), user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
-            if (err.statusCode === 410 || err.statusCode === 404) {
-              // Subscription explicitly expired or gone (410, 404) — mark it invalid
+            if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 403) {
+              // Subscription explicitly expired, gone, or rejected (410, 404, 403) — mark it invalid
               logPushMetric({ platform: 'web', push_type: 'vapid', status: 'invalid_removed', error_code: String(err.statusCode), user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
               return supabase.from('push_subscriptions').update({ status: 'invalid', last_failed_push_at: new Date().toISOString() })
                 .match({ user_id: userId, endpoint: sub.endpoint })
