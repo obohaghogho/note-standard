@@ -71,6 +71,90 @@ const createNotification = async (params) => {
       is_read: false,
     });
 
+    // If skipPush is true, we stop here (push was already dispatched fast-path)
+    if (skipPush) {
+      return true;
+    }
+
+    // 3. Web Push (PWA — VAPID) is now handled entirely by the Realtime Gateway.
+    //    All push routing goes through /internal/push below.
+
+    // 4. Native Push (FCM for Android, APNs for iOS) via the realtime-gateway.
+    //    The gateway holds Firebase Admin and APNs credentials.
+    //    We route through the gateway's /internal/push for all native push notifications.
+
+    const envConfig = require('../config/env');
+    const gatewayUrlStr = process.env.REALTIME_GATEWAY_URL || envConfig.REALTIME_GATEWAY_URL || 'https://realtime-gateway-gsb5.onrender.com';
+    const bodyStr = message || title;
+    
+    // Temporary: Disable KeepAlive to test if Render is tearing down long-lived sockets
+    // and causing the push request to fail silently.
+    if (!global.__pushHttpAgent) {
+      const http = require('http');
+      const https = require('https');
+      global.__pushHttpAgent = new http.Agent({ keepAlive: false });
+      global.__pushHttpsAgent = new https.Agent({ keepAlive: false });
+    }
+    
+    const targetUrl = new URL('/internal/push', gatewayUrlStr);
+    const payloadBody = JSON.stringify({
+      userId: receiverId,
+      title,
+      body: bodyStr,
+      sound: params.sound || 'default',
+      payload: {
+        type,
+        conversationId: conversationId || null,
+        messageId: messageId || null,
+        url: resolvedLink || link || '/dashboard/notifications',
+        recipientId: receiverId,        // legacy compat
+        targetUserId: receiverId,       // explicit
+        targetAccountId: receiverId,    // explicit (same as userId in this app)
+        deliveryWebhookUrl: messageId ? `${gatewayUrlStr}/deliver/${messageId}` : undefined,
+        trace,
+      },
+    });
+
+    const lib = targetUrl.protocol === 'https:' ? require('https') : require('http');
+    const agent = targetUrl.protocol === 'https:' ? global.__pushHttpsAgent : global.__pushHttpAgent;
+
+    const req = lib.request({
+      hostname: targetUrl.hostname,
+      port: targetUrl.port || (targetUrl.protocol === 'https:' ? 443 : 80),
+      path: targetUrl.pathname,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payloadBody) },
+      agent: agent,
+      timeout: 10000 // 10 seconds timeout
+    }, (res) => {
+      let responseBody = '';
+      res.on('data', chunk => responseBody += chunk);
+      res.on('end', () => {
+        console.log(`[NotificationService] Gateway push response status: ${res.statusCode}`);
+        console.log(`[NotificationService] Gateway push response body: ${responseBody}`);
+      });
+    });
+
+    req.on('error', (err) => {
+      console.error('[NotificationService] ❌ Native push via gateway failed.');
+      console.error(`[NotificationService] Target URL: ${gatewayUrlStr}/internal/push`);
+      console.error(`[NotificationService] Error Code: ${err.code}`);
+      console.error(`[NotificationService] Errno: ${err.errno}`);
+      console.error(`[NotificationService] Hostname: ${err.hostname}`);
+      console.error(`[NotificationService] Stack: ${err.stack}`);
+    });
+    
+    req.on('timeout', () => {
+      console.error('[NotificationService] ❌ Gateway push request timed out.');
+      req.destroy();
+    });
+
+    console.log(`[NotificationService] 📤 Dispatching HTTP push request to Gateway: ${gatewayUrlStr}/internal/push`);
+    console.log(`[NotificationService] Payload: ${payloadBody.substring(0, 150)}...`);
+    
+    req.write(payloadBody);
+    req.end();
+
     // 5. Independent Non-blocking Email Notification Dispatch
     if (receiverId) {
       setImmediate(async () => {
@@ -96,11 +180,6 @@ const createNotification = async (params) => {
           console.warn('[NotificationService] Independent email dispatch notice:', err.message);
         }
       });
-    }
-
-    // If skipPush is true, we stop here (push was already dispatched fast-path)
-    if (skipPush) {
-      return true;
     }
 
     return true;

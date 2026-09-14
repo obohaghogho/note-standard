@@ -756,7 +756,7 @@ async function dispatchV2Push(params, pushTargets, isCall = false) {
           .then(() => logPushMetric({ platform: 'web', push_type: 'vapid', status: 'accepted', user_id: userId, device_id: t.device_id, endpoint_hash: endpointHash }))
           .catch(err => {
             logPushMetric({ platform: 'web', push_type: 'vapid', status: 'failed', error_code: String(err.statusCode || err.message), user_id: userId, device_id: t.device_id, endpoint_hash: endpointHash });
-            if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 403) {
+            if (err.statusCode === 410 || err.statusCode === 404) {
                console.log(`[FORENSIC][V2Router] ⚠️ Marking V2 Installation INVALID (${t.device_id}): ${t.push_endpoint.substring(0, 30)}... (Permanent Status: ${err.statusCode})`);
                supabase.from('device_installations')
                  .update({ 
@@ -771,59 +771,6 @@ async function dispatchV2Push(params, pushTargets, isCall = false) {
             }
           })
       );
-    }
-  }
-
-  // Dual-dispatch V1 Web Push (PWA / Browser - VAPID from push_subscriptions)
-  // Ensures PWA web notifications are always delivered even when V2 routing is active.
-  if (!isCall && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
-    try {
-      const { data: webSubs } = await supabase
-        .from('push_subscriptions')
-        .select('endpoint, p256dh, auth, vapid_key_version')
-        .eq('user_id', userId)
-        .neq('status', 'invalid');
-
-      if (webSubs && webSubs.length > 0) {
-        const webPayload = JSON.stringify({
-          title,
-          body,
-          icon: '/icon-192.png',
-          data: {
-            url: resolvePushUrl(payload),
-            type: payload?.type || 'chat_message',
-            messageId: payload?.messageId || null,
-            conversationId: payload?.conversationId || null,
-            targetAccountId: userId,
-            apiUrl: process.env.BACKEND_URL || 'https://note-standard-api.onrender.com',
-            deliveryWebhookUrl: payload?.messageId
-              ? `${process.env.SELF_URL || 'https://realtime-gateway-gsb5.onrender.com'}/deliver/${payload.messageId}`
-              : null,
-          },
-        });
-
-        webSubs.forEach(sub => {
-          const alreadyInV2 = pushTargets.some(t => t.push_endpoint === sub.endpoint);
-          if (alreadyInV2) return;
-
-          const endpointHash = require('crypto').createHash('sha256').update(sub.endpoint).digest('hex').substring(0, 16);
-          console.log(`[V2Router] 📤 Dual-dispatching Web Push to V1 Sub: ${sub.endpoint.substring(0, 30)}...`);
-          nativePromises.push(
-            webpush.sendNotification(
-              { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-              webPayload,
-              { headers: { Urgency: 'high' }, TTL: 86400 }
-            ).catch(err => {
-              console.error(`[V2Router] V1 Push Sub fail for ${sub.endpoint.substring(0, 30)}:`, err.message);
-              if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 403) {
-                supabase.from('push_subscriptions').delete().match({ user_id: userId, endpoint: sub.endpoint }).then();
-              }
-            })
-          );
-        });
-      }
-    } catch (webErr) {
-      console.warn('[V2Router] V1 push_subscriptions dual-query warning:', webErr.message);
     }
   }
 
@@ -1038,8 +985,8 @@ async function sendGenericPush(params) {
             return supabase.from('push_subscriptions').update({ last_successful_push_at: new Date().toISOString() }).match({ user_id: userId, endpoint: sub.endpoint });
           }).catch(err => {
             logPushMetric({ platform: 'web', push_type: 'vapid', status: 'failed', error_code: String(err.statusCode || err.message), user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
-            if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 403) {
-              // Subscription explicitly expired, gone, or rejected (410, 404, 403) — mark it invalid
+            if (err.statusCode === 410 || err.statusCode === 404) {
+              // Subscription explicitly expired or gone (410, 404) — mark it invalid
               logPushMetric({ platform: 'web', push_type: 'vapid', status: 'invalid_removed', error_code: String(err.statusCode), user_id: userId, device_id: null, vapid_version: sub.vapid_key_version, endpoint_hash: endpointHash });
               return supabase.from('push_subscriptions').update({ status: 'invalid', last_failed_push_at: new Date().toISOString() })
                 .match({ user_id: userId, endpoint: sub.endpoint })

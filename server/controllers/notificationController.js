@@ -1,41 +1,6 @@
 const supabase = require("../config/database");
 const notificationService = require("../services/notificationService");
 
-/**
- * Fire-and-forget helper: clears the realtime gateway's in-memory device cache for a user.
- * Must be called after any push subscription or installation registration so the NEXT push
- * does a fresh DB read instead of returning the pre-registration stale empty list.
- * This is the fix for the "first message no push" race condition (Root Cause 1).
- */
-function _clearGatewayDeviceCache(userId) {
-  try {
-    const envConfig = require('../config/env');
-    const gatewayUrl = process.env.REALTIME_GATEWAY_URL || envConfig.REALTIME_GATEWAY_URL || 'https://realtime-gateway-gsb5.onrender.com';
-    const targetUrl = new URL('/internal/cache/clear', gatewayUrl);
-    const body = JSON.stringify({ userId });
-    const lib = targetUrl.protocol === 'https:' ? require('https') : require('http');
-    const req = lib.request({
-      hostname: targetUrl.hostname,
-      port: targetUrl.port || (targetUrl.protocol === 'https:' ? 443 : 80),
-      path: targetUrl.pathname,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
-      timeout: 5000,
-    }, (res) => {
-      res.on('data', () => {});
-      res.on('end', () => {
-        console.log(`[NotificationController] ✅ Gateway device cache cleared for user ${userId} (status ${res.statusCode})`);
-      });
-    });
-    req.on('error', (err) => console.warn(`[NotificationController] Gateway cache clear failed (non-fatal): ${err.message}`));
-    req.on('timeout', () => req.destroy());
-    req.write(body);
-    req.end();
-  } catch (e) {
-    console.warn('[NotificationController] _clearGatewayDeviceCache error (non-fatal):', e.message);
-  }
-}
-
 const getNotifications = async (req, res, next) => {
   try {
     const userId = req.user.id;
@@ -205,45 +170,41 @@ const subscribeToNotifications = async (req, res, next) => {
 
     // 3. V2 Multi-Account Installation Dual-Sync: automatically populate device_installations
     // and installation_accounts so V2 push routing has immediate coverage without relying on fallback.
-    const effectiveDeviceId = deviceId || `web-${userId.substring(0, 8)}-${endpoint ? endpoint.slice(-12) : 'default'}`;
-    try {
-      const upsertPayload = {
-        device_id: effectiveDeviceId,
-        push_endpoint: endpoint || null,
-        push_p256dh: p256dh || null,
-        push_auth: auth || null,
-        platform: platform || 'web',
-        type: 'vapid',
-        token_updated_at: new Date().toISOString(),
-        last_seen_at: new Date().toISOString(),
-        endpoint_status: 'VALID',
-        failure_count: 0,
-        last_validation_reason: 'PUSH_SUBSCRIBE_SYNC'
-      };
-      const { data: inst } = await supabase
-        .from('device_installations')
-        .upsert(upsertPayload, { onConflict: 'device_id' })
-        .select('installation_id')
-        .maybeSingle();
+    if (deviceId) {
+      try {
+        const upsertPayload = {
+          device_id: deviceId,
+          push_endpoint: endpoint || null,
+          push_p256dh: p256dh || null,
+          push_auth: auth || null,
+          platform: platform || 'web',
+          type: 'vapid',
+          token_updated_at: new Date().toISOString(),
+          last_seen_at: new Date().toISOString(),
+          endpoint_status: 'VALID',
+          failure_count: 0,
+          last_validation_reason: 'PUSH_SUBSCRIBE_SYNC'
+        };
+        const { data: inst } = await supabase
+          .from('device_installations')
+          .upsert(upsertPayload, { onConflict: 'device_id' })
+          .select('installation_id')
+          .maybeSingle();
 
-      if (inst && inst.installation_id) {
-        await supabase
-          .from('installation_accounts')
-          .upsert({
-            installation_id: inst.installation_id,
-            user_id: userId,
-            session_state: 'ACTIVE',
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'installation_id,user_id' });
+        if (inst && inst.installation_id) {
+          await supabase
+            .from('installation_accounts')
+            .upsert({
+              installation_id: inst.installation_id,
+              user_id: userId,
+              session_state: 'ACTIVE',
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'installation_id,user_id' });
+        }
+      } catch (v2Err) {
+        console.warn('[PushSubscribe] V2 dual-sync non-fatal warning:', v2Err.message);
       }
-    } catch (v2Err) {
-      console.warn('[PushSubscribe] V2 dual-sync non-fatal warning:', v2Err.message);
     }
-
-    // FIX (Root Cause 1): Clear gateway device cache immediately so the next push
-    // dispatch performs a fresh DB read and sees this newly registered subscription.
-    // Fire-and-forget — does not block the response.
-    _clearGatewayDeviceCache(userId);
 
     res.json({ message: "Subscribed to push notifications" });
   } catch (err) {
@@ -502,12 +463,6 @@ const registerInstallation = async (req, res, next) => {
         .neq("session_state", "LOGGED_OUT");
 
       console.log(`[FORENSIC] installation_accounts upsert SUCCESS`);
-
-      // FIX (Root Cause 1): Clear gateway device cache immediately after registration
-      // so the next push dispatch performs a fresh DB read and sees this installation.
-      // Fire-and-forget — does not block the response.
-      _clearGatewayDeviceCache(userId);
-
       return res.json({ success: true, message: "Installation registered successfully", installation_id: installation.installation_id });
       
     } catch (err) {
