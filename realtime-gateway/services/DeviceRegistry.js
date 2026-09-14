@@ -12,7 +12,11 @@
  */
 
 const deviceCache = new Map();
-const CACHE_TTL_MS = 15000; // 15 seconds TTL
+// FIX (Root Cause 1, defense-in-depth): Reduced from 15s to 5s to shrink the window
+// during which a stale empty device list is served after a new push subscription is
+// registered. The primary fix is _clearGatewayDeviceCache() in notificationController.js;
+// this is defense-in-depth for any registration path that doesn't call cache/clear.
+const CACHE_TTL_MS = 5000; // 5 seconds TTL (was 15s)
 
 class DeviceRegistry {
   /**
