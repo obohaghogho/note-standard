@@ -13,9 +13,7 @@ const PLATFORM_SETTLEMENT_NUBANS = ['6179630721', '6175916799'];
 
 function isPlatformSettlementAccount(acctNo, acctName) {
   if (!acctNo) return false;
-  if (PLATFORM_SETTLEMENT_NUBANS.includes(String(acctNo).trim())) return true;
-  if (acctName && String(acctName).toUpperCase().includes("JOSSY DIGITAL")) return true;
-  return false;
+  return PLATFORM_SETTLEMENT_NUBANS.includes(String(acctNo).trim());
 }
 
 /**
@@ -216,8 +214,7 @@ class AnchorService {
 
       if (existingDva && existingDva.account_number && !isStaleRecord) {
         logger.info(`[AnchorService] Found existing dedicated_account for user ${userId}: ${existingDva.account_number} (${existingDva.bank_name})`);
-        const UserBankReferenceService = require('./payment/UserBankReferenceService');
-        const userRefService = new UserBankReferenceService();
+        const userRefService = require('./payment/UserBankReferenceService');
         let userRef = null;
         try {
           userRef = await userRefService.getOrCreateUserReference(userId, 'anchor');

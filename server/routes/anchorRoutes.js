@@ -124,7 +124,7 @@ router.get("/accounts", requireAuth, async (req, res, next) => {
     if (accounts && accounts.length > 0) {
       accounts.forEach((a) => {
         const isProvidus = a.bank_name?.toUpperCase().includes("PROVIDUS");
-        const isPlatformAccount = PLATFORM_SETTLEMENT_NUBANS.includes(a.account_number) || a.account_name?.toUpperCase().includes("JOSSY DIGITAL");
+        const isPlatformAccount = PLATFORM_SETTLEMENT_NUBANS.includes(a.account_number);
         const hasInvalidNuban = !a.account_number || !/^\d{10}$/.test(a.account_number);
         const hasMissingBankName = !a.bank_name;
         if (isProvidus || isPlatformAccount || hasInvalidNuban || hasMissingBankName) {
@@ -187,8 +187,7 @@ router.get("/accounts", requireAuth, async (req, res, next) => {
     }
 
     // Final validation & enrich with persistent user bank reference code
-    const UserBankReferenceService = require("../services/payment/UserBankReferenceService");
-    const userRefService = new UserBankReferenceService();
+    const userRefService = require("../services/payment/UserBankReferenceService");
     let userReference = null;
     try {
       userReference = await userRefService.getOrCreateUserReference(userId, "anchor");
@@ -199,7 +198,7 @@ router.get("/accounts", requireAuth, async (req, res, next) => {
     const validAccounts = (accounts || []).filter(a => {
       const hasValidNum = a.account_number && /^\d{10}$/.test(a.account_number);
       const hasValidBank = a.bank_name && !a.bank_name.toUpperCase().includes('PROVIDUS');
-      const isNotPlatform = !PLATFORM_SETTLEMENT_NUBANS.includes(a.account_number) && !a.account_name?.toUpperCase().includes('JOSSY DIGITAL');
+      const isNotPlatform = !PLATFORM_SETTLEMENT_NUBANS.includes(a.account_number);
       return hasValidNum && hasValidBank && isNotPlatform;
     }).map(a => ({
       ...a,
