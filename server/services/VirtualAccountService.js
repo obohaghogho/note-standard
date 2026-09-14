@@ -14,12 +14,12 @@ const logger = require("../utils/logger");
 const realtime = require("./realtimeService");
 
 /**
- * PLATFORM_SETTLEMENT_NUBAN
- * The Anchor settlement account shared by the platform itself. Must never be
- * treated as a valid user dedicated account — any DB record with this number
+ * PLATFORM_SETTLEMENT_NUBANS
+ * The Anchor settlement accounts shared by the platform itself. Must never be
+ * treated as a valid user dedicated account — any DB record with these numbers
  * is a stale placeholder and should be ignored so fresh provisioning occurs.
  */
-const PLATFORM_SETTLEMENT_NUBAN = '6179630721';
+const PLATFORM_SETTLEMENT_NUBANS = ['6179630721', '6175916799'];
 
 class VirtualAccountService {
   /**
@@ -58,10 +58,15 @@ class VirtualAccountService {
       throw error;
     }
 
-    // Defence-in-depth: treat any record holding the platform settlement NUBAN as non-existent.
+    // Defence-in-depth: treat any record holding platform settlement NUBANs as non-existent.
     // Such records are stale placeholders — returning them would show the wrong account number
-    // to users and cause deposits to be mis-attributed (the root cause of the Olivia John bug).
-    if (data && data.account_number === PLATFORM_SETTLEMENT_NUBAN) {
+    // to users and cause deposits to be mis-attributed.
+    const isPlatform = data && (
+      PLATFORM_SETTLEMENT_NUBANS.includes(data.account_number) ||
+      data.account_name?.toUpperCase().includes("JOSSY DIGITAL")
+    );
+
+    if (isPlatform) {
       logger.warn(`[VirtualAccountService] Suppressing stale platform-settlement placeholder for user ${userId} (${upperCurrency}). Fresh provisioning will be triggered.`);
       return null;
     }

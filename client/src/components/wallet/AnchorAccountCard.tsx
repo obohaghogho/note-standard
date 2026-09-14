@@ -32,7 +32,9 @@ export const AnchorAccountCard: React.FC<AnchorAccountCardProps> = ({ onSwitchTo
 
         // Handle structured response with availability info
         const responseData = res as any;
-        if (responseData?.available === false || (Array.isArray(res) && res.length === 0)) {
+
+        // Only show service disruption banner if service is explicitly unavailable due to an outage
+        if (responseData?.available === false && responseData?.reason === 'ANCHOR_SERVICE_UNAVAILABLE') {
           if (isMounted) {
             setUnavailable(true);
             setUnavailableMessage(
@@ -47,8 +49,9 @@ export const AnchorAccountCard: React.FC<AnchorAccountCardProps> = ({ onSwitchTo
           setAccount(accounts[0]);
           setUnavailable(false);
         } else if (isMounted) {
-          setUnavailable(true);
-          setUnavailableMessage("No valid Anchor virtual account available. Please use Fincra GTBank transfer.");
+          // User does not have a virtual account generated yet — show "Generate Account" button
+          setAccount(null);
+          setUnavailable(false);
         }
       } catch (err: any) {
         console.warn("[AnchorAccountCard] Failed loading Anchor accounts:", err);
@@ -70,13 +73,18 @@ export const AnchorAccountCard: React.FC<AnchorAccountCardProps> = ({ onSwitchTo
   const handleCreateVirtualAccount = async () => {
     try {
       setCreating(true);
-      const newAcc = await anchorApi.createVirtualAccount({});
-      setAccount(newAcc);
-      setUnavailable(false);
-      toast.success("Anchor Virtual NUBAN Account generated successfully!");
+      const resData = await anchorApi.createVirtualAccount({});
+      const accData = (resData as any)?.data || resData;
+      if (accData && (accData.account_number || accData.accountNumber)) {
+        setAccount(accData);
+        setUnavailable(false);
+        toast.success("Anchor Virtual NUBAN Account generated successfully!");
+      } else {
+        toast.error("Failed to generate Anchor Virtual Account. Please try again.");
+      }
     } catch (err: any) {
       const msg = err.response?.data?.message || err.message || "";
-      if (msg.includes("ANCHOR_API_UNAVAILABLE") || msg.includes("ANCHOR_NO_VALID_ACCOUNT")) {
+      if (msg.includes("ANCHOR_API_UNAVAILABLE")) {
         setUnavailable(true);
         setUnavailableMessage("Anchor banking service is temporarily unavailable. Please use Fincra GTBank transfer.");
         toast.error("Anchor service is temporarily unavailable");

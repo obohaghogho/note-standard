@@ -109,6 +109,7 @@ router.post("/virtual-account", requireAuth, async (req, res, next) => {
 router.get("/accounts", requireAuth, async (req, res, next) => {
   try {
     const userId = req.user.id;
+    const PLATFORM_SETTLEMENT_NUBANS = ["6179630721", "6175916799"];
 
     let { data: accounts, error } = await supabase
       .from("dedicated_accounts")
@@ -118,18 +119,34 @@ router.get("/accounts", requireAuth, async (req, res, next) => {
 
     if (error) throw error;
 
-    // Detect stale records: Providus bank name, invalid NUBAN format, or empty bank name
-    const hasStaleRecord = accounts && accounts.some((a) => {
-      const isProvidus = a.bank_name?.toUpperCase().includes("PROVIDUS");
-      const hasInvalidNuban = !a.account_number || !/^\d{10}$/.test(a.account_number);
-      const hasMissingBankName = !a.bank_name;
-      return isProvidus || hasInvalidNuban || hasMissingBankName;
-    });
+    // Detect stale records: Providus bank name, platform settlement NUBANs, invalid NUBAN format, or empty bank name
+    const staleAccountIds = [];
+    if (accounts && accounts.length > 0) {
+      accounts.forEach((a) => {
+        const isProvidus = a.bank_name?.toUpperCase().includes("PROVIDUS");
+        const isPlatformAccount = PLATFORM_SETTLEMENT_NUBANS.includes(a.account_number) || a.account_name?.toUpperCase().includes("JOSSY DIGITAL");
+        const hasInvalidNuban = !a.account_number || !/^\d{10}$/.test(a.account_number);
+        const hasMissingBankName = !a.bank_name;
+        if (isProvidus || isPlatformAccount || hasInvalidNuban || hasMissingBankName) {
+          staleAccountIds.push(a.id);
+        }
+      });
+    }
 
-    if (hasStaleRecord || !accounts || accounts.length === 0) {
+    if (staleAccountIds.length > 0) {
+      logger.warn(`[AnchorRoute] Cleaning up ${staleAccountIds.length} stale/platform Anchor dedicated_accounts for user ${userId}...`);
+      await supabase
+        .from("dedicated_accounts")
+        .delete()
+        .in("id", staleAccountIds);
+
+      accounts = (accounts || []).filter(a => !staleAccountIds.includes(a.id));
+    }
+
+    if (!accounts || accounts.length === 0) {
       try {
         const email = req.user.email || req.userProfile?.email || `${userId}@notestandard.com`;
-        await anchorService.createVirtualAccount({
+        const created = await anchorService.createVirtualAccount({
           userId,
           email,
           firstName: req.user.user_metadata?.first_name || req.userProfile?.username || "User",
@@ -137,13 +154,15 @@ router.get("/accounts", requireAuth, async (req, res, next) => {
           phone: req.user.phone,
         });
 
-        const { data: updatedAccounts } = await supabase
-          .from("dedicated_accounts")
-          .select("*")
-          .eq("user_id", userId)
-          .eq("provider", "anchor");
+        if (created) {
+          const { data: updatedAccounts } = await supabase
+            .from("dedicated_accounts")
+            .select("*")
+            .eq("user_id", userId)
+            .eq("provider", "anchor");
 
-        accounts = updatedAccounts || accounts;
+          accounts = updatedAccounts || (created.account_number ? [created] : []);
+        }
       } catch (resyncErr) {
         // If Anchor API is unavailable, return a clear signal to the client
         if (resyncErr.code === 'ANCHOR_API_UNAVAILABLE' || resyncErr.message?.includes('ANCHOR_API_UNAVAILABLE')) {
@@ -180,7 +199,8 @@ router.get("/accounts", requireAuth, async (req, res, next) => {
     const validAccounts = (accounts || []).filter(a => {
       const hasValidNum = a.account_number && /^\d{10}$/.test(a.account_number);
       const hasValidBank = a.bank_name && !a.bank_name.toUpperCase().includes('PROVIDUS');
-      return hasValidNum && hasValidBank;
+      const isNotPlatform = !PLATFORM_SETTLEMENT_NUBANS.includes(a.account_number) && !a.account_name?.toUpperCase().includes('JOSSY DIGITAL');
+      return hasValidNum && hasValidBank && isNotPlatform;
     }).map(a => ({
       ...a,
       user_reference: userReference || a.user_reference || `NS-${userId.substring(0, 6).toUpperCase()}`,
@@ -190,11 +210,7 @@ router.get("/accounts", requireAuth, async (req, res, next) => {
     res.json({
       success: true,
       accounts: validAccounts,
-      available: validAccounts.length > 0,
-      ...(validAccounts.length === 0 && {
-        reason: 'NO_VALID_ACCOUNTS',
-        message: 'No valid Anchor virtual accounts available. Please use Fincra GTBank transfer.',
-      }),
+      available: true,
     });
   } catch (err) {
     next(err);

@@ -3,13 +3,20 @@ const supabase = require("../config/database");
 const logger = require("../utils/logger");
 
 /**
- * PLATFORM_SETTLEMENT_NUBAN
- * This is the Anchor merchant settlement account number that belongs to the platform itself.
- * It must NEVER be stored as a user's personal dedicated virtual account — doing so causes all
+ * PLATFORM_SETTLEMENT_NUBANS
+ * These are the Anchor merchant settlement account numbers that belong to the platform itself.
+ * They must NEVER be stored as a user's personal dedicated virtual account — doing so causes all
  * inbound deposits to be mis-attributed. Any Virtual NUBAN resolved from the Anchor API that
- * matches this number must be skipped; a fresh individual NUBAN must be provisioned instead.
+ * matches these numbers or platform names must be skipped; a fresh individual NUBAN must be provisioned.
  */
-const PLATFORM_SETTLEMENT_NUBAN = '6179630721';
+const PLATFORM_SETTLEMENT_NUBANS = ['6179630721', '6175916799'];
+
+function isPlatformSettlementAccount(acctNo, acctName) {
+  if (!acctNo) return false;
+  if (PLATFORM_SETTLEMENT_NUBANS.includes(String(acctNo).trim())) return true;
+  if (acctName && String(acctName).toUpperCase().includes("JOSSY DIGITAL")) return true;
+  return false;
+}
 
 /**
  * Anchor BaaS Service Layer
@@ -198,12 +205,14 @@ class AnchorService {
       //   1. Bank name contains "PROVIDUS" (Anchor migrated to 9PSB)
       //   2. Account number is missing or not a valid 10-digit NUBAN
       //   3. Bank name is empty/placeholder
+      //   4. Account number or name belongs to platform settlement account
       const isStaleProvidus = existingDva?.bank_name?.toUpperCase().includes("PROVIDUS");
       const hasValidNuban = existingDva?.account_number && /^\d{10}$/.test(existingDva.account_number);
       const hasValidBankName = existingDva?.bank_name && 
         !existingDva.bank_name.toUpperCase().includes("PROVIDUS") &&
         existingDva.bank_name !== "0000000000";
-      const isStaleRecord = isStaleProvidus || !hasValidNuban || !hasValidBankName;
+      const isPlatformAccount = isPlatformSettlementAccount(existingDva?.account_number, existingDva?.account_name);
+      const isStaleRecord = isStaleProvidus || !hasValidNuban || !hasValidBankName || isPlatformAccount;
 
       if (existingDva && existingDva.account_number && !isStaleRecord) {
         logger.info(`[AnchorService] Found existing dedicated_account for user ${userId}: ${existingDva.account_number} (${existingDva.bank_name})`);
@@ -231,7 +240,8 @@ class AnchorService {
       }
 
       if (isStaleRecord && existingDva) {
-        logger.warn(`[AnchorService] Found stale/invalid Anchor account for user ${userId} (bank_name: ${existingDva.bank_name}, account_number: ${existingDva.account_number}). Resyncing with Anchor API to get valid 9PSB Virtual NUBAN...`);
+        logger.warn(`[AnchorService] Deleting stale/platform Anchor account for user ${userId} (account_number: ${existingDva.account_number}, bank_name: ${existingDva.bank_name}). Resyncing with Anchor API...`);
+        await supabase.from("dedicated_accounts").delete().eq("id", existingDva.id);
       }
 
       // 1. Ensure user has an Anchor Customer record
@@ -250,20 +260,19 @@ class AnchorService {
       }
 
       // 1b. Check if Anchor already has provisioned Virtual NUBANs for the merchant.
-      //     CRITICAL: The /virtual-nubans list includes the platform's own settlement NUBAN
-      //     (PLATFORM_SETTLEMENT_NUBAN). We must filter it out — only an ACTIVE NUBAN that is
-      //     NOT the platform settlement account qualifies as a user's individual virtual account.
+      //     CRITICAL: The /virtual-nubans list includes the platform's own settlement NUBANs.
+      //     We must filter them out — only an ACTIVE NUBAN that is NOT a platform settlement
+      //     account qualifies as a user's individual virtual account.
       try {
         const vnListRes = await this.client.get("/virtual-nubans");
         const list = vnListRes.data?.data || [];
 
-        // Find an ACTIVE Virtual NUBAN that is NOT the platform settlement account.
-        // A user-specific NUBAN must be a unique account number that no other user has.
+        // Find an ACTIVE Virtual NUBAN that is NOT a platform settlement account.
         const activeVn = list.find((v) => {
           const isActive = (v.attributes?.status || v.status) === "ACTIVE";
           const acctNo = v.attributes?.accountNumber || v.accountNumber || "";
-          const isPlatformAccount = acctNo === PLATFORM_SETTLEMENT_NUBAN;
-          return isActive && !isPlatformAccount;
+          const acctName = v.attributes?.accountName || v.accountName || "";
+          return isActive && !isPlatformSettlementAccount(acctNo, acctName);
         });
 
         if (activeVn) {
@@ -272,8 +281,8 @@ class AnchorService {
           const accountName = vAttr.accountName || `${firstName || ''} ${lastName || ''}`.trim();
           const bankName = vAttr.bank?.name || "9 Payment Service Bank";
 
-          // Double-guard: never save the platform settlement NUBAN as a user account
-          if (accountNo && accountNo !== PLATFORM_SETTLEMENT_NUBAN) {
+          // Double-guard: never save a platform settlement NUBAN as a user account
+          if (accountNo && !isPlatformSettlementAccount(accountNo, accountName)) {
             logger.info(`[AnchorService] Resolved user-specific Anchor Virtual NUBAN: ${accountNo} (${bankName}) for user ${userId}`);
             const { data: dvaRecord } = await supabase
               .from("dedicated_accounts")
@@ -310,12 +319,10 @@ class AnchorService {
             };
           }
         } else {
-          // All Virtual NUBANs on this merchant account are the platform settlement account.
-          // Fall through to POST /virtual-nubans to create a fresh individual one.
-          logger.info(`[AnchorService] No user-specific Virtual NUBAN found for user ${userId} — will provision a fresh one.`);
+          logger.info(`[AnchorService] No user-specific Virtual NUBAN found in list for user ${userId} — will provision a fresh one via POST /virtual-nubans.`);
         }
       } catch (vnErr) {
-        // If Anchor API is completely down, fail fast — don't fall through to more API calls that will also fail
+        // If Anchor API is completely down, fail fast
         const statusCode = vnErr.response?.status;
         if (statusCode === 502 || statusCode === 503 || statusCode === 504 || vnErr.code === 'ECONNREFUSED' || vnErr.code === 'ETIMEDOUT') {
           const err = new Error('ANCHOR_API_UNAVAILABLE: Anchor banking service is temporarily unavailable. Please use Fincra GTBank transfer instead.');
@@ -366,11 +373,11 @@ class AnchorService {
         throw new Error("Anchor API response did not contain account_number");
       }
 
-      // CRITICAL GUARD: If Anchor returned the platform settlement account as the newly
-      // created Virtual NUBAN, something is wrong — abort rather than save it for this user.
-      if (accountNo === PLATFORM_SETTLEMENT_NUBAN) {
-        logger.error(`[AnchorService] Anchor returned the platform settlement NUBAN (${PLATFORM_SETTLEMENT_NUBAN}) as a user Virtual NUBAN for user ${userId}. This is a data integrity violation — aborting save.`);
-        throw new Error('ANCHOR_INTEGRITY_ERROR: Anchor API returned the platform settlement account number instead of a user-specific Virtual NUBAN. Please contact support.');
+      // CRITICAL GUARD: If Anchor returned a platform settlement account as the newly
+      // created Virtual NUBAN, abort rather than saving it for this user.
+      if (isPlatformSettlementAccount(accountNo, accountName)) {
+        logger.error(`[AnchorService] Anchor returned platform settlement NUBAN (${accountNo}) as user account for user ${userId}. Aborting save.`);
+        throw new Error('ANCHOR_INTEGRITY_ERROR: Anchor API returned platform settlement account instead of a user-specific Virtual NUBAN.');
       }
 
       // 4. Save virtual account in public.dedicated_accounts table
