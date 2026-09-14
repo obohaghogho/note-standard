@@ -17,9 +17,7 @@ const webpush = require('web-push');
 
 // In-memory cache for user installation/endpoints: Map<userId, { installations, expiresAt }>
 const installationsCache = new Map();
-// FIX (Root Cause 1, defense-in-depth): Reduced from 15s to 5s. Primary fix is
-// _clearGatewayDeviceCache() in notificationController.js; this is defense-in-depth.
-const CACHE_TTL_MS = 5000; // 5 seconds TTL (was 15s)
+const CACHE_TTL_MS = 15000; // 15 seconds TTL
 
 
 /**

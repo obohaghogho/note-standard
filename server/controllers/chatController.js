@@ -1952,10 +1952,6 @@ exports.sendMessage = async (req, res) => {
             console.log(`[Chat Notify] Skipping muted user push: ${member.user_id}`);
             return;
           }
-          // FIX (Root Cause 2): skipPush: true prevents createNotification from also dispatching
-          // a push internally. dispatchFastPush below is the single authoritative push sender.
-          // Previously both fired simultaneously, creating a race condition against the 15s
-          // DeviceRegistry cache TTL and doubling the failure surface.
           await createNotification({
             receiverId: member.user_id,
             senderId: userId,
@@ -1965,7 +1961,7 @@ exports.sendMessage = async (req, res) => {
             link: `/dashboard/chat?id=${conversationId}`,
             messageId: createdMessageId,
             conversationId: conversationId,
-            skipPush: true,
+            skipPush: false,
           });
           await dispatchFastPush({
             receiverId: member.user_id,
