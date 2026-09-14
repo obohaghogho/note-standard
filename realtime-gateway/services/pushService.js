@@ -767,6 +767,13 @@ async function dispatchV2Push(params, pushTargets, isCall = false) {
                  })
                  .eq('push_endpoint', t.push_endpoint).then();
             } else {
+               console.log(`[V2Router] ⚠️ Transient push failure (${err.statusCode || err.message}) for device ${t.device_id}. Endpoint status preserved.`);
+            }
+          })
+      );
+    }
+  }
+
   // Dual-dispatch V1 Web Push (PWA / Browser - VAPID from push_subscriptions)
   // Ensures PWA web notifications are always delivered even when V2 routing is active.
   if (!isCall && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
