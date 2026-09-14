@@ -256,20 +256,33 @@ class AnchorService {
         logger.warn(`[AnchorService] Customer onboarding warning (${custErr.message}). Checking existing Virtual NUBANs...`);
       }
 
-      // 1b. Check if Anchor already has provisioned Virtual NUBANs for the merchant.
-      //     CRITICAL: The /virtual-nubans list includes the platform's own settlement NUBANs.
-      //     We must filter them out — only an ACTIVE NUBAN that is NOT a platform settlement
-      //     account qualifies as a user's individual virtual account.
+      // 1b. Check if Anchor already has an unassigned Virtual NUBAN available for this user.
+      // CRITICAL: We must ensure that any Virtual NUBAN assigned to a user is UNIQUE.
+      // Filter out:
+      //   1. Platform settlement accounts (PLATFORM_SETTLEMENT_NUBANS)
+      //   2. Virtual NUBANs already assigned to ANOTHER user in dedicated_accounts table
       try {
+        const { data: assignedRecords } = await supabase
+          .from("dedicated_accounts")
+          .select("account_number, user_id")
+          .eq("provider", "anchor");
+
+        const assignedToOtherUsers = new Set(
+          (assignedRecords || [])
+            .filter(r => r.user_id !== userId && r.account_number)
+            .map(r => r.account_number)
+        );
+
         const vnListRes = await this.client.get("/virtual-nubans");
         const list = vnListRes.data?.data || [];
 
-        // Find an ACTIVE Virtual NUBAN that is NOT a platform settlement account.
+        // Find an ACTIVE Virtual NUBAN that is NOT a platform settlement account AND NOT assigned to another user
         const activeVn = list.find((v) => {
           const isActive = (v.attributes?.status || v.status) === "ACTIVE";
           const acctNo = v.attributes?.accountNumber || v.accountNumber || "";
-          const acctName = v.attributes?.accountName || v.accountName || "";
-          return isActive && !isPlatformSettlementAccount(acctNo, acctName);
+          const isPlatform = isPlatformSettlementAccount(acctNo);
+          const isAssignedToOther = assignedToOtherUsers.has(acctNo);
+          return isActive && !isPlatform && !isAssignedToOther;
         });
 
         if (activeVn) {

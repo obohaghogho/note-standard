@@ -119,7 +119,19 @@ router.get("/accounts", requireAuth, async (req, res, next) => {
 
     if (error) throw error;
 
-    // Detect stale records: Providus bank name, platform settlement NUBANs, invalid NUBAN format, or empty bank name
+    // Detect stale or shared records: Providus bank name, platform settlement NUBANs, invalid NUBAN format, or shared NUBANs
+    const { data: allAnchorAccs } = await supabase
+      .from("dedicated_accounts")
+      .select("account_number, user_id")
+      .eq("provider", "anchor");
+
+    const nubanUserCounts = {};
+    (allAnchorAccs || []).forEach(r => {
+      if (r.account_number) {
+        nubanUserCounts[r.account_number] = (nubanUserCounts[r.account_number] || 0) + 1;
+      }
+    });
+
     const staleAccountIds = [];
     if (accounts && accounts.length > 0) {
       accounts.forEach((a) => {
@@ -127,14 +139,16 @@ router.get("/accounts", requireAuth, async (req, res, next) => {
         const isPlatformAccount = PLATFORM_SETTLEMENT_NUBANS.includes(a.account_number);
         const hasInvalidNuban = !a.account_number || !/^\d{10}$/.test(a.account_number);
         const hasMissingBankName = !a.bank_name;
-        if (isProvidus || isPlatformAccount || hasInvalidNuban || hasMissingBankName) {
+        const isSharedWithOtherUser = (nubanUserCounts[a.account_number] || 0) > 1;
+
+        if (isProvidus || isPlatformAccount || hasInvalidNuban || hasMissingBankName || isSharedWithOtherUser) {
           staleAccountIds.push(a.id);
         }
       });
     }
 
     if (staleAccountIds.length > 0) {
-      logger.warn(`[AnchorRoute] Cleaning up ${staleAccountIds.length} stale/platform Anchor dedicated_accounts for user ${userId}...`);
+      logger.warn(`[AnchorRoute] Cleaning up ${staleAccountIds.length} stale/shared Anchor dedicated_accounts for user ${userId}...`);
       await supabase
         .from("dedicated_accounts")
         .delete()
