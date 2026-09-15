@@ -1,7 +1,7 @@
 import { PerfMonitor } from '../utils/PerfMonitor';
 import React, {
     createContext, useContext, useEffect, useState,
-    useMemo, useCallback, useRef
+    useMemo, useCallback, useRef, startTransition
 } from 'react';
 import { useAuth } from './AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -240,22 +240,50 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         if (!user) return;
         try {
             const res = await apiClient.get(`/chat/conversations/${conversationId}/messages`);
-            const rawData = res.data || [];
+            const rawData: any[] = res.data || [];
 
-            const processedData = await Promise.all(rawData.map(async (rawMsg: any) => {
-                const plainContent = await mobileTransportAdapter.decodeIncomingMessage(rawMsg, user.id);
-                return { ...rawMsg, content: plainContent || '[Decryption Failed]' };
-            }));
+            // PERF: Chunked sequential decode (chunk size = 10).
+            //
+            // Why chunked instead of Promise.all on all messages:
+            //   decodeIncomingMessage performs real E2E crypto:
+            //     1. Supabase DB query for sender's public_key
+            //     2. expo-secure-store read for own private key
+            //     3. nacl.box.open (CPU crypto via tweetnacl)
+            //
+            //   With 50+ messages, Promise.all fires all 3 operations
+            //   concurrently, saturating the Supabase connection pool,
+            //   congesting expo-secure-store, and causing visible jank.
+            //
+            //   Chunking to 10 limits concurrent I/O to 10 at a time.
+            //   For plaintext messages (msg.nonce absent), decode returns
+            //   immediately — chunk overhead is negligible for those.
+            //   Original message ordering is preserved exactly.
+            const CHUNK_SIZE = 10;
+            const processedData: any[] = [];
+            for (let i = 0; i < rawData.length; i += CHUNK_SIZE) {
+                const chunk = rawData.slice(i, i + CHUNK_SIZE);
+                const chunkResults = await Promise.all(
+                    chunk.map(async (rawMsg: any) => {
+                        const plainContent = await mobileTransportAdapter.decodeIncomingMessage(rawMsg, user.id);
+                        return { ...rawMsg, content: plainContent || '[Decryption Failed]' };
+                    })
+                );
+                processedData.push(...chunkResults);
+            }
 
             const normalized = processedData.map(normalizeEvent);
             const validated = (normalized as any[])
                 .filter((msg: any) => validateMessagePayload(msg).valid)
                 .map((msg: any) => ({ ...msg, isOwn: msg.sender_id === user.id }));
 
-            setMessages(prev => ({
-                ...prev,
-                [conversationId]: mergeMessages(prev[conversationId] || [], validated).merged as Message[]
-            }));
+            // PERF: startTransition marks this as non-urgent so React keeps
+            // the message list scroll and input bar responsive while history loads.
+            startTransition(() => {
+                setMessages(prev => ({
+                    ...prev,
+                    [conversationId]: mergeMessages(prev[conversationId] || [], validated).merged as Message[]
+                }));
+            });
 
             // Offline delivery sync — deferred off the render critical path
             const unacked = validated.filter(msg => !msg.isOwn && msg.status !== 'read' && !msg.delivered_at);
@@ -284,6 +312,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             console.error('[ChatContext] Failed to load messages', err);
         }
     }, [user]);
+
 
     // ── BATCH FLUSH — Called via requestAnimationFrame ─────────────────────────
     // Processes ALL queued socket messages in ONE setState call.
@@ -483,19 +512,25 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         socketManager.on('chat:read_receipt', (data: any) => {
             const { conversationId, messageIds, readAt } = data;
+            // PERF: Convert messageIds array to a Set for O(1) lookups.
+            // Previously: messageIds.includes(m.id) = O(n) per message = O(n²) total.
+            // Now: readSet.has(m.id) = O(1) per message = O(n) total.
+            // On conversations with 200+ messages this eliminates significant JS work.
+            if (!Array.isArray(messageIds) || messageIds.length === 0) return;
+            const readSet = new Set<string>(messageIds);
             setMessages(prev => {
                 const current = prev[conversationId] || [];
                 return {
                     ...prev,
                     [conversationId]: current.map(m =>
-                        messageIds.includes(m.id) ? { ...m, status: 'read', read_at: readAt } : m
+                        readSet.has(m.id) ? { ...m, status: 'read', read_at: readAt } : m
                     )
                 };
             });
             setConversations(prev => prev.map(c => {
                 if (c.id === conversationId) {
                     const lastMsg = (c as any).last_message ?? (c as any).lastMessage;
-                    if (lastMsg && messageIds.includes(lastMsg.id)) {
+                    if (lastMsg && readSet.has(lastMsg.id)) {
                         return {
                             ...c,
                             last_message: { ...lastMsg, status: 'read', read_at: readAt },

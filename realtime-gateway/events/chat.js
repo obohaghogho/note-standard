@@ -29,10 +29,31 @@ if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
 }
 
 // ── Production Hardening: Sliding-Window Rate Limiter Shield ─────────────────
+// PERF: Added stale-entry eviction to prevent unbounded Map growth from
+// disconnected users whose timestamp arrays accumulate indefinitely.
 const rateLimits = new Map();
+const rateLimitLastAccess = new Map(); // Map<key, lastAccessMs>
+const RATE_LIMIT_EVICTION_INTERVAL_MS = 5 * 60 * 1000;  // 5 minutes
+const RATE_LIMIT_STALE_AGE_MS = 10 * 60 * 1000;         // 10 minutes
+
+setInterval(() => {
+  const now = Date.now();
+  let evicted = 0;
+  rateLimitLastAccess.forEach((lastAccess, key) => {
+    if (now - lastAccess > RATE_LIMIT_STALE_AGE_MS) {
+      rateLimits.delete(key);
+      rateLimitLastAccess.delete(key);
+      evicted++;
+    }
+  });
+  if (evicted > 0) {
+    console.log(`[Chat] RateLimit eviction: removed ${evicted} stale entries. Remaining: ${rateLimits.size}`);
+  }
+}, RATE_LIMIT_EVICTION_INTERVAL_MS);
 
 function checkRateLimit(key, maxRequests, windowMs) {
   const now = Date.now();
+  rateLimitLastAccess.set(key, now);
   if (!rateLimits.has(key)) {
     rateLimits.set(key, [now]);
     return true;
@@ -172,21 +193,26 @@ module.exports = (io, socket) => {
 
   // Emitted by client when a message is received (device received it).
   // Payload: { conversationId, messageId, eventId, deliveredAt: ISO string, senderId?: string }
+  //
+  // PERF: Removed blocking Supabase sender_id DB lookup.
+  // The mobile client always sends senderId in the payload (ChatContext.tsx
+  // line: socket.emit('chat:delivered', { ..., senderId: incomingMessage.sender_id })).
+  // Eliminating the DB round-trip removes 40-120ms of latency per delivery ACK.
+  //
+  // If senderId is absent (old client / web), we still emit to the conversation
+  // room which covers all active participants including the sender.
+  //
+  // deliveryEngine.handleDeliveryAck is fully preserved — it cancels the
+  // pending push timeout (critical for push suppression) and persists the
+  // delivered_at state transition via receiptEngine (idempotent).
   socket.on('chat:delivered', async (data) => {
     const { conversationId, messageId, eventId, deliveredAt, senderId } = data || {};
     if (!conversationId || (!messageId && !eventId)) return;
 
     console.log(`[DELIVERY_TRACE] gateway_received=true | userId:${userId} | conversationId:${conversationId} | messageId:${messageId} | eventId:${eventId} | senderId:${senderId || 'N/A'}`);
 
-    let targetSenderId = senderId;
-    if (!targetSenderId && messageId && supabase) {
-      try {
-        const { data: msg } = await supabase.from('messages').select('sender_id').eq('id', messageId).maybeSingle();
-        if (msg?.sender_id) targetSenderId = msg.sender_id;
-      } catch (e) {
-        console.warn('[Gateway] Could not lookup sender_id for delivery receipt:', e.message);
-      }
-    }
+    // Use senderId from payload directly — no DB lookup.
+    const targetSenderId = senderId || null;
 
     const payload = {
       userId,

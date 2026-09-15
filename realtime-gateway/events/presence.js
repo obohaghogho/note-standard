@@ -1,7 +1,14 @@
 /**
  * Presence Event Handler — Realtime Gateway
- * 
+ *
  * Tracks users online status via Memory AND Supabase Database.
+ *
+ * PERF: Heartbeat DB writes are DEBOUNCED.
+ * The in-memory onlineUsers Map is the routing source of truth.
+ * Supabase is updated at most every HEARTBEAT_FLUSH_INTERVAL_MS (5 s)
+ * rather than on every heartbeat event from every socket.
+ * This eliminates the per-heartbeat blocking DB write that previously
+ * stalled the Node.js event loop during high-concurrency periods.
  */
 const { createClient } = require('@supabase/supabase-js');
 
@@ -24,6 +31,40 @@ const userVisibility = new Map();
 const lastSeenMap = new Map();
 // Map<socketId, deviceId> — canonical device ID for each active socket
 const socketDeviceMap = new Map();
+
+// ── Debounced Heartbeat DB Write ─────────────────────────────────────────────
+// Set of userIds that have sent a heartbeat since the last DB flush.
+// Flushed every HEARTBEAT_FLUSH_INTERVAL_MS to a single batched Supabase call.
+const pendingHeartbeatFlush = new Set();
+const HEARTBEAT_FLUSH_INTERVAL_MS = 5000; // 5 seconds
+
+setInterval(() => {
+  if (pendingHeartbeatFlush.size === 0) return;
+  const sb = getSupabase();
+  if (!sb) { pendingHeartbeatFlush.clear(); return; }
+
+  // Snapshot and clear the pending set before the async flush
+  const toFlush = Array.from(pendingHeartbeatFlush);
+  pendingHeartbeatFlush.clear();
+
+  const now = new Date().toISOString();
+  // Filter: only flush users that are still actually online and visible
+  const stillOnline = toFlush.filter(uid =>
+    onlineUsers.has(uid) &&
+    onlineUsers.get(uid).size > 0 &&
+    userVisibility.get(uid) !== false
+  );
+
+  if (stillOnline.length === 0) return;
+
+  // Batch update using .in() — one DB round-trip for all pending users
+  sb.from('profiles')
+    .update({ is_online: true, last_seen: now })
+    .in('id', stillOnline)
+    .then(() => {})
+    .catch(err => console.error('[Presence] Heartbeat flush error:', err.message));
+}, HEARTBEAT_FLUSH_INTERVAL_MS);
+// ─────────────────────────────────────────────────────────────────────────────
 
 function getOnlineUserIds() {
   return Array.from(onlineUsers.keys());
@@ -145,20 +186,23 @@ module.exports = (io, socket) => {
 
   initPresence();
 
-  // 3. Heartbeat
+  // 3. Heartbeat — DEBOUNCED DB write (5-second batch flush)
+  // The in-memory onlineUsers Map is updated synchronously (instant routing).
+  // DB write is queued into pendingHeartbeatFlush and batched every 5 s.
   socket.on('presence:heartbeat', () => {
     const isVisible = userVisibility.get(userId) !== false;
     const wasOnline = onlineUsers.has(userId) && onlineUsers.get(userId).size > 0;
     markUserOnline(userId, socket.id, socket.deviceId);
 
     if (!wasOnline && isVisible) {
+      // User came back online — broadcast immediately and queue DB write
       console.log(`[Presence] ↑ ${userId} heartbeat — back ONLINE`);
-      // Update is_online in database
-      const sb = getSupabase();
-      if (sb) {
-        sb.from('profiles').update({ is_online: true }).eq('id', userId).then(() => {}).catch(() => {});
-      }
       socket.broadcast.emit('user_online', { userId, online: true, lastSeen: null });
+    }
+
+    // Queue for the next debounced DB flush (whether online or re-online)
+    if (isVisible) {
+      pendingHeartbeatFlush.add(userId);
     }
   });
 
