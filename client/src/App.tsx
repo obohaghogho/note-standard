@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useEffect, Suspense } from 'react';
 
@@ -262,6 +262,33 @@ function AuthenticatedProviders() {
   );
 }
 
+function CanonicalUrlManager() {
+  const location = useLocation();
+
+  useEffect(() => {
+    try {
+      let canonicalLink = document.querySelector("link[rel='canonical']");
+      if (!canonicalLink) {
+        canonicalLink = document.createElement('link');
+        canonicalLink.setAttribute('rel', 'canonical');
+        document.head.appendChild(canonicalLink);
+      }
+      
+      const pathname = location.pathname;
+      const cleanPath = pathname.length > 1 && pathname.endsWith('/')
+        ? pathname.slice(0, -1)
+        : pathname;
+
+      const fullCanonicalUrl = `https://notestandard.com${cleanPath}`;
+      canonicalLink.setAttribute('href', fullCanonicalUrl);
+    } catch (_) {
+      // Ignore DOM errors during render
+    }
+  }, [location.pathname]);
+
+  return null;
+}
+
 function App() {
   useEffect(() => {
     // Global error handler for uncaught errors
@@ -292,6 +319,7 @@ function App() {
 
   return (
     <Router>
+      <CanonicalUrlManager />
       <ErrorBoundary 
         fallbackRender={({ error }) => {
           const isStaleBundleOrRefError = 
