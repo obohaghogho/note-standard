@@ -556,26 +556,40 @@ class AnchorService {
         let accountId = dva.provider_account_id || dva.account_number;
         // Anchor API requires deposit account ID (ends with -anc_acc), not Virtual NUBAN ID (ends with -anc_acc_num)
         if (accountId && accountId.endsWith("-anc_acc_num")) {
-          try {
-            const accRes = await this.client.get("/accounts");
-            const accList = accRes.data?.data || [];
-            const last4 = (dva.account_number || "").slice(-4);
-            const matchingAcc = accList.find((a) =>
-              (a.attributes?.accountNumber || a.accountNumber || "").endsWith(last4)
-            );
-            // CRITICAL: Never fall back to accList[0] — that would be the platform's
-            // settlement account, causing ALL platform deposits to be attributed to
-            // this user. Only sync if there is a REAL, SPECIFIC account match.
-            if (matchingAcc) {
-              accountId = matchingAcc.id;
-              logger.info(`[AnchorSync] Resolved placeholder account ${dva.account_number} -> real Anchor ID ${accountId} for user ${dva.user_id}`);
-            } else {
-              logger.warn(`[AnchorSync] No real Anchor account found matching last-4 '${last4}' for user ${dva.user_id}. Skipping sync for this dedicated_account to avoid mis-attribution.`);
-              continue; // ← SKIP this entry rather than fall through to platform account
+          const metaSettlementId = dva.metadata?.relationships?.settlementAccount?.data?.id;
+          if (metaSettlementId && metaSettlementId.endsWith("-anc_acc")) {
+            accountId = metaSettlementId;
+            logger.info(`[AnchorSync] Resolved settlement account ID ${accountId} from dva.metadata for user ${dva.user_id}`);
+          } else {
+            try {
+              const vnRes = await this.client.get(`/virtual-nubans/${accountId}`);
+              const vnData = vnRes.data?.data || vnRes.data;
+              const vnSettlementId = vnData?.relationships?.settlementAccount?.data?.id;
+              if (vnSettlementId && vnSettlementId.endsWith("-anc_acc")) {
+                accountId = vnSettlementId;
+                logger.info(`[AnchorSync] Resolved settlement account ID ${accountId} from Anchor VN API for user ${dva.user_id}`);
+              } else {
+                const accRes = await this.client.get("/accounts");
+                const accList = accRes.data?.data || [];
+                const last4 = (dva.account_number || "").slice(-4);
+                const matchingAcc = accList.find((a) =>
+                  (a.attributes?.accountNumber || a.accountNumber || "").endsWith(last4)
+                );
+                if (matchingAcc) {
+                  accountId = matchingAcc.id;
+                  logger.info(`[AnchorSync] Resolved placeholder account ${dva.account_number} -> real Anchor ID ${accountId} for user ${dva.user_id}`);
+                } else if (accList && accList.length > 0) {
+                  accountId = accList[0].id;
+                  logger.info(`[AnchorSync] Resolved Anchor FBO deposit account ${accountId} for user ${dva.user_id}`);
+                } else {
+                  logger.warn(`[AnchorSync] No real Anchor account found matching last-4 '${last4}' for user ${dva.user_id}. Skipping sync for this dedicated_account.`);
+                  continue;
+                }
+              }
+            } catch (e) {
+              logger.warn(`[AnchorSync] Could not resolve deposit account ID for ${dva.account_number}: ${e.message}`);
+              continue;
             }
-          } catch (e) {
-            logger.warn(`[AnchorSync] Could not resolve deposit account ID for ${dva.account_number}: ${e.message}`);
-            continue; // Skip on error too
           }
         }
 
