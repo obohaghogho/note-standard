@@ -104,10 +104,11 @@ export default function ChatScreen({ navigation, route }: Props) {
                 const rawOffset = effectiveHeight - TAB_BAR_HEIGHT;
                 offset = rawOffset > 0 ? rawOffset : 0;
             } else {
-                // Android: Tab bar is hidden (tabBarHideOnKeyboard: true)
-                // Math.max ensures smooth offset clamping without negative inset jumps on Android 14
-                const rawAndroidOffset = effectiveHeight - (insets.bottom || 0);
-                offset = Math.max(0, rawAndroidOffset);
+                // Android: AndroidManifest.xml uses android:windowSoftInputMode="adjustResize".
+                // The Android native window automatically resizes flush against the top of the soft keyboard.
+                // Adding paddingBottom here double-counts keyboard height, pushing the input bar high up
+                // and creating a massive blank gap / separation between keyboard and input bar.
+                offset = 0;
             }
         }
         return { paddingBottom: offset };
