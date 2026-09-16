@@ -502,7 +502,9 @@ const ChatWindow: React.FC = () => {
         const textarea = document.getElementById('chat-window-input') as HTMLTextAreaElement | null;
         if (textarea) {
             textarea.style.height = '40px';
-            textarea.focus();
+            requestAnimationFrame(() => {
+                textarea.focus();
+            });
         }
 
         const currentEditingId = editingMessageId;

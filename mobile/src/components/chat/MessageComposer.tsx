@@ -76,6 +76,8 @@ const MessageComposerInner = ({ conversationId, onSend, insets }: Props) => {
         setDisplayText(val);
     }, []);
 
+    const inputRef = useRef<TextInput>(null);
+
     const handleSend = useCallback(() => {
         const text = textRef.current.trim();
         if (!text) return;
@@ -83,9 +85,13 @@ const MessageComposerInner = ({ conversationId, onSend, insets }: Props) => {
         // ── WhatsApp send sequence ──────────────────────────────────────────
         // 1. Clear ref synchronously (so rapid double-tap sends nothing twice)
         // 2. Clear visual state (user sees empty input instantly)
-        // 3. Fire network — happens AFTER visual update, never blocks it
+        // 3. Keep TextInput focused so virtual keyboard NEVER falls back
+        // 4. Fire network — happens AFTER visual update, never blocks it
         textRef.current = '';
         setDisplayText('');
+        requestAnimationFrame(() => {
+            inputRef.current?.focus();
+        });
         onSend(text); // fire and forget
     }, [onSend]);
 
@@ -156,6 +162,7 @@ const MessageComposerInner = ({ conversationId, onSend, insets }: Props) => {
                     This is exactly how WhatsApp works. */}
                 <View style={styles.pill}>
                     <TextInput
+                        ref={inputRef}
                         style={styles.input}
                         value={displayText}
                         onChangeText={handleChangeText}
@@ -193,33 +200,28 @@ const MessageComposerInner = ({ conversationId, onSend, insets }: Props) => {
                 </View>
 
                 {/* Send / Mic ─────────────────────────────────────────────── */}
-                {hasText ? (
-                    <TouchableOpacity
-                        style={styles.sideBtn}
-                        onPress={handleSend}
-                        hitSlop={SLOP}
-                        activeOpacity={0.75}
+                <TouchableOpacity
+                    style={styles.sideBtn}
+                    onPress={hasText ? handleSend : handleVoice}
+                    disabled={isUploading}
+                    hitSlop={SLOP}
+                    activeOpacity={0.75}
+                >
+                    <LinearGradient
+                        colors={
+                            hasText
+                                ? ['#6366f1', '#4f46e5']
+                                : isRecording
+                                ? ['#ef4444', '#dc2626']
+                                : ['#6366f1', '#4f46e5']
+                        }
+                        style={styles.actionGrad}
                     >
-                        <LinearGradient colors={['#6366f1', '#4f46e5']} style={styles.actionGrad}>
-                            <Text style={styles.actionIcon}>➤</Text>
-                        </LinearGradient>
-                    </TouchableOpacity>
-                ) : (
-                    <TouchableOpacity
-                        style={styles.sideBtn}
-                        onPress={handleVoice}
-                        disabled={isUploading}
-                        hitSlop={SLOP}
-                        activeOpacity={0.75}
-                    >
-                        <LinearGradient
-                            colors={isRecording ? ['#ef4444', '#dc2626'] : ['#6366f1', '#4f46e5']}
-                            style={styles.actionGrad}
-                        >
-                            <Text style={styles.actionIcon}>{isRecording ? '⏹' : '🎤'}</Text>
-                        </LinearGradient>
-                    </TouchableOpacity>
-                )}
+                        <Text style={styles.actionIcon}>
+                            {hasText ? '➤' : isRecording ? '⏹' : '🎤'}
+                        </Text>
+                    </LinearGradient>
+                </TouchableOpacity>
 
             </View>
         </View>
