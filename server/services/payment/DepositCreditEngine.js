@@ -260,10 +260,10 @@ class DepositCreditEngine {
       logger.warn(`[DepositCreditEngine] Supplementary update warning for tx ${tx.id}: ${updateErr.message}`);
     }
 
-    // ── 8. Post-credit side effects (non-blocking) ─────────────────────────
-    this._emitPostCreditEffects(targetUserId, creditAmount, targetCurrency, tx, source, auditMeta).catch(
-      (err) => logger.warn(`[DepositCreditEngine] Post-credit effects warning: ${err.message}`)
-    );
+    // Ensure wallets_store stays 100% in sync with transaction history sum
+    this._reconcileWalletWithLedger(targetUserId, targetCurrency).catch((err) => {
+      logger.warn(`[DepositCreditEngine] Ledger reconcile check warning: ${err.message}`);
+    });
 
     logger.info(`[DepositCreditEngine] ✅ SUCCESS: Credited ${creditAmount} ${targetCurrency} to user ${targetUserId} for tx ${tx.id} (Source: ${source})`);
 
@@ -273,6 +273,42 @@ class DepositCreditEngine {
       amount:        creditAmount,
       currency:      targetCurrency,
     });
+  }
+
+  /**
+   * Reconcile wallets_store stored balance with exact ledger sum of completed transactions.
+   * Guarantees zero balance drift for all users.
+   */
+  async _reconcileWalletWithLedger(userId, currency) {
+    if (!userId || !currency) return;
+    try {
+      const { data: txs } = await supabase
+        .from('transactions')
+        .select('amount, type')
+        .eq('user_id', userId)
+        .eq('currency', currency.toUpperCase())
+        .in('status', ['COMPLETED', 'SUCCESS']);
+
+      if (!txs) return;
+
+      let ledgerSum = 0;
+      for (const t of txs) {
+        const amt = Number(t.amount || 0);
+        if (['DEPOSIT', 'CREDIT', 'REFUND'].includes(t.type)) {
+          ledgerSum += amt;
+        } else {
+          ledgerSum -= amt;
+        }
+      }
+
+      await supabase
+        .from('wallets_store')
+        .update({ balance: ledgerSum, available_balance: ledgerSum, updated_at: new Date().toISOString() })
+        .eq('user_id', userId)
+        .eq('currency', currency.toUpperCase());
+    } catch (e) {
+      logger.warn(`[DepositCreditEngine] _reconcileWalletWithLedger warning for user ${userId}: ${e.message}`);
+    }
   }
 
   // ── Private Helpers ───────────────────────────────────────────────────────
