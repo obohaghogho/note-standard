@@ -302,7 +302,7 @@ class DepositCreditEngine {
     const { data: rows, error } = await supabase
       .from('transactions')
       .select('*')
-      .or(`reference_id.eq.${reference},provider_reference.eq.${reference}`)
+      .or(`reference_id.eq.${reference},provider_reference.eq.${reference},metadata->>display_ref.eq.${reference}`)
       .order('created_at', { ascending: false })
       .limit(10);
 

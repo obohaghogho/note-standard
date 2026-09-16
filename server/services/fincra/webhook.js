@@ -155,6 +155,7 @@ async function handleDepositSuccessful(payload) {
 
   // Comprehensive, multi-stage user identification from incoming payment payload
   let userId = null;
+  let matchedUserRef = null;
 
   // 1. Check direct account links (virtual account number)
   if (accountNumber) {
@@ -218,14 +219,14 @@ async function handleDepositSuccessful(payload) {
           .or(`user_reference.eq.${searchRef},session_id.eq.${searchRef}`)
           .maybeSingle();
 
-        if (sessionMatch?.user_id) userId = sessionMatch.user_id;
+        if (sessionMatch?.user_id) { userId = sessionMatch.user_id; matchedUserRef = searchRef; }
         else {
           const { data: manualMatch } = await supabase
             .from("manual_deposits")
             .select("user_id")
             .eq("reference", searchRef)
             .maybeSingle();
-          if (manualMatch?.user_id) userId = manualMatch.user_id;
+          if (manualMatch?.user_id) { userId = manualMatch.user_id; matchedUserRef = searchRef; }
         }
       }
     }
@@ -249,23 +250,23 @@ async function handleDepositSuccessful(payload) {
         for (const cand of candidates) {
           // Check deposit_sessions
           const { data: sess } = await supabase.from("deposit_sessions").select("user_id").eq("user_reference", cand).maybeSingle();
-          if (sess?.user_id) { userId = sess.user_id; break; }
+          if (sess?.user_id) { userId = sess.user_id; matchedUserRef = cand; break; }
 
           // Check transactions
           const { data: tx } = await supabase.from("transactions").select("user_id").or(`reference_id.eq.${cand},metadata->>display_ref.eq.${cand}`).maybeSingle();
-          if (tx?.user_id) { userId = tx.user_id; break; }
+          if (tx?.user_id) { userId = tx.user_id; matchedUserRef = cand; break; }
 
           // Check users table by reference_code
           const { data: u } = await supabase.from("users").select("id").or(`reference_code.eq.${cand},id.eq.${cand}`).maybeSingle();
-          if (u?.id) { userId = u.id; break; }
+          if (u?.id) { userId = u.id; matchedUserRef = cand; break; }
 
           // Check profiles table by referral_code
           const { data: p } = await supabase.from("profiles").select("id").eq("referral_code", cand).maybeSingle();
-          if (p?.id) { userId = p.id; break; }
+          if (p?.id) { userId = p.id; matchedUserRef = cand; break; }
 
           // Check manual_deposits
           const { data: m } = await supabase.from("manual_deposits").select("user_id").eq("reference", cand).maybeSingle();
-          if (m?.user_id) { userId = m.user_id; break; }
+          if (m?.user_id) { userId = m.user_id; matchedUserRef = cand; break; }
         }
       }
     }
@@ -396,11 +397,23 @@ async function handleDepositSuccessful(payload) {
   // ── CREDIT VIA AUTHORITATIVE DepositCreditEngine ────────────────────────────
   const DepositCreditEngine = require("../payment/DepositCreditEngine");
   const searchRef = data.customerReference || data.merchantReference || data.reference || data.narration || fincraRef;
+  const displayRef = matchedUserRef || searchRef;
+
+  const queryConds = [
+    `reference_id.eq.${searchRef}`,
+    `provider_reference.eq.${fincraRef}`,
+    `metadata->>display_ref.eq.${searchRef}`,
+    `metadata->>fincra_reference.eq.${fincraRef}`
+  ];
+  if (matchedUserRef) {
+    queryConds.push(`reference_id.eq.${matchedUserRef}`);
+    queryConds.push(`metadata->>display_ref.eq.${matchedUserRef}`);
+  }
 
   let { data: primaryTx } = await supabase
     .from("transactions")
     .select("id, reference_id, payment_status, wallet_credit_status")
-    .or(`reference_id.eq.${searchRef},provider_reference.eq.${fincraRef},metadata->>display_ref.eq.${searchRef}`)
+    .or(queryConds.join(","))
     .maybeSingle();
 
   if (!primaryTx) {
@@ -413,11 +426,18 @@ async function handleDepositSuccessful(payload) {
         currency,
         type: "DEPOSIT",
         status: "PENDING",
-        reference_id: searchRef,
+        reference_id: displayRef,
         provider_reference: fincraRef,
         payment_status: "PAYMENT_CONFIRMED",
         wallet_credit_status: "WALLET_CREDIT_PENDING",
-        metadata: { provider: "fincra", channel: "virtual_account", payload: data }
+        display_label: `${currency} Bank Deposit`,
+        metadata: {
+          provider: "fincra",
+          channel: "virtual_account",
+          display_ref: displayRef,
+          fincra_reference: fincraRef,
+          payload: data
+        }
       })
       .select("id, reference_id")
       .single();

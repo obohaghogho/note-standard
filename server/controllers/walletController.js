@@ -489,10 +489,31 @@ exports.submitDepositProof = async (req, res) => {
     let { data: tx } = await supabase
       .from("transactions")
       .select("*")
-      .or(`reference_id.eq.${reference},metadata->>display_ref.eq.${reference}`)
+      .or(`reference_id.eq.${reference},metadata->>display_ref.eq.${reference},provider_reference.eq.${reference}`)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     const depositAmount = reqAmount || parseFloat(tx?.amount || 0);
+
+    // Fallback: If no tx matches the reference code directly, look for a recent deposit transaction for this user with same amount
+    if (!tx && depositAmount > 0) {
+      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data: matchedTxs } = await supabase
+        .from("transactions")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("currency", reqCurrency)
+        .eq("amount", depositAmount)
+        .eq("type", "DEPOSIT")
+        .gte("created_at", cutoff)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (matchedTxs && matchedTxs.length > 0) {
+        tx = matchedTxs[0];
+      }
+    }
 
     const walletService = require("../services/walletService");
     const wallet = await walletService.createWallet(userId, reqCurrency, 'native');
