@@ -155,8 +155,25 @@ const createNotification = async (params) => {
     req.write(payloadBody);
     req.end();
 
-    // 5. Independent Non-blocking Email Notification Dispatch
-    if (receiverId) {
+    // 5. Independent Non-blocking Email Notification Dispatch (Transactional / Critical Only)
+    // IMPORTANT: Exclude chat messages, community posts, mentions, and routine in-app activity
+    // to preserve email daily quotas. Push notifications (above) remain 100% untouched and active for all events.
+    // Unread chat messages are processed asynchronously by unreadMessageEmailer worker only if un-opened after 15 mins.
+    const CRITICAL_EMAIL_TYPES = [
+      'wallet_deposit',
+      'wallet_withdrawal',
+      'deposit_approved',
+      'deposit_rejected',
+      'kyc_update',
+      'kyc_approved',
+      'kyc_rejected',
+      'security_alert',
+      'account_security',
+      'password_change',
+      'login_alert'
+    ];
+
+    if (receiverId && type && CRITICAL_EMAIL_TYPES.includes(type)) {
       setImmediate(async () => {
         try {
           const { data: userProf } = await supabase
