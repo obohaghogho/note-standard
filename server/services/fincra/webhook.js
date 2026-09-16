@@ -234,11 +234,14 @@ async function handleDepositSuccessful(payload) {
   // 3. Extract and match embedded reference patterns from transfer narration/description/remark
   if (!userId) {
     const narration = data.description || data.narration || data.remark || '';
-    const tokens = narration.split(/[\s-_|:]+/).filter(t => t.length >= 5 && t.length <= 16);
+    
+    // Direct regex extraction for NS-prefixed reference codes (handles long concatenated bank strings)
+    const nsMatches = narration.match(/NS-?[A-Z0-9]{5,10}/gi) || [];
+    const tokens = [...nsMatches, ...narration.split(/[\s-_|:]+/)].filter(t => t && t.length >= 5);
 
     for (const token of tokens) {
       if (userId) break;
-      const rawCapture = token.toUpperCase().replace(/^NS/, '');
+      const rawCapture = token.toUpperCase().replace(/^NS-?/, '');
       for (let len = Math.min(rawCapture.length, 8); len >= 5 && !userId; len--) {
         const sub = rawCapture.substring(0, len);
         const candidates = [`NS-${sub}`, sub, `NS${sub}`];
