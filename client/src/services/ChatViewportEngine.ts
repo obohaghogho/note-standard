@@ -150,8 +150,11 @@ export class ChatViewportEngine {
 
     // 3. VisualViewport Resize Listener for Mobile Virtual Keyboards (Android & iOS)
     if (typeof window !== 'undefined' && window.visualViewport) {
+      let rafId: number | null = null;
       window.visualViewport.addEventListener('resize', () => {
-        requestAnimationFrame(() => {
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
           if (!this.container) return;
           const isFocused = document.activeElement?.id === 'chat-window-input';
           if (this.isNearBottom || isFocused || this.state === ViewportState.FOLLOWING_BOTTOM) {

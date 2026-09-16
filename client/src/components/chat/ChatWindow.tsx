@@ -498,10 +498,11 @@ const ChatWindow: React.FC = () => {
         setShowMentions(false);
         handleSendMessage();
 
-        // Reset textarea height back to single-line (WhatsApp collapses on send)
+        // Reset textarea height back to single-line smoothly (WhatsApp style)
         const textarea = document.getElementById('chat-window-input') as HTMLTextAreaElement | null;
         if (textarea) {
-            textarea.style.height = 'auto';
+            textarea.style.height = '40px';
+            textarea.focus();
         }
 
         const currentEditingId = editingMessageId;
@@ -1320,11 +1321,7 @@ const ChatWindow: React.FC = () => {
                                                         }
                                                         scrollToBottom('instant');
                                                     };
-                                                    forceBottom();
-                                                    setTimeout(forceBottom, 50);
-                                                    setTimeout(forceBottom, 150);
-                                                    setTimeout(forceBottom, 300);
-                                                    setTimeout(forceBottom, 500);
+                                                    requestAnimationFrame(forceBottom);
                                                 }}
                                                 onKeyDown={() => {
                                                     // By product requirement, Enter inserts a newline instead of sending.
@@ -1389,6 +1386,13 @@ const ChatWindow: React.FC = () => {
                                     <button 
                                         type="submit" 
                                         disabled={!inputValue.trim()} 
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onTouchStart={(e) => {
+                                            if (inputValue.trim()) {
+                                                e.preventDefault();
+                                                handleSend();
+                                            }
+                                        }}
                                         className={`w-11 h-11 md:w-12 md:h-12 flex items-center justify-center rounded-full transition-all duration-300 shadow-xl active:scale-90 flex-shrink-0 ${
                                             inputValue.trim() 
                                             ? 'bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500 hover:-translate-y-0.5' 
