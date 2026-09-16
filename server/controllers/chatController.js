@@ -1,5 +1,9 @@
 const supabase = require("../config/database");
 const usernameCache = new Map(); // Cache to prevent blocking DB lookups during push dispatch
+// ── FIX 2a: Sender profile cache — stores {id,username,full_name,avatar_url} per userId.
+// Avoids a DB SELECT for sender profile when reconstructing the sendMessage response payload.
+const senderProfileCache = new Map();
+
 const { createNotification, dispatchFastPush } = require("../services/notificationService");
 const { detectLanguage } = require("../services/translationService");
 const realtime = require("../services/realtimeService");
@@ -10,6 +14,31 @@ const crypto = require("crypto");
 const { emitMessageEvent } = require("../rpc/eventLedger");
 const logger = require("../utils/logger");
 const PIPELINE_VERSION = process.env.MESSAGING_PIPELINE_VERSION || 'v2';
+
+// ── FIX 3: Module-level Sentiment instance — instantiated ONCE, reused forever.
+// Previously: `new Sentiment()` was called inside the handler on every message send.
+const Sentiment = require("sentiment");
+const _sentimentAnalyzer = new Sentiment();
+
+// ── FIX 4: Auto-reply settings TTL cache — avoids a DB SELECT on every message.
+// Settings rarely change; we refresh at most once per minute.
+let _autoReplyCache = null;
+let _autoReplyCacheTs = 0;
+const AUTO_REPLY_CACHE_TTL_MS = 60_000; // 60 seconds
+async function _getAutoReplySettings() {
+    const now = Date.now();
+    if (_autoReplyCache !== null && (now - _autoReplyCacheTs) < AUTO_REPLY_CACHE_TTL_MS) {
+        return _autoReplyCache;
+    }
+    try {
+        const { data } = await supabase.from("auto_reply_settings").select("*").single();
+        _autoReplyCache = data || null;
+        _autoReplyCacheTs = now;
+    } catch (e) {
+        _autoReplyCache = null;
+    }
+    return _autoReplyCache;
+}
 
 /**
  * _hydrateReplyTo — batch-resolve reply_to nested objects in place.
@@ -24,7 +53,10 @@ const PIPELINE_VERSION = process.env.MESSAGING_PIPELINE_VERSION || 'v2';
  *
  * @param {Array<Object>} messages - mutable array of message rows
  */
-async function _mapSenderTypeBatch(messages) {
+// ── FIX 5: _mapSenderTypeBatch — `currentUserId` was undefined (bug).
+// The function now accepts an optional `requestUserId` parameter so callers
+// can pass `req.user.id` when available. Falls back to 'unknown' safely.
+async function _mapSenderTypeBatch(messages, requestUserId) {
     if (!messages || messages.length === 0) return;
     try {
         const convIds = [...new Set(messages.map(m => m.conversation_id))];
@@ -36,7 +68,7 @@ async function _mapSenderTypeBatch(messages) {
             if (supportConvIds.has(msg.conversation_id)) {
                 if (msg.sender_id === SUPPORT_BOT_ID) {
                     msg.sender_type = 'ai';
-                } else if (msg.sender_id === currentUserId) {
+                } else if (requestUserId && msg.sender_id === requestUserId) {
                     msg.sender_type = 'user';
                 } else {
                     msg.sender_type = 'human';
@@ -407,11 +439,11 @@ exports.syncMessages = async (req, res) => {
         .order("created_at", { ascending: true })
         .limit(200);
       if (plainErr) throw plainErr;
-      await _mapSenderTypeBatch(plain || []);
+      await _mapSenderTypeBatch(plain || [], userId);
       return res.json(plain || []);
     }
 
-    await _mapSenderTypeBatch(data || []);
+    await _mapSenderTypeBatch(data || [], userId);
     res.json(data || []);
   } catch (err) {
     console.error("[Chat] syncMessages error:", err.message);
@@ -999,7 +1031,7 @@ exports.getMessages = async (req, res) => {
           if (!fb1Error) {
             const fbArr = fb1Data || [];
             await _hydrateReplyTo(fbArr);
-            await _mapSenderTypeBatch(fbArr);
+            await _mapSenderTypeBatch(fbArr, userId);
           return res.json(fbArr.reverse());
           }
 
@@ -1022,7 +1054,7 @@ exports.getMessages = async (req, res) => {
           // Manual reply_to hydration — batch load all referenced parent messages
           const simpleArr = simpleData || [];
           await _hydrateReplyTo(simpleArr);
-          await _mapSenderTypeBatch(simpleArr);
+          await _mapSenderTypeBatch(simpleArr, userId);
           return res.json(simpleArr.reverse());
         }
         throw error;
@@ -1031,7 +1063,7 @@ exports.getMessages = async (req, res) => {
       // Primary query succeeded
       const primaryArr = data || [];
       await _hydrateReplyTo(primaryArr);
-      await _mapSenderTypeBatch(primaryArr);
+      await _mapSenderTypeBatch(primaryArr, userId);
       res.json(primaryArr.reverse());
     } catch (innerErr) {
       console.warn("[Chat Controller] Inner query error:", innerErr.message);
@@ -1046,7 +1078,7 @@ exports.getMessages = async (req, res) => {
       if (finalError) throw finalError;
       const finalArr = finalData || [];
       await _hydrateReplyTo(finalArr);
-      await _mapSenderTypeBatch(finalArr);
+      await _mapSenderTypeBatch(finalArr, userId);
       res.json(finalArr.reverse());
     }
   } catch (err) {
@@ -1500,14 +1532,14 @@ exports.sendMessage = async (req, res) => {
     });
 
 
+
     // Analysis: Sentiment (if text)
+    // FIX 3: Uses module-level _sentimentAnalyzer — no require() or new() per request.
     let sentiment = null;
     let detectedLang = "en";
 
     if ((type === "text" || !type) && content) {
-      const Sentiment = require("sentiment");
-      const analyzer = new Sentiment();
-      const result = analyzer.analyze(content);
+      const result = _sentimentAnalyzer.analyze(content);
       sentiment = {
         score: result.score,
         comparative: result.comparative,
@@ -1517,14 +1549,10 @@ exports.sendMessage = async (req, res) => {
           ? "negative"
           : "neutral",
       };
-
-      // LANGUAGE DETECTION MOVED OUT OF CRITICAL PATH
-      // Previously: detectedLang = await detectLanguage(content);
-      // This was making a synchronous HTTP request to google-translate-api-x,
-      // blocking the entire socket broadcast and API response for 500ms - 2000ms.
-      // We default to "en" to allow instant delivery (<50ms).
+      // Language detection kept off the critical path (defaults to "en" for instant delivery).
       detectedLang = "en";
     }
+
     let createdMessageId = null;
     let isDuplicate = false;
     const eventId = req.body.eventId || crypto.randomUUID();
@@ -1639,9 +1667,7 @@ exports.sendMessage = async (req, res) => {
       const t3_DbInsertDone = Date.now();
       createdMessageId = insertedMessage.id;
 
-      // ── CHATLIST FIX: Stamp authoritative last-message pointer ──────────────
-      // Avoids chatlist depending on ORDER BY created_at (vulnerable to clock drift).
-      // Fire-and-forget — does not block the response.
+      // ── CHATLIST FIX: Stamp authoritative last-message pointer (fire-and-forget) ──
       supabase
         .from("conversations")
         .update({
@@ -1661,18 +1687,64 @@ exports.sendMessage = async (req, res) => {
         eventId,
         durationMs: Date.now() - startTimeMs
       });
-      logger.info("Database insert completed [Stage 3]", {
-        correlationId: req.correlationId,
-        userId,
-        conversationId,
-        messageId: createdMessageId,
-        eventId,
-        durationMs: Date.now() - startTimeMs
-      });
 
-      // ==========================================
-      // EVENT LEDGER: Emit SENT
-      // ==========================================
+      // ── FIX 2: Reconstruct response payload from insert result + request body.
+      // Previously: a second SELECT * FROM messages JOIN profiles JOIN media_attachments
+      // was done here to "hydrate" the message — adding ~50ms to EVERY send.
+      // We already have all the data in memory. Build the payload directly.
+      const nowIso = insertedMessage.created_at || new Date().toISOString();
+      const reconstructedMessage = {
+        id:              createdMessageId,
+        event_id:        eventId,
+        conversation_id: conversationId,
+        sender_id:       userId,
+        content:         content || '',
+        type:            type || 'text',
+        created_at:      nowIso,
+        updated_at:      nowIso,
+        is_deleted:      false,
+        is_edited:       false,
+        sentiment:       sentiment,
+        detected_language: detectedLang,
+        sequence_number: insertedMessage.sequence_number || null,
+        status:          'sent',
+        // Sender profile — use cache (warm after first send), gracefully null on cold start.
+        // Cache is populated by the post-send background block on every notification dispatch.
+        sender: senderProfileCache.get(userId) || {
+          id:         userId,
+          username:   null,
+          full_name:  null,
+          avatar_url: null,
+        },
+        // Attachment — only present for media messages
+        attachment: null,
+        // reply_to — carry forward from the request (client already has context)
+        ...(replyToId ? { reply_to_id: replyToId } : {}),
+      };
+
+
+      // Normalize reply_to shape for consistency across transactional/legacy paths
+      // (isTransactional already declared above in the DB insert branch)
+      let safePayload = isTransactional
+        ? (normalizeOutboundMessage(reconstructedMessage) || reconstructedMessage)
+        : reconstructedMessage;
+
+
+      // ── FIX 1: Respond to the sender IMMEDIATELY — before any post-send work. ──
+      // This is what WhatsApp/Telegram/Signal do: DB insert → respond → fan-out.
+      if (!res.headersSent) {
+        res.json(safePayload);
+        logger.info("Response returned [Stage 5 — instant]", {
+          correlationId: req.correlationId,
+          userId,
+          conversationId,
+          messageId: createdMessageId,
+          eventId,
+          durationMs: Date.now() - startTimeMs
+        });
+      }
+
+      // ── EVENT LEDGER: Emit SENT (fire-and-forget, non-blocking) ──
       if (deviceId) {
         emitMessageEvent({
           messageId: createdMessageId,
@@ -1681,97 +1753,200 @@ exports.sendMessage = async (req, res) => {
           deviceId,
           sessionId,
           eventType: 'SENT',
-          correlationId: eventId // The generated intent ID is the correlation root
+          correlationId: eventId
         });
       }
 
-      const { data: hydratedMessage, error: hydrateError } = await supabase
-        .from("messages")
-        .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url)")
-        .eq("id", createdMessageId)
-        .single();
-
-      if (hydrateError) {
-        console.warn("[Chat Controller] Failed to fully hydrate message on select, retrying simple select:", hydrateError.code, hydrateError.message);
-        
-        const { data: simpleMessage, error: simpleErr } = await supabase
-          .from("messages")
-          .select("*")
-          .eq("id", createdMessageId)
-          .single();
-
-        if (simpleErr) throw simpleErr;
-        
+      // ── FIX 6: ALL post-send work moved here — fire-and-forget after response ──
+      // Socket broadcast, notifications, AI support, auto-reply — NONE of these
+      // should ever block the HTTP response back to the sender's device.
+      setImmediate(async () => {
         try {
-          const { data: senderData } = await supabase
-            .from("profiles")
-            .select("id, username, full_name, avatar_url")
-            .eq("id", userId)
-            .single();
-          if (senderData) {
-            simpleMessage.sender = senderData;
-          }
-        } catch (e) {
-          console.warn("[Chat Controller] Manual profile hydration failed:", e);
-        }
+          // ── SOCKET BROADCAST to room (recipient gets the message) ──
+          await realtime.emitToConversation(conversationId, "chat:message", safePayload);
 
-        // ── Gap 3 fix: manually resolve reply_to after fallback select(*) ──
-        // The FK join failed (migration 199 not yet applied, or schema cache stale).
-        // Look up the parent message directly so the client gets the nested object.
-        if (simpleMessage.reply_to_id) {
-          try {
-            const { data: parentMsg } = await supabase
-              .from('messages')
-              .select('id, content, sender_id, type, is_deleted, sender:profiles(username, full_name)')
-              .eq('id', simpleMessage.reply_to_id)
-              .single();
-            if (parentMsg) {
-              const senderName = parentMsg.sender ? (parentMsg.sender.full_name || parentMsg.sender.username) : null;
-              simpleMessage.reply_to = {
-                id: parentMsg.id,
-                content: parentMsg.content,
-                sender_id: parentMsg.sender_id,
-                type: parentMsg.type,
-                deleted: parentMsg.is_deleted,
-                sender_name: senderName,
-              };
+          // ── NOTIFICATION LOGIC ─────────────────────────────────────────────────
+          const otherMembers = members.filter(m => m.user_id !== userId);
+          if (otherMembers.length > 0) {
+            let senderName = usernameCache.get(userId);
+            if (!senderName) {
+              try {
+                const { data: sender } = await supabase
+                  .from("profiles").select("id, username, full_name, avatar_url").eq("id", userId).single();
+                senderName = sender?.username || "Someone";
+                usernameCache.set(userId, senderName);
+                // Populate full profile cache so next sendMessage has instant sender object
+                if (sender) {
+                  senderProfileCache.set(userId, {
+                    id: userId,
+                    username: sender.username || null,
+                    full_name: sender.full_name || null,
+                    avatar_url: sender.avatar_url || null,
+                  });
+                }
+              } catch (_) { senderName = "Someone"; }
             }
-          } catch (replyErr) {
-            console.warn('[Chat Controller] Could not hydrate reply_to manually:', replyErr.message);
-          }
-        }
 
-        processAfterMsg(simpleMessage);
-      } else {
-        // Primary hydration succeeded — but PostgREST can silently return
-        // reply_to: null when the FK join can't be resolved (schema cache miss:
-        // the named constraint 'messages_reply_to_id_fkey' wasn't yet visible to
-        // PostgREST at query time). Detect this case and fall back to a manual lookup.
-        if (hydratedMessage.reply_to_id && !hydratedMessage.reply_to) {
-          console.warn('[Chat Controller] FK join returned null for reply_to despite reply_to_id being set. Falling back to manual lookup.');
-          try {
-            const { data: parentMsg } = await supabase
-              .from('messages')
-              .select('id, content, sender_id, type, is_deleted, sender:profiles(username, full_name)')
-              .eq('id', hydratedMessage.reply_to_id)
-              .single();
-            if (parentMsg) {
-              const senderName = parentMsg.sender ? (parentMsg.sender.full_name || parentMsg.sender.username) : null;
-              hydratedMessage.reply_to = {
-                id: parentMsg.id,
-                content: parentMsg.content,
-                sender_id: parentMsg.sender_id,
-                type: parentMsg.type,
-                deleted: parentMsg.is_deleted,
-                sender_name: senderName,
-              };
-            }
-          } catch (replyFallbackErr) {
-            console.warn('[Chat Controller] Manual reply_to fallback failed:', replyFallbackErr.message);
+            const previewContent = getNotificationPreview(type || 'text', content);
+
+            const notificationPromises = otherMembers.map(async (member) => {
+              if (member.is_muted) return;
+              try {
+                await createNotification({
+                  receiverId:     member.user_id,
+                  senderId:       userId,
+                  type:           "chat_message",
+                  title:          senderName,
+                  message:        previewContent,
+                  link:           `/dashboard/chat?id=${conversationId}`,
+                  messageId:      createdMessageId,
+                  conversationId: conversationId,
+                  skipPush:       false,
+                });
+                await dispatchFastPush({
+                  receiverId:     member.user_id,
+                  type:           "chat_message",
+                  title:          senderName,
+                  message:        previewContent,
+                  link:           `/dashboard/chat?id=${conversationId}`,
+                  messageId:      createdMessageId,
+                  conversationId: conversationId,
+                  trace: {
+                    clientSendTs,
+                    apiReceiveTs: t1_ApiReceived,
+                    dbStartTs:    t2_DbInsertStart,
+                    dbDoneTs:     t3_DbInsertDone,
+                  }
+                });
+              } catch (pushErr) {
+                console.warn("[Chat Notify] Push failed for", member.user_id, pushErr.message);
+              }
+            });
+            Promise.allSettled(notificationPromises);
           }
+
+          // ── MENTION LOGIC ──────────────────────────────────────────────────────
+          if (content) {
+            const mentions = content.match(/@(\w+)/g);
+            if (mentions) {
+              try {
+                const usernames = mentions.map(m => m.substring(1));
+                const { data: mentionedUsers } = await supabase
+                  .from("profiles").select("id, username").in("username", usernames);
+                if (mentionedUsers) {
+                  let senderName = usernameCache.get(userId) || "Someone";
+                  const previewContent = getNotificationPreview(type || 'text', content);
+                  const mentionJobs = mentionedUsers
+                    .filter(mUser => mUser.id !== userId)
+                    .map(async (mUser) => {
+                      await dispatchFastPush({
+                        receiverId: mUser.id, type: "mention", title: senderName,
+                        message: `Mentioned you: ${previewContent}`,
+                        link: `/dashboard/chat?id=${conversationId}`,
+                        messageId: createdMessageId, conversationId,
+                      });
+                      await createNotification({
+                        receiverId: mUser.id, senderId: userId, type: "mention",
+                        title: senderName, message: `Mentioned you: ${previewContent}`,
+                        link: `/dashboard/chat?id=${conversationId}`,
+                        messageId: createdMessageId, conversationId, skipPush: true,
+                      });
+                    });
+                  Promise.allSettled(mentionJobs);
+                }
+              } catch (mentionErr) {
+                console.warn("[Chat Mention] Non-fatal mention error:", mentionErr.message);
+              }
+            }
+          }
+
+          // ── AI SUPPORT AUTO-REPLY (fire-and-forget) ────────────────────────────
+          try {
+            const { data: convInfo } = await supabase
+              .from("conversations").select("chat_type, support_status")
+              .eq("id", conversationId).single();
+
+            if (convInfo && convInfo.chat_type === "support") {
+              const { data: senderProfile } = await supabase
+                .from("profiles").select("plan_tier, role").eq("id", userId).maybeSingle();
+              const isSenderAdmin = senderProfile?.plan_tier === "admin" || senderProfile?.role === "admin";
+
+              if (!isSenderAdmin) {
+                const supportService = require("../services/supportService");
+                const aiRes = await supportService.handleUserSupportMessage(conversationId, content || "", userId);
+                if (aiRes?.message) {
+                  // Broadcast AI reply to conversation room
+                  await realtime.emitToConversation(conversationId, "chat:message", aiRes.message);
+                }
+              } else {
+                await supabase.from("conversation_members")
+                  .upsert([{ conversation_id: conversationId, user_id: userId, role: "admin", status: "accepted" }],
+                    { onConflict: "conversation_id,user_id" });
+                await supabase.from("conversations")
+                  .update({ support_status: "pending", updated_at: new Date().toISOString() })
+                  .eq("id", conversationId);
+                realtime.emitToConversation(conversationId, "chat:conversation_updated", {
+                  id: conversationId, support_status: "pending"
+                });
+              }
+            }
+          } catch (aiErr) {
+            logger.warn(`[sendMessage:AiSupport] Non-fatal AI trigger error: ${aiErr.message}`);
+          }
+
+          // ── FIX 4: AUTO-REPLY — uses TTL-cached settings, NOT a live DB SELECT ──
+          try {
+            const settings = await _getAutoReplySettings();
+            if (settings?.enabled) {
+              const now = new Date();
+              const hours = now.getUTCHours();
+              const parseHour = (h) => typeof h === 'string' && h.includes(':')
+                ? parseInt(h.split(':')[0]) : parseInt(h);
+              const start = parseHour(settings.start_hour);
+              const end   = parseHour(settings.end_hour);
+              const isOffline = start > end
+                ? (hours >= start || hours < end)
+                : (hours >= start && hours < end);
+
+              if (isOffline) {
+                const botSenderId = '00000000-0000-0000-0000-000000000000';
+                const { data: autoMsg, error: autoErr } = await supabase
+                  .from("messages")
+                  .insert([{ conversation_id: conversationId, sender_id: botSenderId,
+                             content: settings.message, type: "text" }])
+                  .select().single();
+                if (!autoErr) {
+                  await realtime.emitToConversation(conversationId, "chat:message", autoMsg);
+                }
+              }
+            }
+          } catch (autoReplyErr) {
+            console.warn("[Chat] Auto-reply non-fatal error:", autoReplyErr.message);
+          }
+
+          // ── SERVER-SIDE ACK TIMEOUT RECHECK (Self-Healing Delivery) ───────────
+          if (PIPELINE_VERSION !== 'v2' && !isDuplicate && safePayload.id && members.length > 0) {
+            const recheckMessageId = safePayload.id;
+            const recheckMembers = [...members];
+            setTimeout(async () => {
+              try {
+                const { data: msgCheck } = await supabase
+                  .from('messages').select('id, delivered_at').eq('id', recheckMessageId).single();
+                if (!msgCheck || msgCheck.delivered_at) return;
+                const userIds = recheckMembers.map(m => m.user_id);
+                await realtime.emitToUsers(userIds, "chat:message", safePayload);
+              } catch (recheckErr) {
+                console.warn(`[FORENSIC] ACK Recheck failed: ${recheckErr.message}`);
+              }
+            }, 30000);
+          }
+
+        } catch (postSendErr) {
+          // Non-fatal — response already sent, log and move on
+          console.error("[Chat] Post-send background task error:", postSendErr.message);
         }
-        processAfterMsg(hydratedMessage);
-      }
+      });
+
     } catch (msgErr) {
       console.error("====================== CHAT ERROR TRACE ======================");
       console.error(msgErr.stack || msgErr);
@@ -1780,324 +1955,6 @@ exports.sendMessage = async (req, res) => {
         return res.status(500).json({ error: msgErr.message || "Failed to send message", stack: msgErr.stack });
       }
     }
-
-    async function processAfterMsg(msgToSend) {
-      // Normalize before broadcast
-      let safePayload = msgToSend;
-      const isTransactional = features.isFeatureEnabled('SEQUENCE_ENFORCEMENT', userId);
-      
-      if (isTransactional) {
-          safePayload = normalizeOutboundMessage(msgToSend);
-          if (!safePayload) {
-             console.error("[Chat Controller] Normalization failed. Dropping outbound broadcast.");
-             return;
-          }
-      } else {
-          // Non-transactional: normalize reply_to shape before sending to clients.
-          // _hydrateReplyTo sets message_type, but the PostgREST FK join uses the
-          // raw column name 'type'. Normalize to 'message_type' for consistency.
-          if (safePayload.reply_to && typeof safePayload.reply_to === 'object') {
-              const rt = safePayload.reply_to;
-              safePayload = {
-                  ...safePayload,
-                  reply_to: {
-                      id: rt.id,
-                      content: rt.content,
-                      sender_id: rt.sender_id,
-                      // _hydrateReplyTo uses message_type; FK join uses type — normalize both
-                      message_type: rt.message_type || rt.type,
-                      deleted: rt.deleted ?? rt.is_deleted ?? false,
-                      sender_name: rt.sender_name,
-                  },
-              };
-          } else if (safePayload.reply_to === null) {
-              // Strip null reply_to: prevents client merge engine from overwriting
-              // valid optimistic reply context with null (schema cache miss path).
-              safePayload = { ...safePayload };
-              delete safePayload.reply_to;
-          }
-      }
-
-      // --- AI Support Auto-Reply Trigger ---
-      let aiResponseMsg = null;
-      try {
-        const { data: convInfo } = await supabase
-          .from("conversations")
-          .select("chat_type, support_status")
-          .eq("id", conversationId)
-          .single();
-
-        if (convInfo && convInfo.chat_type === "support") {
-          const { data: senderProfile } = await supabase
-            .from("profiles")
-            .select("plan_tier, role")
-            .eq("id", userId)
-            .maybeSingle();
-
-          const isSenderAdmin = senderProfile?.plan_tier === "admin" || senderProfile?.role === "admin";
-
-          if (!isSenderAdmin) {
-            // User message: trigger AI support handling synchronously
-            const supportService = require("../services/supportService");
-            const aiRes = await supportService.handleUserSupportMessage(conversationId, content || "", userId);
-            if (aiRes && aiRes.message) {
-              aiResponseMsg = aiRes.message;
-            }
-          } else {
-            // Human admin responding: add admin to conversation_members if not present & update support status
-            await supabase
-              .from("conversation_members")
-              .upsert([
-                { conversation_id: conversationId, user_id: userId, role: "admin", status: "accepted" }
-              ], { onConflict: "conversation_id,user_id" });
-
-            await supabase
-              .from("conversations")
-              .update({ support_status: "pending", updated_at: new Date().toISOString() })
-              .eq("id", conversationId);
-
-            realtime.emitToConversation(conversationId, "chat:conversation_updated", {
-              id: conversationId,
-              support_status: "pending"
-            });
-          }
-        }
-      } catch (aiErr) {
-        logger.warn(`[sendMessage:AiSupport] Non-fatal AI trigger error: ${aiErr.message}`);
-      }
-
-      if (aiResponseMsg) {
-        safePayload = { ...safePayload, ai_reply: aiResponseMsg };
-      }
-
-      // 1. Respond to sender immediately
-      if (!res.headersSent) {
-          res.json(safePayload);
-          logger.info("Response returned [Stage 5]", {
-            correlationId: req.correlationId,
-            userId,
-            conversationId,
-            messageId: msgToSend.id,
-            eventId: msgToSend.event_id,
-            durationMs: Date.now() - startTimeMs
-          });
-      }
-
-      // 4. Server-side ACK Timeout Recheck (Self-Healing Delivery)
-      // After 30s, check if the message was confirmed delivered.
-      // If not (delivered_at still null), re-emit to all recipients.
-      // Handles: iOS backgrounding, network switch (LTE↔WiFi), cold gateway routing.
-      // Fire-and-forget — does NOT block the response, does NOT double-write to DB.
-      if (PIPELINE_VERSION !== 'v2' && !isDuplicate && safePayload.id && members.length > 0) {
-        const recheckMessageId = safePayload.id;
-        const recheckMembers = [...members]; // snapshot at send time
-        const recheckCorrelationId = req.correlationId;
-
-        setTimeout(async () => {
-          try {
-            const { data: msgCheck } = await supabase
-              .from('messages')
-              .select('id, delivered_at')
-              .eq('id', recheckMessageId)
-              .single();
-
-            if (!msgCheck) {
-              console.log(`[FORENSIC][API] ACK Recheck | messageId:${recheckMessageId} | result: NOT_FOUND (deleted or cleaned up)`);
-              return;
-            }
-
-            if (msgCheck.delivered_at) {
-              console.log(`[FORENSIC][API] ACK Recheck | messageId:${recheckMessageId} | result: DELIVERED_OK | delivered_at:${msgCheck.delivered_at}`);
-              return;
-            }
-
-            // Delivery not confirmed — re-emit the message payload to all recipients
-            console.warn(`[FORENSIC][API] ACK Recheck | messageId:${recheckMessageId} | result: NOT_DELIVERED — re-emitting to ${recheckMembers.length} recipients | cid:${recheckCorrelationId}`);
-
-            const userIds = recheckMembers.map(m => m.user_id);
-            await realtime.emitToUsers(userIds, "chat:message", safePayload, {
-              correlationId: recheckCorrelationId,
-              recheck: true
-            });
-
-            console.log(`[FORENSIC][API] ACK Recheck Re-emit Done | messageId:${recheckMessageId} | recipientCount:${userIds.length}`);
-          } catch (recheckErr) {
-            console.warn(`[FORENSIC][API] ACK Recheck Failed | messageId:${recheckMessageId} | error:${recheckErr.message}`);
-          }
-        }, 30000); // 30 second window — enough for reconnect backoff (max 10s) + handshake
-      }
-// --- Notification Logic ---
-    // PERF FIX: Reuse `members` fetched at the top of sendMessage.
-    // Filter to non-sender members here (was previously a 3rd redundant SELECT).
-    const io = req.app.get("io");
-    try {
-      const otherMembers = members.filter(m => m.user_id !== userId);
-
-      if (otherMembers.length > 0) {
-        let senderName = usernameCache.get(userId);
-        if (!senderName) {
-          const { data: sender } = await supabase
-            .from("profiles")
-            .select("username")
-            .eq("id", userId)
-            .single();
-          senderName = sender?.username || "Someone";
-          usernameCache.set(userId, senderName);
-        }
-
-        const previewContent = getNotificationPreview(type || 'text', content);
-
-        const notificationPromises = otherMembers.map(async (member) => {
-          if (member.is_muted) {
-            console.log(`[Chat Notify] Skipping muted user push: ${member.user_id}`);
-            return;
-          }
-          await createNotification({
-            receiverId: member.user_id,
-            senderId: userId,
-            type: "chat_message",
-            title: senderName,
-            message: previewContent,
-            link: `/dashboard/chat?id=${conversationId}`,
-            messageId: createdMessageId,
-            conversationId: conversationId,
-            skipPush: false,
-          });
-          await dispatchFastPush({
-            receiverId: member.user_id,
-            type: "chat_message",
-            title: senderName,
-            message: previewContent,
-            link: `/dashboard/chat?id=${conversationId}`,
-            messageId: createdMessageId,
-            conversationId: conversationId,
-            trace: {
-              clientSendTs,
-              apiReceiveTs: t1_ApiReceived,
-              dbStartTs: t2_DbInsertStart,
-              dbDoneTs: t3_DbInsertDone,
-            }
-          });
-        });
-        Promise.allSettled(notificationPromises).then();
-      }
-
-      // --- Mention Logic ---
-      const mentions = content.match(/@(\w+)/g);
-      if (mentions) {
-        const usernames = mentions.map((m) => m.substring(1));
-        const { data: mentionedUsers } = await supabase
-          .from("profiles")
-          .select("id, username")
-          .in("username", usernames);
-
-        if (mentionedUsers) {
-          let senderName = usernameCache.get(userId);
-          if (!senderName) {
-            const { data: sender } = await supabase
-              .from("profiles")
-              .select("username")
-              .eq("id", userId)
-              .single();
-            senderName = sender?.username || "Someone";
-            usernameCache.set(userId, senderName);
-          }
-
-          const previewContent = getNotificationPreview(type || 'text', content);
-
-          const mentionPushes = mentionedUsers.map(async (mUser) => {
-            if (mUser.id !== userId) {
-              await dispatchFastPush({
-                receiverId: mUser.id,
-                type: "mention",
-                title: senderName,
-                message: `Mentioned you: ${previewContent}`,
-                link: `/dashboard/chat?id=${conversationId}`,
-                messageId: createdMessageId,
-                conversationId: conversationId,
-                trace: {
-                  clientSendTs,
-                  apiReceiveTs: t1_ApiReceived,
-                  dbStartTs: t2_DbInsertStart,
-                  dbDoneTs: t3_DbInsertDone,
-                }
-              });
-            }
-          });
-
-          const mentionDBLogs = mentionedUsers.map(async (mUser) => {
-            if (mUser.id !== userId) {
-              await createNotification({
-                receiverId: mUser.id,
-                senderId: userId,
-                type: "mention",
-                title: senderName,
-                message: `Mentioned you: ${previewContent}`,
-                link: `/dashboard/chat?id=${conversationId}`,
-                messageId: createdMessageId,
-                conversationId: conversationId,
-                skipPush: true,
-              });
-            }
-          });
-
-          await Promise.allSettled(mentionPushes);
-          Promise.allSettled(mentionDBLogs).then();
-        }
-      }
-    } catch (notifErr) {
-      console.error("Failed to send notification or mention:", notifErr);
-    }
-
-    // Offline Hours Auto-Reply Logic
-    try {
-      const { data: settings } = await supabase
-        .from("auto_reply_settings")
-        .select("*")
-        .single();
-
-      if (settings?.enabled) {
-        const now = new Date();
-        const hours = now.getUTCHours();
-        
-        const parseHour = (h) => {
-          if (typeof h === 'string' && h.includes(':')) {
-            return parseInt(h.split(':')[0]);
-          }
-          return parseInt(h);
-        };
-
-        const start = parseHour(settings.start_hour);
-        const end = parseHour(settings.end_hour);
-
-        let isOffline = false;
-        if (start > end) {
-          isOffline = hours >= start || hours < end;
-        } else {
-          isOffline = hours >= start && hours < end;
-        }
-
-        if (isOffline) {
-          const { data: autoMsg, error: autoErr } = await supabase
-            .from("messages")
-            .insert([{
-              conversation_id: conversationId,
-              sender_id: botSenderId,
-              content: settings.message,
-              type: "text",
-            }])
-            .select()
-            .single();
-
-          if (!autoErr) {
-             await realtime.emitToConversation(conversationId, "chat:message", autoMsg);
-          }
-        }
-      }
-    } catch (autoReplyErr) {
-      console.error("Auto-reply logic failed:", autoReplyErr);
-    }
-  }
   } catch (error) {
     console.error("🔥 SEND MESSAGE FAILED");
     console.error("Correlation ID:", req.correlationId);

@@ -423,10 +423,14 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             // ── Queue into batch buffer ────────────────────────────────────────
             socketBatchRef.current.push({ conv: normalized.conversation_id, msg: incomingMessage });
 
-            // Schedule flush on next animation frame (batches rapid bursts)
+            // FIX 7: Schedule flush via setTimeout(0) instead of requestAnimationFrame.
+            // requestAnimationFrame fires on the native UI thread tick and can race
+            // with Reanimated's keyboard animation, causing the input bar to visibly
+            // jump on Android. setTimeout(0) schedules on the JS event loop where
+            // React state updates belong, eliminating the layout conflict.
             if (!batchFlushScheduledRef.current) {
                 batchFlushScheduledRef.current = true;
-                requestAnimationFrame(flushSocketBatch);
+                setTimeout(flushSocketBatch, 0);
             }
 
             // Delivery ACK — industry pattern:
@@ -607,9 +611,16 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
 
     // Fetch messages when conversation opens
+    // FIX 8: Skip loadMessages if messages are already in state for this conversation.
+    // Previously, every socket reconnect triggered loadMessages again even if the user
+    // was already inside the chat — causing a full API fetch + re-decrypt of all 50
+    // messages, adding visible lag. The reconnect sync (via syncMessages) handles gaps.
     useEffect(() => {
         if (activeConversationId) {
-            loadMessages(activeConversationId);
+            const alreadyLoaded = !!(messagesRef.current?.[activeConversationId]?.length);
+            if (!alreadyLoaded) {
+                loadMessages(activeConversationId);
+            }
             socketManager.joinRoom(activeConversationId);
         }
     }, [activeConversationId]);
