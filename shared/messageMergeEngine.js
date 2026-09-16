@@ -51,6 +51,25 @@ function mergeMessages(existing, incoming) {
             if (existingMsg.id.startsWith('temp-') && !msg.id.startsWith('temp-')) {
                 byId.delete(existingMsg.id);
             }
+            // BUG2 defense-in-depth: orphan temp cleanup for socket-before-HTTP race.
+            // When canonical arrives and matches a non-temp socket copy by event_id,
+            // scan for any leftover temp- with same sender+content+time and evict it.
+            if (!existingMsg.id.startsWith('temp-') && !msg.id.startsWith('temp-')) {
+                for (const [orphanId, orphanMsg] of byId.entries()) {
+                    if (
+                        orphanId.startsWith('temp-') &&
+                        orphanMsg.sender_id === msg.sender_id &&
+                        orphanMsg.content === msg.content &&
+                        Math.abs(
+                            new Date(orphanMsg.created_at).getTime() -
+                            new Date(msg.created_at).getTime()
+                        ) < 15000
+                    ) {
+                        byId.delete(orphanId);
+                        break;
+                    }
+                }
+            }
             byId.set(updatedMsg.id, updatedMsg);
             if (incomingEvtKey) byEvent.set(incomingEvtKey, updatedMsg);
         }

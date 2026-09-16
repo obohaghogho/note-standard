@@ -707,8 +707,19 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
             setMessages(prev => ({
                 ...prev,
-                [conversationId]: mergeMessages(prev[conversationId] || [], [canonicalMessage]).merged as Message[]
+                // BUG2 FIX: Explicitly remove the temp message BEFORE merging canonical.
+                // Race condition: socket delivers the real UUID BEFORE the HTTP response
+                // resolves. At that point both temp-xxx (optimistic) and real-uuid (socket)
+                // are in state. mergeMessages finds real-uuid by event_id and updates it,
+                // but temp-xxx has no matching event_id in the socket copy → it stays → 2 bubbles.
+                // Filtering temp-xxx first guarantees exactly 1 message survives regardless
+                // of whether the socket arrived before or after the HTTP response.
+                [conversationId]: mergeMessages(
+                    (prev[conversationId] || []).filter(m => m.id !== tempId),
+                    [canonicalMessage]
+                ).merged as Message[]
             }));
+
 
             // Update chat list with confirmed message
             setConversations(cPrev => cPrev.map(conv => {

@@ -122,6 +122,29 @@ export function mergeMessages(existing: Message[], incoming: Message[]): MergeRe
             if (existingMsg.id.startsWith('temp-') && !msg.id.startsWith('temp-')) {
                 byId.delete(existingMsg.id);
             }
+
+            // BUG2 defense-in-depth: Socket-before-HTTP race cleanup.
+            // If canonical arrived via HTTP and matched an existing non-temp socket copy
+            // (existingMsg.id = real UUID, NOT temp-), there may still be an orphaned
+            // temp- message in byId from the optimistic insert that never got removed
+            // (because primary fix in sendMessage couldn't reach here).
+            // Scan for it and evict it to prevent the duplicate bubble.
+            if (!existingMsg.id.startsWith('temp-') && !msg.id.startsWith('temp-')) {
+                for (const [orphanId, orphanMsg] of byId.entries()) {
+                    if (
+                        orphanId.startsWith('temp-') &&
+                        orphanMsg.sender_id === msg.sender_id &&
+                        orphanMsg.content === msg.content &&
+                        Math.abs(
+                            new Date(orphanMsg.created_at).getTime() -
+                            new Date(msg.created_at).getTime()
+                        ) < 15000
+                    ) {
+                        byId.delete(orphanId);
+                        break;
+                    }
+                }
+            }
             
             byId.set(updatedMsg.id, updatedMsg);
             const updatedEvtKey = getEventKey(updatedMsg);
@@ -137,6 +160,7 @@ export function mergeMessages(existing: Message[], incoming: Message[]): MergeRe
                 payload: msg,
             });
         }
+
     }
 
     // Stage 4: Sort

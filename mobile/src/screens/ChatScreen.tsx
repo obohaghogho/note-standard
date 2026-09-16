@@ -4,7 +4,7 @@ import {
     StyleSheet, Platform, Image,
     Alert, Share, InteractionManager, ActivityIndicator
 } from 'react-native';
-import Animated, { useAnimatedKeyboard, useAnimatedStyle } from 'react-native-reanimated';
+import Animated, { useAnimatedKeyboard, useAnimatedStyle, useSharedValue, KeyboardState } from 'react-native-reanimated';
 
 import { FlashList } from '@shopify/flash-list';
 const SafeFlashList = FlashList as any;
@@ -74,21 +74,39 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     // ── NATIVE 60FPS KEYBOARD TRACKING ──────────────────────────────────────────
     const keyboard = useAnimatedKeyboard();
+    // FIX Bug1: Hold last non-zero keyboard height in a shared value.
+    // On Android, clearing the TextInput (multiline → 1-line shrink) fires a
+    // WINDOW_ATTRIBUTE_CHANGED event that transiently reports keyboard.height=0
+    // while the keyboard is still visually up (state=OPEN/OPENING).
+    // Without this guard, paddingBottom briefly hits 0 → composer hides behind keyboard
+    // → snaps back → user sees the "hang at top then drop" effect.
+    const lastKbHeight = useSharedValue(0);
     const TAB_BAR_HEIGHT = 70; // From MainTabs.tsx
     const animatedKeyboardStyle = useAnimatedStyle(() => {
         const kbHeight = keyboard.height.value;
+        const kbState = keyboard.state.value;
+
+        // Track the last real (non-transient) keyboard height
+        if (kbHeight > 10) {
+            lastKbHeight.value = kbHeight;
+        }
+
+        // Only trust height=0 when the keyboard is definitively CLOSED.
+        // During OPEN or OPENING, a 0-height is always a transient resize flash.
+        const isDefinitelyClosed = kbState === KeyboardState.CLOSED;
+        const effectiveHeight = isDefinitelyClosed ? 0 : (kbHeight > 10 ? kbHeight : lastKbHeight.value);
+
         let offset = 0;
-        
-        if (kbHeight > 0) {
+        if (effectiveHeight > 0) {
             if (Platform.OS === 'ios') {
                 // iOS: ChatScreen is pushed 70px up by the tab bar.
                 // Subtract this 70px from the absolute keyboard height.
-                const rawOffset = kbHeight - TAB_BAR_HEIGHT;
+                const rawOffset = effectiveHeight - TAB_BAR_HEIGHT;
                 offset = rawOffset > 0 ? rawOffset : 0;
             } else {
                 // Android: Tab bar is hidden (tabBarHideOnKeyboard: true)
                 // Math.max ensures smooth offset clamping without negative inset jumps on Android 14
-                const rawAndroidOffset = kbHeight - (insets.bottom || 0);
+                const rawAndroidOffset = effectiveHeight - (insets.bottom || 0);
                 offset = Math.max(0, rawAndroidOffset);
             }
         }
