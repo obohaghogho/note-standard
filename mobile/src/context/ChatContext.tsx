@@ -760,15 +760,17 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         const trimmed = content.trim();
         if (!trimmed) return;
 
-        let prevContent = '';
-        let targetMsg: Message | undefined;
+        const currentList = messagesRef.current?.[conversationId] || messages[conversationId] || [];
+        const targetMsg = currentList.find(m => m.id === messageId || (m.event_id && m.event_id === messageId));
+        const prevContent = targetMsg?.content || '';
+
+        const effectiveId = targetMsg?.id || messageId;
+        const patchTargetId = (targetMsg?.id && !targetMsg.id.startsWith('temp-'))
+            ? targetMsg.id
+            : (targetMsg?.event_id || messageId);
 
         setMessages(prev => {
             const current = prev[conversationId] || [];
-            targetMsg = current.find(m => m.id === messageId || (m.event_id && m.event_id === messageId));
-            if (targetMsg) prevContent = targetMsg.content;
-
-            const effectiveId = targetMsg?.id || messageId;
             return {
                 ...prev,
                 [conversationId]: current.map(m =>
@@ -778,10 +780,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 )
             };
         });
-
-        const patchTargetId = (targetMsg?.id && !targetMsg.id.startsWith('temp-'))
-            ? targetMsg.id
-            : (targetMsg?.event_id || messageId);
 
         try {
             const res = await apiClient.patch(`/chat/messages/${patchTargetId}`, { content: trimmed });
@@ -806,7 +804,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 return {
                     ...prev,
                     [conversationId]: current.map(m =>
-                        (m.id === messageId || (targetMsg?.event_id && m.event_id === targetMsg.event_id))
+                        (m.id === effectiveId || m.id === messageId || (targetMsg?.event_id && m.event_id === targetMsg.event_id))
                             ? { ...m, content: prevContent }
                             : m
                     )
@@ -814,7 +812,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             });
             throw err;
         }
-    }, []);
+    }, [messages]);
 
     const deleteMessage = useCallback(async (conversationId: string, messageId: string) => {
         // Optimistic delete
