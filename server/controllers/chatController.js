@@ -2314,59 +2314,75 @@ exports.editMessage = async (req, res) => {
 
     const trimmedContent = content.trim();
 
-    // Verify ownership and update the message with basic select('*') to prevent PGRST200 join errors
-    // Match by id OR event_id to safely handle cases where the client passes an event_id or temp ID
+    // ── STEP 1: Find candidate message record by ID or event_id ────────────────
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(messageId);
 
+    let targetMsg = null;
+    if (isUuid) {
+      const { data: found, error: findErr } = await supabase
+        .from("messages")
+        .select("id, conversation_id, sender_id, is_deleted")
+        .or(`id.eq.${messageId},event_id.eq.${messageId}`)
+        .maybeSingle();
+      if (!findErr) targetMsg = found;
+    }
+
+    if (!targetMsg) {
+      const { data: foundByEvent } = await supabase
+        .from("messages")
+        .select("id, conversation_id, sender_id, is_deleted")
+        .eq("event_id", messageId)
+        .maybeSingle();
+      targetMsg = foundByEvent;
+    }
+
+    if (!targetMsg) {
+      console.warn(`[Chat Controller] editMessage 404: No message record found for key ${messageId}`);
+      return res.status(404).json({ error: "Message not found or update failed" });
+    }
+
+    // ── STEP 2: Ownership and deletion checks ─────────────────────────────────
+    if (targetMsg.sender_id !== userId) {
+      return res.status(403).json({ error: "Unauthorized: You can only edit your own messages" });
+    }
+
+    if (targetMsg.is_deleted === true) {
+      return res.status(400).json({ error: "Cannot edit a deleted message" });
+    }
+
+    // ── STEP 3: Update by exact canonical UUID primary key ──────────────────
     let updatedData = null;
-    let query = supabase
+    const { data: updateRes, error: updateErr } = await supabase
       .from("messages")
       .update({
         content: trimmedContent,
         is_edited: true,
         updated_at: new Date().toISOString()
-      });
-
-    if (isUuid) {
-      query = query.or(`id.eq.${messageId},event_id.eq.${messageId}`);
-    } else {
-      // Non-UUID string (e.g. temp-xxx or custom event_id): match ONLY event_id to avoid Postgres 22P02 UUID syntax error
-      query = query.eq("event_id", messageId);
-    }
-
-    let { data, error } = await query
-      .eq("sender_id", userId) // Force ownership
-      .eq("is_deleted", false) // Cannot edit deleted messages
+      })
+      .eq("id", targetMsg.id)
       .select("*")
       .maybeSingle();
 
-    if (error) {
-      // If 22P02 or schema error, fallback to event_id query
-      if (error.code === "22P02" || error.code === "42703" || error.code === "PGRST204") {
-         console.warn("[Chat Controller] Invalid UUID syntax or missing column on edit, retrying by event_id:", error.code);
-         const { data: retryData, error: retryErr } = await supabase
-           .from("messages")
-           .update({
-             content: trimmedContent,
-             updated_at: new Date().toISOString()
-           })
-           .eq("event_id", messageId)
-           .eq("sender_id", userId)
-           .eq("is_deleted", false)
-           .select("*")
-           .maybeSingle();
+    if (updateErr) {
+      console.warn("[Chat Controller] Primary edit update failed, retrying basic content update:", updateErr.message);
+      const { data: retryRes, error: retryErr } = await supabase
+        .from("messages")
+        .update({
+          content: trimmedContent,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", targetMsg.id)
+        .select("*")
+        .maybeSingle();
 
-         if (retryErr) throw retryErr;
-         updatedData = retryData;
-      } else {
-         throw error;
-      }
+      if (retryErr) throw retryErr;
+      updatedData = retryRes;
     } else {
-      updatedData = data;
+      updatedData = updateRes;
     }
 
     if (!updatedData) {
-      return res.status(404).json({ error: "Message not found or update failed" });
+      return res.status(500).json({ error: "Failed to apply message edit" });
     }
 
     // Explicitly set is_edited flag in payload

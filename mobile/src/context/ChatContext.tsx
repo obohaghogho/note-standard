@@ -574,14 +574,17 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         });
 
         socketManager.on('chat:message_edited', (editedMsg: any) => {
-            if (!editedMsg.conversation_id) return;
+            if (!editedMsg || !editedMsg.conversation_id) return;
             setMessages(prev => {
                 const current = prev[editedMsg.conversation_id] || [];
                 return {
                     ...prev,
-                    [editedMsg.conversation_id]: current.map(m =>
-                        m.id === editedMsg.id ? { ...m, ...editedMsg } : m
-                    )
+                    [editedMsg.conversation_id]: current.map(m => {
+                        const isMatch = m.id === editedMsg.id ||
+                            (editedMsg.event_id && m.event_id === editedMsg.event_id) ||
+                            (m.event_id && m.event_id === editedMsg.id);
+                        return isMatch ? { ...m, ...editedMsg } : m;
+                    })
                 };
             });
         });

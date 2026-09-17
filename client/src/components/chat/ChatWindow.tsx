@@ -487,10 +487,16 @@ const ChatWindow: React.FC = () => {
         return null;
     }, [session?.access_token]);
 
+    const isSubmittingRef = useRef(false);
+
     const handleSend = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
+        if (isSubmittingRef.current) return;
+
         const textToSend = inputValue.trim();
         if (!textToSend || !activeConversationId) return;
+
+        isSubmittingRef.current = true;
 
         // Clear UI state synchronously for instant feedback
         setInputValue('');
@@ -528,6 +534,8 @@ const ChatWindow: React.FC = () => {
             setEditingMessageId(currentEditingId);
             const serverMsg = error.response?.data?.error || error.message;
             toast.error(serverMsg ? `Error: ${serverMsg}` : (currentEditingId ? 'Failed to edit message' : 'Failed to send message'));
+        } finally {
+            isSubmittingRef.current = false;
         }
     };
 
@@ -1389,12 +1397,6 @@ const ChatWindow: React.FC = () => {
                                         type="submit" 
                                         disabled={!inputValue.trim()} 
                                         onMouseDown={(e) => e.preventDefault()}
-                                        onTouchStart={(e) => {
-                                            if (inputValue.trim()) {
-                                                e.preventDefault();
-                                                handleSend();
-                                            }
-                                        }}
                                         className={`w-11 h-11 md:w-12 md:h-12 flex items-center justify-center rounded-full transition-all duration-300 shadow-xl active:scale-90 flex-shrink-0 ${
                                             inputValue.trim() 
                                             ? 'bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500 hover:-translate-y-0.5' 

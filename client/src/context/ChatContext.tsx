@@ -1933,18 +1933,19 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         };
 
         const onMessageEdited = (editedMsg: Message) => {
+            if (!editedMsg || !editedMsg.conversation_id) return;
             setMessages(prev => {
                 const current = prev[editedMsg.conversation_id] || [];
                 return {
                     ...prev,
                     [editedMsg.conversation_id]: current.map(m => {
-                        if (m.id !== editedMsg.id) return m;
+                        const isMatch = m.id === editedMsg.id || 
+                            (editedMsg.event_id && m.event_id === editedMsg.event_id) || 
+                            (m.event_id && m.event_id === editedMsg.id);
+                        if (!isMatch) return m;
                         return {
                             ...m,
                             ...editedMsg,
-                            // Phase 8: reply_to guard — server edit payload may not carry the
-                            // full reply_to join. Never let a partial broadcast overwrite a
-                            // valid local reply snapshot.
                             reply_to: editedMsg.reply_to ?? m.reply_to,
                         };
                     })
