@@ -171,7 +171,9 @@ export const GreyBankingPanel: React.FC = () => {
                         {dep.rail}
                       </span>
                     </td>
-                    <td className="p-3 font-mono font-bold text-emerald-400">${dep.amount?.toLocaleString()} {dep.currency}</td>
+                    <td className="p-3 font-mono font-bold text-emerald-400">
+                      {dep.currency === 'NGN' ? '₦' : dep.currency === 'GHS' ? 'GH₵' : dep.currency === 'USD' ? '$' : ''}{dep.amount?.toLocaleString()} {dep.currency}
+                    </td>
                     <td className="p-3 text-slate-200 font-medium">{dep.sender_name} ({dep.sender_account || 'N/A'})</td>
                     <td className="p-3 font-mono text-slate-300">{dep.memo || 'None'}</td>
                     <td className="p-3 text-amber-400">{dep.reason}</td>

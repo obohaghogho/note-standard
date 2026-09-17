@@ -106,23 +106,38 @@ router.get('/deposit-monitoring', async (req, res) => {
     let failedDeposits = 0;
     let totalDepositCount = 0;
     let completedCount = 0;
+    let volumeByCurrency = {};
+    let formattedVolume = '₦0';
 
     if (supabase && typeof supabase.from === 'function') {
       try {
         // Query today's deposits
         const { data: todayTxs } = await supabase
           .from('transactions')
-          .select('amount, status')
+          .select('amount, status, currency')
           .gte('created_at', startOfDayIso)
           .ilike('type', '%deposit%');
 
+        const currencySymbols = { NGN: '₦', USD: '$', GHS: 'GH₵', EUR: '€', GBP: '£' };
+
         if (todayTxs) {
           todaysDeposits = todayTxs.length;
-          todaysVolume = todayTxs.reduce((sum, tx) => {
+          todayTxs.forEach(tx => {
             const isSuccess = ['completed', 'COMPLETED', 'posted', 'POSTED', 'success', 'SUCCESS'].includes(tx.status);
-            return sum + (isSuccess ? parseFloat(tx.amount || 0) : 0);
-          }, 0);
+            if (isSuccess) {
+              const curr = (tx.currency || 'NGN').toUpperCase();
+              const amt = parseFloat(tx.amount || 0);
+              volumeByCurrency[curr] = (volumeByCurrency[curr] || 0) + amt;
+            }
+          });
+          todaysVolume = Object.values(volumeByCurrency).reduce((sum, v) => sum + v, 0);
         }
+
+        const formattedVolumeParts = Object.entries(volumeByCurrency).map(([curr, amt]) => {
+          const symbol = currencySymbols[curr] || `${curr} `;
+          return `${symbol}${amt.toLocaleString()}`;
+        });
+        formattedVolume = formattedVolumeParts.length > 0 ? formattedVolumeParts.join(' / ') : '₦0';
 
         // Query pending deposits count
         const { count: pendingCount } = await supabase
@@ -170,6 +185,8 @@ router.get('/deposit-monitoring', async (req, res) => {
 
     const stats = {
       todaysVolume: Math.round(todaysVolume * 100) / 100,
+      formattedVolume: formattedVolume || '₦0',
+      volumeByCurrency: volumeByCurrency || {},
       todaysDeposits,
       pendingSettlement,
       failedDeposits,

@@ -98,7 +98,7 @@ export const DepositMonitoringPage: React.FC = () => {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
           <div className="metric-card p-4 rounded-xl bg-gray-900/80 border border-gray-800">
             <div className="text-xs text-gray-400 mb-1">Today's Volume</div>
-            <div className="text-lg sm:text-xl font-bold text-white">${stats.todaysVolume?.toLocaleString()}</div>
+            <div className="text-lg sm:text-xl font-bold text-white">{stats.formattedVolume || (stats.todaysVolume !== undefined ? `₦${stats.todaysVolume.toLocaleString()}` : '₦0')}</div>
           </div>
           <div className="metric-card p-4 rounded-xl bg-gray-900/80 border border-gray-800">
             <div className="text-xs text-gray-400 mb-1">Today's Deposits</div>
