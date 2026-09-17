@@ -1440,7 +1440,7 @@ exports.sendMessage = async (req, res) => {
 
     const { data: allMembers, error: membersError } = await supabase
       .from("conversation_members")
-      .select("user_id, is_muted")
+      .select("user_id, is_muted, is_deleted, cleared_at, status")
       .eq("conversation_id", conversationId);
       
     if (membersError) {
@@ -1549,7 +1549,9 @@ exports.sendMessage = async (req, res) => {
 
     let createdMessageId = null;
     let isDuplicate = false;
-    const eventId = req.body.eventId || crypto.randomUUID();
+    const rawEventId = req.body.eventId;
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const eventId = (rawEventId && UUID_REGEX.test(rawEventId)) ? rawEventId : crypto.randomUUID();
 
     const t2_DbInsertStart = Date.now();
 
@@ -1614,7 +1616,7 @@ exports.sendMessage = async (req, res) => {
             content: content || '',
             type: type || "text",
             sentiment,
-            detected_language: detectedLang,
+            original_language: detectedLang,
             event_id: eventId,
             sequence_number: null
           };
