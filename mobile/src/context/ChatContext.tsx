@@ -758,24 +758,41 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         if (!trimmed) return;
 
         let prevContent = '';
+        let targetMsg: Message | undefined;
+
         setMessages(prev => {
             const current = prev[conversationId] || [];
-            const match = current.find(m => m.id === messageId);
-            if (match) prevContent = match.content;
+            targetMsg = current.find(m => m.id === messageId || (m.event_id && m.event_id === messageId));
+            if (targetMsg) prevContent = targetMsg.content;
+
+            const effectiveId = targetMsg?.id || messageId;
             return {
                 ...prev,
-                [conversationId]: current.map(m => m.id === messageId ? { ...m, content: trimmed, is_edited: true } : m)
+                [conversationId]: current.map(m =>
+                    (m.id === effectiveId || m.id === messageId || (targetMsg?.event_id && m.event_id === targetMsg.event_id))
+                        ? { ...m, content: trimmed, is_edited: true }
+                        : m
+                )
             };
         });
 
+        const patchTargetId = (targetMsg?.id && !targetMsg.id.startsWith('temp-'))
+            ? targetMsg.id
+            : (targetMsg?.event_id || messageId);
+
         try {
-            const res = await apiClient.patch(`/chat/messages/${messageId}`, { content: trimmed });
+            const res = await apiClient.patch(`/chat/messages/${patchTargetId}`, { content: trimmed });
             if (res.data) {
+                const serverData = res.data;
                 setMessages(prev => {
                     const current = prev[conversationId] || [];
                     return {
                         ...prev,
-                        [conversationId]: current.map(m => m.id === messageId ? { ...m, ...res.data, is_edited: true } : m)
+                        [conversationId]: current.map(m =>
+                            (m.id === serverData.id || m.id === patchTargetId || m.id === messageId || (serverData.event_id && m.event_id === serverData.event_id))
+                                ? { ...m, ...serverData, is_edited: true }
+                                : m
+                        )
                     };
                 });
             }
@@ -785,7 +802,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const current = prev[conversationId] || [];
                 return {
                     ...prev,
-                    [conversationId]: current.map(m => m.id === messageId ? { ...m, content: prevContent } : m)
+                    [conversationId]: current.map(m =>
+                        (m.id === messageId || (targetMsg?.event_id && m.event_id === targetMsg.event_id))
+                            ? { ...m, content: prevContent }
+                            : m
+                    )
                 };
             });
             throw err;

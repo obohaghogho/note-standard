@@ -3171,51 +3171,67 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         const trimmed = content.trim();
         if (!trimmed) return;
 
-        // Find conversation containing messageId and capture previous content
         let targetConvId: string | null = null;
         let prevContent: string = '';
+        let targetMsg: Message | undefined;
+
         const currentMessagesState = messagesRef.current || messages;
         for (const [convId, list] of Object.entries(currentMessagesState)) {
-            const match = list.find(m => m.id === messageId);
+            const match = list.find(m => m.id === messageId || (m.event_id && m.event_id === messageId));
             if (match) {
                 targetConvId = convId;
                 prevContent = match.content;
+                targetMsg = match;
                 break;
             }
         }
 
-        // Optimistic local update
         if (targetConvId) {
             setMessages(prev => {
                 const current = prev[targetConvId!] || [];
                 return {
                     ...prev,
-                    [targetConvId!]: current.map(m => m.id === messageId ? { ...m, content: trimmed, is_edited: true } : m)
+                    [targetConvId!]: current.map(m =>
+                        (m.id === messageId || (targetMsg?.event_id && m.event_id === targetMsg.event_id))
+                            ? { ...m, content: trimmed, is_edited: true }
+                            : m
+                    )
                 };
             });
         }
 
+        const patchTargetId = (targetMsg?.id && !targetMsg.id.startsWith('temp-'))
+            ? targetMsg.id
+            : (targetMsg?.event_id || messageId);
+
         try {
-            const res = await api.patch(`/chat/messages/${messageId}`, { content: trimmed });
+            const res = await api.patch(`/chat/messages/${patchTargetId}`, { content: trimmed });
             const serverUpdated = res.data;
             if (serverUpdated && targetConvId) {
                 setMessages(prev => {
                     const current = prev[targetConvId!] || [];
                     return {
                         ...prev,
-                        [targetConvId!]: current.map(m => m.id === messageId ? { ...m, ...serverUpdated, is_edited: true } : m)
+                        [targetConvId!]: current.map(m =>
+                            (m.id === serverUpdated.id || m.id === patchTargetId || m.id === messageId || (serverUpdated.event_id && m.event_id === serverUpdated.event_id))
+                                ? { ...m, ...serverUpdated, is_edited: true }
+                                : m
+                        )
                     };
                 });
             }
             toast.success('Message updated');
         } catch (err: unknown) {
-            // Rollback optimistic edit on error
             if (targetConvId) {
                 setMessages(prev => {
                     const current = prev[targetConvId!] || [];
                     return {
                         ...prev,
-                        [targetConvId!]: current.map(m => m.id === messageId ? { ...m, content: prevContent } : m)
+                        [targetConvId!]: current.map(m =>
+                            (m.id === messageId || (targetMsg?.event_id && m.event_id === targetMsg.event_id))
+                                ? { ...m, content: prevContent }
+                                : m
+                        )
                     };
                 });
             }
