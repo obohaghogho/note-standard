@@ -2748,6 +2748,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         // 1. Push Intent to Offline Queue
         await offlineQueue.pushIntent({
             event_id: clientEventId,
+            client_message_id: tempId,
             conversation_id: conversationId,
             payload: { content, type, attachmentId, replyTo, correlationId: cid, clientSendTs: Date.now() },
             created_at: Date.now()

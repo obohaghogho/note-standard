@@ -1762,8 +1762,8 @@ exports.sendMessage = async (req, res) => {
       // should ever block the HTTP response back to the sender's device.
       setImmediate(async () => {
         try {
-          // ── SOCKET BROADCAST to room (recipient gets the message) ──
-          await realtime.emitToConversation(conversationId, "chat:message", safePayload);
+          // ── SOCKET BROADCAST to room (recipient gets the message, exclude sender to prevent echo duplicate) ──
+          await realtime.emitToConversation(conversationId, "chat:message", safePayload, { excludeUserId: userId });
 
           // ── NOTIFICATION LOGIC ─────────────────────────────────────────────────
           const otherMembers = members.filter(m => m.user_id !== userId);

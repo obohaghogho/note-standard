@@ -15,6 +15,7 @@ import { normalizeEvent } from 'shared/eventNormalizer';
 import { useSessionArbitration } from 'shared/hooks/useSessionArbitration';
 import { ReadReceiptEngine } from 'shared/readReceiptEngine';
 import { supabase } from '../lib/supabase';
+import { v4 as uuidv4 } from 'uuid';
 
 export interface Message {
     id: string;
@@ -391,11 +392,17 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         };
         setupSocket();
 
-        // INCOMING MESSAGE: Fast path — dedup, normalize, batch
+        // INCOMING MESSAGE: Fast path — decode, normalize, dedup, batch
         const onIncomingMessage = async (rawMsg: any) => {
+            // ── Decode + Normalize ─────────────────────────────────────────────
+            const plainContent = await mobileTransportAdapter.decodeIncomingMessage(rawMsg, user.id);
+            const processedMsg = { ...rawMsg, content: plainContent || rawMsg.content };
+            const normalized = normalizeEvent(processedMsg) as any;
+            if (!validateMessagePayload(normalized).valid) return;
+
             // ── Deduplication ──────────────────────────────────────────────────
-            const dedupEventKey = rawMsg.event_id ? `evt:${rawMsg.event_id}` : null;
-            const dedupIdKey = rawMsg.id && !String(rawMsg.id).startsWith('temp-') ? `id:${rawMsg.id}` : null;
+            const dedupEventKey = normalized.event_id ? `evt:${normalized.event_id}` : null;
+            const dedupIdKey = normalized.id && !String(normalized.id).startsWith('temp-') ? `id:${normalized.id}` : null;
 
             if (dedupEventKey && processedEventsRef.current.has(dedupEventKey)) return;
             if (dedupIdKey && processedEventsRef.current.has(dedupIdKey)) return;
@@ -408,12 +415,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const first = processedEventsRef.current.values().next().value;
                 if (first !== undefined) processedEventsRef.current.delete(first);
             }
-
-            // ── Decode + Normalize ─────────────────────────────────────────────
-            const plainContent = await mobileTransportAdapter.decodeIncomingMessage(rawMsg, user.id);
-            const processedMsg = { ...rawMsg, content: plainContent || rawMsg.content };
-            const normalized = normalizeEvent(processedMsg) as any;
-            if (!validateMessagePayload(normalized).valid) return;
 
             const incomingMessage: Message = {
                 ...normalized,
@@ -641,7 +642,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
 
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-        const clientEventId = `evt-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+        const clientEventId = uuidv4();
 
         // STEP 1: Optimistic insert — happens BEFORE API call, UI is instant
         const optimisticMessage: Message = {
@@ -695,7 +696,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             });
 
             // STEP 3: Canonical collapse — replace temp- with server UUID
-            const canonicalMessage: Message = { ...res.data, isOwn: true, status: 'sent' };
+            const normalizedRes = normalizeEvent(res.data);
+            const canonicalMessage: Message = {
+                ...normalizedRes,
+                event_id: normalizedRes.event_id || clientEventId,
+                isOwn: true,
+                status: 'sent'
+            };
 
             // Pre-register in dedup buffer to drop gateway echo
             const canonEventKey = canonicalMessage.event_id ? `evt:${canonicalMessage.event_id}` : null;
@@ -715,7 +722,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 // Filtering temp-xxx first guarantees exactly 1 message survives regardless
                 // of whether the socket arrived before or after the HTTP response.
                 [conversationId]: mergeMessages(
-                    (prev[conversationId] || []).filter(m => m.id !== tempId),
+                    (prev[conversationId] || []).filter(m => m.id !== tempId && (!m.event_id || m.event_id !== clientEventId)),
                     [canonicalMessage]
                 ).merged as Message[]
             }));

@@ -65,11 +65,13 @@ export function mergeMessages(existing: Message[], incoming: Message[]): MergeRe
                 if (
                     existingItem.id.startsWith('temp-') &&
                     existingItem.sender_id === msg.sender_id &&
-                    existingItem.content === msg.content &&
-                    Math.abs(new Date(existingItem.created_at).getTime() - new Date(msg.created_at).getTime()) < 15000
+                    existingItem.content === msg.content
                 ) {
-                    existingMsg = existingItem;
-                    break;
+                    const timeDiff = Math.abs(new Date(existingItem.created_at).getTime() - new Date(msg.created_at).getTime());
+                    if (isNaN(timeDiff) || timeDiff < 60000) {
+                        existingMsg = existingItem;
+                        break;
+                    }
                 }
             }
         }
@@ -123,25 +125,15 @@ export function mergeMessages(existing: Message[], incoming: Message[]): MergeRe
                 byId.delete(existingMsg.id);
             }
 
-            // BUG2 defense-in-depth: Socket-before-HTTP race cleanup.
-            // If canonical arrived via HTTP and matched an existing non-temp socket copy
-            // (existingMsg.id = real UUID, NOT temp-), there may still be an orphaned
-            // temp- message in byId from the optimistic insert that never got removed
-            // (because primary fix in sendMessage couldn't reach here).
-            // Scan for it and evict it to prevent the duplicate bubble.
-            if (!existingMsg.id.startsWith('temp-') && !msg.id.startsWith('temp-')) {
+            // Evict any orphaned temp- message in byId from optimistic insert
+            if (!msg.id.startsWith('temp-')) {
                 for (const [orphanId, orphanMsg] of byId.entries()) {
                     if (
                         orphanId.startsWith('temp-') &&
                         orphanMsg.sender_id === msg.sender_id &&
-                        orphanMsg.content === msg.content &&
-                        Math.abs(
-                            new Date(orphanMsg.created_at).getTime() -
-                            new Date(msg.created_at).getTime()
-                        ) < 15000
+                        orphanMsg.content === msg.content
                     ) {
                         byId.delete(orphanId);
-                        break;
                     }
                 }
             }
