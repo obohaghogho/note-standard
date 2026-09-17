@@ -664,12 +664,13 @@ exports.createConversation = async (req, res) => {
 
               const memberList = members || [];
 
-              // Re-open the conversation for ALL members IF it was soft-deleted.
+              // Re-open the conversation for ALL members IF it was soft-deleted or history was cleared.
               await supabase
                 .from("conversation_members")
                 .update({ 
                   is_deleted: false, 
-                  deleted_at: null 
+                  deleted_at: null,
+                  cleared_at: null
                 })
                 .eq("conversation_id", existingId)
                 .in("user_id", [userId, recipientId]);
@@ -678,6 +679,7 @@ exports.createConversation = async (req, res) => {
               if (myMembership) {
                 myMembership.is_deleted = false;
                 myMembership.deleted_at = null;
+                myMembership.cleared_at = null;
               }
 
               // Auto-accept if the initiator's current status is pending
@@ -1474,20 +1476,21 @@ exports.sendMessage = async (req, res) => {
       }
     }
 
-    // AUTO-REOPEN: If any member soft-deleted this conversation, un-delete it when a message is sent
-    // so the conversation automatically reappears in their chat list.
-    const deletedMembers = (members || []).filter(m => m.is_deleted);
-    if (deletedMembers.length > 0) {
-      const delUserIds = deletedMembers.map(m => m.user_id);
+    // AUTO-REOPEN: If any member soft-deleted or cleared this conversation, reset state when a message is sent
+    // so the conversation automatically reappears and displays fresh messages in their chat list.
+    const deletedOrClearedMembers = (members || []).filter(m => m.is_deleted || m.cleared_at);
+    if (deletedOrClearedMembers.length > 0) {
+      const delUserIds = deletedOrClearedMembers.map(m => m.user_id);
       await supabase
         .from("conversation_members")
-        .update({ is_deleted: false, deleted_at: null })
+        .update({ is_deleted: false, deleted_at: null, cleared_at: null })
         .eq("conversation_id", conversationId)
         .in("user_id", delUserIds);
 
-      deletedMembers.forEach(m => {
+      deletedOrClearedMembers.forEach(m => {
         m.is_deleted = false;
         m.deleted_at = null;
+        m.cleared_at = null;
       });
     }
 
