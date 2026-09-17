@@ -2329,15 +2329,23 @@ exports.editMessage = async (req, res) => {
     const trimmedContent = content.trim();
 
     // Verify ownership and update the message with basic select('*') to prevent PGRST200 join errors
+    // Match by id OR event_id to safely handle cases where the client passes an event_id or temp ID
     let updatedData = null;
-    let { data, error } = await supabase
+    let query = supabase
       .from("messages")
       .update({
         content: trimmedContent,
         is_edited: true,
         updated_at: new Date().toISOString()
-      })
-      .eq("id", messageId)
+      });
+
+    if (messageId.includes('-') && messageId.length >= 32) {
+      query = query.or(`id.eq.${messageId},event_id.eq.${messageId}`);
+    } else {
+      query = query.eq("id", messageId);
+    }
+
+    let { data, error } = await query
       .eq("sender_id", userId) // Force ownership
       .eq("is_deleted", false) // Cannot edit deleted messages
       .select("*")
