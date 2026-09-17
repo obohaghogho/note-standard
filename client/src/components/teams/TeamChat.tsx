@@ -584,7 +584,8 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
                   return (
                     <button 
                       onClick={() => {
-                        setEditingMessageId(msg.id);
+                        const editId = (msg.id && !msg.id.startsWith('temp-')) ? msg.id : (msg.event_id || msg.id);
+                        setEditingMessageId(editId);
                         setInput(msg.content || '');
                         clearSelection();
                       }}

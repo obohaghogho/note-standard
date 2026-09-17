@@ -856,7 +856,8 @@ const ChatWindow: React.FC = () => {
                                             <button 
                                                 onClick={() => {
                                                     if (msg) {
-                                                        setEditingMessageId(msg.id);
+                                                        const editId = (msg.id && !msg.id.startsWith('temp-')) ? msg.id : (msg.event_id || msg.id);
+                                                        setEditingMessageId(editId);
                                                         setInputValue(msg.content || '');
                                                     }
                                                     clearSelection();

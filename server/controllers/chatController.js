@@ -2319,12 +2319,12 @@ exports.editMessage = async (req, res) => {
 
     let targetMsg = null;
     if (isUuid) {
-      const { data: found, error: findErr } = await supabase
+      const { data: foundList } = await supabase
         .from("messages")
         .select("id, conversation_id, sender_id, is_deleted")
         .or(`id.eq.${messageId},event_id.eq.${messageId}`)
-        .maybeSingle();
-      if (!findErr) targetMsg = found;
+        .limit(1);
+      if (foundList && foundList.length > 0) targetMsg = foundList[0];
     }
 
     if (!targetMsg) {
@@ -2332,8 +2332,8 @@ exports.editMessage = async (req, res) => {
         .from("messages")
         .select("id, conversation_id, sender_id, is_deleted")
         .eq("event_id", messageId)
-        .maybeSingle();
-      targetMsg = foundByEvent;
+        .limit(1);
+      if (foundByEvent && foundByEvent.length > 0) targetMsg = foundByEvent[0];
     }
 
     if (!targetMsg) {
@@ -2352,7 +2352,7 @@ exports.editMessage = async (req, res) => {
 
     // ── STEP 3: Update by exact canonical UUID primary key ──────────────────
     let updatedData = null;
-    const { data: updateRes, error: updateErr } = await supabase
+    const { data: updateResList, error: updateErr } = await supabase
       .from("messages")
       .update({
         content: trimmedContent,
@@ -2360,25 +2360,23 @@ exports.editMessage = async (req, res) => {
         updated_at: new Date().toISOString()
       })
       .eq("id", targetMsg.id)
-      .select("*")
-      .maybeSingle();
+      .select("*");
 
     if (updateErr) {
       console.warn("[Chat Controller] Primary edit update failed, retrying basic content update:", updateErr.message);
-      const { data: retryRes, error: retryErr } = await supabase
+      const { data: retryResList, error: retryErr } = await supabase
         .from("messages")
         .update({
           content: trimmedContent,
           updated_at: new Date().toISOString()
         })
         .eq("id", targetMsg.id)
-        .select("*")
-        .maybeSingle();
+        .select("*");
 
       if (retryErr) throw retryErr;
-      updatedData = retryRes;
-    } else {
-      updatedData = updateRes;
+      if (retryResList && retryResList.length > 0) updatedData = retryResList[0];
+    } else if (updateResList && updateResList.length > 0) {
+      updatedData = updateResList[0];
     }
 
     if (!updatedData) {
