@@ -2322,21 +2322,25 @@ exports.editMessage = async (req, res) => {
     const { content } = req.body;
     const userId = req.user.id;
 
-    if (!content) {
+    if (!content || !content.trim()) {
        return res.status(400).json({ error: "Content is required" });
     }
 
-    // Verify ownership and update the message
-    const { data, error } = await supabase
+    const trimmedContent = content.trim();
+
+    // Verify ownership and update the message with basic select('*') to prevent PGRST200 join errors
+    let updatedData = null;
+    let { data, error } = await supabase
       .from("messages")
       .update({
-        content: content,
+        content: trimmedContent,
         is_edited: true,
+        updated_at: new Date().toISOString()
       })
       .eq("id", messageId)
       .eq("sender_id", userId) // Force ownership
       .eq("is_deleted", false) // Cannot edit deleted messages
-      .select("*, attachment:media_attachments(*)")
+      .select("*")
       .single();
 
     if (error) {
@@ -2345,40 +2349,59 @@ exports.editMessage = async (req, res) => {
           error: "Message not found or you don't have permission to edit it",
         });
       }
-      // if column is_edited doesn't exist yet, we attempt a fallback without it
+      // If column is_edited doesn't exist yet, retry fallback without it
       if (error.code === "42703" || error.code === "PGRST204") {
          console.warn("[Chat Controller] is_edited column missing, retrying without it");
          const { data: retryData, error: retryErr } = await supabase
            .from("messages")
-           .update({ content: content })
+           .update({
+             content: trimmedContent,
+             updated_at: new Date().toISOString()
+           })
            .eq("id", messageId)
            .eq("sender_id", userId)
            .eq("is_deleted", false)
-           .select("*, attachment:media_attachments(*)")
+           .select("*")
            .single();
+
          if (retryErr) throw retryErr;
-         // Ensure reply_to is hydrated even if FK join returned null (schema cache miss)
-         if (retryData.reply_to_id && !retryData.reply_to) {
-           await _hydrateReplyTo([retryData]);
-         }
-         await realtime.emitToConversation(retryData.conversation_id, "chat:message_edited", retryData);
-         return res.json(retryData);
+         updatedData = retryData;
+      } else {
+         throw error;
       }
-      throw error;
+    } else {
+      updatedData = data;
     }
 
-    // Ensure reply_to is hydrated even if FK join returned null (schema cache miss)
-    if (data.reply_to_id && !data.reply_to) {
-      await _hydrateReplyTo([data]);
+    if (!updatedData) {
+      return res.status(404).json({ error: "Message not found or update failed" });
     }
 
-    // Notify via Gateway
-    await realtime.emitToConversation(data.conversation_id, "chat:message_edited", data);
+    // Explicitly set is_edited flag in payload
+    updatedData.is_edited = true;
 
-    res.json(data);
+    // Ensure reply_to is hydrated if message has reply_to_id
+    if (updatedData.reply_to_id && !updatedData.reply_to) {
+      await _hydrateReplyTo([updatedData]);
+    }
+
+    // Attach sender profile payload
+    if (!updatedData.sender) {
+      updatedData.sender = senderProfileCache.get(userId) || {
+        id: userId,
+        username: null,
+        full_name: null,
+        avatar_url: null,
+      };
+    }
+
+    // Notify all participants via Gateway WebSocket
+    await realtime.emitToConversation(updatedData.conversation_id, "chat:message_edited", updatedData);
+
+    return res.json(updatedData);
   } catch (err) {
     console.error("Error editing message:", err.message);
-    res.status(500).json({ error: "Server Error" });
+    return res.status(500).json({ error: "Server Error", details: err.message });
   }
 };
 
