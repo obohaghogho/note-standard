@@ -1433,24 +1433,17 @@ exports.sendMessage = async (req, res) => {
       correlationId: req.correlationId,
       userId,
       conversationId,
-      eventId: req.body.eventId,
-      type
+      eventId: req.body.eventId
     });
 
-    // Allow empty content when an attachment is present
-    if (!content && !attachmentId) {
-      return res.status(400).json({ error: "Content or attachment is required" });
-    }
-
-    // ── PERF FIX: Fetch conversation_members ONCE and reuse across:
-    //   (a) block check, (b) message broadcast, (c) notification.
-    //   Previously fetched 3× per message (3 round-trips → now 1).
     const { data: allMembers, error: membersError } = await supabase
       .from("conversation_members")
       .select("user_id, is_muted")
       .eq("conversation_id", conversationId);
       
-    if (membersError) throw membersError;
+    if (membersError) {
+      console.warn("[Chat Controller] conversation_members lookup warning:", membersError.message);
+    }
 
     // Re-expose as `members` so the rest of the function remains unchanged.
     const members = allMembers || [];
@@ -1531,8 +1524,6 @@ exports.sendMessage = async (req, res) => {
       durationMs: Date.now() - startTimeMs
     });
 
-
-
     // Analysis: Sentiment (if text)
     // FIX 3: Uses module-level _sentimentAnalyzer — no require() or new() per request.
     let sentiment = null;
@@ -1566,30 +1557,37 @@ exports.sendMessage = async (req, res) => {
       console.log(`[SEQUENCE_MODE]: ${isTransactional ? 'transactional' : 'legacy'} (User: ${userId})`);
 
       if (isTransactional) {
-        console.log(`[Chat Controller] Using RPC Transaction for sendMessage (event_id: ${eventId})`);
-        const { data: rpcData, error: rpcError } = await supabase.rpc('rpc_send_message', {
-            p_conversation_id: conversationId,
-            p_sender_id: userId,
-            p_content: content || '',
-            p_type: type || "text",
-            p_event_id: eventId,
-            p_original_language: detectedLang,
-            p_attachment_id: attachmentId || null,
-            p_reply_to_id: replyToId || null
-        });
+        console.log(`[Chat Controller] Attempting RPC Transaction for sendMessage (event_id: ${eventId})`);
+        try {
+          const { data: rpcData, error: rpcError } = await supabase.rpc('rpc_send_message', {
+              p_conversation_id: conversationId,
+              p_sender_id: userId,
+              p_content: content || '',
+              p_type: type || "text",
+              p_event_id: eventId,
+              p_original_language: detectedLang,
+              p_attachment_id: attachmentId || null,
+              p_reply_to_id: replyToId || null
+          });
 
-        if (rpcError) throw rpcError;
-        
-        insertedMessage = rpcData.message;
-        isDuplicate = rpcData.is_duplicate;
-        
-        if (isDuplicate) {
-           console.log(`[Chat Controller] Idempotent send: duplicate event_id ${eventId} rejected safely.`);
-        } else if (insertedMessage?.sequence_number) {
-           // Advance replay guard high-water mark for this conversation
-           replayGuard.advance(conversationId, insertedMessage.sequence_number);
+          if (rpcError) {
+            console.warn(`[Chat Controller] rpc_send_message returned error (${rpcError.code}), falling back to legacy insert: ${rpcError.message}`);
+          } else if (rpcData && rpcData.message) {
+            insertedMessage = rpcData.message;
+            isDuplicate = rpcData.is_duplicate;
+            
+            if (isDuplicate) {
+               console.log(`[Chat Controller] Idempotent send: duplicate event_id ${eventId} rejected safely.`);
+            } else if (insertedMessage?.sequence_number) {
+               replayGuard.advance(conversationId, insertedMessage.sequence_number);
+            }
+          }
+        } catch (rpcCatchErr) {
+          console.warn(`[Chat Controller] rpc_send_message threw exception, falling back to legacy insert: ${rpcCatchErr.message}`);
         }
-      } else {
+      }
+
+      if (!insertedMessage) {
         // Explicit server-side idempotency check
         if (eventId) {
           const { data: existingMsg } = await supabase
@@ -1627,37 +1625,25 @@ exports.sendMessage = async (req, res) => {
             .single();
 
           if (insertError) {
-            const isSchemaError = insertError.code === "42703" || insertError.code === "PGRST200" ||
-              (insertError.message && (
-                insertError.message.includes("sentiment") || 
-                insertError.message.includes("detected_language") || 
-                insertError.message.includes("attachment_id")
-              ));
+            console.warn("[Chat Controller] Primary insert failed, attempting safe basic insert fallback:", insertError.code, insertError.message);
+            const fallbackPayload = {
+              conversation_id: conversationId,
+              sender_id: userId,
+              content: content || '',
+              type: type || "text",
+              event_id: eventId
+            };
+            if (attachmentId) fallbackPayload.attachment_id = attachmentId;
+            if (replyToId)    fallbackPayload.reply_to_id   = replyToId;
 
-            if (isSchemaError) {
-              console.warn("[Chat Controller] Schema mismatch on insert, retrying basic fallback insert:", insertError.code, insertError.message);
-              const fallbackPayload = {
-                conversation_id: conversationId,
-                sender_id: userId,
-                content: content || '',
-                type: type || "text",
-                event_id: eventId,
-                sequence_number: null
-              };
-              if (attachmentId) fallbackPayload.attachment_id = attachmentId;
-              if (replyToId)    fallbackPayload.reply_to_id   = replyToId;
+            const { data: retryData, error: retryErr } = await supabase
+              .from("messages")
+              .insert([fallbackPayload])
+              .select("id")
+              .single();
 
-              const { data: retryData, error: retryErr } = await supabase
-                .from("messages")
-                .insert([fallbackPayload])
-                .select("id")
-                .single();
-
-              if (retryErr) throw retryErr;
-              insertedMessage = retryData;
-            } else {
-              throw insertError;
-            }
+            if (retryErr) throw retryErr;
+            insertedMessage = retryData;
           } else {
             insertedMessage = insertData;
           }
