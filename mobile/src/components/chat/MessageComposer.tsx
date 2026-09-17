@@ -52,13 +52,14 @@ interface Props {
     conversationId: string;
     onSend: (text: string, attachmentId?: string) => void;
     insets: { bottom: number };
+    editingMessage?: { id: string; content: string } | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The ONLY component that owns draft text state.
 // Nothing above it ever re-renders due to typing.
 // ─────────────────────────────────────────────────────────────────────────────
-const MessageComposerInner = ({ conversationId, onSend, insets }: Props) => {
+const MessageComposerInner = ({ conversationId, onSend, insets, editingMessage }: Props) => {
     // displayText: only state atom — drives the controlled input.
     // Everything else (send, upload state) is isolated below.
     const [displayText, setDisplayText] = useState('');
@@ -77,6 +78,16 @@ const MessageComposerInner = ({ conversationId, onSend, insets }: Props) => {
     }, []);
 
     const inputRef = useRef<TextInput>(null);
+
+    React.useEffect(() => {
+        if (editingMessage?.content) {
+            textRef.current = editingMessage.content;
+            setDisplayText(editingMessage.content);
+            requestAnimationFrame(() => {
+                inputRef.current?.focus();
+            });
+        }
+    }, [editingMessage?.id, editingMessage?.content]);
 
     const handleSend = useCallback(() => {
         const text = textRef.current.trim();
@@ -235,7 +246,9 @@ const MessageComposerInner = ({ conversationId, onSend, insets }: Props) => {
 export const MessageComposer = React.memo(MessageComposerInner, (prev, next) =>
     prev.conversationId === next.conversationId &&
     prev.onSend === next.onSend &&
-    prev.insets.bottom === next.insets.bottom
+    prev.insets.bottom === next.insets.bottom &&
+    prev.editingMessage?.id === next.editingMessage?.id &&
+    prev.editingMessage?.content === next.editingMessage?.content
 );
 
 // Stable hitSlop object — defined outside component, zero GC pressure

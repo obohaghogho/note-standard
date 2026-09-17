@@ -423,6 +423,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                     conversationId={conversationId}
                     onSend={handleSend}
                     insets={insets}
+                    editingMessage={editingMessage}
                 />
             )}
         </Animated.View>
