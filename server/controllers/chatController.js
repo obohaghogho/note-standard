@@ -2330,6 +2330,8 @@ exports.editMessage = async (req, res) => {
 
     // Verify ownership and update the message with basic select('*') to prevent PGRST200 join errors
     // Match by id OR event_id to safely handle cases where the client passes an event_id or temp ID
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(messageId);
+
     let updatedData = null;
     let query = supabase
       .from("messages")
@@ -2339,38 +2341,34 @@ exports.editMessage = async (req, res) => {
         updated_at: new Date().toISOString()
       });
 
-    if (messageId.includes('-') && messageId.length >= 32) {
+    if (isUuid) {
       query = query.or(`id.eq.${messageId},event_id.eq.${messageId}`);
     } else {
-      query = query.eq("id", messageId);
+      // Non-UUID string (e.g. temp-xxx or custom event_id): match ONLY event_id to avoid Postgres 22P02 UUID syntax error
+      query = query.eq("event_id", messageId);
     }
 
     let { data, error } = await query
       .eq("sender_id", userId) // Force ownership
       .eq("is_deleted", false) // Cannot edit deleted messages
       .select("*")
-      .single();
+      .maybeSingle();
 
     if (error) {
-      if (error.code === "PGRST116" || error.details?.includes('0 rows')) {
-        return res.status(404).json({
-          error: "Message not found or you don't have permission to edit it",
-        });
-      }
-      // If column is_edited doesn't exist yet, retry fallback without it
-      if (error.code === "42703" || error.code === "PGRST204") {
-         console.warn("[Chat Controller] is_edited column missing, retrying without it");
+      // If 22P02 or schema error, fallback to event_id query
+      if (error.code === "22P02" || error.code === "42703" || error.code === "PGRST204") {
+         console.warn("[Chat Controller] Invalid UUID syntax or missing column on edit, retrying by event_id:", error.code);
          const { data: retryData, error: retryErr } = await supabase
            .from("messages")
            .update({
              content: trimmedContent,
              updated_at: new Date().toISOString()
            })
-           .eq("id", messageId)
+           .eq("event_id", messageId)
            .eq("sender_id", userId)
            .eq("is_deleted", false)
            .select("*")
-           .single();
+           .maybeSingle();
 
          if (retryErr) throw retryErr;
          updatedData = retryData;
