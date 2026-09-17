@@ -754,10 +754,40 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, []); // ← Empty deps: sendMessage is now permanently stable
 
     const editMessage = useCallback(async (conversationId: string, messageId: string, content: string) => {
+        const trimmed = content.trim();
+        if (!trimmed) return;
+
+        let prevContent = '';
+        setMessages(prev => {
+            const current = prev[conversationId] || [];
+            const match = current.find(m => m.id === messageId);
+            if (match) prevContent = match.content;
+            return {
+                ...prev,
+                [conversationId]: current.map(m => m.id === messageId ? { ...m, content: trimmed, is_edited: true } : m)
+            };
+        });
+
         try {
-            await apiClient.patch(`/chat/messages/${messageId}`, { content });
+            const res = await apiClient.patch(`/chat/messages/${messageId}`, { content: trimmed });
+            if (res.data) {
+                setMessages(prev => {
+                    const current = prev[conversationId] || [];
+                    return {
+                        ...prev,
+                        [conversationId]: current.map(m => m.id === messageId ? { ...m, ...res.data, is_edited: true } : m)
+                    };
+                });
+            }
         } catch (err) {
             console.error('[ChatContext] Edit failed:', err);
+            setMessages(prev => {
+                const current = prev[conversationId] || [];
+                return {
+                    ...prev,
+                    [conversationId]: current.map(m => m.id === messageId ? { ...m, content: prevContent } : m)
+                };
+            });
             throw err;
         }
     }, []);

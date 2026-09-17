@@ -1743,10 +1743,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
             // Pre-injection guard
             let safeNewMessage = newMessage;
+            const incomingEvtId = msg.event_id || msg.eventId || msg.client_event_id || msg.client_request_id || msg.clientRequestId;
             if (!newMessage.reply_to?.id) {
                 const currentMsgs = messagesRef.current[msg.conversation_id] || [];
                 const existingInState = currentMsgs.find(
-                    m => (msg.event_id && m.event_id === msg.event_id) || m.id === msg.id
+                    m => (incomingEvtId && (m.event_id === incomingEvtId || m.eventId === incomingEvtId)) || m.id === msg.id
                 );
                 if (existingInState?.reply_to?.id) {
                     safeNewMessage = { ...newMessage, reply_to: existingInState.reply_to };
@@ -1755,7 +1756,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
             // Determine if this is actually a new message to drive Conversation updates
             const currentMsgs = messagesRef.current[msg.conversation_id] || [];
-            const isExisting = currentMsgs.some(m => m.id === msg.id || (msg.event_id && m.event_id === msg.event_id));
+            const isExisting = currentMsgs.some(
+                m => m.id === msg.id || (incomingEvtId && (m.event_id === incomingEvtId || m.eventId === incomingEvtId))
+            );
             const newlyAddedCount = isExisting ? 0 : 1;
             console.log(`[CLIENT_TRACE] [${Date.now()}] newlyAddedCount=${newlyAddedCount} | isExisting: ${isExisting} | messages before=${currentMsgs.length}`);
 
@@ -3165,11 +3168,61 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     const editMessage = async (messageId: string, content: string) => {
+        const trimmed = content.trim();
+        if (!trimmed) return;
+
+        // Find conversation containing messageId and capture previous content
+        let targetConvId: string | null = null;
+        let prevContent: string = '';
+        const currentMessagesState = messagesRef.current || messages;
+        for (const [convId, list] of Object.entries(currentMessagesState)) {
+            const match = list.find(m => m.id === messageId);
+            if (match) {
+                targetConvId = convId;
+                prevContent = match.content;
+                break;
+            }
+        }
+
+        // Optimistic local update
+        if (targetConvId) {
+            setMessages(prev => {
+                const current = prev[targetConvId!] || [];
+                return {
+                    ...prev,
+                    [targetConvId!]: current.map(m => m.id === messageId ? { ...m, content: trimmed, is_edited: true } : m)
+                };
+            });
+        }
+
         try {
-            await api.patch(`/chat/messages/${messageId}`, { content });
+            const res = await api.patch(`/chat/messages/${messageId}`, { content: trimmed });
+            const serverUpdated = res.data;
+            if (serverUpdated && targetConvId) {
+                setMessages(prev => {
+                    const current = prev[targetConvId!] || [];
+                    return {
+                        ...prev,
+                        [targetConvId!]: current.map(m => m.id === messageId ? { ...m, ...serverUpdated, is_edited: true } : m)
+                    };
+                });
+            }
             toast.success('Message updated');
-        } catch {
-            toast.error('Failed to edit message');
+        } catch (err: unknown) {
+            // Rollback optimistic edit on error
+            if (targetConvId) {
+                setMessages(prev => {
+                    const current = prev[targetConvId!] || [];
+                    return {
+                        ...prev,
+                        [targetConvId!]: current.map(m => m.id === messageId ? { ...m, content: prevContent } : m)
+                    };
+                });
+            }
+            const errorObj = err as { response?: { data?: { error?: string } }; message?: string };
+            const msg = errorObj.response?.data?.error || errorObj.message || 'Failed to edit message';
+            toast.error(`Error: ${msg}`);
+            throw err;
         }
     };
 
