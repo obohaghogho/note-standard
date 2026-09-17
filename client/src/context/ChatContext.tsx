@@ -2697,6 +2697,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         const optimisticMessage: Message = {
             id: tempId,
+            tempId: tempId,
             event_id: clientEventId,
             conversation_id: conversationId,
             sender_id: user.id,
@@ -3178,7 +3179,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         const currentMessagesState = messagesRef.current || messages;
         for (const [convId, list] of Object.entries(currentMessagesState)) {
-            const match = list.find(m => m.id === messageId || (m.event_id && m.event_id === messageId));
+            const match = list.find(m =>
+                m.id === messageId ||
+                (m as any).tempId === messageId ||
+                (m.event_id && m.event_id === messageId)
+            );
             if (match) {
                 targetConvId = convId;
                 prevContent = match.content;
@@ -3193,7 +3198,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 return {
                     ...prev,
                     [targetConvId!]: current.map(m =>
-                        (m.id === messageId || (targetMsg?.event_id && m.event_id === targetMsg.event_id))
+                        (m.id === messageId || (m as any).tempId === messageId || (targetMsg?.event_id && m.event_id === targetMsg.event_id))
                             ? { ...m, content: trimmed, is_edited: true }
                             : m
                     )
@@ -3214,7 +3219,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     return {
                         ...prev,
                         [targetConvId!]: current.map(m =>
-                            (m.id === serverUpdated.id || m.id === patchTargetId || m.id === messageId || (serverUpdated.event_id && m.event_id === serverUpdated.event_id))
+                            (m.id === serverUpdated.id || m.id === patchTargetId || m.id === messageId || (m as any).tempId === messageId || (serverUpdated.event_id && m.event_id === serverUpdated.event_id))
                                 ? { ...m, ...serverUpdated, is_edited: true }
                                 : m
                         )
@@ -3229,7 +3234,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     return {
                         ...prev,
                         [targetConvId!]: current.map(m =>
-                            (m.id === messageId || (targetMsg?.event_id && m.event_id === targetMsg.event_id))
+                            (m.id === messageId || (m as any).tempId === messageId || (targetMsg?.event_id && m.event_id === targetMsg.event_id))
                                 ? { ...m, content: prevContent }
                                 : m
                         )

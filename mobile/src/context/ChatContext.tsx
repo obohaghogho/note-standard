@@ -650,6 +650,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         // STEP 1: Optimistic insert — happens BEFORE API call, UI is instant
         const optimisticMessage: Message = {
             id: tempId,
+            tempId: tempId,
             event_id: clientEventId,
             conversation_id: conversationId,
             sender_id: currentUser.id,
@@ -702,6 +703,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             const normalizedRes = normalizeEvent(res.data);
             const canonicalMessage: Message = {
                 ...normalizedRes,
+                tempId: tempId,
                 event_id: normalizedRes.event_id || clientEventId,
                 isOwn: true,
                 status: 'sent'
@@ -761,7 +763,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         if (!trimmed) return;
 
         const currentList = messagesRef.current?.[conversationId] || messages[conversationId] || [];
-        const targetMsg = currentList.find(m => m.id === messageId || (m.event_id && m.event_id === messageId));
+        const targetMsg = currentList.find(m =>
+            m.id === messageId ||
+            (m as any).tempId === messageId ||
+            (m.event_id && m.event_id === messageId)
+        );
         const prevContent = targetMsg?.content || '';
 
         const effectiveId = targetMsg?.id || messageId;
@@ -774,7 +780,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             return {
                 ...prev,
                 [conversationId]: current.map(m =>
-                    (m.id === effectiveId || m.id === messageId || (targetMsg?.event_id && m.event_id === targetMsg.event_id))
+                    (m.id === effectiveId || m.id === messageId || (m as any).tempId === messageId || (targetMsg?.event_id && m.event_id === targetMsg.event_id))
                         ? { ...m, content: trimmed, is_edited: true }
                         : m
                 )
@@ -790,7 +796,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     return {
                         ...prev,
                         [conversationId]: current.map(m =>
-                            (m.id === serverData.id || m.id === patchTargetId || m.id === messageId || (serverData.event_id && m.event_id === serverData.event_id))
+                            (m.id === serverData.id || m.id === patchTargetId || m.id === messageId || (m as any).tempId === messageId || (serverData.event_id && m.event_id === serverData.event_id))
                                 ? { ...m, ...serverData, is_edited: true }
                                 : m
                         )
@@ -804,7 +810,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 return {
                     ...prev,
                     [conversationId]: current.map(m =>
-                        (m.id === effectiveId || m.id === messageId || (targetMsg?.event_id && m.event_id === targetMsg.event_id))
+                        (m.id === effectiveId || m.id === messageId || (m as any).tempId === messageId || (targetMsg?.event_id && m.event_id === targetMsg.event_id))
                             ? { ...m, content: prevContent }
                             : m
                     )

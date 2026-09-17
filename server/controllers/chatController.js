@@ -2325,15 +2325,33 @@ exports.editMessage = async (req, res) => {
         .or(`id.eq.${messageId},event_id.eq.${messageId}`)
         .limit(1);
       if (foundList && foundList.length > 0) targetMsg = foundList[0];
-    }
-
-    if (!targetMsg) {
+    } else {
       const { data: foundByEvent } = await supabase
         .from("messages")
         .select("id, conversation_id, sender_id, is_deleted")
         .eq("event_id", messageId)
         .limit(1);
       if (foundByEvent && foundByEvent.length > 0) targetMsg = foundByEvent[0];
+    }
+
+    // Retrying candidate lookup after short delay in case the message POST is still writing to DB
+    if (!targetMsg) {
+      await new Promise(r => setTimeout(r, 350));
+      if (isUuid) {
+        const { data: retryList } = await supabase
+          .from("messages")
+          .select("id, conversation_id, sender_id, is_deleted")
+          .or(`id.eq.${messageId},event_id.eq.${messageId}`)
+          .limit(1);
+        if (retryList && retryList.length > 0) targetMsg = retryList[0];
+      } else {
+        const { data: retryByEvent } = await supabase
+          .from("messages")
+          .select("id, conversation_id, sender_id, is_deleted")
+          .eq("event_id", messageId)
+          .limit(1);
+        if (retryByEvent && retryByEvent.length > 0) targetMsg = retryByEvent[0];
+      }
     }
 
     if (!targetMsg) {

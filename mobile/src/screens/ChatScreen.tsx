@@ -175,13 +175,17 @@ export default function ChatScreen({ navigation, route }: Props) {
     }, [isFocused, conversationId, setActiveConversationId]);
 
 
-    // handleSend is synchronous — matches the new fire-and-forget MessageComposer API
-    const handleSend = useCallback((content: string, attachmentId?: string) => {
+    const handleSend = useCallback(async (content: string, attachmentId?: string) => {
         const editMsg = editingMessageRef.current;
         const repTo = replyToRef.current;
         if (editMsg) {
-            editMessage(conversationId, editMsg.id, content);
             setEditingMessage(null);
+            try {
+                await editMessage(conversationId, editMsg.id, content);
+            } catch (err) {
+                console.error('[ChatScreen] Edit message failed:', err);
+                Alert.alert('Edit Error', 'Could not update message. Please try again.');
+            }
         } else {
             // Fire and forget — no await
             sendMessage(conversationId, content, attachmentId, repTo?.id);
