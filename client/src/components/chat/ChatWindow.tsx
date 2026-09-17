@@ -268,22 +268,27 @@ const ChatWindow: React.FC = () => {
     const initialScrollDoneRef = useRef<Record<string, boolean>>({});
     const lastScrolledMsgIdRef = useRef<Record<string, string>>({});
 
+    const activeConvIdSwitchRef = useRef<string | null>(null);
+
     // Reset scroll flag when switching active conversations
     useEffect(() => {
         if (activeConversationId) {
-            setInputValue(drafts[activeConversationId] || '');
-            setSelectedMessages(new Set());
-            setTranslations({});
-            setShowOriginal({});
-            setReplyTo(null);
-            setEditingMessageId(null);
-            setShowMoreMenu(false);
-            setIsSearchOpen(false);
-            setSearchQuery('');
-            setSearchResults([]);
-            setShowEmojiPicker(false);
-            initialScrollDoneRef.current[activeConversationId] = false;
-            handleConversationSwitch();
+            if (activeConversationId !== activeConvIdSwitchRef.current) {
+                activeConvIdSwitchRef.current = activeConversationId;
+                setInputValue(drafts[activeConversationId] || '');
+                setSelectedMessages(new Set());
+                setTranslations({});
+                setShowOriginal({});
+                setReplyTo(null);
+                setEditingMessageId(null);
+                setShowMoreMenu(false);
+                setIsSearchOpen(false);
+                setSearchQuery('');
+                setSearchResults([]);
+                setShowEmojiPicker(false);
+                initialScrollDoneRef.current[activeConversationId] = false;
+                handleConversationSwitch();
+            }
         }
     }, [activeConversationId, drafts, handleConversationSwitch]);
 

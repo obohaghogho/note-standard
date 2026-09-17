@@ -2379,25 +2379,13 @@ exports.editMessage = async (req, res) => {
       .from("messages")
       .update({
         content: trimmedContent,
-        is_edited: true,
         updated_at: new Date().toISOString()
       })
       .eq("id", targetMsg.id)
       .select("*");
 
     if (updateErr) {
-      console.warn("[Chat Controller] Primary edit update failed, retrying basic content update:", updateErr.message);
-      const { data: retryResList, error: retryErr } = await supabase
-        .from("messages")
-        .update({
-          content: trimmedContent,
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", targetMsg.id)
-        .select("*");
-
-      if (retryErr) throw retryErr;
-      if (retryResList && retryResList.length > 0) updatedData = retryResList[0];
+      throw updateErr;
     } else if (updateResList && updateResList.length > 0) {
       updatedData = updateResList[0];
     }

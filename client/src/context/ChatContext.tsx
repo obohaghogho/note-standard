@@ -1932,25 +1932,46 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             });
         };
 
-        const onMessageEdited = (editedMsg: Message) => {
-            if (!editedMsg || !editedMsg.conversation_id) return;
+        const onMessageEdited = (editedMsg: any) => {
+            if (!editedMsg) return;
+            const convId = editedMsg.conversation_id || editedMsg.conversationId;
+            const targetMsgId = editedMsg.id || editedMsg.messageId;
+            const updatedContent = editedMsg.content ?? editedMsg.newContent;
+            const evtId = editedMsg.event_id || editedMsg.eventId;
+
+            if (!convId || !targetMsgId) return;
+
             setMessages(prev => {
-                const current = prev[editedMsg.conversation_id] || [];
+                const current = prev[convId] || [];
                 return {
                     ...prev,
-                    [editedMsg.conversation_id]: current.map(m => {
-                        const isMatch = m.id === editedMsg.id || 
-                            (editedMsg.event_id && m.event_id === editedMsg.event_id) || 
-                            (m.event_id && m.event_id === editedMsg.id);
+                    [convId]: current.map(m => {
+                        const isMatch = m.id === targetMsgId || 
+                            (evtId && m.event_id === evtId) || 
+                            (m.event_id && m.event_id === targetMsgId);
                         if (!isMatch) return m;
                         return {
                             ...m,
                             ...editedMsg,
+                            id: m.id,
+                            content: updatedContent !== undefined ? updatedContent : m.content,
+                            is_edited: true,
                             reply_to: editedMsg.reply_to ?? m.reply_to,
                         };
                     })
                 };
             });
+
+            setConversations(prev => prev.map(c => {
+                if (c.id !== convId || !c.lastMessage) return c;
+                const lm = c.lastMessage as Message;
+                const isMatch = lm.id === targetMsgId || (evtId && lm.event_id === evtId);
+                if (!isMatch) return c;
+                return {
+                    ...c,
+                    lastMessage: { ...lm, content: updatedContent !== undefined ? updatedContent : lm.content, is_edited: true }
+                };
+            }));
         };
 
         // PRIMARY WRITER — Delivery
