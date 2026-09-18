@@ -2,15 +2,28 @@ const { body, validationResult } = require("express-validator");
 
 const validateRegistration = [
   body("fullName")
+    .optional({ checkFalsy: true })
     .trim()
-    .notEmpty().withMessage("Full name is required")
     .isLength({ min: 2, max: 50 }).withMessage(
       "Full name must be between 2 and 50 characters",
-    )
-    .escape(),
-  body("username")
+    ),
+  body("full_name")
+    .optional({ checkFalsy: true })
     .trim()
-    .notEmpty().withMessage("Username is required")
+    .isLength({ min: 2, max: 50 }).withMessage(
+      "Full name must be between 2 and 50 characters",
+    ),
+  body()
+    .custom((value, { req }) => {
+      const name = req.body?.fullName || req.body?.full_name;
+      if (!name || typeof name !== "string" || !name.trim()) {
+        throw new Error("Full name is required");
+      }
+      return true;
+    }),
+  body("username")
+    .optional({ checkFalsy: true })
+    .trim()
     .isAlphanumeric().withMessage("Username must be alphanumeric")
     .isLength({ min: 3, max: 20 }).withMessage(
       "Username must be between 3 and 20 characters",

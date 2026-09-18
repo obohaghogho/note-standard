@@ -112,7 +112,15 @@ export const Signup = () => {
             ]) as Response;
 
             const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'Registration failed');
+            if (!response.ok) {
+                let errText = 'Registration failed';
+                if (typeof result?.error === 'string' && result.error.trim()) {
+                    errText = result.error;
+                } else if (typeof result?.message === 'string' && result.message.trim()) {
+                    errText = result.message;
+                }
+                throw new Error(errText);
+            }
 
             // SUCCESS!
             toast.success('Registration successful! You can now log in.');
@@ -124,10 +132,12 @@ export const Signup = () => {
         } catch (err: unknown) {
             console.error('Registration error:', err);
             const error = err as Error;
-            let msg = error.message || 'Signup failed';
+            let msg = typeof error?.message === 'string' && error.message.trim() ? error.message : 'Signup failed';
             
-            if (msg === 'Failed to fetch') {
-                msg = 'Cannot connect to the security server. Please ensure the backend is running and try again.';
+            if (msg === 'Failed to fetch' || msg.includes('Failed to fetch')) {
+                msg = 'Cannot connect to the security server. Please check your network connection and try again.';
+            } else if (msg.includes('size') || msg.includes('timeout') || msg.includes('[object Object]')) {
+                msg = 'Registration service temporarily unavailable. Please try again.';
             }
             
             setError(msg);

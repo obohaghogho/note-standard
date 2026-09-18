@@ -216,7 +216,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: true };
     } catch (err: any) {
       console.error('[AuthContext] Register error:', err.response?.data || err.message);
-      const msg = err?.response?.data?.message || err?.response?.data?.error || err.message || 'Registration failed. Please try again.';
+      const raw = err?.response?.data?.error || err?.response?.data?.message || err.message;
+      let msg = typeof raw === 'string' && raw.trim() ? raw : 'Registration failed. Please try again.';
+      if (msg.includes('size') || msg.includes('timeout') || msg.includes('[object Object]')) {
+        msg = 'Registration service temporarily unavailable. Please try again.';
+      }
       return { success: false, error: msg };
     }
   };

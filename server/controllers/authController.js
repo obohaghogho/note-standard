@@ -91,8 +91,14 @@ const register = async (req, res) => {
     });
 
     if (authError) {
-      console.error("[AUTH-ERROR] Admin creation failed:", authError.message);
-      return res.status(400).json({ error: authError.message });
+      console.error("[AUTH-ERROR] Admin creation failed:", authError.message || authError);
+      const isFetchErr = authError?.name === 'FetchError' || (authError?.size !== undefined && authError?.timeout !== undefined);
+      const errorMessage = isFetchErr
+        ? "Authentication service temporarily unavailable. Please try again."
+        : (typeof authError?.message === 'string' && authError.message.trim().length > 0
+          ? authError.message
+          : "Registration failed. Please check your details and try again.");
+      return res.status(400).json({ error: errorMessage });
     }
 
     // Note: The database trigger 'handle_new_user' will automatically create
@@ -178,8 +184,15 @@ const register = async (req, res) => {
       }
     });
   } catch (err) {
-    console.error("[Register Error]:", err.message);
-    res.status(500).json({ error: "Signup failed. Please try again." });
+    const rawMsg = err ? (err.message || String(err)) : "";
+    const isFetchErr = err?.name === 'FetchError' || (err?.size !== undefined && err?.timeout !== undefined);
+    const friendlyMsg = isFetchErr
+      ? "Authentication service temporarily unavailable. Please check your connection and try again."
+      : (typeof rawMsg === 'string' && rawMsg.trim().length > 0 && !rawMsg.includes('[object Object]') && !rawMsg.includes('size')
+        ? rawMsg
+        : "Signup failed. Please try again.");
+    console.error("[Register Error]:", rawMsg, err);
+    res.status(500).json({ error: friendlyMsg });
   }
 };
 
