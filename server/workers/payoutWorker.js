@@ -2,6 +2,9 @@ const supabase = require('../config/database');
 const logger = require('../utils/logger');
 const payoutService = require('../services/payment/payoutService');
 const SystemState = require('../config/SystemState');
+// FORENSIC FIX: Non-NGN payouts must go through SettlementRouter → GreySettlementProviderV1,
+// NOT silently queued as MANUAL_PENDING with zero actual API dispatch.
+const settlementRouter = require('../services/settlement/SettlementRouter');
 
 let intervalId = null;
 const RUN_INTERVAL = 30000; // 30 seconds
@@ -142,16 +145,36 @@ class PayoutWorker {
                         `Withdrawal-${payout.id.substring(0,8)}`
                     );
                 } else {
-                    // Manual queue for Grey (USD, EUR, GBP, JPY)
-                    logger.info(`[PayoutWorker] Routing ${payout.currency} withdrawal ${payout.id} to manual queue for Grey processing.`);
-                    
-                    result = {
-                        success: true,
+                    // FORENSIC FIX: Route Grey USD/EUR/GBP/JPY payouts through SettlementRouter
+                    // instead of silently dropping them into a phantom MANUAL_PENDING queue.
+                    logger.info(`[PayoutWorker] Routing ${payout.currency} withdrawal ${payout.id} through SettlementRouter → Grey.`);
+
+                    const settlementPayload = {
+                        provider: 'grey',
                         payoutId: payout.id,
-                        status: 'MANUAL_PENDING',
-                        provider: 'GREY_MANUAL',
-                        latency: 0,
-                        rawResponse: { message: "Routed to manual Grey processing queue." }
+                        amount: payout.amount,
+                        currency: payout.currency,
+                        accountName: dest.accountName,
+                        accountNumber: dest.accountNumber,
+                        bankCode: dest.bankCode,
+                        bankName: dest.bankName,
+                        routingNumber: dest.routingNumber || dest.achRoutingNumber,
+                        reference: `Withdrawal-${payout.id.substring(0, 8)}`,
+                        narration: dest.narration || `NoteStandard withdrawal ${payout.id.substring(0, 8)}`,
+                        metadata: { payout_id: payout.id, user_id: payout.user_id }
+                    };
+
+                    const rawResult = await settlementRouter.executePayout(settlementPayload);
+
+                    // Normalise provider response to the standard result shape
+                    result = {
+                        success: rawResult && (rawResult.status === true || rawResult.success === true ||
+                                  ['COMPLETED', 'PROCESSING', 'PENDING', 'SUBMITTED'].includes(String(rawResult.status).toUpperCase())),
+                        payoutId: payout.id,
+                        status: rawResult?.state || rawResult?.status || 'PROCESSING',
+                        provider: 'GREY',
+                        latency: rawResult?.latency || 0,
+                        rawResponse: rawResult
                     };
                 }
             } else if (payout.payout_method === 'crypto') {

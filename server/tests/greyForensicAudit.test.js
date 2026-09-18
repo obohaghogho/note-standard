@@ -589,8 +589,8 @@ describe('SECTION 7 — DepositCreditEngine Code Path Validation', function () {
   this.timeout(15000);
 
   it('7.1 DepositCreditEngine.credit with no reference returns MISSING_REFERENCE', async () => {
-    const engine = new DepositCreditEngine();
-    const result = await engine.credit({});
+    // DepositCreditEngine is exported as a singleton instance — use directly.
+    const result = await DepositCreditEngine.credit({});
 
     recordResult('CREDIT', 'Missing reference returns error', result.error === 'MISSING_REFERENCE',
       `Error: ${result.error}`);
@@ -599,8 +599,7 @@ describe('SECTION 7 — DepositCreditEngine Code Path Validation', function () {
   });
 
   it('7.2 DepositCreditEngine.credit with nonexistent transaction returns TRANSACTION_NOT_FOUND', async () => {
-    const engine = new DepositCreditEngine();
-    const result = await engine.credit({
+    const result = await DepositCreditEngine.credit({
       reference: 'NONEXISTENT-FORENSIC-AUDIT-REF-99999',
       source: 'FORENSIC_AUDIT'
     });
@@ -610,10 +609,11 @@ describe('SECTION 7 — DepositCreditEngine Code Path Validation', function () {
     assert.strictEqual(result.credited, false);
   });
 
-  it('7.3 DepositCreditEngine constructor is a class (instantiable)', () => {
-    const engine = new DepositCreditEngine();
-    recordResult('CREDIT', 'DepositCreditEngine instantiable', !!engine, '');
-    assert.ok(engine);
+  it('7.3 DepositCreditEngine singleton is operational (has credit method)', () => {
+    // Module exports a singleton — verify it is usable, not constructable.
+    const hasCreditMethod = typeof DepositCreditEngine.credit === 'function';
+    recordResult('CREDIT', 'DepositCreditEngine singleton has credit()', hasCreditMethod, '');
+    assert.ok(hasCreditMethod, 'DepositCreditEngine must expose a credit() method');
   });
 });
 

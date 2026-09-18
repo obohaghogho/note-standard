@@ -4,6 +4,8 @@ const supabase = require('../../config/database');
 const logger = require('../../utils/logger');
 const notificationService = require('../notificationService');
 const { v4: uuidv4 } = require('uuid');
+// FORENSIC FIX: All wallet credits MUST flow through the canonical credit engine.
+const depositCreditEngine = require('../payment/DepositCreditEngine');
 
 /**
  * DepositMatchingService
@@ -159,6 +161,7 @@ class DepositMatchingService {
   }
 
   async _findCandidates(memo, senderAccount, amount, currency) {
+    // ── Leg 1: One-time deposit_references (per-session codes) ───────────────
     const { data: refs } = await supabase
       .from('deposit_references')
       .select('*')
@@ -167,11 +170,50 @@ class DepositMatchingService {
       .order('created_at', { ascending: false })
       .limit(20);
 
-    return refs || [];
+    const candidates = refs || [];
+
+    // ── Leg 2: Permanent user_bank_references (NS-XXXXXXX memo codes) ────────
+    // These are the persistent codes users include in ACH/Wire memo fields.
+    // FORENSIC FIX: Without this lookup, repeat senders whose codes are in the
+    // memo field but have no open deposit_references row are NEVER auto-credited.
+    if (memo && memo.trim()) {
+      const upperMemo = memo.toUpperCase();
+      const { data: bankRefs } = await supabase
+        .from('user_bank_references')
+        .select('user_id, reference, provider, is_active, created_at')
+        .eq('is_active', true)
+        .limit(100);
+
+      if (bankRefs && bankRefs.length > 0) {
+        for (const br of bankRefs) {
+          // Only add if the memo actually contains the user's code
+          if (br.reference && upperMemo.includes(br.reference.toUpperCase())) {
+            // Synthesise a candidate shape compatible with _calculateConfidenceScore
+            candidates.push({
+              id: null,                         // no deposit_reference row
+              user_id: br.user_id,
+              reference: br.reference,
+              currency: currency,               // trust the incoming currency
+              expected_amount: null,            // permanent ref has no expected amount
+              account_number: null,
+              created_at: br.created_at,
+              _source: 'user_bank_reference'
+            });
+          }
+        }
+      }
+    }
+
+    return candidates;
   }
 
   /**
-   * Execute Automatic Wallet Credit & Double-Entry Fee Accounting
+   * Execute Automatic Wallet Credit via the canonical DepositCreditEngine.
+   *
+   * FORENSIC FIX: The previous implementation directly wrote to wallets_store
+   * and the transactions table, bypassing the double-entry RPC (confirm_deposit_v7)
+   * that enforces atomicity, idempotency, and ledger-sync.  All credits MUST
+   * flow through DepositCreditEngine.credit() as the single authoritative path.
    */
   async _executeAutoCredit(deposit, candidate, score, providerTxId) {
     const userId = candidate.user_id;
@@ -181,76 +223,86 @@ class DepositMatchingService {
 
     logger.info(`[DepositMatchingService] Auto-crediting ${numAmount} ${upCurrency} to user ${userId} (Score: ${score}%)`);
 
-    // Fetch user wallet
-    const { data: wallet } = await supabase
-      .from('wallets_store')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('currency', upCurrency)
-      .maybeSingle();
+    // ── Step 1: Create a PENDING transactions row so DepositCreditEngine has a
+    //   record to operate on (it requires a tx row to call confirm_deposit_v7).
+    const refId = `dep_${uuidv4().replace(/-/g, '')}`;
+    let txId = null;
 
-    if (!wallet) {
-      return this._routeToUnknownDepositQueue(deposit, providerTxId, 'Wallet not found for matched user');
+    try {
+      const { data: newTx, error: insertErr } = await supabase
+        .from('transactions')
+        .insert({
+          user_id: userId,
+          amount: numAmount,
+          currency: upCurrency,
+          type: 'DEPOSIT',
+          status: 'PENDING',
+          reference_id: refId,
+          provider: 'grey',
+          display_label: `Incoming ${deposit.rail || 'ACH'} Deposit`,
+          metadata: {
+            provider_tx_id: deposit.providerTxId || providerTxId,
+            confidence_score: score,
+            rail: deposit.rail,
+            fee_amount: feeAmount,
+            matched_candidate_id: candidate.id,
+            matched_via: candidate._source || 'deposit_reference'
+          }
+        })
+        .select('id')
+        .single();
+
+      if (insertErr) throw insertErr;
+      txId = newTx?.id;
+    } catch (txErr) {
+      logger.error(`[DepositMatchingService] Failed to create pending transaction for auto-credit: ${txErr.message}`);
+      return this._routeToUnknownDepositQueue(deposit, providerTxId, `Transaction insert error: ${txErr.message}`);
     }
 
-    const curBal = Number(wallet.balance || 0);
-    const curAvail = Number(wallet.available_balance || 0);
+    // ── Step 2: Delegate to DepositCreditEngine — the SOLE canonical credit path.
+    let creditResult;
+    try {
+      creditResult = await depositCreditEngine.credit({
+        transactionId: txId,
+        amount:        numAmount,
+        currency:      upCurrency,
+        userId,
+        providerTxId:  deposit.providerTxId || providerTxId || refId,
+        source:        'GREY_DEPOSIT_MATCHING',
+        auditMeta: {
+          confidence_score: score,
+          rail: deposit.rail,
+          sender_name: deposit.senderName,
+          matched_via: candidate._source || 'deposit_reference'
+        }
+      });
+    } catch (creditErr) {
+      logger.error(`[DepositMatchingService] DepositCreditEngine threw for tx ${txId}: ${creditErr.message}`);
+      return this._routeToUnknownDepositQueue(deposit, providerTxId, `Credit engine error: ${creditErr.message}`);
+    }
 
-    // Atomically Credit Wallet (User gets FULL deposit amount)
-    await supabase
-      .from('wallets_store')
-      .update({
-        balance: curBal + numAmount,
-        available_balance: curAvail + numAmount,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', wallet.id);
+    if (creditResult.error) {
+      logger.error(`[DepositMatchingService] DepositCreditEngine returned error for tx ${txId}: ${creditResult.error}`);
+      return this._routeToUnknownDepositQueue(deposit, providerTxId, `Credit engine: ${creditResult.error}`);
+    }
 
-    // Record Transaction
-    const refId = `dep_${uuidv4().replace(/-/g, '')}`;
-    await supabase.from('transactions').insert({
-      user_id: userId,
-      wallet_id: wallet.id,
-      amount: numAmount,
-      currency: upCurrency,
-      type: 'DEPOSIT',
-      status: 'COMPLETED',
-      reference_id: refId,
-      provider: 'grey',
-      display_label: `Incoming ${deposit.rail || 'ACH'} Deposit`,
-      metadata: {
-        provider_tx_id: deposit.providerTxId,
-        confidence_score: score,
-        rail: deposit.rail,
-        fee_amount: feeAmount,
-        matched_candidate_id: candidate.id
-      }
-    });
-
-    // Update deposit reference status
-    if (candidate.id) {
+    // ── Step 3: Mark the deposit_reference as COMPLETED (if it was a session ref).
+    if (candidate.id && candidate._source !== 'user_bank_reference') {
       await supabase
         .from('deposit_references')
         .update({ status: 'COMPLETED', updated_at: new Date().toISOString() })
-        .eq('id', candidate.id);
+        .eq('id', candidate.id)
+        .catch((e) => logger.warn(`[DepositMatchingService] deposit_reference update warning: ${e.message}`));
     }
 
-    // Real-time Notification
-    await notificationService.createNotification({
-      userId,
-      title: 'Deposit Received',
-      message: `Your ${deposit.rail || 'ACH'} deposit of $${numAmount.toLocaleString()} ${upCurrency} has been credited to your wallet.`,
-      type: 'DEPOSIT_CREDITED',
-      data: { reference: refId, amount: numAmount, currency: upCurrency }
-    }).catch(() => {});
-
     return {
-      status: 'CREDITED',
+      status: creditResult.alreadyCredited ? 'ALREADY_CREDITED' : 'CREDITED',
       confidenceScore: score,
       userId,
       amount: numAmount,
       currency: upCurrency,
-      reference: refId
+      reference: refId,
+      transactionId: creditResult.transactionId
     };
   }
 
