@@ -3,7 +3,7 @@ const graphService = require('../graph/GraphService');
 const Groq = require('groq-sdk');
 
 const groq = (process.env.GROQ_API_KEY) ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
-const MODEL = process.env.GROQ_MODEL || 'groq/compound';
+const MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
 // Builds the standard AI metadata payload attached to every artifact
 function buildAiMetadata(sourceNodeIds, confidence = null) {

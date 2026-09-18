@@ -73,7 +73,7 @@ ${contextString}`;
                 { role: "system", content: systemPrompt },
                 { role: "user", content: query }
             ],
-            model: process.env.GROQ_MODEL || "groq/compound",
+            model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
             temperature: 0.3,
             max_tokens: 500
         });

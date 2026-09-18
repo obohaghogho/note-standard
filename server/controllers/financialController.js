@@ -165,7 +165,7 @@ Do not return any conversational text outside of the JSON object.`;
         { role: "system", content: systemPrompt },
         { role: "user", content: `Ledger Context:\n${textContext}` }
       ],
-      model: process.env.GROQ_MODEL || "groq/compound",
+      model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
       response_format: { type: "json_object" }
     });
 
