@@ -59,10 +59,17 @@ jdk17/
 scratch/
 ANCHOR_COMPLIANCE_RESUBMISSION/
 *.apk
+
+# Large binary build artifacts — excluded from git
 note-standard-latest/
 temp_crops/
 notestandard-social/
+server/scripts/temp_aar/
+mobile/dist-test-2/
+mobile/dist-test/
 *.mp4
 *.mp3
 *.wav
+*.so
+*.aar
 __pycache__/
