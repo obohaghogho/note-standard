@@ -109,4 +109,35 @@ describe('Cross-Account Switch Isolation & State Isolation Suite', () => {
     // User B querying -> blocked because owner_user_id != User B and members is empty
     expect(filterForUser('usr-account-b', allCached)).toHaveLength(0);
   });
+
+  it('filters cached messages strictly by owner_user_id to prevent data leaks', () => {
+    const userAMsgWithOwner: Message & { owner_user_id?: string } = {
+      ...userAMessage,
+      owner_user_id: 'usr-account-a'
+    };
+    const userBMsgWithOwner: Message & { owner_user_id?: string } = {
+      id: 'msg-b-1',
+      conversation_id: 'conv-user-a', // Same conversation ID!
+      sender_id: 'usr-account-b',
+      content: 'User B Secret Message',
+      created_at: new Date().toISOString(),
+      type: 'text',
+      owner_user_id: 'usr-account-b'
+    };
+
+    const allMsgs = [userAMsgWithOwner, userBMsgWithOwner];
+
+    const filterMsgsForUser = (userId: string, msgs: (Message & { owner_user_id?: string })[]) => {
+      return msgs.filter(m => !m.owner_user_id || m.owner_user_id === userId);
+    };
+
+    const userAMsgs = filterMsgsForUser('usr-account-a', allMsgs);
+    expect(userAMsgs).toHaveLength(1);
+    expect(userAMsgs[0].id).toBe('msg-a-1');
+
+    const userBMsgs = filterMsgsForUser('usr-account-b', allMsgs);
+    expect(userBMsgs).toHaveLength(1);
+    expect(userBMsgs[0].id).toBe('msg-b-1');
+  });
 });
+

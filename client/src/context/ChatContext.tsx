@@ -297,6 +297,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         setLoading(true);
         setTypingUsers({});
         setHasMore({});
+        // Capture outgoingUserId BEFORE resetting refs so cache clearance can execute properly
+        const outgoingUserId = lastUserIdRef.current || prevUserIdRef.current || user?.id;
         lastUserIdRef.current = null;
         prevUserIdRef.current = null;
         // Clear message cache timestamps so next account gets a fresh load
@@ -312,11 +314,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         appliedTicksRef.current = new Map();
         useChatStore.getState().clearAll();
 
-        // Evict the stale conversation cache for the outgoing user.
-        // Without this, initialize() re-hydrates cached conversations that still carry
-        // the old lastMessage snapshot — causing the stale preview text until the server
-        // responds. Pattern established in commits dc34a78c and 5c60d7f4.
-        const outgoingUserId = lastUserIdRef.current || prevUserIdRef.current;
+        // Evict the stale conversation and message cache for the outgoing user.
         if (outgoingUserId) {
             ChatCacheEngine.clearConversationsForUser(outgoingUserId).catch(() => {});
         }
@@ -540,7 +538,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     setLoading(false);
 
                     const validIds = cachedConvs.map(c => c.id);
-                    const cachedMsgsMap = await ChatCacheEngine.batchGetMessagesForAllConversations(validIds);
+                    const cachedMsgsMap = await ChatCacheEngine.batchGetMessagesForAllConversations(validIds, user.id);
                     if (!isCancelled && cachedMsgsMap && Object.keys(cachedMsgsMap).length > 0 && isMounted.current) {
                         console.log(`[ChatContext] Instant hydration: cached message frames loaded for ${Object.keys(cachedMsgsMap).length} conversation(s).`);
                         setMessages(prev => ({ ...cachedMsgsMap, ...prev }));
@@ -1127,7 +1125,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         // instantly hydrate from IndexedDB before awaiting network.
         if (!messagesRef.current[conversationId] || messagesRef.current[conversationId].length === 0) {
             try {
-                const cached = await ChatCacheEngine.getMessagesForConversation(conversationId);
+                const cached = await ChatCacheEngine.getMessagesForConversation(conversationId, user?.id);
                 if (cached && cached.length > 0 && isMounted.current) {
                     const convClearedAt = clearedAtMapRef.current.get(conversationId);
                     const convClearedAtMs = convClearedAt ? new Date(convClearedAt).getTime() : 0;
@@ -1178,7 +1176,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 // Atomically replace IndexedDB local cache with fresh server snapshot
                 if (filtered.length > 0) {
                     useChatStore.getState().upsertMessages(conversationId, filtered);
-                    ChatCacheEngine.replaceMessagesForConversation(conversationId, filtered).catch(() => {});
+                    ChatCacheEngine.replaceMessagesForConversation(conversationId, filtered, user?.id).catch(() => {});
                 }
                 
                 // ── BULK UN-ACKED DELIVERY SWEEP ─────────────────────────────────

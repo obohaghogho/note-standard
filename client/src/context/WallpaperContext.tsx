@@ -345,31 +345,40 @@ export const WallpaperProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Re-sync from localStorage when storagePrefix resolves after user auth
   useEffect(() => {
     try {
-      const savedGlobal = localStorage.getItem(`${storagePrefix}global`) || localStorage.getItem('ns_wp_global');
+      const savedGlobal = localStorage.getItem(`${storagePrefix}global`);
       if (savedGlobal) {
         const parsed = JSON.parse(savedGlobal);
         if (parsed && parsed.id) setGlobalWallpaper(parsed);
+      } else {
+        const defaultWp = WALLPAPER_PRESETS.find(p => p.id === 'doodle_dark') || WALLPAPER_PRESETS[0];
+        setGlobalWallpaper(defaultWp);
       }
 
-      const savedChats = localStorage.getItem(`${storagePrefix}chats`) || localStorage.getItem('ns_wp_chats');
+      const savedChats = localStorage.getItem(`${storagePrefix}chats`);
       if (savedChats) {
         const parsed = JSON.parse(savedChats);
         if (parsed) setChatWallpapers(parsed);
+      } else {
+        setChatWallpapers({});
       }
 
-      const savedFavs = localStorage.getItem(`${storagePrefix}favorites`) || localStorage.getItem('ns_wp_favorites');
+      const savedFavs = localStorage.getItem(`${storagePrefix}favorites`);
       if (savedFavs) {
         const parsed = JSON.parse(savedFavs);
         if (Array.isArray(parsed)) setFavorites(parsed);
+      } else {
+        setFavorites([]);
       }
 
-      const savedRecent = localStorage.getItem(`${storagePrefix}recently_used`) || localStorage.getItem('ns_wp_recently_used');
+      const savedRecent = localStorage.getItem(`${storagePrefix}recently_used`);
       if (savedRecent) {
         const parsed = JSON.parse(savedRecent);
         if (Array.isArray(parsed)) setRecentlyUsed(parsed);
+      } else {
+        setRecentlyUsed([]);
       }
 
-      const savedAuto = localStorage.getItem(`${storagePrefix}auto_theme`) || localStorage.getItem('ns_wp_auto_theme');
+      const savedAuto = localStorage.getItem(`${storagePrefix}auto_theme`);
       if (savedAuto) {
         const parsed = JSON.parse(savedAuto);
         if (parsed) setAutoThemeSettings(parsed);
@@ -378,6 +387,20 @@ export const WallpaperProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       console.warn('Failed to sync wallpaper settings on prefix update:', e);
     }
   }, [storagePrefix]);
+
+  // Clear/reset transient state on account switch so old account state never pollutes new account
+  useEffect(() => {
+    const handleAccountSwitch = () => {
+      setChatWallpapers({});
+      setPreviewWallpaper(null);
+    };
+    window.addEventListener('account-switched', handleAccountSwitch);
+    window.addEventListener('account-switch-start', handleAccountSwitch);
+    return () => {
+      window.removeEventListener('account-switched', handleAccountSwitch);
+      window.removeEventListener('account-switch-start', handleAccountSwitch);
+    };
+  }, []);
 
   // ─── PERF & SYSTEM TRIGGERS ───
   const [isBatterySaverActive, setIsBatterySaverActive] = useState(false);
@@ -444,7 +467,12 @@ export const WallpaperProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return previewWallpaper;
     }
 
-    // 1. Check if auto-theme switching is enabled and conditions are met
+    // 1. Explicit Custom wallpaper per chat takes highest priority
+    if (chatId && chatWallpapers[chatId]) {
+      return chatWallpapers[chatId];
+    }
+
+    // 2. Check if auto-theme switching is enabled and conditions are met
     if (autoThemeSettings.enabled) {
       const isDarkMode = document.documentElement.classList.contains('dark') || 
                          window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -471,18 +499,8 @@ export const WallpaperProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       const activePreset = WALLPAPER_PRESETS.find(p => p.id === themeWallpaperId);
       if (activePreset) {
-        // Overlay any custom adjustments configured on the active preset
-        const customAdjustments = chatId ? chatWallpapers[chatId] : globalWallpaper;
-        if (customAdjustments && customAdjustments.id === themeWallpaperId) {
-          return { ...activePreset, ...customAdjustments };
-        }
         return activePreset;
       }
-    }
-
-    // 2. Custom wallpaper per chat
-    if (chatId && chatWallpapers[chatId]) {
-      return chatWallpapers[chatId];
     }
 
     // 3. Fallback to global setting
@@ -497,7 +515,6 @@ export const WallpaperProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setAutoThemeSettings(prev => {
       const next = { ...prev, enabled: false };
       localStorage.setItem(`${storagePrefix}auto_theme`, JSON.stringify(next));
-      localStorage.setItem('ns_wp_auto_theme', JSON.stringify(next));
       return next;
     });
 
@@ -506,7 +523,6 @@ export const WallpaperProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         const next = { ...prev, ...config } as WallpaperConfig;
         const json = JSON.stringify(next);
         localStorage.setItem(`${storagePrefix}global`, json);
-        localStorage.setItem('ns_wp_global', json);
         return next;
       });
     } else {
@@ -515,7 +531,6 @@ export const WallpaperProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         const next = { ...prev, [chatId]: { ...base, ...config } as WallpaperConfig };
         const json = JSON.stringify(next);
         localStorage.setItem(`${storagePrefix}chats`, json);
-        localStorage.setItem('ns_wp_chats', json);
         return next;
       });
     }

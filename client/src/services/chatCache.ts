@@ -85,12 +85,15 @@ export class ChatCacheEngine {
     }
   }
 
-  public static async saveMessages(messages: Message[]): Promise<void> {
+  public static async saveMessages(messages: Message[], userId?: string): Promise<void> {
     try {
       const db = await this.getDB();
       const tx = db.transaction(STORE_MESSAGES, 'readwrite');
       const store = tx.objectStore(STORE_MESSAGES);
-      messages.forEach((msg) => store.put(msg));
+      messages.forEach((msg) => {
+        const toSave = userId ? { ...msg, owner_user_id: userId } : msg;
+        store.put(toSave);
+      });
       return new Promise((resolve) => {
         tx.oncomplete = () => resolve();
       });
@@ -99,7 +102,7 @@ export class ChatCacheEngine {
     }
   }
 
-  public static async replaceMessagesForConversation(conversationId: string, freshMessages: Message[]): Promise<void> {
+  public static async replaceMessagesForConversation(conversationId: string, freshMessages: Message[], userId?: string): Promise<void> {
     try {
       const db = await this.getDB();
       const tx = db.transaction(STORE_MESSAGES, 'readwrite');
@@ -119,7 +122,8 @@ export class ChatCacheEngine {
       // Step 2: Put fresh server messages into the store
       freshMessages.forEach((msg) => {
         if (msg && msg.id) {
-          msgStore.put(msg);
+          const toSave = userId ? { ...msg, owner_user_id: userId } : msg;
+          msgStore.put(toSave);
         }
       });
 
@@ -131,7 +135,7 @@ export class ChatCacheEngine {
     }
   }
 
-  public static async getMessagesForConversation(conversationId: string): Promise<Message[]> {
+  public static async getMessagesForConversation(conversationId: string, userId?: string): Promise<Message[]> {
     try {
       const db = await this.getDB();
       const tx = db.transaction(STORE_MESSAGES, 'readonly');
@@ -140,9 +144,12 @@ export class ChatCacheEngine {
       const request = index.getAll(conversationId);
       return new Promise((resolve) => {
         request.onsuccess = () => {
-          const list: Message[] = request.result || [];
-          list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-          resolve(list);
+          const result: (Message & { owner_user_id?: string })[] = request.result || [];
+          const filtered = userId 
+            ? result.filter(msg => !msg.owner_user_id || msg.owner_user_id === userId)
+            : result;
+          filtered.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+          resolve(filtered);
         };
       });
     } catch {
@@ -154,7 +161,7 @@ export class ChatCacheEngine {
    * High-speed single-transaction batch retrieval of stored messages grouped by conversation_id.
    * Enables instant 0ms rendering of recent message threads on boot.
    */
-  public static async batchGetMessagesForAllConversations(validConversationIds?: string[]): Promise<Record<string, Message[]>> {
+  public static async batchGetMessagesForAllConversations(validConversationIds?: string[], userId?: string): Promise<Record<string, Message[]>> {
     try {
       const db = await this.getDB();
       const tx = db.transaction(STORE_MESSAGES, 'readonly');
@@ -163,9 +170,12 @@ export class ChatCacheEngine {
       const validSet = validConversationIds ? new Set(validConversationIds) : null;
       return new Promise((resolve) => {
         request.onsuccess = () => {
-          const allMsgs: Message[] = request.result || [];
+          const allMsgs: (Message & { owner_user_id?: string })[] = request.result || [];
           const grouped: Record<string, Message[]> = {};
           for (const msg of allMsgs) {
+            if (userId && msg.owner_user_id && msg.owner_user_id !== userId) {
+              continue;
+            }
             if (msg.conversation_id && (!validSet || validSet.has(msg.conversation_id))) {
               if (!grouped[msg.conversation_id]) {
                 grouped[msg.conversation_id] = [];
@@ -182,30 +192,45 @@ export class ChatCacheEngine {
   }
 
   /**
-   * Atomically delete ALL cached conversations owned by a given userId.
-   * Called on account switch so the stale conversation list (with stale lastMessage previews)
-   * is never re-hydrated for the new account. Mirrors the dc34a78c / 5c60d7f4 pattern.
+   * Atomically delete ALL cached conversations AND messages owned by a given userId.
+   * Called on account switch so the stale conversation list and message frames
+   * are never re-hydrated for the new account.
    */
   public static async clearConversationsForUser(userId: string): Promise<void> {
     if (!userId) return;
     try {
       const db = await this.getDB();
-      const tx = db.transaction(STORE_CONVERSATIONS, 'readwrite');
-      const store = tx.objectStore(STORE_CONVERSATIONS);
-      const request = store.getAll();
-      request.onsuccess = () => {
-        const all: (Conversation & { owner_user_id?: string })[] = request.result || [];
-        all.forEach(conv => {
-          if (conv.owner_user_id === userId) {
-            store.delete(conv.id);
+      const tx = db.transaction([STORE_CONVERSATIONS, STORE_MESSAGES], 'readwrite');
+      const convStore = tx.objectStore(STORE_CONVERSATIONS);
+      const msgStore = tx.objectStore(STORE_MESSAGES);
+
+      // Purge conversations owned by user
+      const convReq = convStore.getAll();
+      convReq.onsuccess = () => {
+        const allConvs: (Conversation & { owner_user_id?: string })[] = convReq.result || [];
+        allConvs.forEach(conv => {
+          if (conv.owner_user_id === userId || !conv.owner_user_id) {
+            convStore.delete(conv.id);
           }
         });
       };
+
+      // Purge messages owned by user
+      const msgReq = msgStore.getAll();
+      msgReq.onsuccess = () => {
+        const allMsgs: (Message & { owner_user_id?: string })[] = msgReq.result || [];
+        allMsgs.forEach(msg => {
+          if (msg.owner_user_id === userId || !msg.owner_user_id) {
+            msgStore.delete(msg.id);
+          }
+        });
+      };
+
       await new Promise<void>((resolve) => {
         tx.oncomplete = () => resolve();
         tx.onerror = () => resolve(); // non-fatal
       });
-      console.log(`[ChatCache] Cleared cached conversations for user ${userId}`);
+      console.log(`[ChatCache] Cleared cached conversations and messages for user ${userId}`);
     } catch (err) {
       console.warn('[ChatCache] clearConversationsForUser error (non-fatal):', err);
     }
@@ -281,4 +306,5 @@ export class ChatCacheEngine {
     }
   }
 }
+
 
