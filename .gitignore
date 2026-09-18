@@ -59,3 +59,10 @@ jdk17/
 scratch/
 ANCHOR_COMPLIANCE_RESUBMISSION/
 *.apk
+note-standard-latest/
+temp_crops/
+notestandard-social/
+*.mp4
+*.mp3
+*.wav
+__pycache__/

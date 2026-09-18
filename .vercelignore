@@ -31,3 +31,4 @@ eslint*.json
 git_show*.txt
 schema_output.json
 audit_script.js
+note-standard-latest/
