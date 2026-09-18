@@ -9,12 +9,14 @@ import { Features } from '../components/landing/Features';
 import { Pricing } from '../components/landing/Pricing';
 import { FounderSection } from '../components/landing/FounderSection';
 import { Footer } from '../components/landing/Footer';
+import { preloadAuthRoutes } from '../utils/routePreloader';
 
 export const LandingPage = () => {
     const { user, authReady } = useAuth();
     const navigate = useNavigate();
 
     useEffect(() => {
+        preloadAuthRoutes();
         if (authReady && user) {
             navigate('/dashboard', { replace: true });
         }

@@ -19,6 +19,10 @@ const routeImports: Record<string, () => Promise<unknown>> = {
   '/dashboard/billing': () => import('../pages/dashboard/Billing'),
   '/dashboard/settings': () => import('../pages/dashboard/Settings'),
 
+  // Auth Routes
+  '/login': () => import('../pages/Login'),
+  '/signup': () => import('../pages/Signup'),
+
   // Admin Routes
   '/admin': () => import('../pages/admin/AdminDashboard'),
   '/admin/users': () => import('../pages/admin/UserManagement'),
@@ -112,3 +116,22 @@ export function preloadCoreAdminRoutes(): void {
     setTimeout(runPreload, 500);
   }
 }
+
+/**
+ * Background prefetch public auth route chunks during idle time or landing page mount
+ */
+export function preloadAuthRoutes(): void {
+  const authRoutes = ['/login', '/signup'];
+  const runPreload = () => {
+    authRoutes.forEach((route) => {
+      preloadRoute(route);
+    });
+  };
+
+  if ('requestIdleCallback' in window) {
+    (window as any).requestIdleCallback(runPreload, { timeout: 1000 });
+  } else {
+    setTimeout(runPreload, 100);
+  }
+}
+

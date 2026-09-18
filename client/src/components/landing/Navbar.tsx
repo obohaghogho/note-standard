@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { LanguageSelector } from '../common/LanguageSelector';
 import { usePWAInstall } from '../../context/PWAInstallContext';
+import { preloadRoute } from '../../utils/routePreloader';
 
 export const Navbar = () => {
     const { t } = useTranslation();
@@ -40,8 +41,8 @@ export const Navbar = () => {
                     <button onClick={installApp} className="text-sm font-medium text-gray-400 hover:text-white transition-colors cursor-pointer">{t('landing.install_app', 'Install App')}</button>
                     <div className="h-6 w-[1px] bg-white/10 mx-2" />
                     <LanguageSelector />
-                    <Link to="/login" className="text-sm font-medium px-4 py-2 hover:bg-white/5 rounded-lg transition-colors">{t('auth.login', 'Login')}</Link>
-                    <Link to="/signup" className="text-sm font-medium px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition-colors">{t('auth.signup', 'Get Started')}</Link>
+                    <Link to="/login" onMouseEnter={() => preloadRoute('/login')} onFocus={() => preloadRoute('/login')} className="text-sm font-medium px-4 py-2 hover:bg-white/5 rounded-lg transition-colors">{t('auth.login', 'Login')}</Link>
+                    <Link to="/signup" onMouseEnter={() => preloadRoute('/signup')} onFocus={() => preloadRoute('/signup')} className="text-sm font-medium px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition-colors">{t('auth.signup', 'Get Started')}</Link>
                 </div>
 
                 <div className="flex md:hidden items-center gap-2">

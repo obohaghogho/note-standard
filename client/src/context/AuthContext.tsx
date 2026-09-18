@@ -512,6 +512,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // If we are switching, we ignore SIGNED_OUT from the old account
         if (switchInProgress.current) return;
 
+        // Persistent Session Rehydration Guard: If native storage emitted SIGNED_OUT due to a transient network timeout
+        // or storage drop, attempt to re-establish session from multi-account store before wiping state.
+        const activeId = accountManager.getActiveAccountId();
+        if (activeId) {
+          const acc = accountManager.getAccount(activeId);
+          if (acc?.tokens?.refresh_token) {
+            console.log(`[Auth] Transient SIGNED_OUT detected for active account ${acc.email}. Attempting token rehydration...`);
+            const { data, error } = await supabase.auth.setSession({
+              access_token: acc.tokens.access_token || '',
+              refresh_token: acc.tokens.refresh_token
+            }).catch(err => ({ data: { session: null }, error: err }));
+
+            if (data?.session) {
+              console.log(`[Auth] ✅ Successfully rehydrated session for ${acc.email} after SIGNED_OUT event.`);
+              return;
+            }
+          }
+        }
+
         localStorage.removeItem("token");
         setSession(null);
         setUser(null);

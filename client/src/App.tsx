@@ -139,7 +139,12 @@ function AuthenticatedProviders() {
                     <NotesProvider>
                       <NotesDashboardProvider>
                         <WebNotificationRouter />
-                        <Routes>
+                        <Suspense fallback={
+                          <div className="flex items-center justify-center min-h-[60vh] w-full">
+                            <div className="w-8 h-8 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
+                          </div>
+                        }>
+                          <Routes>
                       <Route path="/" element={<LandingPage />} />
                       <Route path="/login" element={<Login />} />
                       <Route path="/signup" element={<Signup />} />
@@ -241,6 +246,7 @@ function AuthenticatedProviders() {
                       {/* Catch-all 404 Route */}
                       <Route path="*" element={<NotFoundPage />} />
                     </Routes>
+                    </Suspense>
                     {/* Global Chat Widget - visible on all authenticated pages */}
                     <ChatWidget />
                     {/* Global Beta Feedback Widget */}
