@@ -20,14 +20,15 @@ router.use(uploadLimiter);
  * POST /api/upload/image (B-06)
  * Community post image / avatar / media image upload
  */
-router.post('/image', upload.single('file'), async (req, res) => {
+router.post('/image', upload.any(), async (req, res) => {
   try {
-    if (!req.file) {
+    const targetFile = req.file || (req.files && req.files.length > 0 ? req.files[0] : null);
+    if (!targetFile) {
       return res.status(400).json({ error: 'No image file uploaded' });
     }
 
     const result = await MediaUploadService.uploadImage({
-      file: req.file,
+      file: targetFile,
       userId: req.user.id,
       bucket: 'community_media',
     });
@@ -49,14 +50,15 @@ router.post('/image', upload.single('file'), async (req, res) => {
  * POST /api/upload/file (B-09)
  * General document / attachment upload
  */
-router.post('/file', upload.single('file'), async (req, res) => {
+router.post('/file', upload.any(), async (req, res) => {
   try {
-    if (!req.file) {
+    const targetFile = req.file || (req.files && req.files.length > 0 ? req.files[0] : null);
+    if (!targetFile) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
     const result = await MediaUploadService.uploadFile({
-      file: req.file,
+      file: targetFile,
       userId: req.user.id,
       bucket: 'chat_attachments',
     });
@@ -79,14 +81,15 @@ router.post('/file', upload.single('file'), async (req, res) => {
  * POST /api/upload/audio (B-08)
  * Dedicated audio voice-note upload pipeline
  */
-router.post('/audio', upload.single('file'), async (req, res) => {
+router.post('/audio', upload.any(), async (req, res) => {
   try {
-    if (!req.file) {
+    const targetFile = req.file || (req.files && req.files.length > 0 ? req.files[0] : null);
+    if (!targetFile) {
       return res.status(400).json({ error: 'No audio file uploaded' });
     }
 
     const result = await MediaUploadService.uploadAudio({
-      file: req.file,
+      file: targetFile,
       userId: req.user.id,
       bucket: 'voice_notes',
     });
@@ -108,14 +111,15 @@ router.post('/audio', upload.single('file'), async (req, res) => {
  * POST /api/upload/media
  * Unified Status and Chat media upload (Photos, Videos, Audio)
  */
-router.post('/media', upload.single('file'), async (req, res) => {
+router.post('/media', upload.any(), async (req, res) => {
   try {
-    if (!req.file) {
+    const targetFile = req.file || (req.files && req.files.length > 0 ? req.files[0] : null);
+    if (!targetFile) {
       return res.status(400).json({ error: 'No media file uploaded' });
     }
 
     const result = await MediaUploadService.uploadMedia({
-      file: req.file,
+      file: targetFile,
       userId: req.user.id,
       bucket: 'status_media',
     });
