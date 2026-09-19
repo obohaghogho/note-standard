@@ -237,14 +237,22 @@ class MediaUploadService {
     const ext = path.extname(file.originalname) || defaultExt;
     const filename = `${userId}/${Date.now()}_${Math.random().toString(36).substring(7)}${ext}`;
 
-    const uploadRes = await this.executeStorageUpload(filename, file.buffer, file.mimetype, bucket);
+    // Normalize MIME type to standard browser-compatible content types for Supabase Storage
+    let contentType = file.mimetype;
+    if (!contentType || contentType === 'application/octet-stream') {
+      contentType = isVideo ? 'video/mp4' : isAudio ? 'audio/m4a' : 'image/jpeg';
+    } else if (isVideo && (contentType === 'video/quicktime' || contentType === 'video/mov' || contentType === 'video/x-m4v')) {
+      contentType = 'video/mp4'; // Ensure cross-browser HTML5 video player compatibility
+    }
+
+    const uploadRes = await this.executeStorageUpload(filename, file.buffer, contentType, bucket);
 
     return {
       url: uploadRes.url,
       secure_url: uploadRes.secure_url,
       resource_type: resourceType,
       key: uploadRes.key,
-      mime: file.mimetype,
+      mime: contentType,
       size: file.size,
     };
   }

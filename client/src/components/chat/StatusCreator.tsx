@@ -338,8 +338,9 @@ export default function StatusCreator() {
       handleClearMusic();
       closeCreator();
     } catch (err: any) {
-      const e = err as { response?: { data?: { error?: string } } };
-      toast.error(e?.response?.data?.error || 'Failed to post status');
+      console.error('[StatusCreator] Submit error:', err);
+      const msg = err?.response?.data?.error || err?.message || 'Failed to post status';
+      toast.error(msg);
     } finally {
       setSubmitting(false);
       setMediaUploading(false);

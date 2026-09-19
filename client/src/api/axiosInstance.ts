@@ -124,9 +124,11 @@ api.interceptors.response.use(
       }
     }
 
-    // For non-retryable errors, extract message from response
+    // For non-retryable errors, extract message from response while preserving response metadata
     if (error.response?.data?.error) {
-      return Promise.reject(new Error(error.response.data.error));
+      const customErr = new Error(error.response.data.error);
+      (customErr as any).response = error.response;
+      return Promise.reject(customErr);
     }
     return Promise.reject(error);
   }
