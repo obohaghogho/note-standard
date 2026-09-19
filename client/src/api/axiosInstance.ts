@@ -11,7 +11,7 @@ const api = axios.create({
 })
 
 // Add a request interceptor to include the auth token
-// Uses a retry loop to handle Supabase session hydration delay after Paystack redirect
+// Uses a resilient lookup with local storage fallback to prevent unauthenticated 1st upload attempts
 api.interceptors.request.use(
   async (config) => {
     // If the caller already set an Authorization header, honour it as-is.
@@ -22,12 +22,32 @@ api.interceptors.request.use(
     // Attempt to get session using the resilient safeAuth helper
     let session = await safeAuth();
 
-    // Direct fallback if safeAuth returned null (e.g. during initial hydration)
+    // Direct fallback 1: Query Supabase Auth directly if safeAuth returned null
     if (!session?.access_token) {
       try {
         const { supabase } = await import('../lib/supabase');
         const { data } = await supabase.auth.getSession();
         session = data?.session || null;
+      } catch { /* silent fallback */ }
+    }
+
+    // Direct fallback 2: Extract active token directly from local storage if Auth hydration is pending
+    if (!session?.access_token && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.startsWith('sb-') || key.includes('supabase') || key.includes('auth-token'))) {
+            const raw = localStorage.getItem(key);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              const token = parsed?.access_token || parsed?.currentSession?.access_token;
+              if (token) {
+                session = { access_token: token } as any;
+                break;
+              }
+            }
+          }
+        }
       } catch { /* silent fallback */ }
     }
 

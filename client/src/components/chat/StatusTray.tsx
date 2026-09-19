@@ -86,7 +86,7 @@ export default function StatusTray() {
               // Find the first unviewed own status, otherwise default to 0 (oldest)
               const firstUnviewed = myStatuses.findIndex(s => !s.has_viewed);
               const startIdx = firstUnviewed === -1 ? 0 : firstUnviewed;
-              openViewer(-1, startIdx);
+              openViewer(-1, startIdx, 'my', myStatuses[startIdx]?.id);
             }
             else openCreator();
           }}
@@ -144,7 +144,7 @@ export default function StatusTray() {
               onClick={() => {
                 const firstUnviewed = entry.statuses.findIndex(s => !s.has_viewed);
                 const startIdx = firstUnviewed === -1 ? 0 : firstUnviewed;
-                openViewer(feedIdx, startIdx);
+                openViewer(feedIdx, startIdx, entry.user_id, entry.statuses[startIdx]?.id);
               }}
             >
               <div className="w-[60px] h-[60px] relative">

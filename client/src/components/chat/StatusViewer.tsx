@@ -71,19 +71,38 @@ export default function StatusViewer() {
     }
   };
 
-  const { userIndex, statusIndex } = viewerOpen || {};
+  const { userIndex, statusIndex, userId, statusId } = viewerOpen || {};
   
-  const userEntry = userIndex === -1 && myStatuses && myStatuses.length > 0 
-    ? {
+  const userEntry = useMemo(() => {
+    if (!viewerOpen) return null;
+    if (userId === 'my' || userIndex === -1) {
+      return myStatuses && myStatuses.length > 0 ? {
         user_id: user?.id,
         display_name: 'My Status',
         avatar_url: profile?.avatar_url,
         statuses: myStatuses,
         has_unviewed: false
-      }
-    : (userIndex !== undefined && userIndex !== -1 ? feed[userIndex] : null);
+      } : null;
+    }
 
-  const status = userEntry && statusIndex !== undefined ? userEntry.statuses[statusIndex] : null;
+    if (userId) {
+      const found = feed.find(u => u.user_id === userId);
+      if (found) return found;
+    }
+
+    return (userIndex !== undefined && userIndex !== -1 && feed[userIndex]) ? feed[userIndex] : null;
+  }, [viewerOpen, userId, userIndex, feed, myStatuses, user?.id, profile?.avatar_url]);
+
+  const status = useMemo(() => {
+    if (!userEntry || !userEntry.statuses || userEntry.statuses.length === 0) return null;
+    if (statusId) {
+      const found = userEntry.statuses.find(s => s.id === statusId);
+      if (found) return found;
+    }
+    const idx = statusIndex !== undefined ? statusIndex : 0;
+    return userEntry.statuses[idx] || userEntry.statuses[0] || null;
+  }, [userEntry, statusId, statusIndex]);
+
   const isOwn = status?.user_id === user?.id;
 
   const reactionMap = useMemo(() => {

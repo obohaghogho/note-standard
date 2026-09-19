@@ -31,9 +31,9 @@ export const StatusViewerModal: React.FC<StatusViewerModalProps> = ({
 
   useEffect(() => {
     setCurrentIndex(0);
-  }, [group]);
+  }, [group?.username, group?.user_id]);
 
-  if (!visible || !group || group.statuses.length === 0) return null;
+  if (!visible || !group || !Array.isArray(group.statuses) || group.statuses.length === 0) return null;
 
   const currentStatus: StatusItem = group.statuses[currentIndex] || group.statuses[0];
   const isMine = currentStatus.user_id === currentUserId || group.username === 'My Status';

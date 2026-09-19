@@ -64,6 +64,8 @@ export interface StatusFeedEntry {
 interface ViewerState {
   userIndex: number;
   statusIndex: number;
+  userId?: string;
+  statusId?: string;
 }
 
 interface StatusContextValue {
@@ -74,7 +76,7 @@ interface StatusContextValue {
   loading: boolean;
   fetchFeed: () => Promise<void>;
   fetchMyStatuses: () => Promise<void>;
-  openViewer: (userIndex: number, statusIndex?: number) => void;
+  openViewer: (userIndex: number, statusIndex?: number, userId?: string, statusId?: string) => void;
   openStatusById: (statusId: string) => Promise<void>;
   closeViewer: () => void;
   nextStatus: () => void;
@@ -144,9 +146,28 @@ export const StatusProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [user?.id, fetchFeed, fetchMyStatuses]);
 
-  const openViewer = useCallback((userIndex: number, statusIndex = 0) => {
-    setViewerOpen({ userIndex, statusIndex });
-  }, []);
+  const openViewer = useCallback((userIndex: number, statusIndex = 0, userId?: string, statusId?: string) => {
+    let derivedUserId = userId;
+    let derivedStatusId = statusId;
+
+    if (!derivedUserId) {
+      if (userIndex === -1) {
+        derivedUserId = 'my';
+      } else if (feed[userIndex]) {
+        derivedUserId = feed[userIndex].user_id;
+      }
+    }
+
+    if (!derivedStatusId) {
+      if (userIndex === -1 && myStatuses[statusIndex]) {
+        derivedStatusId = myStatuses[statusIndex].id;
+      } else if (feed[userIndex]?.statuses[statusIndex]) {
+        derivedStatusId = feed[userIndex].statuses[statusIndex].id;
+      }
+    }
+
+    setViewerOpen({ userIndex, statusIndex, userId: derivedUserId, statusId: derivedStatusId });
+  }, [feed, myStatuses]);
 
   const openStatusById = useCallback(async (statusId: string) => {
     if (!statusId) return;
@@ -154,7 +175,7 @@ export const StatusProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // 1. Check own statuses
     const myIdx = myStatuses.findIndex(st => st.id === statusId);
     if (myIdx !== -1) {
-      setViewerOpen({ userIndex: -1, statusIndex: myIdx });
+      setViewerOpen({ userIndex: -1, statusIndex: myIdx, userId: 'my', statusId });
       return;
     }
 
@@ -162,7 +183,7 @@ export const StatusProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     for (let uIdx = 0; uIdx < feed.length; uIdx++) {
       const stIdx = feed[uIdx].statuses.findIndex(st => st.id === statusId);
       if (stIdx !== -1) {
-        setViewerOpen({ userIndex: uIdx, statusIndex: stIdx });
+        setViewerOpen({ userIndex: uIdx, statusIndex: stIdx, userId: feed[uIdx].user_id, statusId });
         return;
       }
     }
@@ -174,7 +195,7 @@ export const StatusProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       for (let uIdx = 0; uIdx < freshFeed.length; uIdx++) {
         const stIdx = freshFeed[uIdx].statuses.findIndex((st: StatusItem) => st.id === statusId);
         if (stIdx !== -1) {
-          setViewerOpen({ userIndex: uIdx, statusIndex: stIdx });
+          setViewerOpen({ userIndex: uIdx, statusIndex: stIdx, userId: freshFeed[uIdx].user_id, statusId });
           return;
         }
       }
@@ -191,22 +212,32 @@ export const StatusProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const nextStatus = useCallback(() => {
     setViewerOpen(prev => {
       if (!prev) return null;
-      const { userIndex, statusIndex } = prev;
+      const { userIndex, statusIndex, userId } = prev;
 
-      // Handle own statuses (userIndex === -1)
-      if (userIndex === -1) {
+      // Handle own statuses (userIndex === -1 or userId === 'my')
+      if (userIndex === -1 || userId === 'my') {
         if (statusIndex + 1 < myStatuses.length) {
-          return { userIndex, statusIndex: statusIndex + 1 };
+          const nextSt = myStatuses[statusIndex + 1];
+          return { userIndex: -1, statusIndex: statusIndex + 1, userId: 'my', statusId: nextSt?.id };
         }
         return null;
       }
 
-      const userEntry = feed[userIndex];
+      let currentUIdx = userIndex;
+      if (userId) {
+        const foundUIdx = feed.findIndex(u => u.user_id === userId);
+        if (foundUIdx !== -1) currentUIdx = foundUIdx;
+      }
+
+      const userEntry = feed[currentUIdx];
       if (!userEntry) return null;
       if (statusIndex + 1 < userEntry.statuses.length) {
-        return { userIndex, statusIndex: statusIndex + 1 };
-      } else if (userIndex + 1 < feed.length) {
-        return { userIndex: userIndex + 1, statusIndex: 0 };
+        const nextSt = userEntry.statuses[statusIndex + 1];
+        return { userIndex: currentUIdx, statusIndex: statusIndex + 1, userId: userEntry.user_id, statusId: nextSt?.id };
+      } else if (currentUIdx + 1 < feed.length) {
+        const nextUser = feed[currentUIdx + 1];
+        const nextSt = nextUser.statuses[0];
+        return { userIndex: currentUIdx + 1, statusIndex: 0, userId: nextUser.user_id, statusId: nextSt?.id };
       }
       return null;
     });
@@ -215,22 +246,36 @@ export const StatusProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const prevStatus = useCallback(() => {
     setViewerOpen(prev => {
       if (!prev) return null;
-      const { userIndex, statusIndex } = prev;
+      const { userIndex, statusIndex, userId } = prev;
 
-      // Handle own statuses (userIndex === -1)
-      if (userIndex === -1) {
-        if (statusIndex > 0) return { userIndex, statusIndex: statusIndex - 1 };
+      // Handle own statuses
+      if (userIndex === -1 || userId === 'my') {
+        if (statusIndex > 0) {
+          const prevSt = myStatuses[statusIndex - 1];
+          return { userIndex: -1, statusIndex: statusIndex - 1, userId: 'my', statusId: prevSt?.id };
+        }
         return prev;
       }
 
-      if (statusIndex > 0) return { userIndex, statusIndex: statusIndex - 1 };
-      if (userIndex > 0) {
-        const prevUser = feed[userIndex - 1];
-        return { userIndex: userIndex - 1, statusIndex: prevUser.statuses.length - 1 };
+      let currentUIdx = userIndex;
+      if (userId) {
+        const foundUIdx = feed.findIndex(u => u.user_id === userId);
+        if (foundUIdx !== -1) currentUIdx = foundUIdx;
+      }
+
+      if (statusIndex > 0) {
+        const userEntry = feed[currentUIdx];
+        const prevSt = userEntry?.statuses[statusIndex - 1];
+        return { userIndex: currentUIdx, statusIndex: statusIndex - 1, userId: userEntry?.user_id, statusId: prevSt?.id };
+      }
+      if (currentUIdx > 0) {
+        const prevUser = feed[currentUIdx - 1];
+        const prevSt = prevUser.statuses[prevUser.statuses.length - 1];
+        return { userIndex: currentUIdx - 1, statusIndex: prevUser.statuses.length - 1, userId: prevUser.user_id, statusId: prevSt?.id };
       }
       return prev;
     });
-  }, [feed]);
+  }, [feed, myStatuses]);
 
   const markViewed = useCallback(async (statusId: string) => {
     try {

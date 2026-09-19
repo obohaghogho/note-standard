@@ -16,12 +16,7 @@ import { PerformanceDashboardOverlay } from '../../components/debug/PerformanceD
 
 
 const StatusOverlays = () => {
-    const { viewerOpen, creatorOpen, fetchFeed, fetchMyStatuses } = useStatus();
-    
-    useEffect(() => {
-        fetchFeed();
-        fetchMyStatuses();
-    }, [fetchFeed, fetchMyStatuses]);
+    const { viewerOpen, creatorOpen } = useStatus();
 
     return (
         <>

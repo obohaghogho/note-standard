@@ -23,9 +23,18 @@ class MediaUploadService {
         upsert: false,
       });
 
-    // Fallback to 'chat-media' if requested bucket does not exist
-    if (error && (error.code === 'NoSuchBucket' || error.statusCode === '404' || error.message?.includes('not found') || error.message?.includes('NoSuchBucket'))) {
-      logger.warn(`[MediaUploadService] Bucket '${targetBucket}' not found on Supabase. Falling back to 'chat-media'.`);
+    // Fallback to 'chat-media' if requested bucket does not exist or is unavailable
+    const isBucketNotFound = error && (
+      error.code === 'NoSuchBucket' ||
+      String(error.statusCode) === '404' ||
+      String(error.statusCode) === '400' ||
+      error.message?.toLowerCase().includes('not found') ||
+      error.message?.toLowerCase().includes('nosuchbucket') ||
+      (typeof error.error === 'string' && error.error.toLowerCase().includes('not found'))
+    );
+
+    if (isBucketNotFound) {
+      logger.warn(`[MediaUploadService] Bucket '${targetBucket}' not found or inaccessible on Supabase (${error.message || error.error}). Falling back to 'chat-media'.`);
       targetBucket = 'chat-media';
       const retry = await supabase.storage
         .from(targetBucket)
