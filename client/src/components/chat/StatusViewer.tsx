@@ -35,12 +35,16 @@ export default function StatusViewer() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const elapsedRef = useRef(0);
+  const mountTimeRef = useRef<number>(Date.now());
   
   // Single ref for both video and audio status nodes
   const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement>(null);
   const musicAudioRef = useRef<HTMLAudioElement | null>(null);
   const pressStartRef = useRef<number>(0);
   const touchActiveRef = useRef(false);
+
+  // Update mount timestamp whenever active status changes
+  const { userIndex, statusIndex, userId, statusId } = viewerOpen || {};
 
   const handlePressStart = (e: React.MouseEvent | React.TouchEvent) => {
     e.stopPropagation();
@@ -63,6 +67,13 @@ export default function StatusViewer() {
       return;
     }
 
+    // Guard: ignore tap gestures occurring within 300ms of viewer mount / status change
+    // to prevent event propagation from StatusTray trigger click
+    if (Date.now() - mountTimeRef.current < 300) {
+      setPaused(false);
+      return;
+    }
+
     const duration = Date.now() - pressStartRef.current;
     setPaused(false);
     if (duration < 250) {
@@ -71,8 +82,6 @@ export default function StatusViewer() {
     }
   };
 
-  const { userIndex, statusIndex, userId, statusId } = viewerOpen || {};
-  
   const userEntry = useMemo(() => {
     if (!viewerOpen) return null;
     if (userId === 'my' || userIndex === -1) {
@@ -115,9 +124,10 @@ export default function StatusViewer() {
     return map;
   }, [status?.reactions]);
 
-  // Reset activeDuration back to STATUS_DURATION when status changes
+  // Reset activeDuration back to STATUS_DURATION & update mount time when status changes
   useEffect(() => {
     setActiveDuration(STATUS_DURATION);
+    mountTimeRef.current = Date.now();
   }, [status?.id]);
 
   // Sync background music with play/pause state
@@ -157,10 +167,10 @@ export default function StatusViewer() {
 
   const handleMediaMetadata = useCallback((e: React.SyntheticEvent<HTMLVideoElement | HTMLAudioElement>) => {
     const durationSec = e.currentTarget.duration;
-    if (durationSec && !isNaN(durationSec)) {
+    if (durationSec && !isNaN(durationSec) && isFinite(durationSec) && durationSec > 0.5) {
       const durationMs = durationSec * 1000;
-      // Cap it at STATUS_DURATION
-      const targetDuration = Math.min(durationMs, STATUS_DURATION);
+      // Cap at STATUS_DURATION and enforce minimum 3000ms duration floor
+      const targetDuration = Math.max(3000, Math.min(durationMs, STATUS_DURATION));
       setActiveDuration(targetDuration);
     }
   }, []);
@@ -174,8 +184,26 @@ export default function StatusViewer() {
     startTimeRef.current = Date.now() - elapsedRef.current;
     
     timerRef.current = setInterval(() => {
-      const elapsed = Date.now() - (startTimeRef.current || 0);
+      const media = mediaRef.current;
       const duration = getDuration();
+
+      // If video media element exists, sync progress with real video playback position
+      if (status?.type === 'video' && media instanceof HTMLVideoElement && media.duration > 0 && isFinite(media.duration)) {
+        // Pause timer if video is still buffering or paused
+        if (media.paused || media.readyState < 2) {
+          return;
+        }
+        const pct = Math.min((media.currentTime / media.duration) * 100, 100);
+        setProgress(pct);
+        if (pct >= 100) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          elapsedRef.current = 0;
+          nextStatus();
+        }
+        return;
+      }
+
+      const elapsed = Date.now() - (startTimeRef.current || 0);
       const pct = Math.min((elapsed / duration) * 100, 100);
       
       setProgress(pct);
@@ -188,7 +216,7 @@ export default function StatusViewer() {
         elapsedRef.current = elapsed;
       }
     }, 50);
-  }, [status?.id, nextStatus, getDuration]);
+  }, [status?.id, status?.type, nextStatus, getDuration]);
 
   const stopTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -376,6 +404,11 @@ export default function StatusViewer() {
               className="w-full h-full object-contain"
               playsInline
               onLoadedMetadata={handleMediaMetadata}
+              onDurationChange={handleMediaMetadata}
+              onEnded={() => nextStatus()}
+              onError={(e) => {
+                console.warn('[StatusViewer] Video media error:', e);
+              }}
             />
           )}
 
