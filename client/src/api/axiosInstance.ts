@@ -14,6 +14,15 @@ const api = axios.create({
 // Uses a resilient lookup with local storage fallback to prevent unauthenticated 1st upload attempts
 api.interceptors.request.use(
   async (config) => {
+    // If sending FormData, delete default application/json Content-Type header
+    // so Axios/browser automatically injects 'multipart/form-data; boundary=...'
+    if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+      if (config.headers) {
+        delete config.headers['Content-Type'];
+        delete (config.headers as any)['content-type'];
+      }
+    }
+
     // If the caller already set an Authorization header, honour it as-is.
     if (config.headers.Authorization) {
       return config;
