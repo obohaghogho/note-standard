@@ -49,6 +49,7 @@ export const AuditLogs = () => {
         totalPages: 0
     });
     const [loading, setLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
     const [actionFilter, setActionFilter] = useState('');
     const [targetFilter, setTargetFilter] = useState('');
     const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
@@ -65,6 +66,7 @@ export const AuditLogs = () => {
             const params = new URLSearchParams({
                 page: pagination.page.toString(),
                 limit: pagination.limit.toString(),
+                ...(searchQuery.trim() && { search: searchQuery.trim() }),
                 ...(actionFilter && { action: actionFilter }),
                 ...(targetFilter && { target_type: targetFilter })
             });
@@ -92,7 +94,7 @@ export const AuditLogs = () => {
         } finally {
             setLoading(false);
         }
-    }, [session?.access_token, pagination.page, pagination.limit, actionFilter, targetFilter]);
+    }, [session?.access_token, pagination.page, pagination.limit, searchQuery, actionFilter, targetFilter]);
 
     useEffect(() => {
         fetchLogs();
@@ -108,10 +110,10 @@ export const AuditLogs = () => {
 
     const getActionBadgeClass = (action: string) => {
         const act = (action || '').toLowerCase();
-        if (act.includes('suspend') || act.includes('reject') || act.includes('delete') || act.includes('freeze')) return 'danger';
+        if (act.includes('suspend') || act.includes('reject') || act.includes('delete') || act.includes('freeze') || act.includes('invalidate')) return 'danger';
         if (act.includes('update') || act.includes('override') || act.includes('limit')) return 'warning';
         if (act.includes('broadcast') || act.includes('toggle') || act.includes('process')) return 'info';
-        if (act.includes('join') || act.includes('resolve') || act.includes('approve') || act.includes('create')) return 'success';
+        if (act.includes('join') || act.includes('resolve') || act.includes('approve') || act.includes('create') || act.includes('reconcile')) return 'success';
         return 'default';
     };
 
@@ -150,6 +152,20 @@ export const AuditLogs = () => {
             {/* Filters Toolbar */}
             <div className="filters-bar relative sm:sticky sm:top-14 z-20 bg-[#0F1220]/95 backdrop-blur-md p-2.5 sm:p-3 rounded-xl border border-gray-800/80 mb-4 flex flex-col sm:flex-row gap-2.5 sm:gap-3">
                 <div className="filter-group flex-1 flex items-center gap-2 bg-gray-900/80 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 min-w-0">
+                    <Filter size={18} className="text-gray-400 shrink-0" />
+                    <input
+                        type="text"
+                        placeholder="Search audit logs..."
+                        value={searchQuery}
+                        onChange={(e) => {
+                            setSearchQuery(e.target.value);
+                            setPagination(prev => ({ ...prev, page: 1 }));
+                        }}
+                        className="bg-transparent border-none outline-none text-gray-200 text-sm w-full placeholder:text-gray-500"
+                    />
+                </div>
+
+                <div className="filter-group flex-1 flex items-center gap-2 bg-gray-900/80 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 min-w-0">
                     <ActivityIcon size={18} className="text-gray-400 shrink-0" />
                     <select
                         id="audit-action-filter"
@@ -168,12 +184,15 @@ export const AuditLogs = () => {
                         <option value="join_support_chat" className="bg-gray-900">Admin Support Joins</option>
                         <option value="create_broadcast" className="bg-gray-900">Broadcast Messages</option>
                         <option value="update_system_settings" className="bg-gray-900">System Settings</option>
+                        <option value="update_deposit_settings" className="bg-gray-900">Deposit Settings</option>
                         <option value="update_auto_reply" className="bg-gray-900">Auto Reply Settings</option>
                         <option value="toggle_feature_flag" className="bg-gray-900">Feature Flags</option>
                         <option value="process_limit_request" className="bg-gray-900">Limit Requests</option>
                         <option value="APPROVE_MANUAL_WITHDRAWAL" className="bg-gray-900">Withdrawal Approvals</option>
                         <option value="REJECT_MANUAL_WITHDRAWAL" className="bg-gray-900">Withdrawal Rejections</option>
                         <option value="resolve_unmatched" className="bg-gray-900">Payment Resolutions</option>
+                        <option value="approve_reconciliation_proposal" className="bg-gray-900">Reconciliation Approvals</option>
+                        <option value="invalidate_reconciliation_proposal" className="bg-gray-900">Reconciliation Invalidations</option>
                         <option value="SYSTEM_STATE_OVERRIDE" className="bg-gray-900">System State Overrides</option>
                     </select>
                 </div>
@@ -196,6 +215,7 @@ export const AuditLogs = () => {
                         <option value="conversation" className="bg-gray-900">Conversations</option>
                         <option value="broadcast" className="bg-gray-900">Broadcasts</option>
                         <option value="settings" className="bg-gray-900">System Settings</option>
+                        <option value="reconciliation_proposal" className="bg-gray-900">Reconciliation Proposals</option>
                         <option value="fincra_transactions" className="bg-gray-900">Fincra Transactions</option>
                         <option value="payment" className="bg-gray-900">Payments</option>
                         <option value="limit_request" className="bg-gray-900">Limit Requests</option>

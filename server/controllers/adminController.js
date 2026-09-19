@@ -45,17 +45,22 @@ const logAdminAction = async (
     const ipAddress = typeof rawIp === "string" ? rawIp.split(",")[0].trim() : "Internal";
 
     const serviceSupabase = getServiceSupabase();
+    const safeTargetId = targetId !== undefined && targetId !== null ? String(targetId) : null;
 
-    await serviceSupabase
+    const { error } = await serviceSupabase
       .from("admin_audit_logs")
       .insert([{
         admin_id: adminId,
         action,
         target_type: targetType,
-        target_id: targetId,
+        target_id: safeTargetId,
         details,
         ip_address: ipAddress,
       }]);
+
+    if (error) {
+      console.warn("[AdminAudit] Failed to insert audit log:", error.message || error);
+    }
   } catch (err) {
     console.error("Failed to log admin action:", err.message);
   }
@@ -695,7 +700,7 @@ exports.exportChatTranscript = async (req, res) => {
  */
 exports.getAuditLogs = async (req, res) => {
   try {
-    const { action, admin_id, target_type, page = 1, limit = 20 } = req.query;
+    const { action, admin_id, target_type, search, date_from, date_to, page = 1, limit = 20 } = req.query;
     const pageNum = Math.max(1, parseInt(page) || 1);
     const limitNum = Math.max(1, Math.min(100, parseInt(limit) || 20));
     const from = (pageNum - 1) * limitNum;
@@ -716,6 +721,13 @@ exports.getAuditLogs = async (req, res) => {
     if (action) query = query.eq("action", action);
     if (admin_id) query = query.eq("admin_id", admin_id);
     if (target_type) query = query.eq("target_type", target_type);
+    if (date_from) query = query.gte("created_at", date_from);
+    if (date_to) query = query.lte("created_at", date_to);
+
+    if (search && typeof search === 'string' && search.trim()) {
+      const q = search.trim();
+      query = query.or(`action.ilike.%${q}%,target_type.ilike.%${q}%,target_id.ilike.%${q}%,ip_address.ilike.%${q}%`);
+    }
 
     const { data, error, count } = await query
       .order("created_at", { ascending: false })

@@ -85,6 +85,13 @@ class ReconciliationController {
 
             if (updateErr) throw updateErr;
 
+            const adminController = require('./adminController');
+            try {
+              await adminController.logAdminAction(req, "invalidate_reconciliation_proposal", "reconciliation_proposal", id, { reason: reason || 'Manual Admin Cancellation' });
+            } catch (logErr) {
+              logger.warn(`[ReconciliationController] Non-fatal audit log error: ${logErr.message}`);
+            }
+
             logger.info(`[ReconciliationController] Proposal ${id} manually invalidated by Admin ${adminId}`);
             res.json({ success: true, message: 'Proposal invalidated safely.' });
 
@@ -160,6 +167,13 @@ class ReconciliationController {
                 .from('reconciliation_proposals')
                 .update({ status: 'APPLIED', applied_at: now, metadata: { ...proposal.metadata, approved_by: adminId } })
                 .eq('id', proposal.id);
+
+            const adminController = require('./adminController');
+            try {
+              await adminController.logAdminAction(req, "approve_reconciliation_proposal", "reconciliation_proposal", proposal.id, { drift_amount: proposal.drift_amount, severity: proposal.severity });
+            } catch (logErr) {
+              logger.warn(`[ReconciliationController] Non-fatal audit log error: ${logErr.message}`);
+            }
 
             logger.info(`[ReconciliationController] HIGH Drift Proposal ${proposal.id} manually applied by Admin ${adminId}`);
             res.json({ success: true, message: 'Institutional correction applied securely.' });

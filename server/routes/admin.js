@@ -156,6 +156,12 @@ router.put("/deposit-settings", async (req, res) => {
     const logger = require("../utils/logger");
     logger.info(`[Admin] Deposit auto-credit settings updated by ${req.user.id}:`, newConfig);
 
+    try {
+      await adminController.logAdminAction(req, "update_deposit_settings", "settings", "deposit_auto_credit_config", newConfig);
+    } catch (logErr) {
+      logger.warn("[Admin] Non-fatal audit log error:", logErr.message);
+    }
+
     res.json({ message: "Deposit auto-credit settings updated successfully", config: newConfig });
   } catch (err) {
     res.status(500).json({ error: err.message });
