@@ -664,13 +664,13 @@ exports.createConversation = async (req, res) => {
 
               const memberList = members || [];
 
-              // Re-open the conversation for ALL members IF it was soft-deleted or history was cleared.
+              // Re-open the conversation for members IF it was soft-deleted.
+              // CRITICAL: DO NOT clear cleared_at watermark. cleared_at establishes a durable per-user history boundary.
               await supabase
                 .from("conversation_members")
                 .update({ 
                   is_deleted: false, 
-                  deleted_at: null,
-                  cleared_at: null
+                  deleted_at: null
                 })
                 .eq("conversation_id", existingId)
                 .in("user_id", [userId, recipientId]);
@@ -679,7 +679,6 @@ exports.createConversation = async (req, res) => {
               if (myMembership) {
                 myMembership.is_deleted = false;
                 myMembership.deleted_at = null;
-                myMembership.cleared_at = null;
               }
 
               // Auto-accept if the initiator's current status is pending
@@ -1476,21 +1475,21 @@ exports.sendMessage = async (req, res) => {
       }
     }
 
-    // AUTO-REOPEN: If any member soft-deleted or cleared this conversation, reset state when a message is sent
-    // so the conversation automatically reappears and displays fresh messages in their chat list.
-    const deletedOrClearedMembers = (members || []).filter(m => m.is_deleted || m.cleared_at);
-    if (deletedOrClearedMembers.length > 0) {
-      const delUserIds = deletedOrClearedMembers.map(m => m.user_id);
+    // AUTO-REOPEN: If any member soft-deleted this conversation, reset is_deleted when a message is sent
+    // so the conversation automatically reappears in their chat list.
+    // CRITICAL: Preserve cleared_at watermark timestamp so previously cleared messages remain hidden while new messages display.
+    const softDeletedMembers = (members || []).filter(m => m.is_deleted);
+    if (softDeletedMembers.length > 0) {
+      const delUserIds = softDeletedMembers.map(m => m.user_id);
       await supabase
         .from("conversation_members")
-        .update({ is_deleted: false, deleted_at: null, cleared_at: null })
+        .update({ is_deleted: false, deleted_at: null })
         .eq("conversation_id", conversationId)
         .in("user_id", delUserIds);
 
-      deletedOrClearedMembers.forEach(m => {
+      softDeletedMembers.forEach(m => {
         m.is_deleted = false;
         m.deleted_at = null;
-        m.cleared_at = null;
       });
     }
 
