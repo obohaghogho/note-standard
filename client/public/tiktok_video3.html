@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NoteStandard — TikTok Video 3 (Revised Clean Retention Build)</title>
+  <style>
+    :root {
+      --bg-dark: #070a12;
+      --primary-emerald: #10b981;
+      --primary-blue: #3b82f6;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      user-select: none;
+    }
+
+    body {
+      background-color: #030712;
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+      overflow-x: hidden;
+    }
+
+    .header-info {
+      text-align: center;
+      margin-bottom: 20px;
+      max-width: 600px;
+    }
+
+    .header-info h1 {
+      font-size: 22px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #10b981, #3b82f6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 6px;
+    }
+
+    .header-info p {
+      font-size: 13px;
+      color: #9ca3af;
+    }
+
+    /* 9:16 Vertical TikTok Player Viewport (1080 x 1920 scaled) */
+    .video-viewport {
+      width: 405px;
+      height: 720px;
+      background-color: var(--bg-dark);
+      border-radius: 28px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 30px rgba(16, 185, 129, 0.15);
+      border: 4px solid #1f2937;
+    }
+
+    /* Scene Base Layer */
+    .scene {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.15s ease-in-out;
+    }
+
+    .scene.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    /* Top Progress Bar */
+    .top-progress-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #10b981, #3b82f6);
+      width: 0%;
+      z-index: 50;
+      transition: width 0.1s linear;
+    }
+
+    /* Text Overlay Banner - Mobile Native Large Typography */
+    .tiktok-text-overlay {
+      position: absolute;
+      top: 10%;
+      width: 100%;
+      padding: 0 16px;
+      text-align: center;
+      z-index: 40;
+      pointer-events: none;
+    }
+
+    .tiktok-caption {
+      font-size: 28px;
+      font-weight: 900;
+      text-transform: uppercase;
+      line-height: 1.1;
+      letter-spacing: -0.5px;
+      color: #ffffff;
+      display: inline-block;
+      background: rgba(0, 0, 0, 0.88);
+      padding: 12px 20px;
+      border-radius: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+      transform: scale(0.95);
+      animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    }
+
+    .tiktok-caption.emerald {
+      background: linear-gradient(135deg, #064e3b, #059669);
+      border-color: #34d399;
+      box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4);
+    }
+
+    .tiktok-caption.blue {
+      background: linear-gradient(135deg, #1e3a8a, #2563eb);
+      border-color: #60a5fa;
+      box-shadow: 0 10px 30px rgba(59, 130, 246, 0.4);
+    }
+
+    @keyframes popIn {
+      to { transform: scale(1); }
+    }
+
+    /* SCENE 1: Clean Hook Frame */
+    .hook-clean {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      width: 100%;
+      background: radial-gradient(circle at center, #111827 0%, #030712 100%);
+      padding: 30px;
+      text-align: center;
+    }
+
+    .hook-heading {
+      font-size: 34px;
+      font-weight: 900;
+      line-height: 1.15;
+      text-transform: uppercase;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #ffffff 0%, #e5e7eb 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 20px;
+    }
+
+    .currency-badge-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .curr-pill {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    /* Real Screen Image Frame Container */
+    .real-screen-frame {
+      width: 86%;
+      height: 72%;
+      margin-top: 90px;
+      border-radius: 20px;
+      overflow: hidden;
+      border: 2px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
+      background-color: #0d121d;
+    }
+
+    .real-screen-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top center;
+    }
+
+    /* Controls Bar */
+    .controls-panel {
+      margin-top: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      max-width: 405px;
+      background: #111827;
+      padding: 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .timeline-bar {
+      width: 100%;
+      height: 6px;
+      background: #1f2937;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .timeline-progress {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #10b981, #3b82f6);
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      background: #1f2937;
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: #10b981;
+      border-color: #34d399;
+      color: #000000;
+    }
+
+    .timer-display {
+      font-family: monospace;
+      font-size: 13px;
+      font-weight: 700;
+      color: #10b981;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header-info">
+    <h1>NoteStandard — TikTok Video 3 (Revised Clean Build)</h1>
+    <p>Target Duration: 10.5 Seconds | 100% Real NoteStandard UI | Pure Retention Focus</p>
+  </div>
+
+  <div class="video-viewport" id="viewport">
+    
+    <!-- Top Progress Indicator -->
+    <div class="top-progress-bar" id="topProgress"></div>
+
+    <!-- Dynamic TikTok Text Overlay Layer -->
+    <div class="tiktok-text-overlay" id="textOverlay">
+      <div class="tiktok-caption" id="captionText">WHY USE 3 MONEY APPS?</div>
+    </div>
+
+    <!-- SCENE 1 (0.0s – 1.2s): CLEAN HOOK (No competitor UI) -->
+    <div class="scene active" id="scene1">
+      <div class="hook-clean">
+        <div class="hook-heading">WHY USE 3 MONEY APPS?</div>
+        <div class="currency-badge-row">
+          <span class="curr-pill">🇳🇬 NGN</span>
+          <span class="curr-pill">🇺🇸 USD</span>
+          <span class="curr-pill">🇬🇭 GHS</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCENE 2 (1.2s – 2.5s): REAL NOTE STANDARD WALLET REVEAL -->
+    <div class="scene" id="scene2">
+      <div class="real-screen-frame">
+        <img class="real-screen-img" src="/notestandard-social/assets/screens/ngn_wallet.png" alt="Real NoteStandard Wallet">
+      </div>
+    </div>
+
+    <!-- SCENE 3 (2.5s – 4.5s): REAL CURRENCIES PROOF -->
+    <div class="scene" id="scene3">
+      <div class="real-screen-frame">
+        <img class="real-screen-img" id="currImg" src="/notestandard-social/assets/screens/ngn_wallet.png" alt="Real Currencies Proof">
+      </div>
+    </div>
+
+    <!-- SCENE 4 (4.5s – 7.0s): REAL PRODUCT INTERACTION -->
+    <div class="scene" id="scene4">
+      <div class="real-screen-frame">
+        <img class="real-screen-img" src="/notestandard-social/assets/screens/bank_transfer.png" alt="Real Bank Transfer Screen">
+      </div>
+    </div>
+
+    <!-- SCENE 5 (7.0s – 9.0s): BRAND REVEAL -->
+    <div class="scene" id="scene5">
+      <div class="real-screen-frame">
+        <img class="real-screen-img" src="/notestandard-social/assets/screens/ending_brand.png" alt="Real NoteStandard Brand Screen">
+      </div>
+    </div>
+
+    <!-- SCENE 6 (9.0s – 10.5s): CLEAN CTA FINAL FRAME -->
+    <div class="scene" id="scene6">
+      <div class="hook-clean">
+        <div class="hook-heading" style="font-size: 32px; color: #3b82f6;">WOULD YOU USE IT?</div>
+        <div style="font-size: 14px; color: #9ca3af; margin-top: 10px;">NoteStandard • Multi-Currency Platform</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Player Controls -->
+  <div class="controls-panel">
+    <div class="timeline-bar">
+      <div class="timeline-progress" id="progress"></div>
+    </div>
+    
+    <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+      <div class="timer-display" id="timeDisplay">0.0s / 10.5s</div>
+      
+      <div class="btn-row">
+        <button class="btn btn-primary" id="playBtn" onclick="togglePlay()">▶ Play Video</button>
+        <button class="btn" onclick="resetVideo()">↺ Restart</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const DURATION = 10.5;
+    let currentTime = 0;
+    let isPlaying = false;
+    let animationFrame = null;
+    let lastTimestamp = null;
+
+    const scene1 = document.getElementById('scene1');
+    const scene2 = document.getElementById('scene2');
+    const scene3 = document.getElementById('scene3');
+    const scene4 = document.getElementById('scene4');
+    const scene5 = document.getElementById('scene5');
+    const scene6 = document.getElementById('scene6');
+    
+    const captionText = document.getElementById('captionText');
+    const currImg = document.getElementById('currImg');
+    const progress = document.getElementById('progress');
+    const topProgress = document.getElementById('topProgress');
+    const timeDisplay = document.getElementById('timeDisplay');
+    const playBtn = document.getElementById('playBtn');
+
+    function updateState(t) {
+      const pct = Math.min(100, (t / DURATION) * 100);
+      progress.style.width = pct + '%';
+      topProgress.style.width = pct + '%';
+      timeDisplay.textContent = t.toFixed(1) + 's / ' + DURATION + 's';
+
+      // 0.0s – 1.2s: HOOK
+      if (t < 1.2) {
+        showScene(scene1);
+        captionText.textContent = "WHY USE 3 MONEY APPS?";
+        captionText.className = "tiktok-caption";
+      }
+      // 1.2s – 2.5s: REVEAL REAL PRODUCT
+      else if (t >= 1.2 && t < 2.5) {
+        showScene(scene2);
+        captionText.textContent = "ONE WALLET.";
+        captionText.className = "tiktok-caption emerald";
+      }
+      // 2.5s – 4.5s: CURRENCY PROOF
+      else if (t >= 2.5 && t < 4.5) {
+        showScene(scene3);
+        captionText.textContent = "NGN 🇳🇬 • USD 🇺🇸 • GHS 🇬🇭";
+        captionText.className = "tiktok-caption emerald";
+
+        if (t < 3.1) {
+          currImg.src = "/notestandard-social/assets/screens/ngn_wallet.png";
+        } else if (t < 3.8) {
+          currImg.src = "/notestandard-social/assets/screens/usd_wallet.png";
+        } else {
+          currImg.src = "/notestandard-social/assets/screens/ghs_wallet.png";
+        }
+      }
+      // 4.5s – 7.0s: REAL INTERACTION
+      else if (t >= 4.5 && t < 7.0) {
+        showScene(scene4);
+        captionText.textContent = "ALL IN ONE PLACE.";
+        captionText.className = "tiktok-caption emerald";
+      }
+      // 7.0s – 9.0s: BRAND REVEAL
+      else if (t >= 7.0 && t < 9.0) {
+        showScene(scene5);
+        captionText.textContent = "NOTE STANDARD";
+        captionText.className = "tiktok-caption";
+      }
+      // 9.0s – 10.5s: CTA
+      else if (t >= 9.0) {
+        showScene(scene6);
+        captionText.textContent = "WOULD YOU USE IT?";
+        captionText.className = "tiktok-caption blue";
+      }
+    }
+
+    function showScene(targetScene) {
+      [scene1, scene2, scene3, scene4, scene5, scene6].forEach(s => {
+        if (s === targetScene) s.classList.add('active');
+        else s.classList.remove('active');
+      });
+    }
+
+    function tick(timestamp) {
+      if (!lastTimestamp) lastTimestamp = timestamp;
+      const delta = (timestamp - lastTimestamp) / 1000;
+      lastTimestamp = timestamp;
+
+      currentTime += delta;
+      if (currentTime >= DURATION) {
+        currentTime = DURATION;
+        updateState(currentTime);
+        pauseVideo();
+        return;
+      }
+
+      updateState(currentTime);
+      if (isPlaying) animationFrame = requestAnimationFrame(tick);
+    }
+
+    function togglePlay() {
+      if (isPlaying) pauseVideo();
+      else {
+        if (currentTime >= DURATION) currentTime = 0;
+        playVideo();
+      }
+    }
+
+    function playVideo() {
+      isPlaying = true;
+      lastTimestamp = null;
+      playBtn.textContent = "⏸ Pause Video";
+      animationFrame = requestAnimationFrame(tick);
+    }
+
+    function pauseVideo() {
+      isPlaying = false;
+      playBtn.textContent = "▶ Play Video";
+      if (animationFrame) cancelAnimationFrame(animationFrame);
+    }
+
+    function resetVideo() {
+      pauseVideo();
+      currentTime = 0;
+      updateState(0);
+    }
+
+    updateState(0);
+  </script>
+</body>
+</html>

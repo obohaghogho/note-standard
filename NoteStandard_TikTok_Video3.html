@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NoteStandard — TikTok Video 3 (Retention-First Build)</title>
+  <style>
+    :root {
+      --bg-dark: #0a0d14;
+      --card-bg: #131926;
+      --border-color: rgba(255, 255, 255, 0.08);
+      --primary-emerald: #10b981;
+      --primary-blue: #3b82f6;
+      --primary-ghana: #006b3f;
+      --tiktok-yellow: #fe2c55;
+      --tiktok-cyan: #25f4ee;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      user-select: none;
+    }
+
+    body {
+      background-color: #030712;
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+      overflow-x: hidden;
+    }
+
+    .header-info {
+      text-align: center;
+      margin-bottom: 20px;
+      max-width: 600px;
+    }
+
+    .header-info h1 {
+      font-size: 24px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #10b981, #3b82f6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 6px;
+    }
+
+    .header-info p {
+      font-size: 14px;
+      color: #9ca3af;
+    }
+
+    /* 9:16 Vertical TikTok Player Container */
+    .video-viewport {
+      width: 405px;
+      height: 720px; /* Scaling factor of 1080x1920 (0.375) */
+      background-color: var(--bg-dark);
+      border-radius: 28px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 30px rgba(16, 185, 129, 0.15);
+      border: 4px solid #1f2937;
+    }
+
+    /* Scene Base Layer */
+    .scene {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 24px 20px;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s ease-in-out;
+    }
+
+    .scene.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    /* Top Overlay Badges */
+    .top-badge {
+      align-self: center;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #10b981;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      z-index: 10;
+    }
+
+    .top-badge .dot {
+      width: 6px;
+      height: 6px;
+      background-color: #10b981;
+      border-radius: 50%;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.3); }
+    }
+
+    /* Core TikTok Heavy Text Overlay */
+    .tiktok-text-overlay {
+      position: absolute;
+      width: 100%;
+      top: 15%;
+      left: 0;
+      padding: 0 16px;
+      text-align: center;
+      z-index: 20;
+      pointer-events: none;
+    }
+
+    .tiktok-caption {
+      font-size: 32px;
+      font-weight: 900;
+      text-transform: uppercase;
+      line-height: 1.1;
+      letter-spacing: -0.5px;
+      color: #ffffff;
+      text-shadow: 0 4px 12px rgba(0,0,0,0.9), 0 0 2px #000;
+      display: inline-block;
+      background: rgba(0, 0, 0, 0.85);
+      padding: 10px 18px;
+      border-radius: 14px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      transform: scale(0.9);
+      animation: popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    }
+
+    .tiktok-caption.highlight {
+      background: linear-gradient(135deg, #10b981, #059669);
+      border-color: #34d399;
+      color: #ffffff;
+      box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4);
+    }
+
+    .tiktok-caption.question {
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+      border-color: #60a5fa;
+      box-shadow: 0 10px 30px rgba(59, 130, 246, 0.4);
+    }
+
+    @keyframes popIn {
+      to { transform: scale(1); }
+    }
+
+    /* SCENE 1: HOOK — 3 Clustered App Cards */
+    .hook-container {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-top: 120px;
+      padding: 0 10px;
+    }
+
+    .app-card-split {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1.5px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      backdrop-filter: blur(8px);
+      transform: translateY(20px);
+      opacity: 0;
+      animation: slideUp 0.3s forwards;
+    }
+
+    .app-card-split:nth-child(1) { animation-delay: 0.1s; border-left: 4px solid #10b981; }
+    .app-card-split:nth-child(2) { animation-delay: 0.3s; border-left: 4px solid #3b82f6; }
+    .app-card-split:nth-child(3) { animation-delay: 0.5s; border-left: 4px solid #006b3f; }
+
+    @keyframes slideUp {
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .app-card-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .flag-icon {
+      font-size: 28px;
+    }
+
+    .app-card-name {
+      font-weight: 700;
+      font-size: 15px;
+    }
+
+    .app-card-sub {
+      font-size: 11px;
+      color: #9ca3af;
+    }
+
+    .status-pill {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+    }
+
+    /* SCENE 2 & 3: Real NoteStandard Wallet Screen */
+    .wallet-mockup {
+      margin-top: 100px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .total-balance-card {
+      background: linear-gradient(135deg, #131926 0%, #0d121d 100%);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+
+    .total-label {
+      font-size: 11px;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .total-amount {
+      font-size: 28px;
+      font-weight: 800;
+      color: #ffffff;
+      margin-bottom: 14px;
+    }
+
+    .action-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .action-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 10px 4px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      color: #e5e7eb;
+    }
+
+    .action-btn-icon {
+      width: 18px;
+      height: 18px;
+      color: #10b981;
+    }
+
+    /* Currency Cards Grid */
+    .currency-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .currency-item {
+      background: #131926;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .currency-item.active-highlight {
+      border-color: #10b981;
+      background: rgba(16, 185, 129, 0.08);
+      transform: scale(1.02);
+      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.2);
+    }
+
+    .curr-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .curr-symbol-bg {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .bg-ngn { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+    .bg-usd { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+    .bg-ghs { background: rgba(0, 107, 63, 0.25); color: #34d399; }
+
+    .curr-title {
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .curr-code {
+      font-size: 11px;
+      color: #9ca3af;
+    }
+
+    .curr-right {
+      text-align: right;
+    }
+
+    .curr-balance {
+      font-weight: 800;
+      font-size: 15px;
+    }
+
+    .curr-account-tag {
+      font-size: 10px;
+      color: #10b981;
+      font-weight: 600;
+    }
+
+    /* SCENE 4: Virtual Bank Account Proof */
+    .va-proof-card {
+      background: linear-gradient(145deg, #182234, #0f1623);
+      border: 1.5px solid #10b981;
+      border-radius: 20px;
+      padding: 18px;
+      margin-top: 100px;
+      box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+    }
+
+    .va-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .va-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #10b981;
+      letter-spacing: 0.5px;
+    }
+
+    .va-bank-name {
+      font-size: 16px;
+      font-weight: 800;
+      color: #ffffff;
+      margin-bottom: 4px;
+    }
+
+    .va-number {
+      font-family: monospace;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: #60a5fa;
+      background: rgba(0,0,0,0.3);
+      padding: 8px 12px;
+      border-radius: 8px;
+      margin: 8px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .va-holder {
+      font-size: 11px;
+      color: #9ca3af;
+    }
+
+    /* SCENE 5: Brand Outro & TikTok CTA */
+    .brand-outro {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .brand-logo-icon {
+      width: 72px;
+      height: 72px;
+      background: linear-gradient(135deg, #10b981, #3b82f6);
+      border-radius: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+      font-weight: 900;
+      color: #ffffff;
+      box-shadow: 0 15px 40px rgba(16, 185, 129, 0.4);
+      margin-bottom: 16px;
+      animation: pulse 2s infinite;
+    }
+
+    .brand-title {
+      font-size: 26px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }
+
+    .brand-sub {
+      font-size: 13px;
+      color: #9ca3af;
+      margin-bottom: 24px;
+    }
+
+    .comment-bubble {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px dashed rgba(255, 255, 255, 0.2);
+      border-radius: 16px;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #38bdf8;
+    }
+
+    /* TikTok Watermark & Creator Side Bar */
+    .tiktok-sidebar {
+      position: absolute;
+      right: 12px;
+      bottom: 80px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      z-index: 30;
+    }
+
+    .sidebar-icon-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .sidebar-icon {
+      width: 40px;
+      height: 40px;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(8px);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .sidebar-count {
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    /* Player Controls Bar */
+    .controls-panel {
+      margin-top: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      max-width: 405px;
+      background: #111827;
+      padding: 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .timeline-bar {
+      width: 100%;
+      height: 6px;
+      background: #1f2937;
+      border-radius: 3px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .timeline-progress {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #10b981, #3b82f6);
+      transition: width 0.1s linear;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      background: #1f2937;
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn:hover {
+      background: #374151;
+    }
+
+    .btn-primary {
+      background: #10b981;
+      border-color: #34d399;
+      color: #000000;
+    }
+
+    .btn-primary:hover {
+      background: #059669;
+    }
+
+    .timer-display {
+      font-family: monospace;
+      font-size: 13px;
+      font-weight: 700;
+      color: #10b981;
+    }
+
+    /* Audio Indicator */
+    .audio-tag {
+      position: absolute;
+      left: 16px;
+      bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.8);
+      z-index: 30;
+    }
+
+    .disc-spin {
+      width: 22px;
+      height: 22px;
+      background: #111827;
+      border: 2px solid #374151;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      animation: spin 3s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+  </style>
+</head>
+<body>
+
+  <div class="header-info">
+    <h1>TikTok Video 3 — Retention-First Build</h1>
+    <p>Target Duration: 11.5 Seconds | Format: 9:16 Vertical (1080 × 1920) | Real NoteStandard UI</p>
+  </div>
+
+  <div class="video-viewport" id="viewport">
+    
+    <!-- Top Floating Badge -->
+    <div class="top-badge">
+      <div class="dot"></div>
+      NoteStandard • Multi-Currency
+    </div>
+
+    <!-- Dynamic TikTok Text Overlay Layer -->
+    <div class="tiktok-text-overlay" id="textOverlay">
+      <div class="tiktok-caption" id="captionText">WHY USE 3 MONEY APPS?</div>
+    </div>
+
+    <!-- SCENE 1 (0.0s - 1.2s): THE HOOK -->
+    <div class="scene active" id="scene1">
+      <div class="hook-container">
+        <div class="app-card-split">
+          <div class="app-card-info">
+            <span class="flag-icon">🇳🇬</span>
+            <div>
+              <div class="app-card-name">Naira Wallet App</div>
+              <div class="app-card-sub">Local Bank Transfer</div>
+            </div>
+          </div>
+          <span class="status-pill">App 1</span>
+        </div>
+
+        <div class="app-card-split">
+          <div class="app-card-info">
+            <span class="flag-icon">🇺🇸</span>
+            <div>
+              <div class="app-card-name">USD Account App</div>
+              <div class="app-card-sub">Wire & ACH Rails</div>
+            </div>
+          </div>
+          <span class="status-pill">App 2</span>
+        </div>
+
+        <div class="app-card-split">
+          <div class="app-card-info">
+            <span class="flag-icon">🇬🇭</span>
+            <div>
+              <div class="app-card-name">Cedi Payment App</div>
+              <div class="app-card-sub">Ghana Virtual Account</div>
+            </div>
+          </div>
+          <span class="status-pill">App 3</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCENE 2 & 3 (1.2s - 5.5s): SOLUTION + PRODUCT PROOF -->
+    <div class="scene" id="scene2">
+      <div class="wallet-mockup">
+        
+        <div class="total-balance-card">
+          <div class="total-label">Total Unified Portfolio</div>
+          <div class="total-amount">$ 4,890.50</div>
+          
+          <div class="action-row">
+            <div class="action-btn">
+              <svg class="action-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+              Deposit
+            </div>
+            <div class="action-btn">
+              <svg class="action-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+              Transfer
+            </div>
+            <div class="action-btn">
+              <svg class="action-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              Convert
+            </div>
+            <div class="action-btn">
+              <svg class="action-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+              Withdraw
+            </div>
+          </div>
+        </div>
+
+        <div class="currency-list">
+          <div class="currency-item" id="itemNGN">
+            <div class="curr-left">
+              <div class="curr-symbol-bg bg-ngn">🇳🇬</div>
+              <div>
+                <div class="curr-title">Nigerian Naira</div>
+                <div class="curr-code">NGN • GTBank Account</div>
+              </div>
+            </div>
+            <div class="curr-right">
+              <div class="curr-balance">₦ 1,450,000.00</div>
+              <div class="curr-account-tag">✓ Active</div>
+            </div>
+          </div>
+
+          <div class="currency-item" id="itemUSD">
+            <div class="curr-left">
+              <div class="curr-symbol-bg bg-usd">🇺🇸</div>
+              <div>
+                <div class="curr-title">US Dollar</div>
+                <div class="curr-code">USD • Lead Bank USA</div>
+              </div>
+            </div>
+            <div class="curr-right">
+              <div class="curr-balance">$ 2,500.00</div>
+              <div class="curr-account-tag">✓ Active</div>
+            </div>
+          </div>
+
+          <div class="currency-item" id="itemGHS">
+            <div class="curr-left">
+              <div class="curr-symbol-bg bg-ghs">🇬🇭</div>
+              <div>
+                <div class="curr-title">Ghanaian Cedi</div>
+                <div class="curr-code">GHS • First Bank Ghana</div>
+              </div>
+            </div>
+            <div class="curr-right">
+              <div class="curr-balance">GH₵ 18,400.00</div>
+              <div class="curr-account-tag">✓ Active</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- SCENE 4 (5.5s - 7.5s): BENEFIT / REAL VIRTUAL ACCOUNT -->
+    <div class="scene" id="scene3">
+      <div class="va-proof-card">
+        <div class="va-header">
+          <span class="va-title">INSTANT VIRTUAL ACCOUNT</span>
+          <span style="font-size: 18px;">🇬🇭</span>
+        </div>
+        <div class="va-bank-name">FIRST BANK GHANA</div>
+        <div class="va-number">
+          <span>9990000132713</span>
+          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+        </div>
+        <div class="va-holder">Account Name: Jossy Digital Technologies Ltd.</div>
+        <div style="margin-top: 12px; font-size: 10px; color: #10b981; font-weight: 700;">
+          ✓ Zero Deposit Surcharge • Direct Wallet Settlement
+        </div>
+      </div>
+    </div>
+
+    <!-- SCENE 5 (7.5s - 11.5s): BRAND + CURIOSITY CTA -->
+    <div class="scene" id="scene4">
+      <div class="brand-outro">
+        <div class="brand-logo-icon">N</div>
+        <div class="brand-title">NOTE STANDARD</div>
+        <div class="brand-sub">The All-In-One Multi-Currency Platform</div>
+        
+        <div class="comment-bubble">
+          <span>💬</span>
+          <span>Would you use this for your money?</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- TikTok Sidebar Overlay -->
+    <div class="tiktok-sidebar">
+      <div class="sidebar-icon-wrap">
+        <div class="sidebar-icon">❤️</div>
+        <span class="sidebar-count">14.2k</span>
+      </div>
+      <div class="sidebar-icon-wrap">
+        <div class="sidebar-icon">💬</div>
+        <span class="sidebar-count">892</span>
+      </div>
+      <div class="sidebar-icon-wrap">
+        <div class="sidebar-icon">🔖</div>
+        <span class="sidebar-count">2.1k</span>
+      </div>
+      <div class="sidebar-icon-wrap">
+        <div class="sidebar-icon">↪️</div>
+        <span class="sidebar-count">Share</span>
+      </div>
+    </div>
+
+    <!-- Audio Track Bar -->
+    <div class="audio-tag">
+      <div class="disc-spin">🎵</div>
+      <span>NoteStandard Original Sound — High Retention</span>
+    </div>
+
+  </div>
+
+  <!-- Player Controls -->
+  <div class="controls-panel">
+    <div class="timeline-bar">
+      <div class="timeline-progress" id="progress"></div>
+    </div>
+    
+    <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+      <div class="timer-display" id="timeDisplay">0.0s / 11.5s</div>
+      
+      <div class="btn-row">
+        <button class="btn btn-primary" id="playBtn" onclick="togglePlay()">▶ Play Video</button>
+        <button class="btn" onclick="resetVideo()">↺ Restart</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const DURATION = 11.5; // Total seconds
+    let currentTime = 0;
+    let isPlaying = false;
+    let animationFrame = null;
+    let lastTimestamp = null;
+
+    // Elements
+    const scene1 = document.getElementById('scene1');
+    const scene2 = document.getElementById('scene2');
+    const scene3 = document.getElementById('scene3');
+    const scene4 = document.getElementById('scene4');
+    const captionText = document.getElementById('captionText');
+    const progress = document.getElementById('progress');
+    const timeDisplay = document.getElementById('timeDisplay');
+    const playBtn = document.getElementById('playBtn');
+
+    // Currency Highlight Elements
+    const itemNGN = document.getElementById('itemNGN');
+    const itemUSD = document.getElementById('itemUSD');
+    const itemGHS = document.getElementById('itemGHS');
+
+    function updateState(t) {
+      // Timeline progress
+      const pct = Math.min(100, (t / DURATION) * 100);
+      progress.style.width = pct + '%';
+      timeDisplay.textContent = t.toFixed(1) + 's / ' + DURATION + 's';
+
+      // -------------------------------------------------------------
+      // EXACT TIMING ENGINE
+      // -------------------------------------------------------------
+      
+      // SCENE 1: 0.0s – 1.2s — THE HOOK
+      if (t >= 0 && t < 1.2) {
+        showScene(scene1);
+        captionText.textContent = "WHY USE 3 MONEY APPS?";
+        captionText.className = "tiktok-caption";
+      }
+      
+      // SCENE 2: 1.2s – 3.0s — REVEAL SOLUTION
+      else if (t >= 1.2 && t < 3.0) {
+        showScene(scene2);
+        captionText.textContent = "PUT THEM IN ONE PLACE.";
+        captionText.className = "tiktok-caption highlight";
+        
+        itemNGN.classList.remove('active-highlight');
+        itemUSD.classList.remove('active-highlight');
+        itemGHS.classList.remove('active-highlight');
+      }
+
+      // SCENE 3: 3.0s – 5.5s — PRODUCT PROOF (NGN • USD • GHS)
+      else if (t >= 3.0 && t < 5.5) {
+        showScene(scene2);
+        captionText.textContent = "NGN • USD • GHS";
+        captionText.className = "tiktok-caption highlight";
+
+        // Cycle highlights
+        if (t < 3.8) {
+          itemNGN.classList.add('active-highlight');
+          itemUSD.classList.remove('active-highlight');
+          itemGHS.classList.remove('active-highlight');
+        } else if (t < 4.6) {
+          itemNGN.classList.remove('active-highlight');
+          itemUSD.classList.add('active-highlight');
+          itemGHS.classList.remove('active-highlight');
+        } else {
+          itemNGN.classList.remove('active-highlight');
+          itemUSD.classList.remove('active-highlight');
+          itemGHS.classList.add('active-highlight');
+        }
+      }
+
+      // SCENE 4: 5.5s – 7.5s — BENEFIT (ONE WALLET / ONE PLACE)
+      else if (t >= 5.5 && t < 7.5) {
+        showScene(scene3);
+        if (t < 6.5) {
+          captionText.textContent = "ONE WALLET.";
+        } else {
+          captionText.textContent = "ONE PLACE.";
+        }
+        captionText.className = "tiktok-caption highlight";
+      }
+
+      // SCENE 5: 7.5s – 11.5s — BRAND + CURIOSITY CTA
+      else if (t >= 7.5) {
+        showScene(scene4);
+        if (t < 9.2) {
+          captionText.textContent = "NOTE STANDARD";
+          captionText.className = "tiktok-caption";
+        } else {
+          captionText.textContent = "WOULD YOU USE IT?";
+          captionText.className = "tiktok-caption question";
+        }
+      }
+    }
+
+    function showScene(targetScene) {
+      [scene1, scene2, scene3, scene4].forEach(s => {
+        if (s === targetScene) {
+          s.classList.add('active');
+        } else {
+          s.classList.remove('active');
+        }
+      });
+    }
+
+    function tick(timestamp) {
+      if (!lastTimestamp) lastTimestamp = timestamp;
+      const delta = (timestamp - lastTimestamp) / 1000;
+      lastTimestamp = timestamp;
+
+      currentTime += delta;
+      if (currentTime >= DURATION) {
+        currentTime = DURATION;
+        updateState(currentTime);
+        pauseVideo();
+        return;
+      }
+
+      updateState(currentTime);
+      if (isPlaying) {
+        animationFrame = requestAnimationFrame(tick);
+      }
+    }
+
+    function togglePlay() {
+      if (isPlaying) {
+        pauseVideo();
+      } else {
+        if (currentTime >= DURATION) currentTime = 0;
+        playVideo();
+      }
+    }
+
+    function playVideo() {
+      isPlaying = true;
+      lastTimestamp = null;
+      playBtn.textContent = "⏸ Pause Video";
+      animationFrame = requestAnimationFrame(tick);
+      playVoiceoverSim();
+    }
+
+    function pauseVideo() {
+      isPlaying = false;
+      playBtn.textContent = "▶ Play Video";
+      if (animationFrame) cancelAnimationFrame(animationFrame);
+    }
+
+    function resetVideo() {
+      pauseVideo();
+      currentTime = 0;
+      updateState(0);
+    }
+
+    // Voiceover Synth Audio simulation for interactive preview
+    function playVoiceoverSim() {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      
+      const msg = new SpeechSynthesisUtterance("Why use three different money apps? Put them in one place with NoteStandard.");
+      msg.rate = 1.1;
+      msg.pitch = 1.0;
+      window.speechSynthesis.speak(msg);
+    }
+
+    // Initial state
+    updateState(0);
+  </script>
+</body>
+</html>
