@@ -49,7 +49,7 @@ class FiatWalletService {
     return personalWallets.map(wallet => ({
       ...wallet,
       balances: {
-        available: parseFloat(wallet.balance) || 0,
+        available: parseFloat(wallet.available_balance ?? wallet.balance) || 0,
         pending: parseFloat(wallet.pending_balance) || 0,
         locked: parseFloat(wallet.locked_balance) || 0,
       }

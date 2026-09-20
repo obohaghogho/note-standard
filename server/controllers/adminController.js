@@ -2551,3 +2551,148 @@ exports.reconcileDeposit = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/admin/fee-revenue
+ * Comprehensive fee & settlement revenue dashboard.
+ * Aggregates data from: commissions, transactions (fee column), revenue_logs, platform_wallets.
+ */
+exports.getFeeRevenueDashboard = async (req, res, next) => {
+  try {
+    const serviceSupabase = getServiceSupabase();
+    const { range = '30d' } = req.query;
+
+    // Calculate date cutoff
+    const msMap = { '7d': 7, '30d': 30, '90d': 90, 'all': null };
+    const days = msMap[range] ?? 30;
+    const since = days ? new Date(Date.now() - days * 86400000).toISOString() : null;
+
+    // ── 1. Aggregate fees from the transactions table (fee column) ──────────
+    let txQuery = serviceSupabase
+      .from('transactions')
+      .select('fee, currency, type, status, created_at')
+      .in('status', ['COMPLETED', 'completed'])
+      .gt('fee', 0);
+    if (since) txQuery = txQuery.gte('created_at', since);
+    const { data: txFeeRows = [], error: txErr } = await txQuery;
+    if (txErr) console.warn('[FeeRevenue] transactions fee query warning:', txErr.message);
+
+    // Group fees by currency
+    const feesByCurrency = {};
+    const feesByType = {};
+    for (const row of txFeeRows) {
+      const cur = (row.currency || 'NGN').toUpperCase();
+      const fee = parseFloat(row.fee || 0);
+      if (!feesByCurrency[cur]) feesByCurrency[cur] = 0;
+      feesByCurrency[cur] += fee;
+      const tp = row.type || 'UNKNOWN';
+      if (!feesByType[tp]) feesByType[tp] = 0;
+      feesByType[tp] += fee;
+    }
+
+    // ── 2. Commissions audit log ─────────────────────────────────────────────
+    let commQuery = serviceSupabase
+      .from('commissions')
+      .select('id, amount, currency, rate_applied, commission_type, created_at, source_user_id')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (since) commQuery = commQuery.gte('created_at', since);
+    const { data: commissions = [], error: commErr } = await commQuery;
+    if (commErr) console.warn('[FeeRevenue] commissions query warning:', commErr.message);
+
+    // Total commissions by currency
+    const commByCurrency = {};
+    for (const c of commissions) {
+      const cur = (c.currency || 'NGN').toUpperCase();
+      if (!commByCurrency[cur]) commByCurrency[cur] = 0;
+      commByCurrency[cur] += parseFloat(c.amount || 0);
+    }
+
+    // ── 3. Revenue logs ──────────────────────────────────────────────────────
+    let revQuery = serviceSupabase
+      .from('revenue_logs')
+      .select('amount, currency, revenue_type, created_at')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (since) revQuery = revQuery.gte('created_at', since);
+    const { data: revLogs = [], error: revErr } = await revQuery;
+    if (revErr) console.warn('[FeeRevenue] revenue_logs query warning:', revErr.message);
+
+    // Group by revenue type and currency
+    const revByType = {};
+    for (const r of revLogs) {
+      const key = `${r.revenue_type || 'UNKNOWN'}_${(r.currency || 'NGN').toUpperCase()}`;
+      if (!revByType[key]) revByType[key] = { type: r.revenue_type, currency: r.currency, total: 0, count: 0 };
+      revByType[key].total += parseFloat(r.amount || 0);
+      revByType[key].count += 1;
+    }
+
+    // ── 4. Platform wallet balances (where fees are credited to) ────────────
+    const { data: platformWallets = [], error: pwErr } = await serviceSupabase
+      .from('platform_wallets')
+      .select('id, currency, chain, description, wallet_id, external_address');
+    if (pwErr) console.warn('[FeeRevenue] platform_wallets query warning:', pwErr.message);
+
+    // For each platform wallet, fetch the actual wallet balance
+    const platformWalletBalances = [];
+    for (const pw of platformWallets) {
+      let balance = 0;
+      let available = 0;
+      if (pw.wallet_id) {
+        const { data: wData } = await serviceSupabase
+          .from('wallets_store')
+          .select('balance, available_balance')
+          .eq('id', pw.wallet_id)
+          .maybeSingle();
+        if (wData) {
+          balance = parseFloat(wData.balance || 0);
+          available = parseFloat(wData.available_balance || 0);
+        }
+      }
+      platformWalletBalances.push({
+        id: pw.id,
+        currency: pw.currency,
+        chain: pw.chain,
+        description: pw.description || 'Platform Fee Wallet',
+        balance,
+        available,
+        hasLinkedWallet: !!pw.wallet_id,
+      });
+    }
+
+    // ── 5. Recent fee transactions (last 50) ─────────────────────────────────
+    let recentQuery = serviceSupabase
+      .from('transactions')
+      .select('id, type, amount, fee, currency, status, reference_id, created_at')
+      .gt('fee', 0)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (since) recentQuery = recentQuery.gte('created_at', since);
+    const { data: recentFeeTx = [] } = await recentQuery;
+
+    // ── 6. Summary Stats ─────────────────────────────────────────────────────
+    const totalFeesNGN = feesByCurrency['NGN'] || 0;
+    const totalFeesUSD = feesByCurrency['USD'] || 0;
+    const totalTransactionsWithFee = txFeeRows.length;
+    const avgFeeNGN = totalTransactionsWithFee > 0 ? totalFeesNGN / totalTransactionsWithFee : 0;
+
+    return res.json({
+      success: true,
+      range,
+      generatedAt: new Date().toISOString(),
+      summary: {
+        totalTransactionsWithFee,
+        avgFeeNGN: avgFeeNGN.toFixed(2),
+        feesByCurrency,
+        commissionsByCurrency: commByCurrency,
+      },
+      feesByType,
+      revenueByType: Object.values(revByType),
+      platformWallets: platformWalletBalances,
+      recentFeeTransactions: recentFeeTx,
+      recentCommissions: commissions.slice(0, 20),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+

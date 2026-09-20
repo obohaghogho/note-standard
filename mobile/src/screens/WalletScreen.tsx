@@ -276,6 +276,7 @@ export default function WalletScreen() {
   const renderFiatCard = ({ item: meta }: { item: CurrencyMeta }) => {
     const wallet   = getWallet(meta.code);
     const balance  = wallet?.balance || 0;
+    const availBal = wallet?.available_balance ?? balance;
     const isActive = meta.status === 'active';
     const colors   = CURRENCY_COLORS[meta.code] || CURRENCY_COLORS.default;
 
@@ -315,9 +316,24 @@ export default function WalletScreen() {
           </View>
 
           {/* Balance */}
-          <Text style={styles.balanceAmount}>
-            {isActive ? `${meta.symbol}${formatBalance(balance, meta.code)}` : '—'}
-          </Text>
+          <View style={{ marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
+              <Text style={styles.balanceAmount}>
+                {isActive ? `${meta.symbol}${formatBalance(balance, meta.code)}` : '—'}
+              </Text>
+              <Text style={{ fontSize: 10, color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Total</Text>
+            </View>
+            {isActive && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                <Text style={{ fontSize: 12, color: '#10b981', fontWeight: '500' }}>
+                  Available
+                </Text>
+                <Text style={{ fontSize: 13, color: '#10b981', fontWeight: '700' }}>
+                  {meta.symbol}{formatBalance(availBal, meta.code)}
+                </Text>
+              </View>
+            )}
+          </View>
 
           {/* Actions */}
           {isActive && (

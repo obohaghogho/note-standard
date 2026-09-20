@@ -28,7 +28,8 @@ import {
     Landmark,
     Activity,
     Sparkles,
-    ShieldCheck
+    ShieldCheck,
+    DollarSign
 } from 'lucide-react';
 
 import { LanguageSelector } from '../common/LanguageSelector';
@@ -165,6 +166,7 @@ export const AdminLayout = () => {
         { to: '/admin/withdrawals', icon: ArrowUpFromLine, label: 'Manual Withdrawals' },
         { to: '/admin/auto-reply', icon: Bot, label: 'Auto-Reply' },
         { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
+        { to: '/admin/fee-revenue', icon: DollarSign, label: 'Fee Revenue' },
         { to: '/admin/settings', icon: Settings, label: 'Settings' },
     ];
 
