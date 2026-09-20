@@ -48,6 +48,10 @@ export default defineConfig({
         inline: false,
         keep_classnames: true,
         keep_fnames: true,
+        // Reliably drop all console.* and debugger statements in production.
+        // esbuild.pure only tree-shakes side-effect-free calls, not standalone statements.
+        drop_console: true,
+        drop_debugger: true,
       },
       mangle: {
         keep_classnames: true,
@@ -56,25 +60,49 @@ export default defineConfig({
     },
     rollupOptions: {
       output: {
-        // Split large vendor libraries into separate cached chunks.
-        // After first download, returning users only re-download changed chunks.
+        // Granular vendor chunk splitting for optimal browser caching.
+        // Each sub-chunk is independently cached — returning users only re-download
+        // the chunk that changed, not the entire 1.4 MB vendor blob.
         manualChunks: (id) => {
-          // Agora video SDK (very large, lazy-loaded on call screens)
-          if (id.includes('node_modules/agora')) {
+          if (!id.includes('node_modules')) return undefined;
+          
+          // Agora video SDK — very large (~1.5MB), isolated to video call feature
+          if (id.includes('node_modules/agora') || id.includes('agora-rtc')) {
             return 'agora-vendor';
           }
-          // Consolidate other third-party libraries to prevent circular chunk loading crashes
-          if (id.includes('node_modules')) {
-            return 'vendor';
+          // Supabase — auth and realtime client library
+          if (id.includes('node_modules/@supabase')) {
+            return 'vendor-supabase';
           }
-          return undefined; // fix consistent-return
+          // Chart.js — dashboard & admin graphs
+          if (id.includes('node_modules/chart.js') || id.includes('node_modules/react-chartjs-2')) {
+            return 'vendor-charts';
+          }
+          // React core framework
+          if (id.includes('node_modules/react/') ||
+              id.includes('node_modules/react-dom/') ||
+              id.includes('node_modules/scheduler/')) {
+            return 'vendor-react';
+          }
+          // React Router
+          if (id.includes('node_modules/react-router') || id.includes('node_modules/@remix-run')) {
+            return 'vendor-router';
+          }
+          // Socket.IO + transport dependencies
+          if (id.includes('socket.io') || id.includes('engine.io') || id.includes('component-emitter')) {
+            return 'vendor-socket';
+          }
+          // Framer motion
+          if (id.includes('node_modules/framer-motion')) {
+            return 'vendor-motion';
+          }
+          // Default vendor chunk for remaining dependencies
+          return 'vendor';
         },
       },
     },
   },
-  esbuild: {
-    pure: ['console.log'],
-  },
+
   preview: {
     host: '0.0.0.0',
     port: parseInt(process.env.PORT || '4173'),

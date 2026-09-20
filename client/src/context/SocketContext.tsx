@@ -118,38 +118,48 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // Sync HMR / remount state with global socket
     useEffect(() => {
-        // Foreground Wake-up Listeners for iOS
-        const handleWakeup = () => {
-            if (globalSocket && !globalSocket.connected) {
-                console.log(`[FORENSIC][CLIENT] Socket Reconnected via wakeup event (visibility/focus)`);
+        // Foreground Wake-up Listeners for iOS — stored as named references so they
+        // can be properly removed in the cleanup, preventing accumulation on remounts.
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible' && globalSocket && !globalSocket.connected) {
+                console.log(`[FORENSIC][CLIENT] Socket Reconnected via visibilitychange`);
                 globalSocket.connect();
             }
         };
-        
+        const handleFocusWakeup = () => {
+            if (globalSocket && !globalSocket.connected) {
+                console.log(`[FORENSIC][CLIENT] Socket Reconnected via focus`);
+                globalSocket.connect();
+            }
+        };
+
         if (typeof document !== 'undefined') {
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible') handleWakeup();
-            });
+            document.addEventListener('visibilitychange', handleVisibilityChange);
         }
         if (typeof window !== 'undefined') {
-            window.addEventListener('focus', handleWakeup);
+            window.addEventListener('focus', handleFocusWakeup);
         }
 
-        if (!globalSocket) return;
-        
+        if (!globalSocket) {
+            return () => {
+                document.removeEventListener('visibilitychange', handleVisibilityChange);
+                window.removeEventListener('focus', handleFocusWakeup);
+            };
+        }
+
         const onConnect = () => setConnected(true);
         const onDisconnect = () => setConnected(false);
-        
+
         globalSocket.on('connect', onConnect);
         globalSocket.on('disconnect', onDisconnect);
-        
+
         setConnected(globalSocket.connected);
-        
+
         return () => {
             globalSocket?.off('connect', onConnect);
             globalSocket?.off('disconnect', onDisconnect);
-            // We intentionally do not remove the handleWakeup listeners here because this effect
-            // only mounts once globally, and we want iOS wake-up logic to persist across session switches.
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('focus', handleFocusWakeup);
         };
     }, []);
     const teardown = useCallback(() => {

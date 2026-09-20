@@ -125,10 +125,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           }
           
-          // Atomic update to account manager
-          const { data: { session: currentSession } } = await supabase.auth.getSession();
-          if (currentSession?.user?.id === userId) {
-            accountManager.saveAccount(currentSession, prof);
+          // Atomic update to account manager — use the already-known session from
+          // the React state closure rather than making a second network/storage call.
+          // Falls back to a lightweight getSession() only if no session is in state yet.
+          const knownSession = session;
+          if (knownSession?.user?.id === userId) {
+            accountManager.saveAccount(knownSession, prof);
+          } else {
+            // Rare: profile sync before session state settles (e.g. initial boot race)
+            supabase.auth.getSession().then(({ data }) => {
+              if (data.session?.user?.id === userId) {
+                accountManager.saveAccount(data.session, prof);
+              }
+            }).catch(() => {});
           }
         }
         

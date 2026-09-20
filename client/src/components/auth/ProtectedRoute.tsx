@@ -8,7 +8,7 @@ interface ProtectedRouteProps {
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) => {
     const { user, profile, authReady } = useAuth();
-    console.log("[ProtectedRoute] Status:", { authReady, user: !!user, profileRole: profile?.role });
+
 
     // Rule 8: If auth is not ready, show loader
     if (!authReady) {

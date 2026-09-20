@@ -48,6 +48,9 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [error, setError] = useState<string | null>(null);
     const fetchingRef = useRef(false);
     const lastUserIdRef = useRef<string | null>(null);
+    // Tracks whether the initial load for the current user has completed.
+    // Replaces wallets.length as a dependency, which caused refetch cascades.
+    const initialLoadDoneRef = useRef(false);
 
     // Derived State: The Valuation Singleton DTO
     const financialView = useMemo(() => {
@@ -59,8 +62,8 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (fetchingRef.current) return;
         
         fetchingRef.current = true;
-        // Only trigger full skeleton loading if explicitly not silent AND we have no existing wallet data
-        if (!isSilent && wallets.length === 0) {
+        // Only trigger full skeleton loading on explicit first-load (not silent refreshes)
+        if (!isSilent && !initialLoadDoneRef.current) {
             setLoading(true);
         }
         setError(null);
@@ -96,19 +99,26 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 provider: w.provider as string
             }));
 
-            // Only update wallets if values actually changed to preserve reference identity
+            // Only update wallets if values actually changed — use lightweight check
+            // (ID + balance fingerprint) instead of JSON.stringify to avoid O(n) string allocation.
             setWallets(prev => {
-                const prevStr = JSON.stringify(prev);
-                const nextStr = JSON.stringify(mappedWallets);
-                return prevStr === nextStr ? prev : mappedWallets;
+                const fingerprint = (arr: WalletEntry[]) =>
+                    arr.map(w => `${w.id}:${w.balance}:${w.available}:${w.is_frozen}`).join('|');
+                return fingerprint(prev) === fingerprint(mappedWallets) ? prev : mappedWallets;
             });
 
             const newTxs = Array.isArray(transactionsData?.transactions) ? transactionsData.transactions : [];
             setTransactions(prev => {
-                const prevStr = JSON.stringify(prev);
-                const nextStr = JSON.stringify(newTxs);
-                return prevStr === nextStr ? prev : newTxs;
+                // Lightweight check: compare length + first/last IDs as a fast equality gate
+                if (prev.length === newTxs.length &&
+                    prev[0]?.id === newTxs[0]?.id &&
+                    prev[prev.length - 1]?.id === newTxs[newTxs.length - 1]?.id) {
+                    return prev;
+                }
+                return newTxs;
             });
+
+            initialLoadDoneRef.current = true;
 
             // 2. Clear initial loading state once core data is ready
             setLoading(false);
@@ -137,7 +147,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             setLoading(false);
             fetchingRef.current = false;
         }
-    }, [user?.id, profile?.id, authReady, wallets.length]);
+    }, [user?.id, profile?.id, authReady]);
 
 
     // Initial Load & Financial Data Isolation on Account Switch
@@ -149,6 +159,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             setLoading(true);
             fetchingRef.current = false;
             lastUserIdRef.current = null;
+            initialLoadDoneRef.current = false; // Reset so next user gets full loading state
         };
 
         window.addEventListener('account-switched', handleAccountSwitch);
@@ -161,6 +172,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 setTransactions([]);
                 setLoading(true);
                 fetchingRef.current = false;
+                initialLoadDoneRef.current = false; // Reset for new user
                 fetchData(false); // Non-silent for initial load
             } else {
                 fetchData(true); // Silent refresh if same user
@@ -170,6 +182,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             setTransactions([]);
             setLoading(false);
             lastUserIdRef.current = null;
+            initialLoadDoneRef.current = false;
         }
 
         return () => window.removeEventListener('account-switched', handleAccountSwitch);

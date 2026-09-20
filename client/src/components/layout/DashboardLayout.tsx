@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Sidebar } from './Sidebar';
 import { CreateNoteModal } from '../dashboard/CreateNoteModal';
@@ -13,7 +13,6 @@ import { LanguageSelector } from '../common/LanguageSelector';
 import { cn } from '../../utils/cn';
 import { ErrorBoundary } from 'react-error-boundary';
 
-import { preloadCoreDashboardRoutes } from '../../utils/routePreloader';
 
 import { MobileBottomNav } from './MobileBottomNav';
 
@@ -25,24 +24,6 @@ export function DashboardLayout() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const { user, authReady } = useAuth();
 
-    const isUserLoggedIn = !!user;
-
-    useEffect(() => {
-        if (authReady && isUserLoggedIn) {
-            preloadCoreDashboardRoutes();
-        }
-    }, [authReady, isUserLoggedIn]);
-
-    useEffect(() => {
-        // Essential render trace with version for debugging production navigation hangs
-        console.log(`[DashboardLayout v1.1.0] Render: ${location.pathname} | Auth: ${authReady} | User: ${isUserLoggedIn}`);
-        
-        // Navigation completion check
-        const t = setTimeout(() => {
-            console.log(`[DashboardLayout v1.1.0] Navigation suspected complete: ${location.pathname}`);
-        }, 500);
-        return () => clearTimeout(t);
-    }, [location.pathname, authReady, isUserLoggedIn]);
     
     if (!authReady) {
         return (

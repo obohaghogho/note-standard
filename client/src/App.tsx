@@ -125,6 +125,129 @@ function AuthenticatedProviders() {
     preloadCoreDashboardRoutes();
   }, [user]);
 
+  const routes = (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[60vh] w-full">
+        <div className="w-8 h-8 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
+      </div>
+    }>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/refund" element={<RefundPage />} />
+        <Route path="/about" element={<AboutPage />} />
+        <Route path="/contact" element={<ContactPage />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/download" element={<DownloadPage />} />
+
+        {/* Common SEO & Crawlers Redirect Aliases */}
+        <Route path="/register" element={<Navigate to="/signup" replace />} />
+        <Route path="/signin" element={<Navigate to="/login" replace />} />
+        <Route path="/sign-in" element={<Navigate to="/login" replace />} />
+        <Route path="/home" element={<Navigate to="/" replace />} />
+        <Route path="/features" element={<Navigate to="/" replace />} />
+        <Route path="/pricing" element={<Navigate to="/" replace />} />
+        <Route path="/faq" element={<Navigate to="/contact" replace />} />
+        <Route path="/app" element={<Navigate to="/dashboard" replace />} />
+
+        <Route path="/chat/:id" element={<ChatRedirect />} />
+        <Route path="/post/:postId" element={<PostRedirect />} />
+        <Route path="/community/post/:postId" element={<PostRedirect />} />
+
+        {/* Phase 6.2: Replay Debugger UI */}
+        <Route path="/debug/replay" element={<ReplayPage />} />
+
+        <Route path="/wallet/success" element={<ActivitySuccess />} />
+        <Route path="/wallet/cancel" element={<ActivityCancel />} />
+        <Route path="/payment/callback" element={<PaymentCallback />} />
+        <Route path="/wallet" element={<Navigate to="/dashboard/wallet" replace />} />
+        
+        {/* High-priority Payment Redirects */}
+        <Route path="/payment/success/*" element={<Navigate to="/wallet/success" replace />} />
+        <Route path="/payment/cancel/*" element={<Navigate to="/wallet/cancel" replace />} />
+
+        <Route element={<ProtectedRoute />}>
+          <Route path="/dashboard" element={<DashboardLayout />}>
+            <Route index element={<DashboardHome />} />
+            <Route path="notes" element={<Notes />} />
+            <Route path="chat" element={<Chat />} />
+            <Route path="shared" element={<Shared />} />
+            <Route path="feed" element={<Feed />} />
+            <Route path="reels" element={<Reels />} />
+            <Route path="favorites" element={<Notes />} />
+            <Route path="search" element={<Search />} />
+            <Route path="billing" element={<Billing />} />
+            <Route path="wallet" element={<WalletPage />} />
+            <Route path="history" element={<Transactions />} />
+            <Route path="affiliates" element={<Affiliates />} />
+            <Route path="deposit" element={<DepositPage />} />
+            <Route path="settings" element={<Settings />} />
+            <Route path="notifications" element={<Notifications />} />
+            <Route path="trends" element={<Trends />} />
+            <Route path="teams" element={<TeamsPage />} />
+            <Route path="feedback" element={<UserIssueTracker />} />
+            <Route path="profile/:userId" element={<PublicProfilePage />} />
+            <Route path="community/profile/:userId" element={<PublicProfilePage />} />
+            <Route path="post/:postId" element={<PostDetailPage />} />
+            <Route path="community/post/:postId" element={<PostDetailPage />} />
+          </Route>
+        </Route>
+
+        <Route element={<ProtectedRoute allowedRoles={['admin', 'support', 'fincra_demo']} />}>
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route path="compliance-demo" element={<FincraComplianceDemo />} />
+
+            <Route element={<ProtectedRoute allowedRoles={['admin', 'support']} />}>
+              <Route index element={<AdminDashboard />} />
+              <Route path="users" element={<UserManagement />} />
+              <Route path="chats" element={<AdminChat />} />
+              <Route path="audit-logs" element={<AuditLogs />} />
+              <Route path="broadcasts" element={<BroadcastManager />} />
+              <Route path="auto-reply" element={<AutoReplySettings />} />
+              <Route path="analytics" element={<Analytics />} />
+              <Route path="reconciliation" element={<ReconciliationDashboard />} />
+              <Route path="ads" element={<ManageAds />} />
+              <Route path="deposits" element={<ManualDeposits />} />
+              <Route path="withdrawals" element={<ManualWithdrawals />} />
+              <Route path="limit-requests" element={<LimitRequestsPage />} />
+              <Route path="settings" element={<AdminSettings />} />
+              <Route path="push-health" element={<PushHealthDashboard />} />
+              <Route path="communication-health" element={<CommunicationHealthDashboard />} />
+              <Route path="fincra" element={<FincraAdminPanel />} />
+              <Route path="crypto-treasury" element={<CryptoTreasuryDashboard />} />
+              <Route path="payment-capabilities" element={<PaymentCapabilitiesPage />} />
+              <Route path="collection-accounts" element={<CollectionAccountsPage />} />
+              <Route path="deposit-monitoring" element={<DepositMonitoringPage />} />
+              <Route path="treasury" element={<TreasuryDashboard />} />
+              <Route path="banking" element={<GreyBankingPanel />} />
+              <Route path="support-center" element={<SupportCenter />} />
+              <Route path="beta-feedback" element={<BetaFeedbackDashboard />} />
+              <Route path="kyc-compliance" element={<KycCompliancePage />} />
+            </Route>
+          </Route>
+        </Route>
+
+        {/* Catch-all 404 Route */}
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </Suspense>
+  );
+
+  // Unauthenticated guests get a minimal provider tree for maximum page speed
+  if (!user) {
+    return (
+      <PWAInstallProvider key="guest-pwa">
+        <VersionGuard>
+          {routes}
+          <PWAInstallPrompt />
+        </VersionGuard>
+      </PWAInstallProvider>
+    );
+  }
+
   return (
     <PWAInstallProvider key={userKey}>
       <VersionGuard>
@@ -139,127 +262,20 @@ function AuthenticatedProviders() {
                     <NotesProvider>
                       <NotesDashboardProvider>
                         <WebNotificationRouter />
-                        <Suspense fallback={
-                          <div className="flex items-center justify-center min-h-[60vh] w-full">
-                            <div className="w-8 h-8 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
-                          </div>
-                        }>
-                          <Routes>
-                      <Route path="/" element={<LandingPage />} />
-                      <Route path="/login" element={<Login />} />
-                      <Route path="/signup" element={<Signup />} />
-                      <Route path="/terms" element={<TermsPage />} />
-                      <Route path="/privacy" element={<PrivacyPage />} />
-                      <Route path="/refund" element={<RefundPage />} />
-                      <Route path="/about" element={<AboutPage />} />
-                      <Route path="/contact" element={<ContactPage />} />
-                      <Route path="/reset-password" element={<ResetPassword />} />
-                      <Route path="/download" element={<DownloadPage />} />
-
-                      {/* Common SEO & Crawlers Redirect Aliases */}
-                      <Route path="/register" element={<Navigate to="/signup" replace />} />
-                      <Route path="/signin" element={<Navigate to="/login" replace />} />
-                      <Route path="/sign-in" element={<Navigate to="/login" replace />} />
-                      <Route path="/home" element={<Navigate to="/" replace />} />
-                      <Route path="/features" element={<Navigate to="/" replace />} />
-                      <Route path="/pricing" element={<Navigate to="/" replace />} />
-                      <Route path="/faq" element={<Navigate to="/contact" replace />} />
-                      <Route path="/app" element={<Navigate to="/dashboard" replace />} />
-
-                      <Route path="/chat/:id" element={<ChatRedirect />} />
-                      <Route path="/post/:postId" element={<PostRedirect />} />
-                      <Route path="/community/post/:postId" element={<PostRedirect />} />
-
-                      {/* Phase 6.2: Replay Debugger UI */}
-                      <Route path="/debug/replay" element={<ReplayPage />} />
-
-                      <Route path="/wallet/success" element={<ActivitySuccess />} />
-                      <Route path="/wallet/cancel" element={<ActivityCancel />} />
-                      <Route path="/payment/callback" element={<PaymentCallback />} />
-                      <Route path="/wallet" element={<Navigate to="/dashboard/wallet" replace />} />
-                      
-                      {/* High-priority Payment Redirects */}
-                      <Route path="/payment/success/*" element={<Navigate to="/wallet/success" replace />} />
-                      <Route path="/payment/cancel/*" element={<Navigate to="/wallet/cancel" replace />} />
-
-                      <Route element={<ProtectedRoute />}>
-                        <Route path="/dashboard" element={<DashboardLayout />}>
-                          <Route index element={<DashboardHome />} />
-                          <Route path="notes" element={<Notes />} />
-                          <Route path="chat" element={<Chat />} />
-                          <Route path="shared" element={<Shared />} />
-                          <Route path="feed" element={<Feed />} />
-                          <Route path="reels" element={<Reels />} />
-                          <Route path="favorites" element={<Notes />} />
-                          <Route path="search" element={<Search />} />
-                          <Route path="billing" element={<Billing />} />
-                          <Route path="wallet" element={<WalletPage />} />
-                          <Route path="history" element={<Transactions />} />
-                          <Route path="affiliates" element={<Affiliates />} />
-                          <Route path="deposit" element={<DepositPage />} />
-                          <Route path="settings" element={<Settings />} />
-                          <Route path="notifications" element={<Notifications />} />
-                          <Route path="trends" element={<Trends />} />
-                          <Route path="teams" element={<TeamsPage />} />
-                          <Route path="feedback" element={<UserIssueTracker />} />
-                          <Route path="profile/:userId" element={<PublicProfilePage />} />
-                          <Route path="community/profile/:userId" element={<PublicProfilePage />} />
-                          <Route path="post/:postId" element={<PostDetailPage />} />
-                          <Route path="community/post/:postId" element={<PostDetailPage />} />
-                        </Route>
-                      </Route>
-
-                      <Route element={<ProtectedRoute allowedRoles={['admin', 'support', 'fincra_demo']} />}>
-                        <Route path="/admin" element={<AdminLayout />}>
-                          <Route path="compliance-demo" element={<FincraComplianceDemo />} />
-
-                          <Route element={<ProtectedRoute allowedRoles={['admin', 'support']} />}>
-                            <Route index element={<AdminDashboard />} />
-                            <Route path="users" element={<UserManagement />} />
-                            <Route path="chats" element={<AdminChat />} />
-                            <Route path="audit-logs" element={<AuditLogs />} />
-                            <Route path="broadcasts" element={<BroadcastManager />} />
-                            <Route path="auto-reply" element={<AutoReplySettings />} />
-                            <Route path="analytics" element={<Analytics />} />
-                            <Route path="reconciliation" element={<ReconciliationDashboard />} />
-                            <Route path="ads" element={<ManageAds />} />
-                            <Route path="deposits" element={<ManualDeposits />} />
-                            <Route path="withdrawals" element={<ManualWithdrawals />} />
-                            <Route path="limit-requests" element={<LimitRequestsPage />} />
-                            <Route path="settings" element={<AdminSettings />} />
-                            <Route path="push-health" element={<PushHealthDashboard />} />
-                            <Route path="communication-health" element={<CommunicationHealthDashboard />} />
-                            <Route path="fincra" element={<FincraAdminPanel />} />
-                            <Route path="crypto-treasury" element={<CryptoTreasuryDashboard />} />
-                            <Route path="payment-capabilities" element={<PaymentCapabilitiesPage />} />
-                            <Route path="collection-accounts" element={<CollectionAccountsPage />} />
-                            <Route path="deposit-monitoring" element={<DepositMonitoringPage />} />
-                            <Route path="treasury" element={<TreasuryDashboard />} />
-                            <Route path="banking" element={<GreyBankingPanel />} />
-                            <Route path="support-center" element={<SupportCenter />} />
-                            <Route path="beta-feedback" element={<BetaFeedbackDashboard />} />
-                            <Route path="kyc-compliance" element={<KycCompliancePage />} />
-                          </Route>
-                        </Route>
-                      </Route>
-
-                      {/* Catch-all 404 Route */}
-                      <Route path="*" element={<NotFoundPage />} />
-                    </Routes>
-                    </Suspense>
-                    {/* Global Chat Widget - visible on all authenticated pages */}
-                    <ChatWidget />
-                    {/* Global Beta Feedback Widget */}
-                    <BetaFeedbackModal />
-                    {/* Universal Mobile & Desktop PWA Install Prompt — shown automatically on Android & iOS */}
-                    <PWAInstallPrompt />
-                    </NotesDashboardProvider>
-                  </NotesProvider>
-                </WalletProvider>
-              </WebRTCProvider>
-            </ChatThemeProvider>
-          </ChatProvider>
-        </NotificationProvider>
+                        {routes}
+                        {/* Global Chat Widget - visible on all authenticated pages */}
+                        <ChatWidget />
+                        {/* Global Beta Feedback Widget */}
+                        <BetaFeedbackModal />
+                        {/* Universal Mobile & Desktop PWA Install Prompt — shown automatically on Android & iOS */}
+                        <PWAInstallPrompt />
+                      </NotesDashboardProvider>
+                    </NotesProvider>
+                  </WalletProvider>
+                </WebRTCProvider>
+              </ChatThemeProvider>
+            </ChatProvider>
+          </NotificationProvider>
         </PresenceProvider>
       </SocketProvider>
       </WallpaperProvider>
