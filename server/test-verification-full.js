@@ -4,8 +4,8 @@ const paymentService = require("./services/payment/paymentService");
 const fs = require("fs");
 
 async function run() {
-  const reference = "tx_489a90c7bf3b4e08bb92526cc430c374";
-  console.log(`Starting full verfication flow for: ${reference}`);
+  const reference = process.argv[2] || "tx_666db86c0afe40a48fb3bf7712b8345b";
+  console.log(`Starting full verification flow for: ${reference}`);
   try {
     const originalLog = console.error;
     let errLogs = "";

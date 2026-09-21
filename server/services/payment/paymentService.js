@@ -521,9 +521,78 @@ class PaymentService {
       return { status: "FAILED", error: "Missing reference" };
     }
 
-    const { data: tx, error } = await query.maybeSingle();
+    const { data: primaryTx, error } = await query.maybeSingle();
+    let tx = primaryTx;
 
+    // Fallback 1: Check payments table (where initializePayment stores references like tx_...)
     if (!tx || error) {
+      try {
+        let payQuery = supabase
+          .from("payments")
+          .select("id, status, amount, currency, provider, reference")
+          .order("created_at", { ascending: false });
+
+        if (reference && externalId) {
+          payQuery = payQuery.or(`reference.eq.${reference},reference.eq.${externalId}`);
+        } else if (reference) {
+          payQuery = payQuery.eq("reference", reference);
+        } else if (externalId) {
+          payQuery = payQuery.eq("reference", externalId);
+        }
+
+        const { data: payTx } = await payQuery.maybeSingle();
+        if (payTx) {
+          tx = {
+            id: payTx.id,
+            status: payTx.status,
+            amount: payTx.amount,
+            currency: payTx.currency,
+            provider: payTx.provider,
+            provider_reference: payTx.reference,
+            reference_id: payTx.reference,
+            source_table: 'payments'
+          };
+        }
+      } catch (payErr) {
+        logger.warn(`[PaymentService] Fallback payments query error: ${payErr.message}`);
+      }
+    }
+
+    // Fallback 2: Check fincra_transactions table
+    if (!tx) {
+      try {
+        let finQuery = supabase
+          .from("fincra_transactions")
+          .select("id, status, amount, currency, provider_name, reference, fincra_reference")
+          .order("created_at", { ascending: false });
+
+        if (reference && externalId) {
+          finQuery = finQuery.or(`reference.eq.${reference},fincra_reference.eq.${reference},reference.eq.${externalId},fincra_reference.eq.${externalId}`);
+        } else if (reference) {
+          finQuery = finQuery.or(`reference.eq.${reference},fincra_reference.eq.${reference}`);
+        } else if (externalId) {
+          finQuery = finQuery.or(`reference.eq.${externalId},fincra_reference.eq.${externalId}`);
+        }
+
+        const { data: finTx } = await finQuery.maybeSingle();
+        if (finTx) {
+          tx = {
+            id: finTx.id,
+            status: finTx.status,
+            amount: finTx.amount,
+            currency: finTx.currency,
+            provider: finTx.provider_name || "fincra",
+            provider_reference: finTx.fincra_reference || finTx.reference,
+            reference_id: finTx.reference,
+            source_table: 'fincra_transactions'
+          };
+        }
+      } catch (finErr) {
+        logger.warn(`[PaymentService] Fallback fincra_transactions query error: ${finErr.message}`);
+      }
+    }
+
+    if (!tx) {
       logger.warn(`[PaymentService] No transaction found for ref: ${reference}`);
       return { status: "NOT_FOUND" };
     }
