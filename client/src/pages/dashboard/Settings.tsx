@@ -32,6 +32,12 @@ export default function Settings() {
 
     const [activeTab, setActiveTab] = useState<'profile' | 'kyc' | 'ads' | 'privacy' | 'chat' | 'security'>(initialTab as any);
     const [preferredChatLanguage, setPreferredChatLanguage] = useState(authProfile?.preferred_language || 'en');
+    const [voiceCallPrivacy, setVoiceCallPrivacy] = useState<'everyone' | 'connections' | 'nobody'>(
+        ((authProfile as any)?.voice_call_privacy as 'everyone' | 'connections' | 'nobody') || 'everyone'
+    );
+    const [videoCallPrivacy, setVideoCallPrivacy] = useState<'everyone' | 'connections' | 'nobody'>(
+        ((authProfile as any)?.video_call_privacy as 'everyone' | 'connections' | 'nobody') || 'everyone'
+    );
     const [privacySettings, setPrivacySettings] = useState({
         analytics: true,
         offers: false,
@@ -99,6 +105,8 @@ export default function Settings() {
             setCountryCode(authProfile.country_code || '');
             setPhone(authProfile.phone || '');
             setPreferredChatLanguage(authProfile.preferred_language || 'en');
+            setVoiceCallPrivacy(((authProfile as any)?.voice_call_privacy as 'everyone' | 'connections' | 'nobody') || 'everyone');
+            setVideoCallPrivacy(((authProfile as any)?.video_call_privacy as 'everyone' | 'connections' | 'nobody') || 'everyone');
             setPrivacySettings({
                 analytics: authProfile.user_consent ?? true,
                 offers: authProfile.preferences?.offers ?? false,
@@ -107,6 +115,25 @@ export default function Settings() {
             setLoading(false);
         }
     }, [authProfile, user]);
+
+    const handleSaveCallPrivacy = async (voice: string, video: string) => {
+        if (!user) return;
+        try {
+            const { error } = await supabase
+                .from('profiles')
+                .update({
+                    voice_call_privacy: voice,
+                    video_call_privacy: video
+                })
+                .eq('id', user.id);
+            if (error) throw error;
+            toast.success('Call privacy settings updated');
+            refreshProfile?.();
+        } catch {
+            toast.error('Failed to update call privacy settings');
+        }
+    };
+
 
 
 
@@ -470,12 +497,72 @@ export default function Settings() {
             {
                 activeTab === 'privacy' && (
                     <div className="space-y-6">
+                        {/* Call Privacy Controls */}
+                        <Card variant="glass" className="p-4 sm:p-6 border border-white/5 bg-white/5 min-w-0">
+                            <h2 className="text-xl font-semibold mb-2 flex items-center gap-2">
+                                <Phone className="text-blue-400" size={20} />
+                                Call Privacy Controls
+                            </h2>
+                            <p className="text-sm text-gray-400 mb-6">
+                                Manage independent permissions for voice and video calls received on Mobile & Web.
+                            </p>
+
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-white mb-1">
+                                        Voice Calls Privacy
+                                    </label>
+                                    <p className="text-xs text-gray-400 mb-2">
+                                        Choose who can initiate voice (audio) calls with you.
+                                    </p>
+                                    <select
+                                        value={voiceCallPrivacy}
+                                        onChange={async (e) => {
+                                            const val = e.target.value as 'everyone' | 'connections' | 'nobody';
+                                            setVoiceCallPrivacy(val);
+                                            await handleSaveCallPrivacy(val, videoCallPrivacy);
+                                        }}
+                                        className="w-full sm:w-80 bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    >
+                                        <option value="everyone">Everyone</option>
+                                        <option value="connections">Connections Only (Active Chats)</option>
+                                        <option value="nobody">Nobody</option>
+                                    </select>
+                                </div>
+
+                                <div className="h-px bg-white/5" />
+
+                                <div>
+                                    <label className="block text-sm font-medium text-white mb-1">
+                                        Video Calls Privacy
+                                    </label>
+                                    <p className="text-xs text-gray-400 mb-2">
+                                        Choose who can initiate video calls with you.
+                                    </p>
+                                    <select
+                                        value={videoCallPrivacy}
+                                        onChange={async (e) => {
+                                            const val = e.target.value as 'everyone' | 'connections' | 'nobody';
+                                            setVideoCallPrivacy(val);
+                                            await handleSaveCallPrivacy(voiceCallPrivacy, val);
+                                        }}
+                                        className="w-full sm:w-80 bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    >
+                                        <option value="everyone">Everyone</option>
+                                        <option value="connections">Connections Only (Active Chats)</option>
+                                        <option value="nobody">Nobody</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </Card>
+
                         {/* Privacy Controls */}
                         <Card variant="glass" className="p-4 sm:p-6 min-w-0">
                             <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
                                 <Lock className="text-primary" size={20} />
                                 Data Controls
                             </h2>
+
                             <div className="space-y-6">
                                 <Toggle
                                     label="Anonymous Usage Analytics"

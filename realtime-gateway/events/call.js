@@ -39,6 +39,47 @@ if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
 
 // ── DB Helpers ──────────────────────────────────────────────────────────────
 
+async function checkCallPermissions(callerId, calleeId, conversationId, callType) {
+  if (!supabase) return { allowed: true };
+  try {
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('voice_call_privacy, video_call_privacy')
+      .eq('id', calleeId)
+      .maybeSingle();
+
+    if (error || !profile) {
+      return { allowed: true };
+    }
+
+    const privacySetting = callType === 'video' 
+      ? (profile.video_call_privacy || 'everyone')
+      : (profile.voice_call_privacy || 'everyone');
+
+    if (privacySetting === 'nobody') {
+      return { allowed: false, code: 'CALL_PRIVACY_BLOCKED', message: `This user does not accept ${callType} calls.` };
+    }
+
+    if (privacySetting === 'connections') {
+      const { data: member, error: memberErr } = await supabase
+        .from('conversation_members')
+        .select('conversation_id')
+        .eq('conversation_id', conversationId)
+        .eq('user_id', callerId)
+        .maybeSingle();
+
+      if (memberErr || !member) {
+        return { allowed: false, code: 'CALL_PRIVACY_BLOCKED', message: `This user only accepts ${callType} calls from connections.` };
+      }
+    }
+
+    return { allowed: true };
+  } catch (err) {
+    console.error('[Call] Error checking call privacy permissions:', err.message);
+    return { allowed: true };
+  }
+}
+
 async function createCallSession({ callerId, calleeId, conversationId, callType }) {
   if (!supabase) return null;
   const { data, error } = await supabase
@@ -58,6 +99,7 @@ async function createCallSession({ callerId, calleeId, conversationId, callType 
   }
   return data.id;
 }
+
 
 async function updateCallSession(sessionId, fields) {
   if (!supabase || !sessionId) return;
@@ -199,7 +241,16 @@ module.exports = (io, socket) => {
       return;
     }
 
+    // Call Privacy Authorization Check
+    const perm = await checkCallPermissions(userId, to, conversationId, callType);
+    if (!perm.allowed) {
+      console.warn(`[Call] 🚫 Call blocked by privacy settings: ${userId} → ${to} (${callType})`);
+      socket.emit('call:error', { code: perm.code, message: perm.message });
+      return;
+    }
+
     console.log(`[Call] 📞 ${userId} → ${to} (${callType})`);
+
 
     // Persist to DB
     const sessionId = await createCallSession({

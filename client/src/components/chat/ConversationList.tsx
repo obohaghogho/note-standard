@@ -9,6 +9,7 @@ import { useSearchParams } from 'react-router-dom';
 import SecureImage from '../common/SecureImage';
 import { UserBadge } from '../common/UserBadge';
 import { toast } from 'react-hot-toast';
+import { PublicProfileModal } from '../profile/PublicProfileModal';
 
 // Extracting ConversationItem and wrapping with React.memo prevents the entire list
 // from re-rendering when one item changes (e.g., typing status or active state).
@@ -20,7 +21,8 @@ const ConversationItem = React.memo(({
     typingUsers,
     onClick,
     onDelete,
-    onHover
+    onHover,
+    onAvatarClick
 }: { 
     conv: Conversation, 
     user: { id?: string } | null, 
@@ -29,17 +31,22 @@ const ConversationItem = React.memo(({
     typingUsers: string[],
     onClick: (id: string) => void,
     onDelete: (id: string, e: React.MouseEvent) => void,
-    onHover?: (id: string) => void
+    onHover?: (id: string) => void,
+    onAvatarClick?: (userId: string) => void
 }) => {
     let displayName = conv.name;
     let displayAvatar = null;
+    let otherUserId: string | null = null;
     
     if (conv.type === 'direct') {
         const otherMember = conv.members.find((m: { user_id: string; profile?: Conversation['members'][0]['profile'] }) => m.user_id !== user?.id);
-        if (otherMember && otherMember.profile) {
-            const profile = otherMember.profile;
-            displayName = profile.full_name || profile.username || 'Unknown User';
-            displayAvatar = profile.avatar_url;
+        if (otherMember) {
+            otherUserId = otherMember.user_id;
+            if (otherMember.profile) {
+                const profile = otherMember.profile;
+                displayName = profile.full_name || profile.username || 'Unknown User';
+                displayAvatar = profile.avatar_url;
+            }
         }
     }
 
@@ -117,8 +124,18 @@ const ConversationItem = React.memo(({
             }}
         >
             {/* Avatar Container */}
-            <div className="relative flex-shrink-0">
-                <div className="w-14 h-14 rounded-[20px] bg-gradient-to-br from-blue-600/20 to-indigo-600/20 border border-white/10 flex items-center justify-center overflow-hidden shadow-xl md:group-hover:scale-105 transition-transform duration-300">
+            <div 
+                className="relative flex-shrink-0 cursor-pointer group/avatar"
+                onClick={(e) => {
+                    if (otherUserId && onAvatarClick) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        onAvatarClick(otherUserId);
+                    }
+                }}
+                title={otherUserId ? "View Profile" : undefined}
+            >
+                <div className="w-14 h-14 rounded-[20px] bg-gradient-to-br from-blue-600/20 to-indigo-600/20 border border-white/10 flex items-center justify-center overflow-hidden shadow-xl md:group-hover/avatar:scale-105 group-hover/avatar:ring-2 group-hover/avatar:ring-blue-500 transition-all duration-300">
                     {displayAvatar ? (
                         <SecureImage src={displayAvatar} alt={displayName} className="w-full h-full object-cover" fallbackType="profile" />
                     ) : (
@@ -240,6 +257,7 @@ const ConversationList: React.FC = () => {
     const { isUserOnline } = usePresence();
     const [, setSearchParams] = useSearchParams();
     const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+    const [selectedProfileUserId, setSelectedProfileUserId] = useState<string | null>(null);
 
     const sortKeys = conversations.map(c =>
         `${c.id}:${c.lastMessage?.created_at ?? c.updated_at ?? ''}:${c.lastMessage?.id ?? ''}:${(c as unknown as { unreadCount?: number }).unreadCount ?? 0}:${c.lastMessage?.status ?? ''}:${c.lastMessage?.delivered_at ?? ''}:${c.lastMessage?.read_at ?? ''}`
@@ -346,6 +364,7 @@ const ConversationList: React.FC = () => {
                         onClick={handleConversationClick}
                         onDelete={handleDeleteRequest}
                         onHover={preloadMessages}
+                        onAvatarClick={setSelectedProfileUserId}
                     />
                 );
             })}
@@ -375,6 +394,13 @@ const ConversationList: React.FC = () => {
                     </div>
                 </div>
             )}
+
+            {selectedProfileUserId && (
+                <PublicProfileModal
+                    userId={selectedProfileUserId}
+                    onClose={() => setSelectedProfileUserId(null)}
+                />
+            )}
         </div>
     );
 };
@@ -384,3 +410,4 @@ export default ConversationList;
 // Stable empty array reference — prevents new array creation on every render
 // for conversations with no active typing users.
 const EMPTY_TYPING: string[] = [];
+

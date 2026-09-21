@@ -797,6 +797,12 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
         };
 
+        const onCallError = (data: { code?: string; message?: string }) => {
+            callTrace('call:error received from gateway', data);
+            toast.error(data.message || 'Call failed due to privacy settings or network error');
+            cleanup();
+        };
+
         socket.on('call:incoming',           onCallIncoming);
         socket.on('call:ringing',            onCallRinging);
         socket.on('call:answered',           onCallAnswered);
@@ -807,6 +813,7 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         socket.on('call:timeout',            onCallEnded);
         socket.on('call:accepted',           onCallAccepted);
         socket.on('call:peer-disconnected',  onPeerDisconnected);
+        socket.on('call:error',              onCallError);
 
         return () => {
             socket.off('call:incoming',          onCallIncoming);
@@ -819,7 +826,9 @@ export const WebRTCProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             socket.off('call:timeout',           onCallEnded);
             socket.off('call:accepted',          onCallAccepted);
             socket.off('call:peer-disconnected', onPeerDisconnected);
+            socket.off('call:error',              onCallError);
         };
+
     }, [socket, socketConnected, cleanup, createPeerConnection, drainIceQueue]);
 
     const overlayStatus = callState.status as 'calling' | 'ringing' | 'incoming' | 'connecting' | 'connected' | 'reconnecting';
