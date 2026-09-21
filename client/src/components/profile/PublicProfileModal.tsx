@@ -24,10 +24,12 @@ export interface PublicProfile {
   bio?: string;
   website?: string;
   country_code?: string;
+  location_visibility?: 'visible' | 'hidden';
   is_verified?: boolean;
   kyc_level?: string;
   plan_tier?: string;
   created_at?: string;
+
   followers_count: number;
   following_count: number;
   posts_count: number;

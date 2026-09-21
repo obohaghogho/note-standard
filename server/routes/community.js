@@ -12,6 +12,8 @@ const aiTutorController = require("../controllers/aiTutorController");
 const supabase = require("../config/database");
 const { followLimiter, reportLimiter, profileViewLimiter } = require("../middleware/rateLimiter");
 const logger = require("../utils/logger");
+const { sanitizeProfileForViewer, sanitizeProfilesForViewer } = require("../utils/privacySanitizer");
+
 
 router.use(requireAuth);
 
@@ -96,7 +98,7 @@ const getProfileHandler = async (req, res, next, isUsername = false) => {
 
     let query = supabase
       .from('profiles')
-      .select('id, username, full_name, avatar_url, cover_url, bio, website, country_code, is_verified, kyc_level, created_at');
+      .select('id, username, full_name, avatar_url, cover_url, bio, website, country_code, location_visibility, is_verified, kyc_level, created_at');
 
     if (isUsername) {
       query = query.ilike('username', identifier);
@@ -155,7 +157,7 @@ const getProfileHandler = async (req, res, next, isUsername = false) => {
       totalLikesReceived = likesCount || 0;
     }
 
-    const profile = {
+    const rawProfile = {
       ...profileData,
       followers_count: followersCount || 0,
       following_count: followingCount || 0,
@@ -164,9 +166,11 @@ const getProfileHandler = async (req, res, next, isUsername = false) => {
       likes_count: totalLikesReceived
     };
 
+    const profile = sanitizeProfileForViewer(rawProfile, userId);
+
     const { data: posts } = await supabase
       .from('community_posts')
-      .select('*, profiles!author_id(id, username, full_name, avatar_url, is_verified), community_likes(user_id), community_bookmarks(user_id), community_comments(id)')
+      .select('*, profiles!author_id(id, username, full_name, avatar_url, is_verified, country_code, location_visibility), community_likes(user_id), community_bookmarks(user_id), community_comments(id)')
       .eq('author_id', targetProfileId)
       .eq('status', 'public')
       .order('created_at', { ascending: false })
@@ -175,6 +179,7 @@ const getProfileHandler = async (req, res, next, isUsername = false) => {
     const postsWithCommentCount = (posts || []).map(post => {
       const clean = {
         ...post,
+        profiles: post.profiles ? sanitizeProfileForViewer(post.profiles, userId) : post.profiles,
         comments_count: post.community_comments?.length || 0,
         likes_count: post.community_likes?.length || 0,
         is_liked: (post.community_likes || []).some(l => l.user_id === userId),
@@ -185,6 +190,7 @@ const getProfileHandler = async (req, res, next, isUsername = false) => {
       delete clean.community_bookmarks;
       return clean;
     });
+
 
     logger.info('Profile viewed', { event: 'profile_viewed', user_id: userId, target_user_id: targetProfileId });
 
@@ -205,6 +211,7 @@ router.get("/profile/:identifier", profileViewLimiter, (req, res, next) => getPr
 router.get("/profile/:profileId/followers", async (req, res, next) => {
   try {
     const { profileId } = req.params;
+    const requestingUserId = req.user.id;
     const { data: follows } = await supabase
       .from('community_follows')
       .select('follower_id')
@@ -215,11 +222,12 @@ router.get("/profile/:profileId/followers", async (req, res, next) => {
 
     const { data: profiles, error } = await supabase
       .from('profiles')
-      .select('id, username, full_name, avatar_url, is_verified, bio')
+      .select('id, username, full_name, avatar_url, is_verified, bio, country_code, location_visibility')
       .in('id', followerIds);
 
     if (error) throw error;
-    res.json(profiles || []);
+    const sanitized = sanitizeProfilesForViewer(profiles || [], requestingUserId);
+    res.json(sanitized);
   } catch (err) { next(err); }
 });
 
@@ -227,6 +235,7 @@ router.get("/profile/:profileId/followers", async (req, res, next) => {
 router.get("/profile/:profileId/following", async (req, res, next) => {
   try {
     const { profileId } = req.params;
+    const requestingUserId = req.user.id;
     const { data: follows } = await supabase
       .from('community_follows')
       .select('following_id')
@@ -237,13 +246,15 @@ router.get("/profile/:profileId/following", async (req, res, next) => {
 
     const { data: profiles, error } = await supabase
       .from('profiles')
-      .select('id, username, full_name, avatar_url, is_verified, bio')
+      .select('id, username, full_name, avatar_url, is_verified, bio, country_code, location_visibility')
       .in('id', followingIds);
 
     if (error) throw error;
-    res.json(profiles || []);
+    const sanitized = sanitizeProfilesForViewer(profiles || [], requestingUserId);
+    res.json(sanitized);
   } catch (err) { next(err); }
 });
+
 
 // Notes list for profile
 router.get("/profile/:profileId/notes", async (req, res, next) => {

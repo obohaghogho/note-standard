@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const supabase = require('../config/database');
 const { requireAuth } = require('../middleware/authMiddleware');
+const { sanitizeProfilesForViewer } = require('../utils/privacySanitizer');
 
 // Search users by username or full_name
 router.get('/search', requireAuth, async (req, res) => {
@@ -17,14 +18,15 @@ router.get('/search', requireAuth, async (req, res) => {
 
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, full_name, avatar_url, plan_tier, is_verified')
+      .select('id, username, full_name, avatar_url, plan_tier, is_verified, country_code, location_visibility')
       .or(`username.ilike.%${query}%,full_name.ilike.%${query}%`)
       .neq('id', requestingUserId) // exclude self
       .limit(20);
 
     if (error) throw error;
 
-    res.json(data || []);
+    const sanitized = sanitizeProfilesForViewer(data || [], requestingUserId);
+    res.json(sanitized);
   } catch (err) {
     console.error('[Users] Search error:', err.message);
     res.status(500).json({ error: 'Search failed' });
@@ -32,3 +34,4 @@ router.get('/search', requireAuth, async (req, res) => {
 });
 
 module.exports = router;
+

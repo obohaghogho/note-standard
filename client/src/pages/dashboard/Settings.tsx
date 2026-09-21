@@ -38,6 +38,9 @@ export default function Settings() {
     const [videoCallPrivacy, setVideoCallPrivacy] = useState<'everyone' | 'connections' | 'nobody'>(
         ((authProfile as any)?.video_call_privacy as 'everyone' | 'connections' | 'nobody') || 'everyone'
     );
+    const [locationVisibility, setLocationVisibility] = useState<'visible' | 'hidden'>(
+        ((authProfile as any)?.location_visibility as 'visible' | 'hidden') || 'hidden'
+    );
     const [privacySettings, setPrivacySettings] = useState({
         analytics: true,
         offers: false,
@@ -107,6 +110,7 @@ export default function Settings() {
             setPreferredChatLanguage(authProfile.preferred_language || 'en');
             setVoiceCallPrivacy(((authProfile as any)?.voice_call_privacy as 'everyone' | 'connections' | 'nobody') || 'everyone');
             setVideoCallPrivacy(((authProfile as any)?.video_call_privacy as 'everyone' | 'connections' | 'nobody') || 'everyone');
+            setLocationVisibility(((authProfile as any)?.location_visibility as 'visible' | 'hidden') || 'hidden');
             setPrivacySettings({
                 analytics: authProfile.user_consent ?? true,
                 offers: authProfile.preferences?.offers ?? false,
@@ -133,6 +137,22 @@ export default function Settings() {
             toast.error('Failed to update call privacy settings');
         }
     };
+
+    const handleSaveLocationVisibility = async (visibility: 'visible' | 'hidden') => {
+        if (!user) return;
+        try {
+            const { error } = await supabase
+                .from('profiles')
+                .update({ location_visibility: visibility })
+                .eq('id', user.id);
+            if (error) throw error;
+            toast.success(`Location visibility set to ${visibility}`);
+            refreshProfile?.();
+        } catch {
+            toast.error('Failed to update location visibility');
+        }
+    };
+
 
 
 
@@ -497,12 +517,47 @@ export default function Settings() {
             {
                 activeTab === 'privacy' && (
                     <div className="space-y-6">
+                        {/* Location Privacy Controls */}
+                        <Card variant="glass" className="p-4 sm:p-6 border border-white/5 bg-white/5 min-w-0">
+                            <h2 className="text-xl font-semibold mb-2 flex items-center gap-2">
+                                <Globe className="text-emerald-400" size={20} />
+                                Location Privacy Controls
+                            </h2>
+                            <p className="text-sm text-gray-400 mb-6">
+                                Control whether your country location is exposed to other users on profiles, search, and directory views.
+                            </p>
+
+                            <div className="space-y-4">
+                                <label className="block text-sm font-medium text-white mb-1">
+                                    Location Visibility
+                                </label>
+                                <select
+                                    value={locationVisibility}
+                                    onChange={async (e) => {
+                                        const val = e.target.value as 'visible' | 'hidden';
+                                        setLocationVisibility(val);
+                                        await handleSaveLocationVisibility(val);
+                                    }}
+                                    className="w-full sm:w-80 bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                                >
+                                    <option value="hidden">Hidden (Default - Privacy Protected)</option>
+                                    <option value="visible">Visible (Expose Country to Other Users)</option>
+                                </select>
+                                <p className="text-xs text-gray-400">
+                                    {locationVisibility === 'hidden'
+                                        ? '🔒 Your location is currently hidden from other users across web, mobile, search, and profiles.'
+                                        : '🌍 Your country location may be shown to other users where supported.'}
+                                </p>
+                            </div>
+                        </Card>
+
                         {/* Call Privacy Controls */}
                         <Card variant="glass" className="p-4 sm:p-6 border border-white/5 bg-white/5 min-w-0">
                             <h2 className="text-xl font-semibold mb-2 flex items-center gap-2">
                                 <Phone className="text-blue-400" size={20} />
                                 Call Privacy Controls
                             </h2>
+
                             <p className="text-sm text-gray-400 mb-6">
                                 Manage independent permissions for voice and video calls received on Mobile & Web.
                             </p>

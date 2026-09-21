@@ -54,6 +54,7 @@ export const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation
   const [website, setWebsite] = useState(user?.website || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [countryCode, setCountryCode] = useState(user?.country_code || 'US');
+  const [locationVisibility, setLocationVisibility] = useState<'visible' | 'hidden'>((user as any)?.location_visibility || 'hidden');
   const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url || '');
   const [coverUrl, setCoverUrl] = useState(user?.cover_url || '');
 
@@ -71,6 +72,7 @@ export const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation
       setWebsite(user.website || '');
       setPhone(user.phone || '');
       setCountryCode(user.country_code || 'US');
+      setLocationVisibility((user as any)?.location_visibility || 'hidden');
       setAvatarUrl(user.avatar_url || '');
       setCoverUrl(user.cover_url || '');
     }
@@ -142,9 +144,11 @@ export const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation
         website: website.trim(),
         phone: phone.trim(),
         country_code: countryCode.trim().toUpperCase(),
+        location_visibility: locationVisibility,
         avatar_url: avatarUrl,
         cover_url: coverUrl,
       };
+
 
       await apiClient.patch('/auth/me', payload);
       await refreshProfile();
