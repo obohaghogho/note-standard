@@ -202,55 +202,29 @@ class IdempotentWithdrawalSettlementService {
         p_admin_id: adminId
       });
 
-      if (atomicRes && atomicRes.success) {
-        if (atomicRes.already_debited) {
-          logger.info(`[IdempotentWithdrawalSettlementService] Idempotency Hit for tx ${tx.id}. Already debited.`);
-          return {
-            success: true,
-            alreadyDebited: true,
-            debited: false,
-            transactionId: tx.id,
-            withdrawalStatus: "COMPLETED",
-            fundsStatus: "DEBITED",
-          };
-        }
-        logger.info(`[IdempotentWithdrawalSettlementService] ✅ Atomic settlement RPC succeeded for tx ${tx.id}`);
-      } else {
-        // Fallback for non-migrated environment
-        logger.warn(`[IdempotentWithdrawalSettlementService] atomic_finalize_withdrawal_settlement RPC fallback: ${atomicErr?.message}`);
-
-        const { error: rpcErr } = await supabase.rpc("complete_withdrawal", {
-          p_wallet_id: wallet.id,
-          p_amount: totalDeduction,
-        });
-
-        if (rpcErr) {
-          await supabase
-            .from("wallets_store")
-            .update({
-              balance: wallet.balance - totalDeduction,
-              reserved_balance: Math.max(0, (wallet.reserved_balance || 0) - totalDeduction),
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", wallet.id);
-        }
-
-        const now = new Date().toISOString();
-        await supabase
-          .from("fincra_transactions")
-          .update({
-            status: "SUCCESSFUL",
-            withdrawal_status: "COMPLETED",
-            funds_status: "DEBITED",
-            provider_status: "SUCCESS",
-            reconciliation_status: source.includes("ADMIN") || source.includes("RECONCILIATION") ? "RECONCILED" : "NONE",
-            fincra_reference: providerTransactionId || tx.fincra_reference || reference,
-            reconciled_at: now,
-            reconciled_by: adminId || source,
-            updated_at: now,
-          })
-          .eq("id", tx.id);
+      if (atomicErr) {
+        logger.error(`[IdempotentWithdrawalSettlementService] atomic_finalize_withdrawal_settlement RPC error: ${atomicErr.message}`);
+        throw new Error(`SETTLEMENT_RPC_ERROR: ${atomicErr.message}`);
       }
+
+      if (!atomicRes || !atomicRes.success) {
+        const msg = atomicRes?.error || "Atomic settlement RPC returned unhandled failure";
+        logger.error(`[IdempotentWithdrawalSettlementService] Atomic settlement failed: ${msg}`);
+        throw new Error(`SETTLEMENT_FAILED: ${msg}`);
+      }
+
+      if (atomicRes.already_debited) {
+        logger.info(`[IdempotentWithdrawalSettlementService] Idempotency Hit for tx ${tx.id}. Already debited.`);
+        return {
+          success: true,
+          alreadyDebited: true,
+          debited: false,
+          transactionId: tx.id,
+          withdrawalStatus: "COMPLETED",
+          fundsStatus: "DEBITED",
+        };
+      }
+      logger.info(`[IdempotentWithdrawalSettlementService] ✅ Atomic settlement RPC succeeded for tx ${tx.id}`);
 
       // Also update primary transactions table if reference exists
       await supabase.from("transactions")

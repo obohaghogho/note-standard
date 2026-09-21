@@ -261,18 +261,17 @@ async function reversePayoutReservation(reference, reason = "Payout failed") {
 
   const amount = parseFloat(txRecord.amount);
 
-  const { error: rpcErr } = await supabase.rpc('reverse_withdrawal_reservation', {
+  const { error: rpcErr } = await supabase.rpc('atomic_reverse_withdrawal_reservation', {
+    p_transaction_id: txRecord.id,
     p_wallet_id: wallet.id,
     p_amount: amount,
+    p_reason: reason,
+    p_source: 'FINCRA_PAYOUT'
   });
 
   if (rpcErr) {
-    logger.error(`[Fincra/payout] RPC reverse_withdrawal_reservation error: ${rpcErr.message}`);
-    // Fallback
-    const restored = parseFloat(wallet.available_balance || 0) + amount;
-    await supabase.from("wallets_store")
-      .update({ available_balance: restored, updated_at: new Date().toISOString() })
-      .eq("id", wallet.id);
+    logger.error(`[Fincra/payout] RPC atomic_reverse_withdrawal_reservation error: ${rpcErr.message}`);
+    throw new Error(`REVERSAL_RPC_ERROR: ${rpcErr.message}`);
   }
 
   await supabase.from("fincra_transactions")
