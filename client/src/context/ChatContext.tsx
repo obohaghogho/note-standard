@@ -21,6 +21,7 @@ import { safeRandomUUID } from '../utils/uuid';
 import { ChatCacheEngine } from '../services/chatCache';
 import { useChatStore } from '../stores/chatStore';
 import { mergeMessageMonotonic, correlationRegistry } from '../utils/messageStatusEngine';
+import { getConversationRecencyTime } from '../utils/conversationRecency';
 
 export interface Message {
     id: string;
@@ -935,15 +936,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         }
                     });
 
-                    const allMerged = Array.from(existingMap.values()).sort((a, b) => {
-                        const hasMsgA = (a.lastMessage || (a as any).last_message) ? 1 : 0;
-                        const hasMsgB = (b.lastMessage || (b as any).last_message) ? 1 : 0;
-                        if (hasMsgA !== hasMsgB) return hasMsgB - hasMsgA;
-
-                        const timeA = new Date((a as any).last_message_at || a.lastMessage?.created_at || a.updated_at || 0).getTime();
-                        const timeB = new Date((b as any).last_message_at || b.lastMessage?.created_at || b.updated_at || 0).getTime();
-                        return timeB - timeA;
-                    });
+                    const allMerged = Array.from(existingMap.values()).sort((a, b) => getConversationRecencyTime(b) - getConversationRecencyTime(a));
 
                     // Deduplicate direct conversations by peer user ID
                     const seenDirectPeers = new Set<string>();
@@ -1231,9 +1224,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         }
                         return prev.map(c => {
                             if (c.id === conversationId) {
+                                const existingRecency = getConversationRecencyTime(c);
+                                const newMsgTime = lastMsg?.created_at ? new Date(lastMsg.created_at).getTime() : 0;
+                                const maxTimeMs = Math.max(existingRecency, newMsgTime);
+                                const monotonicIso = maxTimeMs > 0 ? new Date(maxTimeMs).toISOString() : (c.updated_at || lastMsg.created_at);
+
                                 return {
                                     ...c,
-                                    updated_at: lastMsg.created_at || c.updated_at,
+                                    updated_at: monotonicIso,
+                                    last_message_at: monotonicIso,
                                     lastMessage: {
                                         id: lastMsg.id,
                                         content: lastMsg.content,
@@ -1248,7 +1247,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                                 };
                             }
                             return c;
-                        }).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+                        }).sort((a, b) => getConversationRecencyTime(b) - getConversationRecencyTime(a));
                     });
                 }
 
@@ -1802,12 +1801,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                                     // Don't add if it already arrived via a parallel fetch
                                     if (prev.some(c => c.id === mapped.id)) {
                                         return prev.map(c => c.id === mapped.id ? { ...c, lastMessage: mapped.lastMessage, updated_at: mapped.updated_at, unreadCount: (c.unreadCount || 0) + 1 } : c)
-                                            .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+                                            .sort((a, b) => getConversationRecencyTime(b) - getConversationRecencyTime(a));
                                     }
                                     // Inject at top, then re-sort by recency
-                                    return [mapped, ...prev].sort((a, b) =>
-                                        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-                                    );
+                                    return [mapped, ...prev].sort((a, b) => getConversationRecencyTime(b) - getConversationRecencyTime(a));
                                 });
                             })
                             .catch(() => {

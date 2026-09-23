@@ -10,6 +10,7 @@ import SecureImage from '../common/SecureImage';
 import { UserBadge } from '../common/UserBadge';
 import { toast } from 'react-hot-toast';
 import { PublicProfileModal } from '../profile/PublicProfileModal';
+import { getConversationRecencyTime } from '../../utils/conversationRecency';
 
 // Extracting ConversationItem and wrapping with React.memo prevents the entire list
 // from re-rendering when one item changes (e.g., typing status or active state).
@@ -260,19 +261,12 @@ const ConversationList: React.FC = () => {
     const [selectedProfileUserId, setSelectedProfileUserId] = useState<string | null>(null);
 
     const sortKeys = conversations.map(c => {
-        const recencyTime = Math.max(
-            new Date(c.lastMessage?.created_at || 0).getTime(),
-            new Date(c.updated_at || 0).getTime()
-        );
+        const recencyTime = getConversationRecencyTime(c);
         return `${c.id}:${recencyTime}:${c.lastMessage?.id ?? ''}:${(c as unknown as { unreadCount?: number }).unreadCount ?? 0}`;
     }).join(',');
 
     const sortedConversations = useMemo(() => {
-        const sorted = [...conversations].sort((a, b) => {
-            const timeA = Math.max(new Date(a.lastMessage?.created_at || 0).getTime(), new Date(a.updated_at || 0).getTime());
-            const timeB = Math.max(new Date(b.lastMessage?.created_at || 0).getTime(), new Date(b.updated_at || 0).getTime());
-            return timeB - timeA;
-        });
+        const sorted = [...conversations].sort((a, b) => getConversationRecencyTime(b) - getConversationRecencyTime(a));
 
         const seenDirectPeerIds = new Set<string>();
         const uniqueConversations: Conversation[] = [];
@@ -294,7 +288,7 @@ const ConversationList: React.FC = () => {
 
         return uniqueConversations;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [sortKeys, user?.id]);
+    }, [sortKeys, user?.id, activeConversationId]);
 
     const lastClickTimeRef = useRef(0);
 
