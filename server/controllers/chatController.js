@@ -2527,16 +2527,14 @@ exports.markConversationDelivered = async (req, res) => {
 
     const deliveredPayload = { conversationId, userId, delivered_at: now };
 
-    // Emit to ALL members of the conversation globally.
-    const { data: members } = await supabase
-      .from('conversation_members')
-      .select('user_id')
-      .eq('conversation_id', conversationId);
-      
-    if (members && members.length > 0) {
-      const memberIds = members.map(m => m.user_id);
-      await realtime.emitToUsers(memberIds, "chat:conversation_delivered", deliveredPayload);
-    }
+    // Emit delivery receipt to conversation room immediately (non-blocking)
+    setImmediate(async () => {
+      try {
+        await realtime.emitToConversation(conversationId, "chat:conversation_delivered", deliveredPayload);
+      } catch (e) {
+        console.warn("[Chat] Delivery emit warning:", e.message);
+      }
+    });
 
     res.json({ success: true });
   } catch (err) {
@@ -2969,15 +2967,22 @@ exports.markMessagesDeliveredBatch = async (req, res, next) => {
     if (error) throw error;
 
     if (updated && updated.length > 0) {
-      const realtime = require("../services/realtimeService");
-      const senderIds = [...new Set(updated.map((m) => m.sender_id))];
-      for (const senderId of senderIds) {
-        await realtime.emitToUser(senderId, "chat:messages_delivered_batch", {
-          messageIds: updated.map((m) => m.id),
-          recipientId: userId,
-          delivered_at: now,
-        });
-      }
+      setImmediate(async () => {
+        try {
+          const realtime = require("../services/realtimeService");
+          const senderIds = [...new Set(updated.map((m) => m.sender_id))];
+          const emitPromises = senderIds.map((senderId) =>
+            realtime.emitToUser(senderId, "chat:messages_delivered_batch", {
+              messageIds: updated.map((m) => m.id),
+              recipientId: userId,
+              delivered_at: now,
+            })
+          );
+          await Promise.allSettled(emitPromises);
+        } catch (e) {
+          console.warn("[Chat] Batch delivery emit warning:", e.message);
+        }
+      });
     }
 
     console.log(`[Chat/Telemetry] BATCH_DELIVERED | count: ${updated?.length || 0} | recipient: ${userId}`);

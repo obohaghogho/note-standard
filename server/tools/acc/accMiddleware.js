@@ -29,6 +29,24 @@ async function accMiddleware(req, res, next) {
         return next(); // Not a governed route
     }
 
+    if (SHADOW_MODE) {
+        // In shadow mode, run accGuard in background without blocking next()
+        setImmediate(async () => {
+            try {
+                const result = await accGuard(action, supabase, SHADOW_MODE);
+                emitMetricAsync({
+                    event: "acc_decision",
+                    decision: result.decision,
+                    risk: result.risk,
+                    modelVersion: result.modelVersion,
+                    isShadowMode: true
+                });
+            } catch (_) {}
+        });
+        req.accDecision = { decision: "ALLOW", risk: 0 };
+        return next();
+    }
+
     const result = await accGuard(action, supabase, SHADOW_MODE);
 
     // Asynchronous Telemetry
@@ -37,15 +55,8 @@ async function accMiddleware(req, res, next) {
         decision: result.decision,
         risk: result.risk,
         modelVersion: result.modelVersion,
-        isShadowMode: SHADOW_MODE
+        isShadowMode: false
     });
-
-    if (SHADOW_MODE) {
-        // In shadow mode, we NEVER block or mutate. We just log what we WOULD have done.
-        console.log(`[ACC SHADOW MODE] Would have applied: ${result.decision} (Risk: ${result.risk})`);
-        req.accDecision = { decision: "ALLOW", risk: 0 };
-        return next();
-    }
 
     req.accDecision = result;
 
