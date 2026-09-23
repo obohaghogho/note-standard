@@ -2446,157 +2446,147 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             const currentSessionId = sessionIdRef.current;
             if (!currentDeviceId || !currentSessionId) return;
             
-            // Continuous outbox drain loop: Drains newly enqueued message intents
-            // that arrive while earlier API requests were in flight.
-            while (true) {
-                const rawIntents = await offlineQueue.getPendingIntents();
-                if (rawIntents.length === 0) break;
+            const rawIntents = await offlineQueue.getPendingIntents();
+            if (rawIntents.length === 0) return;
+            const intents = [...rawIntents].sort((a, b) => a.created_at - b.created_at);
 
+            for (const intent of intents) {
+                // Check backoff delay
                 const now = Date.now();
-                // Select queued intents or ready-to-retry intents
-                const pendingIntents = rawIntents.filter(intent =>
-                    intent.status === 'queued' || (intent.status === 'retry_wait' && (!intent.next_retry_at || intent.next_retry_at <= now))
-                ).sort((a, b) => a.created_at - b.created_at);
+                if (intent.next_retry_at && intent.next_retry_at > now) continue;
 
-                if (pendingIntents.length === 0) break;
+                await offlineQueue.updateIntentStatus(intent.event_id, 'sending');
 
-                // Concurrent Dispatch: Process available queued message intents concurrently
-                // so rapid multi-message sends aren't forced into serial round-trip waiting.
-                await Promise.all(pendingIntents.map(async (intent) => {
-                    // Mark as sending immediately to prevent duplicate selection in race windows
-                    await offlineQueue.updateIntentStatus(intent.event_id, 'sending');
+                try {
+                    await ensureLeaseOwnership(
+                        intent.conversation_id, 
+                        currentSessionId, 
+                        currentDeviceId, 
+                        api, 
+                        (cid: string) => leases[cid], 
+                        markLeaseClaimEnd
+                    );
 
-                    try {
-                        await ensureLeaseOwnership(
-                            intent.conversation_id, 
-                            currentSessionId, 
-                            currentDeviceId, 
-                            api, 
-                            (cid: string) => leases[cid], 
-                            markLeaseClaimEnd
-                        );
+                    if (intent.payload.correlationId) {
+                        logger.debug('API', 'Flushing message intent', { correlationId: intent.payload.correlationId, eventId: intent.event_id });
+                    }
+                    const res = await api.post(`/chat/conversations/${intent.conversation_id}/messages`, {
+                        content: intent.payload.content,
+                        type: intent.payload.type,
+                        attachmentId: intent.payload.attachmentId,
+                        replyToId: intent.payload.replyTo?.id,
+                        eventId: intent.event_id,
+                        deviceId: currentDeviceId,
+                        sessionId: currentSessionId,
+                        clientSendTs: intent.payload.clientSendTs || intent.created_at
+                    }, {
+                        headers: intent.payload.correlationId ? { 'X-Correlation-ID': intent.payload.correlationId } : undefined
+                    });
+                    
+                    if (intent.payload.correlationId) {
+                        completeCorrelation(intent.payload.correlationId);
+                    }
 
-                        if (intent.payload.correlationId) {
-                            logger.debug('API', 'Flushing message intent', { correlationId: intent.payload.correlationId, eventId: intent.event_id });
+                    const backendMsg = res.data.message || res.data;
+                    let canonicalMessage: Message = { 
+                        ...backendMsg, 
+                        event_id: backendMsg.event_id || intent.event_id, 
+                        isOwn: true, 
+                        status: 'sent' 
+                    };
+
+                    const tickSetById = appliedTicksRef.current.get(canonicalMessage.id);
+                    const tickSetByEventId = appliedTicksRef.current.get(intent.event_id);
+                    if (tickSetById?.has('read') || tickSetByEventId?.has('read')) {
+                        canonicalMessage.status = 'read';
+                        canonicalMessage.read_at = canonicalMessage.read_at || new Date().toISOString();
+                        canonicalMessage.delivered_at = canonicalMessage.delivered_at || canonicalMessage.read_at;
+                    } else if (tickSetById?.has('delivered') || tickSetByEventId?.has('delivered')) {
+                        canonicalMessage.status = 'delivered';
+                        canonicalMessage.delivered_at = canonicalMessage.delivered_at || new Date().toISOString();
+                    }
+
+                    if (intent.payload.replyTo && !canonicalMessage.reply_to) {
+                        canonicalMessage = { ...canonicalMessage, reply_to: { 
+                            id: intent.payload.replyTo.id,
+                            content: intent.payload.replyTo.content ?? '',
+                            sender_id: intent.payload.replyTo.sender_id ?? '',
+                            type: intent.payload.replyTo.type ?? 'text'
+                        } };
+                    }
+
+                    if (canonicalMessage.id && !canonicalMessage.id.startsWith('temp-')) {
+                        processedEventIdsRef.current.add(`id:${canonicalMessage.id}`);
+                        seenMessagesRef.current.add(canonicalMessage.id);
+                    }
+                    if (canonicalMessage.event_id) {
+                        processedEventIdsRef.current.add(`evt:${canonicalMessage.event_id}`);
+                        seenMessagesRef.current.add(canonicalMessage.event_id);
+                    }
+                    processedEventIdsRef.current.add(`evt:${intent.event_id}`);
+                    seenMessagesRef.current.add(intent.event_id);
+
+                    setMessages(prev => {
+                        const current = prev[intent.conversation_id] || [];
+                        const tempId = intent.client_message_id || `temp-${intent.event_id}`;
+                        const filtered = current.filter(m => m.id !== tempId && (!m.event_id || m.event_id !== intent.event_id));
+                        const { merged } = mergeMessages(filtered, [canonicalMessage]);
+                        return { ...prev, [intent.conversation_id]: merged as Message[] };
+                    });
+
+                    setConversations(cPrev => cPrev.map(conv => {
+                        if (conv.id !== intent.conversation_id) return conv;
+                        const existingLastMsgTime = new Date(conv.lastMessage?.created_at ?? 0).getTime();
+                        const newMsgTime = new Date(canonicalMessage.created_at).getTime();
+                        if (newMsgTime >= (existingLastMsgTime - 300000)) {
+                            return {
+                                ...conv,
+                                updated_at: canonicalMessage.created_at,
+                                last_message: { 
+                                    id: canonicalMessage.id, 
+                                    content: canonicalMessage.content, 
+                                    sender_id: canonicalMessage.sender_id, 
+                                    created_at: canonicalMessage.created_at,
+                                    type: canonicalMessage.type,
+                                    status: canonicalMessage.status,
+                                    delivered_at: canonicalMessage.delivered_at,
+                                    read_at: canonicalMessage.read_at
+                                },
+                                lastMessage: { 
+                                    id: canonicalMessage.id, 
+                                    event_id: intent.event_id,
+                                    content: canonicalMessage.content, 
+                                    sender_id: canonicalMessage.sender_id, 
+                                    created_at: canonicalMessage.created_at,
+                                    type: canonicalMessage.type,
+                                    status: canonicalMessage.status,
+                                    delivered_at: canonicalMessage.delivered_at,
+                                    read_at: canonicalMessage.read_at
+                                } as NonNullable<Conversation['lastMessage']>
+                            };
                         }
-                        const res = await api.post(`/chat/conversations/${intent.conversation_id}/messages`, {
-                            content: intent.payload.content,
-                            type: intent.payload.type,
-                            attachmentId: intent.payload.attachmentId,
-                            replyToId: intent.payload.replyTo?.id,
-                            eventId: intent.event_id,
-                            deviceId: currentDeviceId,
-                            sessionId: currentSessionId,
-                            clientSendTs: intent.payload.clientSendTs || intent.created_at
-                        }, {
-                            headers: intent.payload.correlationId ? { 'X-Correlation-ID': intent.payload.correlationId } : undefined
-                        });
-                        
-                        if (intent.payload.correlationId) {
-                            completeCorrelation(intent.payload.correlationId);
-                        }
+                        return conv;
+                    }).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()));
 
-                        const backendMsg = res.data.message || res.data;
-                        let canonicalMessage: Message = { 
-                            ...backendMsg, 
-                            event_id: backendMsg.event_id || intent.event_id, 
-                            isOwn: true, 
-                            status: 'sent' 
-                        };
-
-                        const tickSetById = appliedTicksRef.current.get(canonicalMessage.id);
-                        const tickSetByEventId = appliedTicksRef.current.get(intent.event_id);
-                        if (tickSetById?.has('read') || tickSetByEventId?.has('read')) {
-                            canonicalMessage.status = 'read';
-                            canonicalMessage.read_at = canonicalMessage.read_at || new Date().toISOString();
-                            canonicalMessage.delivered_at = canonicalMessage.delivered_at || canonicalMessage.read_at;
-                        } else if (tickSetById?.has('delivered') || tickSetByEventId?.has('delivered')) {
-                            canonicalMessage.status = 'delivered';
-                            canonicalMessage.delivered_at = canonicalMessage.delivered_at || new Date().toISOString();
-                        }
-
-                        if (intent.payload.replyTo && !canonicalMessage.reply_to) {
-                            canonicalMessage = { ...canonicalMessage, reply_to: { 
-                                id: intent.payload.replyTo.id,
-                                content: intent.payload.replyTo.content ?? '',
-                                sender_id: intent.payload.replyTo.sender_id ?? '',
-                                type: intent.payload.replyTo.type ?? 'text'
-                            } };
-                        }
-
-                        if (canonicalMessage.id && !canonicalMessage.id.startsWith('temp-')) {
-                            processedEventIdsRef.current.add(`id:${canonicalMessage.id}`);
-                            seenMessagesRef.current.add(canonicalMessage.id);
-                        }
-                        if (canonicalMessage.event_id) {
-                            processedEventIdsRef.current.add(`evt:${canonicalMessage.event_id}`);
-                            seenMessagesRef.current.add(canonicalMessage.event_id);
-                        }
-                        processedEventIdsRef.current.add(`evt:${intent.event_id}`);
-                        seenMessagesRef.current.add(intent.event_id);
-
+                    await offlineQueue.updateIntentStatus(intent.event_id, 'synced', canonicalMessage.id);
+                    await offlineQueue.removeIntent(intent.event_id);
+                } catch (err: any) {
+                    const isNetworkErr = !err.response || err.message === 'Network Error' || err.code === 'ECONNABORTED';
+                    if (isNetworkErr || (err.response && err.response.status >= 500)) {
+                        console.warn('[ChatContext] Transient network/server error during flush, placing intent in retry_wait', intent.event_id);
+                        await offlineQueue.updateIntentStatus(intent.event_id, 'retry_wait');
+                    } else {
+                        console.error('[ChatContext] Terminal error flushing intent', intent.event_id, err);
+                        await offlineQueue.updateIntentStatus(intent.event_id, 'failed');
                         setMessages(prev => {
                             const current = prev[intent.conversation_id] || [];
-                            const tempId = intent.client_message_id || `temp-${intent.event_id}`;
-                            const filtered = current.filter(m => m.id !== tempId && (!m.event_id || m.event_id !== intent.event_id));
-                            const { merged } = mergeMessages(filtered, [canonicalMessage]);
-                            return { ...prev, [intent.conversation_id]: merged as Message[] };
+                            return {
+                                ...prev,
+                                [intent.conversation_id]: current.map(m => (m.id === intent.event_id || m.event_id === intent.event_id || m.id === intent.client_message_id) ? { ...m, status: 'failed' } : m)
+                            };
                         });
-
-                        setConversations(cPrev => cPrev.map(conv => {
-                            if (conv.id !== intent.conversation_id) return conv;
-                            const existingLastMsgTime = new Date(conv.lastMessage?.created_at ?? 0).getTime();
-                            const newMsgTime = new Date(canonicalMessage.created_at).getTime();
-                            if (newMsgTime >= (existingLastMsgTime - 300000)) {
-                                return {
-                                    ...conv,
-                                    updated_at: canonicalMessage.created_at,
-                                    last_message: { 
-                                        id: canonicalMessage.id, 
-                                        content: canonicalMessage.content, 
-                                        sender_id: canonicalMessage.sender_id, 
-                                        created_at: canonicalMessage.created_at,
-                                        type: canonicalMessage.type,
-                                        status: canonicalMessage.status,
-                                        delivered_at: canonicalMessage.delivered_at,
-                                        read_at: canonicalMessage.read_at
-                                    },
-                                    lastMessage: { 
-                                        id: canonicalMessage.id, 
-                                        event_id: intent.event_id,
-                                        content: canonicalMessage.content, 
-                                        sender_id: canonicalMessage.sender_id, 
-                                        created_at: canonicalMessage.created_at,
-                                        type: canonicalMessage.type,
-                                        status: canonicalMessage.status,
-                                        delivered_at: canonicalMessage.delivered_at,
-                                        read_at: canonicalMessage.read_at
-                                    } as NonNullable<Conversation['lastMessage']>
-                                };
-                            }
-                            return conv;
-                        }).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()));
-
-                        await offlineQueue.updateIntentStatus(intent.event_id, 'synced', canonicalMessage.id);
-                        await offlineQueue.removeIntent(intent.event_id);
-                    } catch (err: any) {
-                        const isNetworkErr = !err.response || err.message === 'Network Error' || err.code === 'ECONNABORTED';
-                        if (isNetworkErr || (err.response && err.response.status >= 500)) {
-                            console.warn('[ChatContext] Transient network/server error during flush, placing intent in retry_wait', intent.event_id);
-                            await offlineQueue.updateIntentStatus(intent.event_id, 'retry_wait');
-                        } else {
-                            console.error('[ChatContext] Terminal error flushing intent', intent.event_id, err);
-                            await offlineQueue.updateIntentStatus(intent.event_id, 'failed');
-                            setMessages(prev => {
-                                const current = prev[intent.conversation_id] || [];
-                                return {
-                                    ...prev,
-                                    [intent.conversation_id]: current.map(m => (m.id === intent.event_id || m.event_id === intent.event_id || m.id === intent.client_message_id) ? { ...m, status: 'failed' } : m)
-                                };
-                            });
-                        }
                     }
-                }));
+                }
             }
         });
     }, [session, user, offlineQueue, leases, markLeaseClaimEnd]);
