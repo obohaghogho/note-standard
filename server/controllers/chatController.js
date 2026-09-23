@@ -1782,32 +1782,37 @@ exports.sendMessage = async (req, res) => {
             const notificationPromises = otherMembers.map(async (member) => {
               if (member.is_muted) return;
               try {
-                await createNotification({
-                  receiverId:     member.user_id,
-                  senderId:       userId,
-                  type:           "chat_message",
-                  title:          senderName,
-                  message:        previewContent,
-                  link:           `/dashboard/chat?id=${conversationId}`,
-                  messageId:      createdMessageId,
-                  conversationId: conversationId,
-                  skipPush:       false,
-                });
-                await dispatchFastPush({
-                  receiverId:     member.user_id,
-                  type:           "chat_message",
-                  title:          senderName,
-                  message:        previewContent,
-                  link:           `/dashboard/chat?id=${conversationId}`,
-                  messageId:      createdMessageId,
-                  conversationId: conversationId,
-                  trace: {
-                    clientSendTs,
-                    apiReceiveTs: t1_ApiReceived,
-                    dbStartTs:    t2_DbInsertStart,
-                    dbDoneTs:     t3_DbInsertDone,
-                  }
-                });
+                // Run DB notification persist + push dispatch CONCURRENTLY.
+                // skipPush:true stops createNotification firing its own gateway HTTP call
+                // so dispatchFastPush is the sole, immediate push path — no double-push race.
+                await Promise.all([
+                  createNotification({
+                    receiverId:     member.user_id,
+                    senderId:       userId,
+                    type:           "chat_message",
+                    title:          senderName,
+                    message:        previewContent,
+                    link:           `/dashboard/chat?id=${conversationId}`,
+                    messageId:      createdMessageId,
+                    conversationId: conversationId,
+                    skipPush:       true, // dispatchFastPush below is the sole push path
+                  }),
+                  dispatchFastPush({
+                    receiverId:     member.user_id,
+                    type:           "chat_message",
+                    title:          senderName,
+                    message:        previewContent,
+                    link:           `/dashboard/chat?id=${conversationId}`,
+                    messageId:      createdMessageId,
+                    conversationId: conversationId,
+                    trace: {
+                      clientSendTs,
+                      apiReceiveTs: t1_ApiReceived,
+                      dbStartTs:    t2_DbInsertStart,
+                      dbDoneTs:     t3_DbInsertDone,
+                    }
+                  }),
+                ]);
               } catch (pushErr) {
                 console.warn("[Chat Notify] Push failed for", member.user_id, pushErr.message);
               }

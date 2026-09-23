@@ -4,6 +4,45 @@ const supabase = require("../config/database");
 const realtime = require("./realtimeService");
 const eventBus = require("./eventBus");
 const sendgridEmailService = require("./sendgridEmailService");
+const http  = require('http');
+const https = require('https');
+
+// ── Persistent keep-alive agents for gateway push requests ──────────────────
+// keepAlive: true  → TCP connections are reused across requests, eliminating
+// the 300-800 ms TLS handshake overhead that was causing push latency on Render.
+// maxSockets: 4   → Allow up to 4 parallel sockets to the gateway.
+// timeout: 30000  → Gateway keeps idle sockets alive for 30 s.
+const _pushHttpAgent  = new http.Agent({ keepAlive: true, maxSockets: 4, timeout: 30000 });
+const _pushHttpsAgent = new https.Agent({ keepAlive: true, maxSockets: 4, timeout: 30000 });
+
+// Expose on global so both createNotification and dispatchFastPush share the
+// same pool (they're in the same module but referenced via global in legacy code).
+global.__pushHttpAgent  = _pushHttpAgent;
+global.__pushHttpsAgent = _pushHttpsAgent;
+
+// ── Warm up the connection to the gateway on startup ────────────────────────
+// Fire a lightweight OPTIONS/HEAD to establish the TLS session before the
+// first real push — so the first message notification is never cold.
+setTimeout(() => {
+  try {
+    const envConfig = require('../config/env');
+    const gatewayUrlStr = process.env.REALTIME_GATEWAY_URL || envConfig.REALTIME_GATEWAY_URL || 'https://realtime-gateway-gsb5.onrender.com';
+    const warmUrl = new URL('/health', gatewayUrlStr);
+    const warmLib = warmUrl.protocol === 'https:' ? https : http;
+    const warmAgent = warmUrl.protocol === 'https:' ? _pushHttpsAgent : _pushHttpAgent;
+    const warmReq = warmLib.request({
+      hostname: warmUrl.hostname,
+      port: warmUrl.port || (warmUrl.protocol === 'https:' ? 443 : 80),
+      path: warmUrl.pathname,
+      method: 'GET',
+      agent: warmAgent,
+      timeout: 8000,
+    }, (res) => { res.resume(); });
+    warmReq.on('error', () => {}); // silent — warmup is best-effort
+    warmReq.end();
+    console.log('[NotificationService] 🔥 Gateway connection warm-up initiated.');
+  } catch (_) {}
+}, 3000); // 3 s after module load — after server is ready
 
 /**
  * Creates a notification and emits it via Gateway
@@ -86,15 +125,10 @@ const createNotification = async (params) => {
     const envConfig = require('../config/env');
     const gatewayUrlStr = process.env.REALTIME_GATEWAY_URL || envConfig.REALTIME_GATEWAY_URL || 'https://realtime-gateway-gsb5.onrender.com';
     const bodyStr = message || title;
-    
-    // Temporary: Disable KeepAlive to test if Render is tearing down long-lived sockets
-    // and causing the push request to fail silently.
-    if (!global.__pushHttpAgent) {
-      const http = require('http');
-      const https = require('https');
-      global.__pushHttpAgent = new http.Agent({ keepAlive: false });
-      global.__pushHttpsAgent = new https.Agent({ keepAlive: false });
-    }
+
+    // Use module-level keep-alive agents (persistent TCP pool — no per-request handshake)
+    const pushHttpAgent  = global.__pushHttpAgent  || _pushHttpAgent;
+    const pushHttpsAgent = global.__pushHttpsAgent || _pushHttpsAgent;
     
     const targetUrl = new URL('/internal/push', gatewayUrlStr);
     const payloadBody = JSON.stringify({
@@ -115,8 +149,8 @@ const createNotification = async (params) => {
       },
     });
 
-    const lib = targetUrl.protocol === 'https:' ? require('https') : require('http');
-    const agent = targetUrl.protocol === 'https:' ? global.__pushHttpsAgent : global.__pushHttpAgent;
+    const lib = targetUrl.protocol === 'https:' ? https : http;
+    const agent = targetUrl.protocol === 'https:' ? pushHttpsAgent : pushHttpAgent;
 
     const req = lib.request({
       hostname: targetUrl.hostname,
@@ -125,7 +159,7 @@ const createNotification = async (params) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payloadBody) },
       agent: agent,
-      timeout: 10000 // 10 seconds timeout
+      timeout: 6000 // 6 s — fail fast on stale sockets so keep-alive pool self-heals
     }, (res) => {
       let responseBody = '';
       res.on('data', chunk => responseBody += chunk);
@@ -145,8 +179,8 @@ const createNotification = async (params) => {
     });
     
     req.on('timeout', () => {
-      console.error('[NotificationService] ❌ Gateway push request timed out.');
-      req.destroy();
+      console.error('[NotificationService] ❌ Gateway push request timed out — destroying stale socket.');
+      req.destroy(); // socket returns to pool after destroy; next request gets fresh one
     });
 
     console.log(`[NotificationService] 📤 Dispatching HTTP push request to Gateway: ${gatewayUrlStr}/internal/push`);
@@ -269,16 +303,10 @@ const dispatchFastPush = (params) => {
 
       const payloadBody = JSON.stringify(payloadObj);
       const targetUrl = new URL('/internal/push', baseUrl);
-      const lib = targetUrl.protocol === 'https:' ? require('https') : require('http');
+      const lib = targetUrl.protocol === 'https:' ? https : http;
 
-      // Reuse the same persistent keep-alive-disabled agent as createNotification
-      if (!global.__pushHttpAgent) {
-        const http  = require('http');
-        const https = require('https');
-        global.__pushHttpAgent  = new http.Agent({ keepAlive: false });
-        global.__pushHttpsAgent = new https.Agent({ keepAlive: false });
-      }
-      const agent = targetUrl.protocol === 'https:' ? global.__pushHttpsAgent : global.__pushHttpAgent;
+      // Use module-level keep-alive agent pool (persistent — no per-request TLS handshake)
+      const agent = targetUrl.protocol === 'https:' ? (global.__pushHttpsAgent || _pushHttpsAgent) : (global.__pushHttpAgent || _pushHttpAgent);
 
       console.log(`[NotificationService][FastPush] 📤 Dispatching push to Gateway: ${targetUrl.href} | user:${receiverId} | msgId:${messageId || 'N/A'}`);
 
@@ -292,7 +320,7 @@ const dispatchFastPush = (params) => {
           'Content-Length': Buffer.byteLength(payloadBody),
         },
         agent,
-        timeout: 10000,
+        timeout: 6000, // 6 s — fail fast so keep-alive pool self-heals on stale sockets
       }, (res) => {
         let responseBody = '';
         res.on('data', chunk => { responseBody += chunk; });
