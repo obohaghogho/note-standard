@@ -1823,7 +1823,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
                         const existingTs = conv.lastMessage?.created_at;
                         const existingLastMsgTime = existingTs ? new Date(existingTs).getTime() : 0;
+                        const existingUpdatedAtTime = conv.updated_at ? new Date(conv.updated_at).getTime() : 0;
                         const newMsgTime = new Date(msg.created_at).getTime();
+                        const maxTimeMs = Math.max(existingLastMsgTime, existingUpdatedAtTime, newMsgTime);
+                        const monotonicIso = maxTimeMs > 0 ? new Date(maxTimeMs).toISOString() : msg.created_at;
+
                         const shouldUpdateLastMessage = newlyAddedCount > 0 || newMsgTime >= (existingLastMsgTime - 300000);
 
                         const shouldIncrementUnread = !isCurrentlyOpen && !isOwnMessage && newlyAddedCount > 0;
@@ -1854,13 +1858,17 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
                         return {
                             ...conv,
-                            updated_at: shouldUpdateLastMessage ? msg.created_at : conv.updated_at,
+                            updated_at: shouldUpdateLastMessage ? monotonicIso : conv.updated_at,
                             lastMessage: incomingLastMsg,
                             last_message: incomingLastMsg,
                             unreadCount: nextUnread,
                             unread_count: nextUnread
                         };
-                    }).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+                    }).sort((a, b) => {
+                        const timeA = Math.max(new Date(a.lastMessage?.created_at || 0).getTime(), new Date(a.updated_at || 0).getTime());
+                        const timeB = Math.max(new Date(b.lastMessage?.created_at || 0).getTime(), new Date(b.updated_at || 0).getTime());
+                        return timeB - timeA;
+                    });
 
                     useChatStore.getState().setConversations(nextConvs);
                     ChatCacheEngine.saveConversations(nextConvs).catch(() => {});
@@ -2542,11 +2550,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     setConversations(cPrev => cPrev.map(conv => {
                         if (conv.id !== intent.conversation_id) return conv;
                         const existingLastMsgTime = new Date(conv.lastMessage?.created_at ?? 0).getTime();
+                        const existingUpdatedAtTime = new Date(conv.updated_at ?? 0).getTime();
                         const newMsgTime = new Date(canonicalMessage.created_at).getTime();
+                        const maxTimeMs = Math.max(existingLastMsgTime, existingUpdatedAtTime, newMsgTime);
+                        const monotonicIso = maxTimeMs > 0 ? new Date(maxTimeMs).toISOString() : canonicalMessage.created_at;
+
                         if (newMsgTime >= (existingLastMsgTime - 300000)) {
                             return {
                                 ...conv,
-                                updated_at: canonicalMessage.created_at,
+                                updated_at: monotonicIso,
                                 last_message: { 
                                     id: canonicalMessage.id, 
                                     content: canonicalMessage.content, 
@@ -2571,7 +2583,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                             };
                         }
                         return conv;
-                    }).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()));
+                    }).sort((a, b) => {
+                        const timeA = Math.max(new Date(a.lastMessage?.created_at || 0).getTime(), new Date(a.updated_at || 0).getTime());
+                        const timeB = Math.max(new Date(b.lastMessage?.created_at || 0).getTime(), new Date(b.updated_at || 0).getTime());
+                        return timeB - timeA;
+                    }));
 
                     await offlineQueue.updateIntentStatus(intent.event_id, 'synced', canonicalMessage.id);
                     await offlineQueue.removeIntent(intent.event_id);
@@ -2750,9 +2766,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         // that arrive before the HTTP POST finishes can link to this tempId.
         setConversations(cPrev => cPrev.map(conv => {
             if (conv.id !== conversationId) return conv;
+            const existingLastMsgTime = new Date(conv.lastMessage?.created_at ?? 0).getTime();
+            const existingUpdatedAtTime = new Date(conv.updated_at ?? 0).getTime();
+            const newMsgTime = new Date(optimisticMessage.created_at).getTime();
+            const maxTimeMs = Math.max(existingLastMsgTime, existingUpdatedAtTime, newMsgTime);
+            const monotonicIso = maxTimeMs > 0 ? new Date(maxTimeMs).toISOString() : optimisticMessage.created_at;
+
             return {
                 ...conv,
-                updated_at: optimisticMessage.created_at,
+                updated_at: monotonicIso,
                 lastMessage: {
                     id: optimisticMessage.id,
                     event_id: optimisticMessage.event_id,
@@ -2772,6 +2794,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     status: optimisticMessage.status
                 } as unknown as NonNullable<Conversation['lastMessage']>
             };
+        }).sort((a, b) => {
+            const timeA = Math.max(new Date(a.lastMessage?.created_at || 0).getTime(), new Date(a.updated_at || 0).getTime());
+            const timeB = Math.max(new Date(b.lastMessage?.created_at || 0).getTime(), new Date(b.updated_at || 0).getTime());
+            return timeB - timeA;
         }));
 
         // 1. Push Intent to Offline Queue

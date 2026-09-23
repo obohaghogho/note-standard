@@ -259,14 +259,18 @@ const ConversationList: React.FC = () => {
     const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
     const [selectedProfileUserId, setSelectedProfileUserId] = useState<string | null>(null);
 
-    const sortKeys = conversations.map(c =>
-        `${c.id}:${c.lastMessage?.created_at ?? c.updated_at ?? ''}:${c.lastMessage?.id ?? ''}:${(c as unknown as { unreadCount?: number }).unreadCount ?? 0}:${c.lastMessage?.status ?? ''}:${c.lastMessage?.delivered_at ?? ''}:${c.lastMessage?.read_at ?? ''}`
-    ).join(',');
+    const sortKeys = conversations.map(c => {
+        const recencyTime = Math.max(
+            new Date(c.lastMessage?.created_at || 0).getTime(),
+            new Date(c.updated_at || 0).getTime()
+        );
+        return `${c.id}:${recencyTime}:${c.lastMessage?.id ?? ''}:${(c as unknown as { unreadCount?: number }).unreadCount ?? 0}`;
+    }).join(',');
 
     const sortedConversations = useMemo(() => {
         const sorted = [...conversations].sort((a, b) => {
-            const timeA = new Date(a.lastMessage?.created_at || a.updated_at || 0).getTime();
-            const timeB = new Date(b.lastMessage?.created_at || b.updated_at || 0).getTime();
+            const timeA = Math.max(new Date(a.lastMessage?.created_at || 0).getTime(), new Date(a.updated_at || 0).getTime());
+            const timeB = Math.max(new Date(b.lastMessage?.created_at || 0).getTime(), new Date(b.updated_at || 0).getTime());
             return timeB - timeA;
         });
 
