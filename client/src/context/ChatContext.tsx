@@ -252,6 +252,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const sessionRef = useRef(session);
     useEffect(() => { sessionRef.current = session; }, [session]);
 
+    const userRef = useRef(user);
+    useEffect(() => { userRef.current = user; }, [user]);
+
     const conversationsRef = useRef<Conversation[]>([]);
     useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
 
