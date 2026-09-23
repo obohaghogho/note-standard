@@ -854,8 +854,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, []);
 
     const loadConversations = useCallback(async () => {
+        const requestUserId = user?.id;
         console.log('[CHAT] loadConversations started');
-        if (!session || isSwitching || conversationsFetchRef.current) {
+        if (!session || !requestUserId || isSwitching || conversationsFetchRef.current) {
             console.log(`[CHAT] loadConversations aborted: session=${!!session}, isSwitching=${isSwitching}, fetching=${conversationsFetchRef.current}`);
             return;
         }
@@ -863,7 +864,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         try {
             const response = await api.get('/chat/conversations');
             const data = response.data;
-            if (isMounted.current && Array.isArray(data)) {
+            if (isMounted.current && userRef.current?.id === requestUserId && Array.isArray(data)) {
                 const mappedData = data.map((conv: Conversation & { last_message?: Conversation['lastMessage']; unread_count?: number }) => {
                     const count = conv.unread_count ?? conv.unreadCount ?? 0;
                     return {
@@ -1119,14 +1120,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, [session, isSwitching, user?.id]);
 
     const loadMessages = useCallback(async (conversationId: string, force = false) => {
-        if (!session || !conversationId) return;
+        const requestUserId = user?.id;
+        if (!session || !conversationId || !requestUserId) return;
 
         // Instant Local Cache Warm-up: If memory state for this chat is empty,
         // instantly hydrate from IndexedDB before awaiting network.
         if (!messagesRef.current[conversationId] || messagesRef.current[conversationId].length === 0) {
             try {
                 const cached = await ChatCacheEngine.getMessagesForConversation(conversationId, user?.id);
-                if (cached && cached.length > 0 && isMounted.current) {
+                if (cached && cached.length > 0 && isMounted.current && userRef.current?.id === requestUserId) {
                     const convClearedAt = clearedAtMapRef.current.get(conversationId);
                     const convClearedAtMs = convClearedAt ? new Date(convClearedAt).getTime() : 0;
                     const validCached = cached.filter(m =>
@@ -1159,7 +1161,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         try {
             const res = await api.get(`/chat/conversations/${conversationId}/messages`);
-            if (isMounted.current) {
+            if (isMounted.current && userRef.current?.id === requestUserId) {
                 // Record cache timestamp before setting state
                 messagesCachedAtRef.current[conversationId] = Date.now();
 
@@ -1338,8 +1340,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     setConversations(freshConvs);
                     useChatStore.getState().setConversations(freshConvs);
                     const validIds = cachedConvs.map(c => c.id);
-                    const cachedMsgsMap = await ChatCacheEngine.batchGetMessagesForAllConversations(validIds);
-                    if (cachedMsgsMap && isMounted.current) {
+                    const cachedMsgsMap = await ChatCacheEngine.batchGetMessagesForAllConversations(validIds, user.id);
+                    if (cachedMsgsMap && isMounted.current && userRef.current?.id === user.id) {
                         setMessages(cachedMsgsMap);
                         Object.entries(cachedMsgsMap).forEach(([cid, msgs]) => {
                             useChatStore.getState().upsertMessages(cid, msgs);
@@ -3085,26 +3087,27 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 if (pId) deletedPeerIdsRef.current.delete(pId);
             });
 
+            const isExisting = !!res.data?.isExisting;
             const clearedAt = conv?.membership?.cleared_at;
             if (clearedAt) {
                 clearedAtMapRef.current.set(id, clearedAt);
             }
             
-            // Clear any stale cached messages for this conversation (critical for delete→re-add flow).
-            // The server now sets cleared_at = NOW() on re-open, so only fresh messages should show.
-            // We must clear client caches so old messages don't bleed through from IndexedDB/Zustand.
-            setMessages(prev => {
-                const next = { ...prev };
-                delete next[id];
-                messagesRef.current = next;
-                return next;
-            });
-            // Clear IndexedDB cache for this conversation
-            ChatCacheEngine.deleteConversation(id).catch(() => {});
-            // Clear the staleness gate so loadMessages does a fresh server fetch
+            // Only purge cached messages if this is NOT an existing conversation with history or if explicit cleared_at is set
+            if (!isExisting && clearedAt) {
+                setMessages(prev => {
+                    const next = { ...prev };
+                    delete next[id];
+                    messagesRef.current = next;
+                    return next;
+                });
+                ChatCacheEngine.deleteConversation(id).catch(() => {});
+            }
+            // Clear the staleness gate so loadMessages does a fresh server sync
             delete messagesCachedAtRef.current[id];
 
             setActiveConversationId(id);
+            loadMessages(id, true).catch(() => {});
 
             // FIX: Reset the fetch guard before re-loading so the call is never silently
             // swallowed by the concurrent-fetch de-bounce. This ensures the server snapshot

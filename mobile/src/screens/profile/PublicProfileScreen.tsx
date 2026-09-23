@@ -46,9 +46,10 @@ export default function PublicProfileScreen() {
   const handleStartChat = async () => {
     try {
       const res = await apiClient.post('/chat/conversations', { recipient_id: userId });
-      const conv = res.data;
-      if (conv) {
-        navigation.navigate('Chat', { conversationId: conv.id, conversation: conv });
+      const conv = res.data?.conversation || res.data;
+      const convId = conv?.id || res.data?.existingChatId;
+      if (convId) {
+        navigation.navigate('Chat', { conversationId: convId, conversation: conv });
       }
     } catch (e: any) {
       console.warn('Failed to start chat:', e);
