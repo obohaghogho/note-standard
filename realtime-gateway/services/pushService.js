@@ -831,11 +831,20 @@ async function sendGenericPush(params) {
     const sockets = presence.getUserSockets(userId);
     console.log(`[FORENSIC][PushService] Preparing push for user ${userId}. Online: ${isOnline}, Sockets: ${sockets.length} ([${sockets.join(',')}])`);
 
-    // --- 1. Native tokens (FCM / APNs) ---
-    const { data: tokens, error } = await supabase
-      .from('native_device_tokens')
-      .select('token, platform, type, device_id')
-      .eq('user_id', userId);
+    // --- 1. Fetch native tokens (FCM/APNs) & Web Push subscriptions in PARALLEL ---
+    const [{ data: tokens, error }, { data: webSubs, error: webErr }] = await Promise.all([
+      supabase
+        .from('native_device_tokens')
+        .select('token, platform, type, device_id')
+        .eq('user_id', userId),
+      (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY)
+        ? supabase
+            .from('push_subscriptions')
+            .select('endpoint, p256dh, auth, vapid_key_version')
+            .eq('user_id', userId)
+            .neq('status', 'invalid')
+        : Promise.resolve({ data: [], error: null })
+    ]);
 
     const nativePromises = [];
 
@@ -929,17 +938,8 @@ async function sendGenericPush(params) {
     }
 
     // --- 2. Web Push (PWA / Browser — VAPID) ---
-    // CRITICAL FIX: sendGenericPush previously skipped web push entirely, causing
-    // browsers (PWA) to never receive chat message notifications.
-    if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
-      const { data: webSubs, error: webErr } = await supabase
-        .from('push_subscriptions')
-        .select('endpoint, p256dh, auth, vapid_key_version')
-        .eq('user_id', userId)
-        .neq('status', 'invalid');
-
-      if (!webErr && webSubs && webSubs.length > 0) {
-        if (payload?.trace) { payload.trace.pushProviderStartTs = Date.now(); }
+    if (!webErr && webSubs && webSubs.length > 0) {
+      if (payload?.trace) { payload.trace.pushProviderStartTs = Date.now(); }
       const webPayload = JSON.stringify({
           title,
           body,
@@ -1002,9 +1002,8 @@ async function sendGenericPush(params) {
 
         nativePromises.push(...webPromises);
         console.log(`[PushService] 📤 Web push dispatched to ${webSubs.length} subscription(s) for user ${userId}`);
-      } else {
-        console.log(`[PushService] No web push subscriptions found for user ${userId}`);
-      }
+    } else {
+      console.log(`[PushService] No web push subscriptions found for user ${userId}`);
     }
 
     await Promise.all(nativePromises.filter(Boolean));
