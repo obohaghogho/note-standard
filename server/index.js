@@ -99,7 +99,9 @@ server.listen(PORT, "0.0.0.0", async () => {
   nowPaymentsPollingWorker.start();
   supportInactivityWorker.start();
 
-  // ── Enterprise Treasury Workers ────────────────────────────────────────────
+  // ── Enterprise Treasury & Settlement Workers ──────────────────────────────
+  const SettlementSyncWorker = require("./workers/SettlementSyncWorker");
+  SettlementSyncWorker.start(parseInt(process.env.WORKER_SETTLEMENT_SYNC_INTERVAL_MS || '300000', 10));
   TreasuryBalanceSyncWorker.start();
   AggregateReconciliationWorker.start();
   ProviderHealthWorker.start();
