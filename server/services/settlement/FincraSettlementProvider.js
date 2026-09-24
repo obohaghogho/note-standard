@@ -60,15 +60,22 @@ class FincraSettlementProvider extends ISettlementProviderV1 {
     logger.info(`[FincraSettlementProvider] Payout request to ${address}, Amount: ${amount} ${currency}, Ref: ${reference}`);
 
     if (process.env.ENABLE_LIVE_SETTLEMENT_PROVIDER_EXECUTION === 'true') {
-      const { instance } = getFincraClient();
+      const { instance, businessId } = getFincraClient();
+
+      if (!businessId) {
+        throw new Error('Fincra settlement unavailable: FINCRA business ID is not configured');
+      }
+
       const cur = (currency || 'NGN').toUpperCase();
 
       const payload = {
         sourceCurrency: cur,
         destinationCurrency: cur,
         amount: parseFloat(amount),
+        business: businessId,
         description: `NoteStandard platform revenue settlement ${reference}`,
         customerReference: reference,
+        paymentDestination: "bank_account",
         beneficiary: {
           name: "NoteStandard Revenue Account",
           accountNumber: address,
