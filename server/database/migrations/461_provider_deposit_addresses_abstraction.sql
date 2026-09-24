@@ -47,4 +47,12 @@ DROP POLICY IF EXISTS users_read_own_provider_addresses ON public.provider_depos
 CREATE POLICY users_read_own_provider_addresses ON public.provider_deposit_addresses
     FOR SELECT TO authenticated USING (auth.uid() = user_id);
 
+-- ============================================================================
+-- DATA API GRANTS (required as of Supabase October 30 2026 change)
+-- New tables in public schema need explicit grants; default privileges alone
+-- are no longer sufficient after Supabase's security model update.
+-- ============================================================================
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.provider_deposit_addresses TO authenticated;
+GRANT ALL ON public.provider_deposit_addresses TO service_role;
+
 COMMIT;

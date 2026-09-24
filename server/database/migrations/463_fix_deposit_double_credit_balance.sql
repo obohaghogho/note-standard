@@ -117,4 +117,10 @@ ALTER TABLE public.balance_correction_log ENABLE ROW LEVEL SECURITY;
 CREATE POLICY bcl_service_only ON public.balance_correction_log
     FOR ALL TO service_role USING (true) WITH CHECK (true);
 
+-- ============================================================================
+-- DATA API GRANTS (required as of Supabase October 30 2026 change)
+-- ============================================================================
+GRANT ALL ON public.balance_correction_log TO service_role;
+-- No authenticated grant: this table is internal audit-only (service_role access via bcl_service_only policy).
+
 COMMIT;

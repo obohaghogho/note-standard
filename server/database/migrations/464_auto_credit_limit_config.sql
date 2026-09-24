@@ -87,6 +87,14 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.get_auto_credit_limit(TEXT) TO service_role, authenticated;
 
+-- ============================================================================
+-- DATA API GRANTS (required as of Supabase October 30 2026 change)
+-- admin_settings is gated by RLS (admin_settings_admin_read / admin_settings_service)
+-- but the table-level grant must exist for PostgREST to route requests at all.
+-- ============================================================================
+GRANT SELECT ON public.admin_settings TO authenticated;
+GRANT ALL ON public.admin_settings TO service_role;
+
 -- ─── 4. Add wallet_credit_status to manual_deposits if not present ───────────
 ALTER TABLE public.manual_deposits
     ADD COLUMN IF NOT EXISTS wallet_credited     BOOLEAN     NOT NULL DEFAULT FALSE,
