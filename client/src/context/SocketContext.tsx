@@ -284,7 +284,6 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 setConnected(false);
 
                 const isFatal =
-                    err.message.includes('BOOT_NOT_READY') ||
                     err.message.includes('Session ID and Device ID required') ||
                     err.message.includes('Authentication error');
 

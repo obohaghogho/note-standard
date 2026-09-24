@@ -189,6 +189,13 @@ class PushDispatcher {
         return false;
       }
 
+      const p256dhBufLen = Buffer.from(p256dh, 'base64url').length;
+      const authBufLen = Buffer.from(auth, 'base64url').length;
+      if (p256dhBufLen !== 65 || authBufLen < 16) {
+        console.warn(`[PushDispatcher] ⚠️ Invalid Web Push key lengths for ${device.endpoint?.slice(0, 30)}... (p256dh bytes: ${p256dhBufLen}, auth bytes: ${authBufLen})`);
+        return false;
+      }
+
       const webPayload = JSON.stringify({
         title: payload.title,
         body: payload.body,

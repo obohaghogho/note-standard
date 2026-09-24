@@ -272,7 +272,8 @@ const dispatchFastPush = (params) => {
       }
 
       const envConfig = require('../config/env');
-      const gatewayUrlStr = process.env.REALTIME_GATEWAY_URL || envConfig.REALTIME_GATEWAY_URL || 'https://realtime-gateway-gsb5.onrender.com';
+      const gatewayUrlRaw = process.env.REALTIME_GATEWAY_URL || envConfig.REALTIME_GATEWAY_URL || 'https://realtime-gateway-gsb5.onrender.com';
+      const gatewayUrlStr = gatewayUrlRaw.startsWith('http://') || gatewayUrlRaw.startsWith('https://') ? gatewayUrlRaw : `https://${gatewayUrlRaw}`;
       const bodyStr = message || title;
 
       // Normalise Gateway URL (strip trailing slash)

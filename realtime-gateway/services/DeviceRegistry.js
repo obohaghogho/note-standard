@@ -57,6 +57,8 @@ class DeviceRegistry {
 
           for (const dev of devices) {
             if (!dev || !dev.push_endpoint || dev.endpoint_status === 'INVALID') continue;
+            const isVapidDev = dev.type === 'vapid' || (typeof dev.push_endpoint === 'string' && dev.push_endpoint.startsWith('https://'));
+            if (isVapidDev && (!dev.push_p256dh || !dev.push_auth)) continue;
 
             const endpointKey = dev.push_endpoint;
             const platformClass = DeviceRegistry.classifyPlatform(dev.platform, dev.type);
@@ -96,7 +98,7 @@ class DeviceRegistry {
 
       if (!v1Error && v1Data) {
         for (const sub of v1Data) {
-          if (!sub.endpoint) continue;
+          if (!sub.endpoint || !sub.p256dh || !sub.auth) continue;
 
           const endpointKey = sub.endpoint;
           // Deduplicate: If V2 already claimed this exact endpoint, merge attributes
