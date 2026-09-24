@@ -2566,112 +2566,92 @@ exports.getFeeRevenueDashboard = async (req, res, next) => {
     const days = msMap[range] ?? 30;
     const since = days ? new Date(Date.now() - days * 86400000).toISOString() : null;
 
-    // ── 1. Aggregate fees from the transactions table (fee column) ──────────
+    // ── 1. Aggregate Customer Fees & Transactions from transactions table ───
     let txQuery = serviceSupabase
       .from('transactions')
-      .select('fee, currency, type, status, created_at')
-      .in('status', ['COMPLETED', 'completed'])
+      .select('id, amount, fee, currency, type, status, created_at, reference_id, provider')
+      .in('status', ['COMPLETED', 'SUCCESS', 'completed', 'success'])
       .gt('fee', 0);
     if (since) txQuery = txQuery.gte('created_at', since);
+
     const { data: txFeeRows = [], error: txErr } = await txQuery;
     if (txErr) console.warn('[FeeRevenue] transactions fee query warning:', txErr.message);
 
-    // Group fees by currency
-    const feesByCurrency = {};
+    // Group fees by currency and transaction type
+    const customerFeesByCurrency = {};
     const feesByType = {};
     for (const row of txFeeRows) {
       const cur = (row.currency || 'NGN').toUpperCase();
       const fee = parseFloat(row.fee || 0);
-      if (!feesByCurrency[cur]) feesByCurrency[cur] = 0;
-      feesByCurrency[cur] += fee;
+      if (!customerFeesByCurrency[cur]) customerFeesByCurrency[cur] = 0;
+      customerFeesByCurrency[cur] += fee;
       const tp = row.type || 'UNKNOWN';
       if (!feesByType[tp]) feesByType[tp] = 0;
       feesByType[tp] += fee;
     }
 
-    // ── 2. Commissions audit log ─────────────────────────────────────────────
-    let commQuery = serviceSupabase
-      .from('commissions')
-      .select('id, amount, currency, rate_applied, commission_type, created_at, source_user_id')
-      .order('created_at', { ascending: false })
-      .limit(100);
-    if (since) commQuery = commQuery.gte('created_at', since);
-    const { data: commissions = [], error: commErr } = await commQuery;
-    if (commErr) console.warn('[FeeRevenue] commissions query warning:', commErr.message);
-
-    // Total commissions by currency
-    const commByCurrency = {};
-    for (const c of commissions) {
-      const cur = (c.currency || 'NGN').toUpperCase();
-      if (!commByCurrency[cur]) commByCurrency[cur] = 0;
-      commByCurrency[cur] += parseFloat(c.amount || 0);
-    }
-
-    // ── 3. Revenue logs ──────────────────────────────────────────────────────
+    // ── 2. Platform Revenue Logs (NoteStandard Admin Revenue Component) ──────
     let revQuery = serviceSupabase
       .from('revenue_logs')
       .select('amount, currency, revenue_type, created_at')
-      .order('created_at', { ascending: false })
-      .limit(200);
+      .order('created_at', { ascending: false });
     if (since) revQuery = revQuery.gte('created_at', since);
     const { data: revLogs = [], error: revErr } = await revQuery;
     if (revErr) console.warn('[FeeRevenue] revenue_logs query warning:', revErr.message);
 
-    // Group by revenue type and currency
+    const platformRevenueByCurrency = {};
     const revByType = {};
     for (const r of revLogs) {
-      const key = `${r.revenue_type || 'UNKNOWN'}_${(r.currency || 'NGN').toUpperCase()}`;
-      if (!revByType[key]) revByType[key] = { type: r.revenue_type, currency: r.currency, total: 0, count: 0 };
-      revByType[key].total += parseFloat(r.amount || 0);
+      const cur = (r.currency || 'NGN').toUpperCase();
+      const amt = parseFloat(r.amount || 0);
+      if (!platformRevenueByCurrency[cur]) platformRevenueByCurrency[cur] = 0;
+      platformRevenueByCurrency[cur] += amt;
+
+      const key = `${r.revenue_type || 'UNKNOWN'}_${cur}`;
+      if (!revByType[key]) revByType[key] = { type: r.revenue_type, currency: cur, total: 0, count: 0 };
+      revByType[key].total += amt;
       revByType[key].count += 1;
     }
 
-    // ── 4. Platform wallet balances (where fees are credited to) ────────────
+    // ── 3. Platform Wallets (Operational Scope: NGN, USD, GHS) ──────────────
     const { data: platformWallets = [], error: pwErr } = await serviceSupabase
       .from('platform_wallets')
       .select('id, currency, chain, description, wallet_id, external_address');
     if (pwErr) console.warn('[FeeRevenue] platform_wallets query warning:', pwErr.message);
 
-    // For each platform wallet, fetch the actual wallet balance
+    const PlatformSettlementService = require('../services/settlement/PlatformSettlementService');
+
     const platformWalletBalances = [];
     for (const pw of platformWallets) {
-      let balance = 0;
-      let available = 0;
-      if (pw.wallet_id) {
-        const { data: wData } = await serviceSupabase
-          .from('wallets_store')
-          .select('balance, available_balance')
-          .eq('id', pw.wallet_id)
-          .maybeSingle();
-        if (wData) {
-          balance = parseFloat(wData.balance || 0);
-          available = parseFloat(wData.available_balance || 0);
-        }
-      }
+      const cur = pw.currency.toUpperCase();
+      const revBalance = await PlatformSettlementService.getPlatformRevenueBalance(cur);
+
       platformWalletBalances.push({
         id: pw.id,
-        currency: pw.currency,
-        chain: pw.chain,
-        description: pw.description || 'Platform Fee Wallet',
-        balance,
-        available,
+        currency: cur,
+        chain: pw.chain || 'NATIVE',
+        description: pw.description || `Platform Revenue Wallet (${cur})`,
+        balance: revBalance.totalRevenue,
+        available: revBalance.availableRevenue,
+        settled: revBalance.totalSettled,
         hasLinkedWallet: !!pw.wallet_id,
       });
     }
 
-    // ── 5. Recent fee transactions (last 50) ─────────────────────────────────
+    // ── 4. Recent Fee-Bearing Transactions (last 50) ─────────────────────────
     let recentQuery = serviceSupabase
       .from('transactions')
-      .select('id, type, amount, fee, currency, status, reference_id, created_at')
+      .select('id, type, amount, fee, currency, status, reference_id, created_at, provider')
+      .in('status', ['COMPLETED', 'SUCCESS', 'completed', 'success'])
       .gt('fee', 0)
       .order('created_at', { ascending: false })
       .limit(50);
     if (since) recentQuery = recentQuery.gte('created_at', since);
     const { data: recentFeeTx = [] } = await recentQuery;
 
-    // ── 6. Summary Stats ─────────────────────────────────────────────────────
-    const totalFeesNGN = feesByCurrency['NGN'] || 0;
-    const totalFeesUSD = feesByCurrency['USD'] || 0;
+    // ── 5. Summary Stats ─────────────────────────────────────────────────────
+    const totalFeesNGN = customerFeesByCurrency['NGN'] || platformRevenueByCurrency['NGN'] || 0;
+    const totalFeesUSD = customerFeesByCurrency['USD'] || platformRevenueByCurrency['USD'] || 0;
     const totalTransactionsWithFee = txFeeRows.length;
     const avgFeeNGN = totalTransactionsWithFee > 0 ? totalFeesNGN / totalTransactionsWithFee : 0;
 
@@ -2682,17 +2662,64 @@ exports.getFeeRevenueDashboard = async (req, res, next) => {
       summary: {
         totalTransactionsWithFee,
         avgFeeNGN: avgFeeNGN.toFixed(2),
-        feesByCurrency,
-        commissionsByCurrency: commByCurrency,
+        feesByCurrency: customerFeesByCurrency,
+        platformRevenueByCurrency,
       },
       feesByType,
       revenueByType: Object.values(revByType),
       platformWallets: platformWalletBalances,
       recentFeeTransactions: recentFeeTx,
-      recentCommissions: commissions.slice(0, 20),
     });
   } catch (err) {
     next(err);
+  }
+};
+
+/**
+ * POST /api/admin/fee-revenue/settle
+ * Controlled Platform Revenue Settlement endpoint
+ */
+exports.settlePlatformRevenue = async (req, res, next) => {
+  try {
+    const adminUserId = req.user?.id || req.user?.userId;
+
+    // Extract amount, currency, and idempotencyKey.
+    // destinationAccountId is intentionally NOT extracted from req.body.
+    // The settlement destination is resolved exclusively from server-side
+    // environment variables in PlatformSettlementService (Blocker 3 fix).
+    const { amount, currency = 'NGN' } = req.body;
+
+    // Accept idempotency key from standard Idempotency-Key header (preferred)
+    // or from request body (fallback). Required for live execution.
+    const idempotencyKey =
+      req.headers['idempotency-key'] ||
+      req.headers['x-idempotency-key'] ||
+      req.body.idempotencyKey ||
+      null;
+
+    const PlatformSettlementService = require('../services/settlement/PlatformSettlementService');
+
+    const result = await PlatformSettlementService.requestSettlement({
+      adminUserId,
+      amount,
+      currency,
+      idempotencyKey,
+      // destinationAccountId is deliberately not passed — service resolves from env
+    });
+
+    return res.json({
+      success: true,
+      ...result
+    });
+  } catch (err) {
+    const statusCode = err.message?.startsWith('MISSING_IDEMPOTENCY_KEY') ? 422
+      : err.message?.startsWith('INSUFFICIENT_PLATFORM_REVENUE') ? 409
+      : err.message?.startsWith('INVALID_SETTLEMENT_AMOUNT') ? 400
+      : 400;
+    return res.status(statusCode).json({
+      success: false,
+      error: err.message
+    });
   }
 };
 

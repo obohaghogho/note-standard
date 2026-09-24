@@ -189,6 +189,7 @@ router.put(
 
 // Fee Revenue Dashboard — aggregates all collected fees, commissions, platform wallet balances
 router.get("/fee-revenue", adminController.getFeeRevenueDashboard);
+router.post("/fee-revenue/settle", adminController.settlePlatformRevenue);
 
 // Affiliate Management
 router.get("/affiliates/stats", adminController.getAffiliateStats);
