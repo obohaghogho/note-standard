@@ -84,7 +84,6 @@ class FincraSettlementProvider extends ISettlementProviderV1 {
         paymentDestination: "bank_account",
         beneficiary: {
           accountHolderName,
-          name: accountHolderName,
           accountNumber: address,
           type: "corporate",
           bankCode: process.env.FINCRA_BANK_CODE || "058",
