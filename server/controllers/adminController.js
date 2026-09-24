@@ -2574,7 +2574,8 @@ exports.getFeeRevenueDashboard = async (req, res, next) => {
       .gt('fee', 0);
     if (since) txQuery = txQuery.gte('created_at', since);
 
-    const { data: txFeeRows = [], error: txErr } = await txQuery;
+    const { data: rawTxFeeRows, error: txErr } = await txQuery;
+    const txFeeRows = Array.isArray(rawTxFeeRows) ? rawTxFeeRows : [];
     if (txErr) console.warn('[FeeRevenue] transactions fee query warning:', txErr.message);
 
     // Group fees by currency and transaction type
@@ -2596,7 +2597,8 @@ exports.getFeeRevenueDashboard = async (req, res, next) => {
       .select('amount, currency, revenue_type, created_at')
       .order('created_at', { ascending: false });
     if (since) revQuery = revQuery.gte('created_at', since);
-    const { data: revLogs = [], error: revErr } = await revQuery;
+    const { data: rawRevLogs, error: revErr } = await revQuery;
+    const revLogs = Array.isArray(rawRevLogs) ? rawRevLogs : [];
     if (revErr) console.warn('[FeeRevenue] revenue_logs query warning:', revErr.message);
 
     const platformRevenueByCurrency = {};
@@ -2614,9 +2616,10 @@ exports.getFeeRevenueDashboard = async (req, res, next) => {
     }
 
     // ── 3. Platform Wallets (Operational Scope: NGN, USD, GHS) ──────────────
-    const { data: platformWallets = [], error: pwErr } = await serviceSupabase
+    const { data: rawPlatformWallets, error: pwErr } = await serviceSupabase
       .from('platform_wallets')
       .select('id, currency, chain, description, wallet_id, external_address');
+    const platformWallets = Array.isArray(rawPlatformWallets) ? rawPlatformWallets : [];
     if (pwErr) console.warn('[FeeRevenue] platform_wallets query warning:', pwErr.message);
 
     const PlatformSettlementService = require('../services/settlement/PlatformSettlementService');
@@ -2647,7 +2650,8 @@ exports.getFeeRevenueDashboard = async (req, res, next) => {
       .order('created_at', { ascending: false })
       .limit(50);
     if (since) recentQuery = recentQuery.gte('created_at', since);
-    const { data: recentFeeTx = [] } = await recentQuery;
+    const { data: rawRecentFeeTx } = await recentQuery;
+    const recentFeeTx = Array.isArray(rawRecentFeeTx) ? rawRecentFeeTx : [];
 
     // ── 5. Summary Stats ─────────────────────────────────────────────────────
     const totalFeesNGN = customerFeesByCurrency['NGN'] || platformRevenueByCurrency['NGN'] || 0;
