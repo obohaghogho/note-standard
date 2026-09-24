@@ -4,7 +4,7 @@
  * test_fincra_settlement_payload.js
  * ══════════════════════════════════════════════════════════════════════════════
  * Unit and Integration Test Suite for Fincra Settlement Payout Payload
- * Verification of minimal repair: businessId, paymentDestination, and fail-closed validation.
+ * Verification of minimal repair: businessId, paymentDestination, accountHolderName, and fail-closed validation.
  */
 
 const path = require('path');
@@ -30,12 +30,14 @@ async function runPayloadTests() {
 
   const origLiveFlag = process.env.ENABLE_LIVE_SETTLEMENT_PROVIDER_EXECUTION;
   const origBusinessId = process.env.FINCRA_BUSINESS_ID;
+  const origAccountName = process.env.FINCRA_ACCOUNT_NAME;
 
   try {
-    // ── TEST A & B: Payload Structure in Live Execution Mode ────────
-    console.log('── Test A & B: Payload Structure in Live Execution Mode ────────');
+    // ── TEST A, B, C & D: Payload Structure in Live Execution Mode ────────
+    console.log('── Test A, B, C & D: Payload Structure in Live Execution Mode ────────');
     process.env.ENABLE_LIVE_SETTLEMENT_PROVIDER_EXECUTION = 'true';
     process.env.FINCRA_BUSINESS_ID = '6a4ff170021f8ec0b94ebb65';
+    process.env.FINCRA_ACCOUNT_NAME = 'JOSSY DIGITAL TECHNOLOGIES LTD';
 
     let capturedPayload = null;
     let requestCount = 0;
@@ -103,13 +105,34 @@ async function runPayloadTests() {
       fail('Test B: payload.paymentDestination', `Expected 'bank_account', got '${capturedPayload?.paymentDestination}'`);
     }
 
+    if (capturedPayload && capturedPayload.beneficiary && capturedPayload.beneficiary.accountHolderName === 'JOSSY DIGITAL TECHNOLOGIES LTD') {
+      pass('Test C: payload.beneficiary.accountHolderName matches configured accountHolderName');
+    } else {
+      fail('Test C: payload.beneficiary.accountHolderName', `Expected 'JOSSY DIGITAL TECHNOLOGIES LTD', got '${capturedPayload?.beneficiary?.accountHolderName}'`);
+    }
+
+    if (capturedPayload && capturedPayload.beneficiary && capturedPayload.beneficiary.country === 'NG') {
+      pass('Test D: payload.beneficiary.country is "NG"');
+    } else {
+      fail('Test D: payload.beneficiary.country', `Expected 'NG', got '${capturedPayload?.beneficiary?.country}'`);
+    }
+
+    if (capturedPayload && capturedPayload.beneficiary && capturedPayload.beneficiary.type === 'corporate') {
+      pass('Test E: payload.beneficiary.type is "corporate"');
+    } else {
+      fail('Test E: payload.beneficiary.type', `Expected 'corporate', got '${capturedPayload?.beneficiary?.type}'`);
+    }
+
     // Print sanitized payload for verification report
     const sanitized = JSON.parse(JSON.stringify(capturedPayload));
     sanitized.business = '<REDACTED_BUSINESS_ID>';
+    sanitized.beneficiary.accountHolderName = '<REDACTED_ACCOUNT_HOLDER_NAME>';
+    sanitized.beneficiary.name = '<REDACTED_ACCOUNT_HOLDER_NAME>';
+    sanitized.beneficiary.accountNumber = '<REDACTED_ACCOUNT_NUMBER>';
     console.log('\n  [SANITIZED GENERATED PAYLOAD]:\n', JSON.stringify(sanitized, null, 2), '\n');
 
-    // ── TEST C: Missing Business ID fails closed ──────────────────────────
-    console.log('── Test C: Missing Business ID Fail-Closed Protection ──────────');
+    // ── TEST F: Missing Business ID fails closed ──────────────────────────
+    console.log('── Test F: Missing Business ID Fail-Closed Protection ──────────');
     process.env.ENABLE_LIVE_SETTLEMENT_PROVIDER_EXECUTION = 'true';
     process.env.FINCRA_BUSINESS_ID = '';
 
@@ -148,20 +171,20 @@ async function runPayloadTests() {
     } catch (err) {
       threw = true;
       if (err.message.includes('FINCRA business ID is not configured')) {
-        pass('Test C: Throws explicit error when businessId is missing');
+        pass('Test F: Throws explicit error when businessId is missing');
       } else {
-        fail('Test C: Error message', `Unexpected error message: ${err.message}`);
+        fail('Test F: Error message', `Unexpected error message: ${err.message}`);
       }
     }
 
     if (!threw) {
-      fail('Test C: Fail-closed', 'createPayout did not throw when businessId was empty');
+      fail('Test F: Fail-closed', 'createPayout did not throw when businessId was empty');
     }
 
     if (failClosedReqCount === 0) {
-      pass('Test C: Fincra HTTP request count = 0 when businessId is missing');
+      pass('Test F: Fincra HTTP request count = 0 when businessId is missing');
     } else {
-      fail('Test C: HTTP request count', `Expected 0 requests, got ${failClosedReqCount}`);
+      fail('Test F: HTTP request count', `Expected 0 requests, got ${failClosedReqCount}`);
     }
 
     // Clean cache restore
@@ -171,6 +194,7 @@ async function runPayloadTests() {
   } finally {
     process.env.ENABLE_LIVE_SETTLEMENT_PROVIDER_EXECUTION = origLiveFlag || 'false';
     process.env.FINCRA_BUSINESS_ID = origBusinessId || '';
+    process.env.FINCRA_ACCOUNT_NAME = origAccountName || '';
   }
 
   console.log(`\nPayload Test Results: ${passed} PASSED, ${failed} FAILED\n`);

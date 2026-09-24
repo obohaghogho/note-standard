@@ -66,6 +66,12 @@ class FincraSettlementProvider extends ISettlementProviderV1 {
         throw new Error('Fincra settlement unavailable: FINCRA business ID is not configured');
       }
 
+      const accountHolderName = (process.env.FINCRA_ACCOUNT_NAME || 'JOSSY DIGITAL TECHNOLOGIES LTD').trim();
+
+      if (!accountHolderName) {
+        throw new Error('Fincra settlement unavailable: FINCRA_ACCOUNT_NAME is not configured');
+      }
+
       const cur = (currency || 'NGN').toUpperCase();
 
       const payload = {
@@ -77,10 +83,12 @@ class FincraSettlementProvider extends ISettlementProviderV1 {
         customerReference: reference,
         paymentDestination: "bank_account",
         beneficiary: {
-          name: "NoteStandard Revenue Account",
+          accountHolderName,
+          name: accountHolderName,
           accountNumber: address,
           type: "corporate",
-          bankCode: process.env.FINCRA_BANK_CODE || "033"
+          bankCode: process.env.FINCRA_BANK_CODE || "058",
+          country: process.env.FINCRA_COUNTRY || "NG"
         }
       };
 
