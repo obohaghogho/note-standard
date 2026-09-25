@@ -1098,6 +1098,15 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     console.log(`[ChatContext] loadSingleConversation BLOCKED by tombstone (post-fetch): ${conversationId}`);
                     return;
                 }
+
+                const serverClearedAt = (conv as any).membership?.cleared_at || (conv as any).cleared_at;
+                if (serverClearedAt) {
+                    const existing = clearedAtMapRef.current.get(conv.id);
+                    if (!existing || new Date(serverClearedAt).getTime() > new Date(existing).getTime()) {
+                        clearedAtMapRef.current.set(conv.id, serverClearedAt);
+                    }
+                }
+
                 setConversations(prev => {
                     // Check if it already got loaded by loadConversations in the meantime
                     if (prev.some(c => c.id === conversationId)) return prev;
@@ -1123,14 +1132,23 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         const requestUserId = user?.id;
         if (!session || !conversationId || !requestUserId) return;
 
+        // Resolve conversation cleared_at timestamp (checking map first, falling back to conversations list)
+        let convClearedAt = clearedAtMapRef.current.get(conversationId);
+        if (!convClearedAt) {
+            const targetConv = conversationsRef.current.find(c => c.id === conversationId);
+            convClearedAt = (targetConv as any)?.membership?.cleared_at || (targetConv as any)?.cleared_at;
+            if (convClearedAt) {
+                clearedAtMapRef.current.set(conversationId, convClearedAt);
+            }
+        }
+        const convClearedAtMs = convClearedAt ? new Date(convClearedAt).getTime() : 0;
+
         // Instant Local Cache Warm-up: If memory state for this chat is empty,
         // instantly hydrate from IndexedDB before awaiting network.
         if (!messagesRef.current[conversationId] || messagesRef.current[conversationId].length === 0) {
             try {
                 const cached = await ChatCacheEngine.getMessagesForConversation(conversationId, user?.id);
                 if (cached && cached.length > 0 && isMounted.current && userRef.current?.id === requestUserId) {
-                    const convClearedAt = clearedAtMapRef.current.get(conversationId);
-                    const convClearedAtMs = convClearedAt ? new Date(convClearedAt).getTime() : 0;
                     const validCached = cached.filter(m =>
                         !deletedMessageIdsRef.current.has(m.id) && !m.is_deleted &&
                         (!convClearedAtMs || new Date(m.created_at).getTime() > convClearedAtMs)
@@ -1168,8 +1186,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 // Hard-filter: remove any message that is in the tombstone (optimistically deleted
                 // this session), that the server already marked as soft-deleted, or that
                 // was created before this conversation's cleared_at timestamp (delete→re-add).
-                const convClearedAt = clearedAtMapRef.current.get(conversationId);
-                const convClearedAtMs = convClearedAt ? new Date(convClearedAt).getTime() : 0;
                 const filtered = (res.data as (Message & { is_deleted?: boolean })[]).filter(
                     m => !deletedMessageIdsRef.current.has(m.id) && !m.is_deleted &&
                          (!convClearedAtMs || new Date(m.created_at).getTime() > convClearedAtMs)
@@ -1179,6 +1195,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 if (filtered.length > 0) {
                     useChatStore.getState().upsertMessages(conversationId, filtered);
                     ChatCacheEngine.replaceMessagesForConversation(conversationId, filtered, user?.id).catch(() => {});
+                } else {
+                    useChatStore.getState().clearConversationMessages(conversationId);
+                    ChatCacheEngine.clearMessagesForConversation(conversationId).catch(() => {});
                 }
                 
                 // ── BULK UN-ACKED DELIVERY SWEEP ─────────────────────────────────

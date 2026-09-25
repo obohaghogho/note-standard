@@ -399,34 +399,45 @@ exports.syncMessages = async (req, res) => {
       return res.status(400).json({ error: "'since' query param is required (ISO timestamp)" });
     }
 
+    // Load membership cleared_at timestamps for user
+    const clearedMap = new Map();
+    let memQuery = supabase
+      .from("conversation_members")
+      .select("conversation_id, cleared_at")
+      .eq("user_id", userId);
+
+    if (conversationId) {
+      memQuery = memQuery.eq("conversation_id", conversationId);
+    }
+    const { data: memberships, error: memErr } = await memQuery;
+    if (memErr) throw memErr;
+    if (conversationId && (!memberships || memberships.length === 0)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    const convIds = (memberships || []).map(m => {
+      if (m.cleared_at) clearedMap.set(m.conversation_id, new Date(m.cleared_at).getTime());
+      return m.conversation_id;
+    });
+
+    if (convIds.length === 0) return res.json([]);
+
+    const filterClearedSync = (list) => {
+      return (list || []).filter(m => {
+        const clearedTime = clearedMap.get(m.conversation_id);
+        if (!clearedTime) return true;
+        return new Date(m.created_at).getTime() > clearedTime;
+      });
+    };
+
     let query = supabase
       .from("messages")
       .select("*, attachment:media_attachments(*), sender:profiles(id, username, full_name, avatar_url)")
       .eq("is_deleted", false)
       .gte("created_at", since)
+      .in("conversation_id", convIds)
       .order("created_at", { ascending: true })
       .limit(200);
-
-    if (conversationId) {
-      // Verify membership before scoping
-      const { data: mem } = await supabase
-        .from("conversation_members")
-        .select("conversation_id")
-        .eq("conversation_id", conversationId)
-        .eq("user_id", userId)
-        .maybeSingle();
-      if (!mem) return res.status(403).json({ error: "Access denied" });
-      query = query.eq("conversation_id", conversationId);
-    } else {
-      // Scope to all conversations the user belongs to
-      const { data: memberships } = await supabase
-        .from("conversation_members")
-        .select("conversation_id")
-        .eq("user_id", userId);
-      const convIds = (memberships || []).map(m => m.conversation_id);
-      if (convIds.length === 0) return res.json([]);
-      query = query.in("conversation_id", convIds);
-    }
 
     const { data, error } = await query;
     if (error) {
@@ -436,15 +447,18 @@ exports.syncMessages = async (req, res) => {
         .select("*")
         .eq("is_deleted", false)
         .gte("created_at", since)
+        .in("conversation_id", convIds)
         .order("created_at", { ascending: true })
         .limit(200);
       if (plainErr) throw plainErr;
-      await _mapSenderTypeBatch(plain || [], userId);
-      return res.json(plain || []);
+      const filteredPlain = filterClearedSync(plain || []);
+      await _mapSenderTypeBatch(filteredPlain, userId);
+      return res.json(filteredPlain);
     }
 
-    await _mapSenderTypeBatch(data || [], userId);
-    res.json(data || []);
+    const filteredData = filterClearedSync(data || []);
+    await _mapSenderTypeBatch(filteredData, userId);
+    res.json(filteredData);
   } catch (err) {
     console.error("[Chat] syncMessages error:", err.message);
     res.status(500).json({ error: "Server Error" });
@@ -1033,7 +1047,7 @@ exports.getMessages = async (req, res) => {
             const fbArr = fb1Data || [];
             await _hydrateReplyTo(fbArr);
             await _mapSenderTypeBatch(fbArr, userId);
-          return res.json(fbArr.reverse());
+            return res.json(fbArr.reverse());
           }
 
           // Second fallback: plain select(*) + manual reply_to hydration
@@ -1068,14 +1082,19 @@ exports.getMessages = async (req, res) => {
       res.json(primaryArr.reverse());
     } catch (innerErr) {
       console.warn("[Chat Controller] Inner query error:", innerErr.message);
-      // Final fallback — also exclude deleted messages + manual reply_to hydration
-      const { data: finalData, error: finalError } = await supabase
+      // Final fallback — also exclude deleted & cleared messages + manual reply_to hydration
+      let finalQuery = supabase
         .from("messages")
         .select("*")
         .eq("conversation_id", conversationId)
         .eq("is_deleted", false)
         .order("created_at", { ascending: false })
         .limit(parseInt(limit));
+
+      if (before) finalQuery = finalQuery.lt("created_at", before);
+      if (clearedAt) finalQuery = finalQuery.gt("created_at", clearedAt);
+
+      const { data: finalData, error: finalError } = await finalQuery;
       if (finalError) throw finalError;
       const finalArr = finalData || [];
       await _hydrateReplyTo(finalArr);
@@ -1092,18 +1111,43 @@ exports.searchMessages = async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { q } = req.query;
+    const userId = req.user.id;
 
     if (!q) return res.status(400).json({ error: "Search query required" });
 
+    let clearedAt = null;
+    try {
+      const { data: member } = await supabase
+        .from("conversation_members")
+        .select("cleared_at")
+        .eq("conversation_id", conversationId)
+        .eq("user_id", userId)
+        .maybeSingle();
+      clearedAt = member?.cleared_at;
+    } catch (_) {}
+
+    const filterCleared = (list) => {
+      if (!clearedAt) return list || [];
+      const clearedTime = new Date(clearedAt).getTime();
+      return (list || []).filter(m => new Date(m.created_at).getTime() > clearedTime);
+    };
+
     // Try full query with attachments
     try {
-      const { data, error } = await supabase
+      let searchQuery = supabase
         .from("messages")
         .select("*, attachment:media_attachments(*)")
         .eq("conversation_id", conversationId)
+        .eq("is_deleted", false)
         .ilike("content", `%${q}%`)
         .order("created_at", { ascending: false })
         .limit(100);
+
+      if (clearedAt) {
+        searchQuery = searchQuery.gt("created_at", clearedAt);
+      }
+
+      const { data, error } = await searchQuery;
 
       if (error) {
         if (
@@ -1113,31 +1157,41 @@ exports.searchMessages = async (req, res) => {
           console.warn(
             "[Chat Controller] Falling back to basic search (media_attachments missing)",
           );
-          const { data: simpleData, error: simpleError } = await supabase
+          let simpleSearch = supabase
             .from("messages")
             .select("*")
             .eq("conversation_id", conversationId)
+            .eq("is_deleted", false)
             .ilike("content", `%${q}%`)
             .order("created_at", { ascending: false })
             .limit(100);
 
+          if (clearedAt) simpleSearch = simpleSearch.gt("created_at", clearedAt);
+
+          const { data: simpleData, error: simpleError } = await simpleSearch;
+
           if (simpleError) throw simpleError;
-          return res.json(simpleData);
+          return res.json(filterCleared(simpleData));
         }
         throw error;
       }
-      res.json(data);
+      res.json(filterCleared(data));
     } catch (innerErr) {
       console.warn("[Chat Controller] Search error:", innerErr.message);
-      const { data, error } = await supabase
+      let fallbackSearch = supabase
         .from("messages")
         .select("*")
         .eq("conversation_id", conversationId)
+        .eq("is_deleted", false)
         .ilike("content", `%${q}%`)
         .order("created_at", { ascending: false })
         .limit(100);
+
+      if (clearedAt) fallbackSearch = fallbackSearch.gt("created_at", clearedAt);
+
+      const { data, error } = await fallbackSearch;
       if (error) throw error;
-      res.json(data);
+      res.json(filterCleared(data));
     }
   } catch (err) {
     console.error("Error searching messages:", err.message);
