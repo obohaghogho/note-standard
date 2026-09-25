@@ -206,34 +206,38 @@ const FeeRevenueDashboard: React.FC = () => {
       minHeight: '100vh',
       background: 'linear-gradient(160deg, #020617 0%, #0f172a 50%, #0a0f1e 100%)',
       color: '#f1f5f9',
-      padding: '32px 24px',
+      padding: '20px 16px',
       fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
+      maxWidth: '100vw',
+      boxSizing: 'border-box',
+      overflowX: 'hidden'
     }}>
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '32px', flexWrap: 'wrap', gap: '16px' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
-            <div style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', borderRadius: '12px', padding: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px', width: '100%', boxSizing: 'border-box' }}>
+        <div style={{ flex: '1 1 280px', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px', flexWrap: 'wrap' }}>
+            <div style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', borderRadius: '12px', padding: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <DollarSign size={22} style={{ color: '#fff' }} />
             </div>
-            <h1 style={{ fontSize: '24px', fontWeight: 800, background: 'linear-gradient(90deg, #e2e8f0, #a5b4fc)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', margin: 0 }}>
+            <h1 style={{ fontSize: '20px', fontWeight: 800, background: 'linear-gradient(90deg, #e2e8f0, #a5b4fc)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', margin: 0, wordBreak: 'break-word' }}>
               Fee &amp; Platform Revenue Settlement
             </h1>
           </div>
-          <p style={{ color: '#64748b', fontSize: '13px', margin: 0 }}>
+          <p style={{ color: '#64748b', fontSize: '12px', margin: 0, wordBreak: 'break-word' }}>
             Authoritative platform revenue collected across NGN, USD &amp; GHS · Source: <code style={{ color: '#6366f1', fontSize: '11px' }}>revenue_logs + transactions.fee</code>
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', width: '100%', maxWidth: '100%' }}>
           <select
             id="fee-revenue-range"
             value={range}
             onChange={e => setRange(e.target.value)}
             style={{
+              flex: '1 1 110px', minWidth: '100px',
               background: 'rgba(30,41,59,0.9)', border: '1px solid rgba(99,102,241,0.3)',
-              color: '#e2e8f0', borderRadius: '10px', padding: '8px 14px', fontSize: '13px', cursor: 'pointer'
+              color: '#e2e8f0', borderRadius: '10px', padding: '8px 12px', fontSize: '12px', cursor: 'pointer'
             }}
           >
             <option value="all">All Time</option>
@@ -247,9 +251,10 @@ const FeeRevenueDashboard: React.FC = () => {
             onClick={fetchData}
             disabled={loading}
             style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
+              flex: '1 1 auto',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
               background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)',
-              color: '#a5b4fc', borderRadius: '10px', padding: '8px 16px', fontSize: '13px', cursor: 'pointer', fontWeight: 600
+              color: '#a5b4fc', borderRadius: '10px', padding: '8px 14px', fontSize: '12px', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap'
             }}
           >
             <RefreshCw size={14} style={loading ? { animation: 'spin 1s linear infinite' } : {}} />
@@ -260,13 +265,14 @@ const FeeRevenueDashboard: React.FC = () => {
             id="open-settlement-modal"
             onClick={() => setShowSettleModal(true)}
             style={{
-              display: 'flex', alignItems: 'center', gap: '8px',
+              flex: '2 1 180px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
               background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none',
-              color: '#fff', borderRadius: '10px', padding: '8px 18px', fontSize: '13px', cursor: 'pointer', fontWeight: 700,
-              boxShadow: '0 4px 14px rgba(16,185,129,0.3)'
+              color: '#fff', borderRadius: '10px', padding: '8px 14px', fontSize: '12px', cursor: 'pointer', fontWeight: 700,
+              boxShadow: '0 4px 14px rgba(16,185,129,0.3)', whiteSpace: 'nowrap'
             }}
           >
-            <Building2 size={16} />
+            <Building2 size={15} />
             Settle Platform Revenue
           </button>
         </div>
@@ -398,9 +404,9 @@ const FeeRevenueDashboard: React.FC = () => {
               </h2>
               <div style={{
                 background: 'linear-gradient(135deg, rgba(15,23,42,0.95), rgba(30,41,59,0.9))',
-                border: '1px solid rgba(99,102,241,0.15)', borderRadius: '16px', overflow: 'hidden'
+                border: '1px solid rgba(99,102,241,0.15)', borderRadius: '16px', overflowX: 'auto', WebkitOverflowScrolling: 'touch'
               }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '500px' }}>
                   <thead>
                     <tr style={{ background: 'rgba(16,185,129,0.06)', borderBottom: '1px solid rgba(16,185,129,0.15)' }}>
                       {['Revenue Type', 'Currency', 'Transaction Count', 'Platform Revenue (Admin)'].map(h => (
