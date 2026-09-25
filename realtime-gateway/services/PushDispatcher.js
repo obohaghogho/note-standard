@@ -152,6 +152,7 @@ class PushDispatcher {
           ttl: 86400,
           notification: {
             channelId: 'default',
+            tag: payload.messageId ? String(payload.messageId) : undefined,
             sound: 'default',
             priority: 'high',
             visibility: 'public',

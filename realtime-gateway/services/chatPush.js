@@ -136,6 +136,7 @@ async function sendFcm(fbApp, supabase, target, { userId, title, body, messageId
       ttl: 86400,
       notification: {
         channelId: 'default',
+        tag: messageId ? String(messageId) : undefined,
         sound: 'default',
         priority: 'high',
         visibility: 'public',

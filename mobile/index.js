@@ -52,8 +52,10 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
         const Notifications = require('expo-notifications');
         const notifTitle = data.title || (data.type === 'message' || data.type === 'chat_message' ? 'New Message' : 'NoteStandard Notification');
         const notifBody = data.message || data.body || data.content || '';
+        const notifId = messageId ? String(messageId) : undefined;
         
         await Notifications.scheduleNotificationAsync({
+          identifier: notifId,
           content: {
             title: notifTitle,
             body: notifBody,
@@ -62,7 +64,7 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
           },
           trigger: null,
         });
-        console.log('[Background] Local notification presented for FCM data message:', notifTitle);
+        console.log('[Background] Local notification presented for FCM data message:', notifTitle, 'id:', notifId);
       } catch (nErr) {
         console.warn('[Background] Local notification presentation warning:', nErr);
       }
