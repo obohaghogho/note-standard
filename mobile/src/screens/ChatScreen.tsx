@@ -36,7 +36,7 @@ export default function ChatScreen({ navigation, route }: Props) {
     const { user, accountReady } = useAuth();
 
     // Scoped selectors — each only subscribes to what it needs
-    const { sendMessage, editMessage, deleteMessage, onMessageVisible, messages } = useMessages();
+    const { sendMessage, editMessage, deleteMessage, onMessageVisible, clearChatHistory, deleteConversation, messages } = useMessages();
     const { setActiveConversationId, conversations } = useConversations();
 
     // Self-healing: if conversation object wasn’t passed (e.g. from notification tap),
@@ -277,6 +277,65 @@ export default function ChatScreen({ navigation, route }: Props) {
         }
     }, [otherMember?.user_id, recipientName, conversationId, navigation]);
 
+    const handleMenuPress = useCallback(() => {
+        Alert.alert(
+            'Chat Options',
+            `Manage conversation with ${recipientName}`,
+            [
+                {
+                    text: 'Clear Chat History',
+                    style: 'destructive',
+                    onPress: () => {
+                        Alert.alert(
+                            'Clear Chat History?',
+                            'All messages in this chat will be deleted from your view.',
+                            [
+                                { text: 'Cancel', style: 'cancel' },
+                                {
+                                    text: 'Clear',
+                                    style: 'destructive',
+                                    onPress: async () => {
+                                        try {
+                                            await clearChatHistory(conversationId);
+                                        } catch (err) {
+                                            Alert.alert('Error', 'Failed to clear chat history.');
+                                        }
+                                    }
+                                }
+                            ]
+                        );
+                    }
+                },
+                {
+                    text: 'Delete Conversation',
+                    style: 'destructive',
+                    onPress: () => {
+                        Alert.alert(
+                            'Delete Conversation?',
+                            'This chat will be removed from your conversation list.',
+                            [
+                                { text: 'Cancel', style: 'cancel' },
+                                {
+                                    text: 'Delete',
+                                    style: 'destructive',
+                                    onPress: async () => {
+                                        try {
+                                            await deleteConversation(conversationId);
+                                            navigation.goBack();
+                                        } catch (err) {
+                                            Alert.alert('Error', 'Failed to delete conversation.');
+                                        }
+                                    }
+                                }
+                            ]
+                        );
+                    }
+                },
+                { text: 'Cancel', style: 'cancel' }
+            ]
+        );
+    }, [recipientName, clearChatHistory, deleteConversation, conversationId, navigation]);
+
     const keyExtractor = useCallback((item: Message) =>
         // Prefer event_id for stability across optimistic→canonical transitions
         item.event_id ?? item.id ?? item.created_at
@@ -322,6 +381,9 @@ export default function ChatScreen({ navigation, route }: Props) {
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => startCall('video')} style={styles.headerActionBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                         <Text style={styles.headerActionIcon}>📹</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={handleMenuPress} style={styles.headerActionBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Text style={styles.headerActionIcon}>⋮</Text>
                     </TouchableOpacity>
                 </View>
             </View>

@@ -29,11 +29,12 @@ interface ConversationItemProps {
     item: Conversation;
     userId: string;
     onPress: () => void;
+    onLongPress?: () => void;
     onAccept?: () => void;
 }
 
 const ConversationItem = memo(({
-    item, userId, onPress, onAccept
+    item, userId, onPress, onLongPress, onAccept
 }: ConversationItemProps) => {
     const otherMember = item.members?.find(m => m.user_id !== userId);
     const myMember = item.members?.find(m => m.user_id === userId);
@@ -77,6 +78,7 @@ const ConversationItem = memo(({
         <TouchableOpacity
             style={[styles.item, isPending && styles.itemPending]}
             onPress={onPress}
+            onLongPress={onLongPress}
             activeOpacity={0.75}
         >
             <View style={styles.avatarWrap}>
@@ -149,7 +151,7 @@ const ConversationItem = memo(({
 export default function ChatListScreen({ navigation }: Props) {
     const { user } = useAuth();
     // ✅ Scoped selector — only conversations, not messages
-    const { conversations, loadConversations } = useConversations();
+    const { conversations, loadConversations, clearChatHistory, deleteConversation } = useConversations();
     const [refreshing, setRefreshing] = React.useState(false);
     const isFocused = useIsFocused();
 
@@ -175,6 +177,67 @@ export default function ChatListScreen({ navigation }: Props) {
         const ok = await ChatService.acceptConversation(conversationId);
         if (ok) load();
     }, [load]);
+
+    const handleItemLongPress = useCallback((item: Conversation) => {
+        const otherMember = item.members?.find((m: any) => m.user_id !== user?.id);
+        const profile = otherMember?.profile;
+        const name = profile?.full_name?.trim() || profile?.username?.trim() || 'Chat';
+        Alert.alert(
+            'Conversation Options',
+            `Manage conversation with ${name}`,
+            [
+                {
+                    text: 'Clear Chat History',
+                    style: 'destructive',
+                    onPress: () => {
+                        Alert.alert(
+                            'Clear Chat History?',
+                            'All messages in this chat will be deleted from your view.',
+                            [
+                                { text: 'Cancel', style: 'cancel' },
+                                {
+                                    text: 'Clear',
+                                    style: 'destructive',
+                                    onPress: async () => {
+                                        try {
+                                            await clearChatHistory(item.id);
+                                        } catch (err) {
+                                            Alert.alert('Error', 'Failed to clear chat history.');
+                                        }
+                                    }
+                                }
+                            ]
+                        );
+                    }
+                },
+                {
+                    text: 'Delete Conversation',
+                    style: 'destructive',
+                    onPress: () => {
+                        Alert.alert(
+                            'Delete Conversation?',
+                            'This chat will be removed from your conversation list.',
+                            [
+                                { text: 'Cancel', style: 'cancel' },
+                                {
+                                    text: 'Delete',
+                                    style: 'destructive',
+                                    onPress: async () => {
+                                        try {
+                                            await deleteConversation(item.id);
+                                        } catch (err) {
+                                            Alert.alert('Error', 'Failed to delete conversation.');
+                                        }
+                                    }
+                                }
+                            ]
+                        );
+                    }
+                },
+                { text: 'Cancel', style: 'cancel' }
+            ]
+        );
+    }, [user?.id, clearChatHistory, deleteConversation]);
 
     const handleSupport = useCallback(async () => {
         try {
@@ -222,9 +285,10 @@ export default function ChatListScreen({ navigation }: Props) {
                     navigation.navigate('Chat', { conversationId: item.id, conversation: item });
                 });
             }}
+            onLongPress={() => handleItemLongPress(item)}
             onAccept={() => handleAccept(item.id)}
         />
-    ), [user?.id, navigation, handleAccept]);
+    ), [user?.id, navigation, handleAccept, handleItemLongPress]);
 
     const keyExtractor = useCallback((item: Conversation) => item.id, []);
 

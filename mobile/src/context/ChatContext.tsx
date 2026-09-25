@@ -44,6 +44,8 @@ interface ConversationsContextType {
     setActiveConversationId: (id: string | null) => void;
     isActiveWriter: (conversationId: string) => boolean;
     isClaimingLease: (conversationId: string) => boolean;
+    clearChatHistory: (conversationId: string) => Promise<void>;
+    deleteConversation: (conversationId: string) => Promise<void>;
 }
 
 const ConversationsContext = createContext<ConversationsContextType>({
@@ -53,6 +55,8 @@ const ConversationsContext = createContext<ConversationsContextType>({
     setActiveConversationId: () => {},
     isActiveWriter: () => true,
     isClaimingLease: () => false,
+    clearChatHistory: async () => {},
+    deleteConversation: async () => {},
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -64,6 +68,8 @@ interface MessagesContextType {
     editMessage: (conversationId: string, messageId: string, content: string) => Promise<void>;
     deleteMessage: (conversationId: string, messageId: string) => Promise<void>;
     onMessageVisible: (conversationId: string, messageId: string) => void;
+    clearChatHistory: (conversationId: string) => Promise<void>;
+    deleteConversation: (conversationId: string) => Promise<void>;
 }
 
 const MessagesContext = createContext<MessagesContextType>({
@@ -72,6 +78,8 @@ const MessagesContext = createContext<MessagesContextType>({
     editMessage: async () => {},
     deleteMessage: async () => {},
     onMessageVisible: () => {},
+    clearChatHistory: async () => {},
+    deleteConversation: async () => {},
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -91,6 +99,8 @@ const ChatContext = createContext<ChatContextType>({
     isActiveWriter: () => true,
     isClaimingLease: () => false,
     onMessageVisible: () => {},
+    clearChatHistory: async () => {},
+    deleteConversation: async () => {},
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -115,6 +125,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const userRef = useRef(user);
     const messagesRef = useRef<Record<string, Message[]>>({});
     const conversationsRef = useRef<any[]>([]);
+
+    const clearedAtMapRef = useRef<Map<string, string>>(new Map());
+    const deletedConvIdsRef = useRef<Set<string>>(new Set());
 
     // Stable refs for arbitration fns — updated each render synchronously.
     // This breaks the dependency chain: sendMessage no longer needs to
@@ -227,10 +240,20 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const loadConversations = useCallback(async () => {
         try {
             const res = await apiClient.get('/chat/conversations');
-            const data = res.data || [];
-            setConversations(data);
-            conversationsRef.current = data;
-            joinAllRooms(data);
+            const data: any[] = res.data || [];
+            data.forEach((c: any) => {
+                const serverClearedAt = c.membership?.cleared_at || c.cleared_at;
+                if (serverClearedAt) {
+                    const existing = clearedAtMapRef.current.get(c.id);
+                    if (!existing || new Date(serverClearedAt).getTime() > new Date(existing).getTime()) {
+                        clearedAtMapRef.current.set(c.id, serverClearedAt);
+                    }
+                }
+            });
+            const validConvs = data.filter((c: any) => !deletedConvIdsRef.current.has(c.id));
+            setConversations(validConvs);
+            conversationsRef.current = validConvs;
+            joinAllRooms(validConvs);
         } catch (err) {
             console.error('[ChatContext] Failed to load conversations', err);
         }
@@ -243,22 +266,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             const res = await apiClient.get(`/chat/conversations/${conversationId}/messages`);
             const rawData: any[] = res.data || [];
 
-            // PERF: Chunked sequential decode (chunk size = 10).
-            //
-            // Why chunked instead of Promise.all on all messages:
-            //   decodeIncomingMessage performs real E2E crypto:
-            //     1. Supabase DB query for sender's public_key
-            //     2. expo-secure-store read for own private key
-            //     3. nacl.box.open (CPU crypto via tweetnacl)
-            //
-            //   With 50+ messages, Promise.all fires all 3 operations
-            //   concurrently, saturating the Supabase connection pool,
-            //   congesting expo-secure-store, and causing visible jank.
-            //
-            //   Chunking to 10 limits concurrent I/O to 10 at a time.
-            //   For plaintext messages (msg.nonce absent), decode returns
-            //   immediately — chunk overhead is negligible for those.
-            //   Original message ordering is preserved exactly.
+            const targetConv = conversationsRef.current.find((c: any) => c.id === conversationId);
+            const convClearedAt = clearedAtMapRef.current.get(conversationId) || targetConv?.membership?.cleared_at || targetConv?.cleared_at;
+            const clearedAtMs = convClearedAt ? new Date(convClearedAt).getTime() : 0;
+
             const CHUNK_SIZE = 10;
             const processedData: any[] = [];
             for (let i = 0; i < rawData.length; i += CHUNK_SIZE) {
@@ -277,17 +288,27 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 .filter((msg: any) => validateMessagePayload(msg).valid)
                 .map((msg: any) => ({ ...msg, isOwn: msg.sender_id === user.id }));
 
-            // PERF: startTransition marks this as non-urgent so React keeps
-            // the message list scroll and input bar responsive while history loads.
+            const validMessages = validated.filter((msg: any) =>
+                !msg.is_deleted && (!clearedAtMs || new Date(msg.created_at).getTime() > clearedAtMs)
+            );
+
             startTransition(() => {
-                setMessages(prev => ({
-                    ...prev,
-                    [conversationId]: mergeMessages(prev[conversationId] || [], validated).merged as Message[]
-                }));
+                setMessages(prev => {
+                    if (validMessages.length === 0) {
+                        return { ...prev, [conversationId]: [] };
+                    }
+                    const existing = (prev[conversationId] || []).filter(m =>
+                        !clearedAtMs || new Date(m.created_at).getTime() > clearedAtMs
+                    );
+                    return {
+                        ...prev,
+                        [conversationId]: mergeMessages(existing, validMessages).merged as Message[]
+                    };
+                });
             });
 
             // Offline delivery sync — deferred off the render critical path
-            const unacked = validated.filter(msg => !msg.isOwn && msg.status !== 'read' && !msg.delivered_at);
+            const unacked = validMessages.filter(msg => !msg.isOwn && msg.status !== 'read' && !msg.delivered_at);
             if (unacked.length > 0) {
                 const latestMsg = unacked[unacked.length - 1];
                 setTimeout(async () => {
@@ -598,6 +619,32 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }));
         });
 
+        socketManager.on('chat:history_cleared', (data: any) => {
+            const { conversationId, clearedAt } = data || {};
+            if (!conversationId) return;
+            const ts = clearedAt || new Date().toISOString();
+            clearedAtMapRef.current.set(conversationId, ts);
+            setMessages(prev => ({ ...prev, [conversationId]: [] }));
+            setConversations(prev => prev.map(c => {
+                if (c.id === conversationId) {
+                    return { ...c, last_message: undefined, lastMessage: undefined, unreadCount: 0 };
+                }
+                return c;
+            }));
+        });
+
+        socketManager.on('chat:conversation_deleted', (data: any) => {
+            const { conversationId } = data || {};
+            if (!conversationId) return;
+            deletedConvIdsRef.current.add(conversationId);
+            setMessages(prev => {
+                const next = { ...prev };
+                delete next[conversationId];
+                return next;
+            });
+            setConversations(prev => prev.filter(c => c.id !== conversationId));
+        });
+
         loadConversations();
 
         return () => {
@@ -610,6 +657,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             socketManager.offEvent('chat:message_deleted');
             socketManager.offEvent('chat:conversation_delivered');
             socketManager.offEvent('chat:conversation_read');
+            socketManager.offEvent('chat:history_cleared');
+            socketManager.offEvent('chat:conversation_deleted');
         };
     }, [user]);
 
@@ -834,6 +883,43 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     }, []);
 
+    const clearChatHistory = useCallback(async (conversationId: string) => {
+        const timestamp = new Date().toISOString();
+        clearedAtMapRef.current.set(conversationId, timestamp);
+        setMessages(prev => ({ ...prev, [conversationId]: [] }));
+        setConversations(prev => prev.map(c => {
+            if (c.id === conversationId) {
+                return { ...c, last_message: undefined, lastMessage: undefined, unreadCount: 0 };
+            }
+            return c;
+        }));
+        try {
+            const res = await apiClient.delete(`/chat/conversations/${conversationId}/messages`);
+            if (res.data?.clearedAt) {
+                clearedAtMapRef.current.set(conversationId, res.data.clearedAt);
+            }
+        } catch (err) {
+            console.error('[ChatContext] Clear chat history failed:', err);
+            throw err;
+        }
+    }, []);
+
+    const deleteConversation = useCallback(async (conversationId: string) => {
+        deletedConvIdsRef.current.add(conversationId);
+        setMessages(prev => {
+            const next = { ...prev };
+            delete next[conversationId];
+            return next;
+        });
+        setConversations(prev => prev.filter(c => c.id !== conversationId));
+        try {
+            await apiClient.delete(`/chat/conversations/${conversationId}`);
+        } catch (err) {
+            console.error('[ChatContext] Delete conversation failed:', err);
+            throw err;
+        }
+    }, []);
+
     const onMessageVisible = useCallback((conversationId: string, messageId: string) => {
         readReceiptEngine.onMessageVisible(conversationId, messageId);
     }, [readReceiptEngine]);
@@ -846,7 +932,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         setActiveConversationId,
         isActiveWriter,
         isClaimingLease,
-    }), [conversations, loadConversations, activeConversationId, isActiveWriter, isClaimingLease]);
+        clearChatHistory,
+        deleteConversation,
+    }), [conversations, loadConversations, activeConversationId, isActiveWriter, isClaimingLease, clearChatHistory, deleteConversation]);
 
     const messagesContextValue = useMemo<MessagesContextType>(() => ({
         messages,
@@ -854,7 +942,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         editMessage,
         deleteMessage,
         onMessageVisible,
-    }), [messages, sendMessage, editMessage, deleteMessage, onMessageVisible]);
+        clearChatHistory,
+        deleteConversation,
+    }), [messages, sendMessage, editMessage, deleteMessage, onMessageVisible, clearChatHistory, deleteConversation]);
 
     // Legacy combined context value — for any existing useChat() consumers
     const legacyChatValue = useMemo<ChatContextType>(() => ({
