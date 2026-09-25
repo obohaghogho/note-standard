@@ -1,25 +1,32 @@
 const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY
-);
+const supabaseUrl = process.env.SUPABASE_URL || 'https://tngcvgisfctggvivcnva.supabase.co';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-async function listAll() {
-    console.log('--- Listing Tables/Views ---');
-    const { data: tables, error } = await supabase.rpc('get_tables'); // Hope this exists or use query
+async function listAllTables() {
+  console.log('=== LISTING DATABASE TABLES & VIEWS ===');
+  
+  // Query pg_tables via RPC or by checking known table names
+  const knownTables = [
+    'transactions', 'wallets_store', 'wallets_v6', 'revenue_logs', 'commissions',
+    'platform_wallets', 'treasury_accounts', 'fincra_transactions', 'deposit_sessions',
+    'manual_deposits', 'payments', 'bank_accounts', 'fincra_wallet_links',
+    'profiles', 'users', 'commission_settings', 'admin_settings',
+    'journal_entries', 'journal_lines', 'ledger_accounts', 'ledger_entries',
+    'audit_logs', 'fincra_webhook_logs', 'swap_quotes'
+  ];
+
+  for (const t of knownTables) {
+    const { count, error } = await supabase.from(t).select('*', { count: 'exact', head: true });
     if (error) {
-        // Fallback to direct schema query if possible or just try known names
-        console.error('RPC get_tables failed, searching for dashboard_stats specifically...');
-        const possible = ['dashboard_stats', 'global_stats', 'app_stats', 'analytics_stats'];
-        for (const name of possible) {
-            const { data, error: err } = await supabase.from(name).select('id').limit(1);
-            if (!err) console.log(`- ${name}: EXISTS`);
-            else if (err.code !== '42P01') console.log(`- ${name}: Exists but Error ${err.code}`);
-        }
+      console.log(`Table '${t}': MISSING/ERROR (${error.message})`);
     } else {
-        console.log('Tables:', tables);
+      console.log(`Table '${t}': EXISTS (${count} rows)`);
     }
+  }
 }
-listAll();
+
+listAllTables();

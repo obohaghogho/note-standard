@@ -274,6 +274,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const lastSeenSequenceRef = useRef<Record<string, number>>({});
     const processedEventIdsRef = useRef<Set<string>>(new Set());
     const messagesCachedAtRef = useRef<Record<string, number>>({});
+    // Bug D fix: per-conversation debounce handles for sequence/version gap refetches.
+    // Prevents a burst of rapid messages (each triggering gap detection) from spawning
+    // multiple concurrent DB refetches that race with socket delivery and produce duplicates.
+    const gapRefetchDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
     const setActiveConversationId = useCallback((id: string | null) => {
         if (id && deletedConversationIdsRef.current.has(id)) {
@@ -1671,12 +1675,29 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 // If sequence jumps by > 1 (e.g. lastSeen was 201, incoming is 204),
                 // do NOT skip the sequence number in memory until missing messages are backfilled.
                 if (lastSeen > 0 && seq > lastSeen + 1) {
-                    console.log(`[SEQUENCE_GAP_DETECTED] Conversation ${msg.conversation_id}: local seq ${lastSeen}, incoming seq ${seq}. Gap of ${seq - lastSeen - 1} message(s). Triggering conservative self-healing refetch.`);
-                    loadMessagesRef.current(msg.conversation_id, true)
-                        .then(() => {
-                            lastSeenSequenceRef.current[msg.conversation_id] = Math.max(lastSeenSequenceRef.current[msg.conversation_id] ?? 0, seq);
-                        })
-                        .catch(() => {});
+                    console.log(`[SEQUENCE_GAP_DETECTED] Conversation ${msg.conversation_id}: local seq ${lastSeen}, incoming seq ${seq}. Gap of ${seq - lastSeen - 1} message(s). Scheduling debounced self-healing refetch.`);
+
+                    // Bug D fix: advance the sequence pointer IMMEDIATELY so subsequent
+                    // messages in the same burst do not each re-trigger the gap handler.
+                    lastSeenSequenceRef.current[msg.conversation_id] = Math.max(lastSeen, seq);
+
+                    // Debounce the actual DB refetch to at most once per 500ms per conversation.
+                    // This prevents a burst of 5 rapid messages (each with seq gaps) from
+                    // spawning 5 concurrent loadMessages calls that race with socket delivery
+                    // and insert duplicate rows into React state.
+                    const existingDebounce = gapRefetchDebounceRef.current[msg.conversation_id];
+                    if (existingDebounce) clearTimeout(existingDebounce);
+                    gapRefetchDebounceRef.current[msg.conversation_id] = setTimeout(() => {
+                        delete gapRefetchDebounceRef.current[msg.conversation_id];
+                        loadMessagesRef.current(msg.conversation_id, true)
+                            .then(() => {
+                                // Re-sync sequence pointer after the refetch settles
+                                lastSeenSequenceRef.current[msg.conversation_id] = Math.max(
+                                    lastSeenSequenceRef.current[msg.conversation_id] ?? 0, seq
+                                );
+                            })
+                            .catch(() => {});
+                    }, 500);
                 } else {
                     lastSeenSequenceRef.current[msg.conversation_id] = Math.max(lastSeen, seq);
                 }
@@ -1686,12 +1707,24 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             if (version !== undefined && !Number.isNaN(version) && version > 0) {
                 const lastVersion = lastSeenSequenceRef.current[`ver:${msg.conversation_id}`] ?? -1;
                 if (lastVersion > 0 && version > lastVersion + 1) {
-                    console.log(`[VERSION_GAP_DETECTED] Conversation ${msg.conversation_id}: local ver ${lastVersion}, incoming ver ${version}. Triggering conservative self-healing refetch.`);
-                    loadMessagesRef.current(msg.conversation_id, true)
-                        .then(() => {
-                            lastSeenSequenceRef.current[`ver:${msg.conversation_id}`] = Math.max(lastSeenSequenceRef.current[`ver:${msg.conversation_id}`] ?? 0, version);
-                        })
-                        .catch(() => {});
+                    console.log(`[VERSION_GAP_DETECTED] Conversation ${msg.conversation_id}: local ver ${lastVersion}, incoming ver ${version}. Scheduling debounced self-healing refetch.`);
+
+                    // Bug D fix: same debounce pattern for the version-gap handler.
+                    lastSeenSequenceRef.current[`ver:${msg.conversation_id}`] = Math.max(lastVersion, version);
+
+                    const versionDebounceKey = `ver:${msg.conversation_id}`;
+                    const existingVerDebounce = gapRefetchDebounceRef.current[versionDebounceKey];
+                    if (existingVerDebounce) clearTimeout(existingVerDebounce);
+                    gapRefetchDebounceRef.current[versionDebounceKey] = setTimeout(() => {
+                        delete gapRefetchDebounceRef.current[versionDebounceKey];
+                        loadMessagesRef.current(msg.conversation_id, true)
+                            .then(() => {
+                                lastSeenSequenceRef.current[versionDebounceKey] = Math.max(
+                                    lastSeenSequenceRef.current[versionDebounceKey] ?? 0, version
+                                );
+                            })
+                            .catch(() => {});
+                    }, 500);
                 } else {
                     lastSeenSequenceRef.current[`ver:${msg.conversation_id}`] = Math.max(lastVersion, version);
                 }

@@ -1,0 +1,10 @@
+{
+  "finalStatus": "FAILED",
+  "errorLogs": "",
+  "result": {
+    "status": "FAILED",
+    "transactionId": "a06a3902-143f-4d65-8494-7701db6c7190",
+    "amount": 1000,
+    "currency": "NGN"
+  }
+}

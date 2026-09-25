@@ -138,6 +138,23 @@ async function processIncomingMessage(io, supabase, envelope, deps = {}) {
     return;
   }
 
+  // Bug A fix: bust the chatPush in-memory installation cache for every recipient
+  // before the socket / push decision logic runs.
+  //
+  // Root cause: chatPush caches per-user push installations in memory. On a new
+  // conversation's first message, deliveryEngine waits up to 250ms for
+  // conversation_members to become available (line ~122). That retry fires AFTER
+  // registerSession has already called /internal/cache/clear — meaning the in-memory
+  // cache re-populates with the stale entry and the first push hits the wrong token
+  // or is silently suppressed.
+  //
+  // Scope: targeted per-recipient only — no global flush, no unrelated users touched.
+  // Cost: one extra DB read per push (already required for the actual token lookup).
+  const chatPushService = require('./chatPush');
+  if (chatPushService.clearUserCache) {
+    recipientIds.forEach(id => chatPushService.clearUserCache(id));
+  }
+
   for (const recipientId of recipientIds) {
     const sockets = await io.in(`user:${recipientId}`).fetchSockets();
     const socketsCount = sockets.length;

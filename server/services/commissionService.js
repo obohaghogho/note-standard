@@ -136,6 +136,19 @@ const commissionService = {
     sourceTxId = null,
     metadata = {},
   ) {
+    if (sourceTxId) {
+      const { data: sourceTx } = await supabase
+        .from('transactions')
+        .select('id, status')
+        .eq('id', sourceTxId)
+        .maybeSingle();
+
+      if (!sourceTx || !['COMPLETED', 'SUCCESS'].includes((sourceTx.status || '').toUpperCase())) {
+        console.error(`[CommissionService] Blocked revenue log: source_transaction_id ${sourceTxId} is missing or not COMPLETED.`);
+        return;
+      }
+    }
+
     const { error } = await supabase
       .from("revenue_logs")
       .insert({
