@@ -129,6 +129,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const clearedAtMapRef = useRef<Map<string, string>>(new Map());
     const deletedConvIdsRef = useRef<Set<string>>(new Set());
     const deletedMessageIdsRef = useRef<Set<string>>(new Set());
+    // Tracks conversations that had clearChatHistory called — forces a fresh
+    // loadMessages on next open instead of serving the stale in-memory cache.
+    const staleClearedConvIdsRef = useRef<Set<string>>(new Set());
 
     // Stable refs for arbitration fns — updated each render synchronously.
     // This breaks the dependency chain: sendMessage no longer needs to
@@ -359,9 +362,22 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         setMessages(prev => {
             const next = { ...prev };
             Object.entries(byConv).forEach(([convId, newMsgs]) => {
-                const cleanMsgs = newMsgs.filter(m => !m.is_deleted && !deletedMessageIdsRef.current.has(m.id));
+                // GHOST FIX: Filter incoming socket messages against the cleared_at watermark.
+                // Without this, a new message arriving after clearChatHistory would merge
+                // against existing state that may still hold pre-cleared messages.
+                const clearedAtStr = clearedAtMapRef.current.get(convId);
+                const clearedAtMs = clearedAtStr ? new Date(clearedAtStr).getTime() : 0;
+                const cleanMsgs = newMsgs.filter(m =>
+                    !m.is_deleted &&
+                    !deletedMessageIdsRef.current.has(m.id) &&
+                    (!clearedAtMs || new Date(m.created_at).getTime() > clearedAtMs)
+                );
                 if (cleanMsgs.length > 0) {
-                    const existing = (prev[convId] || []).filter(m => !m.is_deleted && !deletedMessageIdsRef.current.has(m.id));
+                    const existing = (prev[convId] || []).filter(m =>
+                        !m.is_deleted &&
+                        !deletedMessageIdsRef.current.has(m.id) &&
+                        (!clearedAtMs || new Date(m.created_at).getTime() > clearedAtMs)
+                    );
                     next[convId] = mergeMessages(existing, cleanMsgs).merged as Message[];
                 }
             });
@@ -447,8 +463,22 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 isOwn: normalized.sender_id === user.id
             };
 
+            // GHOST FIX: Drop socket messages that are older than the cleared_at watermark.
+            // This prevents a message that was sent before the user cleared history from
+            // being injected into the chat via the socket pipeline.
+            const incomingConvId = normalized.conversation_id;
+            const incomingClearedAtStr = clearedAtMapRef.current.get(incomingConvId);
+            if (incomingClearedAtStr) {
+                const incomingClearedAtMs = new Date(incomingClearedAtStr).getTime();
+                const incomingMsgMs = new Date(normalized.created_at).getTime();
+                if (incomingMsgMs <= incomingClearedAtMs) {
+                    // Message predates the clear watermark — drop it silently
+                    return;
+                }
+            }
+
             // ── Queue into batch buffer ────────────────────────────────────────
-            socketBatchRef.current.push({ conv: normalized.conversation_id, msg: incomingMessage });
+            socketBatchRef.current.push({ conv: incomingConvId, msg: incomingMessage });
 
             // FIX 7: Schedule flush via setTimeout(0) instead of requestAnimationFrame.
             // requestAnimationFrame fires on the native UI thread tick and can race
@@ -631,6 +661,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             if (!conversationId) return;
             const ts = clearedAt || new Date().toISOString();
             clearedAtMapRef.current.set(conversationId, ts);
+            // Mark stale so the next open forces a fresh server fetch \u2014
+            // applies to both the initiator and the other party receiving this event.
+            staleClearedConvIdsRef.current.add(conversationId);
             setMessages(prev => ({ ...prev, [conversationId]: [] }));
             setConversations(prev => prev.map(c => {
                 if (c.id === conversationId) {
@@ -671,14 +704,18 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
 
     // Fetch messages when conversation opens
-    // FIX 8: Skip loadMessages if messages are already in state for this conversation.
-    // Previously, every socket reconnect triggered loadMessages again even if the user
-    // was already inside the chat — causing a full API fetch + re-decrypt of all 50
-    // messages, adding visible lag. The reconnect sync (via syncMessages) handles gaps.
+    // FIX 8 (revised): Skip loadMessages if messages are already in state AND the
+    // conversation has not been cleared. If clearChatHistory was called, staleClearedConvIdsRef
+    // marks the conversation as needing a fresh server fetch — bypassing the cache.
+    // This prevents ghost resurrection: after clearChatHistory sets state to [], the
+    // next open forces a real API call instead of serving from a stale ref.
     useEffect(() => {
         if (activeConversationId) {
-            const alreadyLoaded = !!(messagesRef.current?.[activeConversationId]?.length);
+            const wasCleared = staleClearedConvIdsRef.current.has(activeConversationId);
+            const alreadyLoaded = !wasCleared && !!(messagesRef.current?.[activeConversationId]?.length);
             if (!alreadyLoaded) {
+                // Remove from stale set before fetching so re-entry doesn't re-fetch
+                staleClearedConvIdsRef.current.delete(activeConversationId);
                 loadMessages(activeConversationId);
             }
             socketManager.joinRoom(activeConversationId);
@@ -894,7 +931,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     const clearChatHistory = useCallback(async (conversationId: string) => {
         const timestamp = new Date().toISOString();
+        // Write watermark FIRST so any concurrent socket messages are already blocked
         clearedAtMapRef.current.set(conversationId, timestamp);
+        // Mark as stale so next open forces a fresh loadMessages instead of cache
+        staleClearedConvIdsRef.current.add(conversationId);
         setMessages(prev => ({ ...prev, [conversationId]: [] }));
         setConversations(prev => prev.map(c => {
             if (c.id === conversationId) {
@@ -905,6 +945,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         try {
             const res = await apiClient.delete(`/chat/conversations/${conversationId}/messages`);
             if (res.data?.clearedAt) {
+                // Update to authoritative server timestamp — removes any clock-skew risk
                 clearedAtMapRef.current.set(conversationId, res.data.clearedAt);
             }
         } catch (err) {
