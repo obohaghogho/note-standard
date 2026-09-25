@@ -295,6 +295,11 @@ class PushDispatcher {
           .from('push_subscriptions')
           .update({ status: 'invalid' })
           .eq('endpoint', device.endpoint);
+      } else if (device.source === 'native_device_tokens' && device.endpoint) {
+        await supabase
+          .from('native_device_tokens')
+          .delete()
+          .eq('token', device.endpoint);
       }
     } catch (err) {
       console.error('[PushDispatcher] Failed to mark endpoint invalid:', err.message);
