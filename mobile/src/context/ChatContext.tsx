@@ -128,6 +128,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     const clearedAtMapRef = useRef<Map<string, string>>(new Map());
     const deletedConvIdsRef = useRef<Set<string>>(new Set());
+    const deletedMessageIdsRef = useRef<Set<string>>(new Set());
 
     // Stable refs for arbitration fns — updated each render synchronously.
     // This breaks the dependency chain: sendMessage no longer needs to
@@ -289,7 +290,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 .map((msg: any) => ({ ...msg, isOwn: msg.sender_id === user.id }));
 
             const validMessages = validated.filter((msg: any) =>
-                !msg.is_deleted && (!clearedAtMs || new Date(msg.created_at).getTime() > clearedAtMs)
+                !msg.is_deleted && !deletedMessageIdsRef.current.has(msg.id) && (!clearedAtMs || new Date(msg.created_at).getTime() > clearedAtMs)
             );
 
             startTransition(() => {
@@ -298,7 +299,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         return { ...prev, [conversationId]: [] };
                     }
                     const existing = (prev[conversationId] || []).filter(m =>
-                        !clearedAtMs || new Date(m.created_at).getTime() > clearedAtMs
+                        !m.is_deleted && !deletedMessageIdsRef.current.has(m.id) && (!clearedAtMs || new Date(m.created_at).getTime() > clearedAtMs)
                     );
                     return {
                         ...prev,
@@ -358,7 +359,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         setMessages(prev => {
             const next = { ...prev };
             Object.entries(byConv).forEach(([convId, newMsgs]) => {
-                next[convId] = mergeMessages(prev[convId] || [], newMsgs).merged as Message[];
+                const cleanMsgs = newMsgs.filter(m => !m.is_deleted && !deletedMessageIdsRef.current.has(m.id));
+                if (cleanMsgs.length > 0) {
+                    const existing = (prev[convId] || []).filter(m => !m.is_deleted && !deletedMessageIdsRef.current.has(m.id));
+                    next[convId] = mergeMessages(existing, cleanMsgs).merged as Message[];
+                }
             });
             return next;
         });
@@ -611,11 +616,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         });
 
         socketManager.on('chat:message_deleted', (data: any) => {
-            const { messageId, conversationId } = data;
+            const targetId = data?.messageId || data?.id;
+            const conversationId = data?.conversationId || data?.conversation_id;
+            if (targetId) deletedMessageIdsRef.current.add(targetId);
             if (!conversationId) return;
             setMessages(prev => ({
                 ...prev,
-                [conversationId]: (prev[conversationId] || []).filter(m => m.id !== messageId)
+                [conversationId]: (prev[conversationId] || []).filter(m => m.id !== targetId && m.id !== data?.messageId)
             }));
         });
 
@@ -870,6 +877,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     }, [messages]);
 
     const deleteMessage = useCallback(async (conversationId: string, messageId: string) => {
+        // Track tombstone locally to prevent resurrection via sync/reconnect
+        deletedMessageIdsRef.current.add(messageId);
         // Optimistic delete
         setMessages(prev => ({
             ...prev,

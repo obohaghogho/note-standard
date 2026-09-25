@@ -172,35 +172,37 @@ export function mergeMessages(existing: Message[], incoming: Message[]): MergeRe
 
     }
 
-    // Stage 4: Sort — 4-level deterministic comparator (Bug B fix)
+    // Stage 4: Sort — 4-level deterministic comparator
     //
-    // Priority 1: Both have sequence → ascending sequence (authoritative server order).
-    // Priority 2: One has sequence, one does not → sequenced message goes first.
-    //             This ensures a confirmed server message always sits above an
-    //             optimistic temp- that is still awaiting its sequence number.
-    // Priority 3: Both lack a valid sequence → ascending created_at timestamp.
-    // Priority 4: Identical timestamps (sub-ms send storm) → ascending id string
-    //             for a fully stable, deterministic sort that does not rely on
-    //             Array.sort() being stable (guaranteed in V8 ≥ 7.0 / Node ≥ 11,
-    //             but the tiebreaker removes the dependency for older runtimes).
+    // Priority 1: Primary chronological order — created_at timestamp ASC (> 1000ms difference).
+    //             Prevents newer messages from ever sorting above older legacy/unsequenced messages.
+    // Priority 2: Sub-second window — if both have sequence → ascending sequence_number.
+    // Priority 3: Sub-second window — if only one has sequence → sequenced message goes first.
+    // Priority 4: Identical timestamps/sequences → stable tiebreaker via ascending id string.
     const mergedArray = Array.from(byId.values());
     mergedArray.sort((a, b) => {
+        const timeA = new Date(a.created_at).getTime();
+        const timeB = new Date(b.created_at).getTime();
+
+        // P1: Significant timestamp difference (> 1s) → strict chronological order
+        if (!isNaN(timeA) && !isNaN(timeB) && Math.abs(timeA - timeB) >= 1000) {
+            return timeA - timeB;
+        }
+
         const seqA = (a.sequence_number !== undefined && a.sequence_number > 0) ? a.sequence_number : -1;
         const seqB = (b.sequence_number !== undefined && b.sequence_number > 0) ? b.sequence_number : -1;
 
-        // P1: both sequenced
+        // P2: Both sequenced within sub-second window → sequence_number ASC
         if (seqA !== -1 && seqB !== -1) return seqA - seqB;
 
-        // P2: only one sequenced — sequenced wins (goes earlier in the list)
+        // P3: Only one sequenced within sub-second window → sequenced wins
         if (seqA !== -1) return -1;
         if (seqB !== -1) return 1;
 
-        // P3: both unsequenced — fall back to timestamp
-        const timeA = new Date(a.created_at).getTime();
-        const timeB = new Date(b.created_at).getTime();
+        // P4: Fine timestamp comparison fallback
         if (timeA !== timeB) return timeA - timeB;
 
-        // P4: same timestamp — stable tiebreaker via id string comparison
+        // P5: Stable tiebreaker via id string comparison
         return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
     });
 

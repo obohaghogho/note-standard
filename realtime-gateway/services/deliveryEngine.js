@@ -159,16 +159,22 @@ async function processIncomingMessage(io, supabase, envelope, deps = {}) {
     const sockets = await io.in(`user:${recipientId}`).fetchSockets();
     const socketsCount = sockets.length;
 
+    // Check if recipient is actively joined to the specific conversation room
+    const convSockets = await io.in(`conversation:${conversationId}`).fetchSockets();
+    const isRecipientInConvRoom = convSockets.some(s =>
+      s.data?.userId === recipientId || s.userId === recipientId || s.handshake?.query?.userId === recipientId
+    );
+
     // Log the initial delivery state trace (non-blocking)
     logInitialTelemetry(supabase, messageId, recipientId, socketsCount).catch(err => {
       console.error('[DeliveryEngine] Background telemetry initial insert failed:', err.message);
     });
 
-    if (socketsCount > 0) {
+    if (socketsCount > 0 && isRecipientInConvRoom) {
       console.log(`[DeliveryEngine] Routing Decision | msgId:${messageId.slice(0, 8)} | recipient:${recipientId.slice(0, 8)} | sender:${senderId.slice(0, 8)} | conv:${conversationId.slice(0, 8)}`);
-      console.log(`[DeliveryEngine] Sockets: ${socketsCount} | Decision: SOCKET_FIRST | Push suppressed for ${ACK_TIMEOUT_MS}ms ACK window`);
+      console.log(`[DeliveryEngine] Sockets: ${socketsCount} | RoomJoined: true | Decision: SOCKET_FIRST | Push suppressed for ${ACK_TIMEOUT_MS}ms ACK window`);
 
-      // Recipient has a socket — message was delivered via dispatchSocketEvent.
+      // Recipient has active socket in the conversation room.
       // Start ACK timeout: if no chat:delivered within configured time, send push.
       const ackKey = `${messageId}:${recipientId}`;
 
@@ -212,7 +218,7 @@ async function processIncomingMessage(io, supabase, envelope, deps = {}) {
       pendingAcks.set(ackKey, { timer, recipientId, conversationId });
     } else {
       console.log(`[DeliveryEngine] Routing Decision | msgId:${messageId.slice(0, 8)} | recipient:${recipientId.slice(0, 8)} | sender:${senderId.slice(0, 8)} | conv:${conversationId.slice(0, 8)}`);
-      console.log(`[DeliveryEngine] Sockets: 0 | Decision: PUSH_IMMEDIATE | Recipient offline`);
+      console.log(`[DeliveryEngine] Sockets: ${socketsCount} | RoomJoined: ${isRecipientInConvRoom} | Decision: PUSH_IMMEDIATE | Recipient not in active chat room`);
 
       await chatPush.sendChatPush({
         supabase,
