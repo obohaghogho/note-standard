@@ -1663,6 +1663,20 @@ exports.sendMessage = async (req, res) => {
         }
 
         if (!insertedMessage) {
+          let fallbackSeq = 1;
+          try {
+            const { data: maxSeqRow } = await supabase
+              .from("messages")
+              .select("sequence_number")
+              .eq("conversation_id", conversationId)
+              .order("sequence_number", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (maxSeqRow && maxSeqRow.sequence_number) {
+              fallbackSeq = Number(maxSeqRow.sequence_number) + 1;
+            }
+          } catch (_) { fallbackSeq = 1; }
+
           const insertPayload = {
             conversation_id: conversationId,
             sender_id: userId,
@@ -1671,7 +1685,7 @@ exports.sendMessage = async (req, res) => {
             sentiment,
             original_language: detectedLang,
             event_id: eventId,
-            sequence_number: null
+            sequence_number: fallbackSeq
           };
           if (attachmentId) insertPayload.attachment_id = attachmentId;
           if (replyToId)    insertPayload.reply_to_id   = replyToId;
