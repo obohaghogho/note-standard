@@ -1693,7 +1693,7 @@ exports.sendMessage = async (req, res) => {
           const { data: insertData, error: insertError } = await supabase
             .from("messages")
             .insert([insertPayload])
-            .select("id")
+            .select("id, sequence_number, created_at, updated_at")
             .single();
 
           if (insertError) {
@@ -1711,7 +1711,7 @@ exports.sendMessage = async (req, res) => {
             const { data: retryData, error: retryErr } = await supabase
               .from("messages")
               .insert([fallbackPayload])
-              .select("id")
+              .select("id, sequence_number, created_at, updated_at")
               .single();
 
             if (retryErr) throw retryErr;
