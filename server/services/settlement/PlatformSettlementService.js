@@ -100,14 +100,27 @@ class PlatformSettlementService {
 
     const { data: revLogs, error: revErr } = await supabase
       .from('revenue_logs')
-      .select('amount')
+      .select('amount, source_transaction_id, transactions!inner(provider, reference_id, metadata)')
       .eq('currency', cur);
 
     if (revErr) {
       logger.error(`[PlatformSettlement] revenue_logs query error for ${cur}: ${revErr.message}`);
     }
 
-    const totalRevenue = (revLogs || []).reduce(
+    const eligibleLogs = (revLogs || []).filter(r => {
+      const tx = r.transactions || {};
+      const provider = (tx.provider || '').toLowerCase();
+      const ref = tx.reference_id || '';
+      const meta = typeof tx.metadata === 'string' ? tx.metadata : JSON.stringify(tx.metadata || {});
+
+      const isAllowlistedProvider = ['fincra', 'anchor', 'paystack', 'grey', 'nowpayments'].includes(provider);
+      const isLegacyFincra = !tx.provider && (meta.includes('fincra') || meta.includes('FINCRA'));
+      const isInternalRef = ref.startsWith('NS-') || ref.startsWith('MANUAL-CREDIT-');
+
+      return (isAllowlistedProvider || isLegacyFincra) && !isInternalRef;
+    });
+
+    const totalRevenue = eligibleLogs.reduce(
       (sum, r) => sum + parseFloat(r.amount || 0), 0
     );
 
