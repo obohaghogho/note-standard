@@ -95,6 +95,10 @@ export function mergeMessages(existing: Message[], incoming: Message[]): MergeRe
 
         if (!existingMsg) {
             newlyAddedCount++;
+            if (msg.id.startsWith('temp-') && msg._clientTimestamp === undefined) {
+                const t = new Date(msg.created_at).getTime();
+                if (!isNaN(t)) msg._clientTimestamp = t;
+            }
             byId.set(msg.id, msg);
             if (incomingEvtKey) byEvent.set(incomingEvtKey, msg);
             continue;
@@ -107,6 +111,15 @@ export function mergeMessages(existing: Message[], incoming: Message[]): MergeRe
         if (incomingSeq >= existingSeq || existingMsg.id.startsWith('temp-')) {
             const updatedMsg = { ...existingMsg, ...msg };
             
+            // Causal order preservation: Preserve the local creation timestamp when reconciliating
+            // an optimistic message with its canonical server confirmation.
+            if (existingMsg.id.startsWith('temp-') || existingMsg._clientTimestamp !== undefined) {
+                const existingTime = existingMsg._clientTimestamp ?? new Date(existingMsg.created_at).getTime();
+                if (!isNaN(existingTime)) {
+                    updatedMsg._clientTimestamp = existingTime;
+                }
+            }
+
             // Critical fix: Incoming messages from server/socket are authoritative.
             // If the local message was optimistic, clear it so it doesn't stay stuck.
             delete updatedMsg._optimistic;
@@ -162,7 +175,7 @@ export function mergeMessages(existing: Message[], incoming: Message[]): MergeRe
     // Stage 4: Sort — deterministic comparator with sequence_number authority
     //
     // Priority 1: If both messages have valid sequence_number > 0 → ascending sequence_number (DB-authoritative).
-    // Priority 2: Primary chronological order — created_at timestamp ASC when timestamps differ.
+    // Priority 2: Primary chronological order — _clientTimestamp (if present) or created_at timestamp ASC.
     // Priority 3: Identical timestamps → sequenced message sorts first.
     // Priority 4: Stable tiebreaker via ascending id string.
     const mergedArray = Array.from(byId.values());
@@ -175,8 +188,12 @@ export function mergeMessages(existing: Message[], incoming: Message[]): MergeRe
             return seqA - seqB;
         }
 
-        const timeA = new Date(a.created_at).getTime();
-        const timeB = new Date(b.created_at).getTime();
+        const timeA = (a._clientTimestamp !== undefined && !isNaN(a._clientTimestamp))
+            ? Number(a._clientTimestamp)
+            : new Date(a.created_at).getTime();
+        const timeB = (b._clientTimestamp !== undefined && !isNaN(b._clientTimestamp))
+            ? Number(b._clientTimestamp)
+            : new Date(b.created_at).getTime();
 
         if (!isNaN(timeA) && !isNaN(timeB) && timeA !== timeB) {
             return timeA - timeB;
