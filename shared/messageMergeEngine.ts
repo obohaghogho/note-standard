@@ -162,9 +162,9 @@ export function mergeMessages(existing: Message[], incoming: Message[]): MergeRe
     // Stage 4: Sort — deterministic comparator with sequence_number authority
     //
     // Priority 1: If both messages have valid sequence_number > 0 → ascending sequence_number (DB-authoritative).
-    // Priority 2: Primary chronological order — created_at timestamp ASC (> 2000ms difference).
-    // Priority 3: If only one has sequence → sequenced message sorts by sequence.
-    // Priority 4: Identical timestamps/sequences → stable tiebreaker via ascending id string.
+    // Priority 2: Primary chronological order — created_at timestamp ASC when timestamps differ.
+    // Priority 3: Identical timestamps → sequenced message sorts first.
+    // Priority 4: Stable tiebreaker via ascending id string.
     const mergedArray = Array.from(byId.values());
     mergedArray.sort((a, b) => {
         const seqA = (a.sequence_number !== undefined && a.sequence_number > 0) ? Number(a.sequence_number) : -1;
@@ -178,19 +178,15 @@ export function mergeMessages(existing: Message[], incoming: Message[]): MergeRe
         const timeA = new Date(a.created_at).getTime();
         const timeB = new Date(b.created_at).getTime();
 
-        // P2: Significant timestamp difference (> 2s) for unsequenced/optimistic fallback
-        if (!isNaN(timeA) && !isNaN(timeB) && Math.abs(timeA - timeB) >= 2000) {
+        if (!isNaN(timeA) && !isNaN(timeB) && timeA !== timeB) {
             return timeA - timeB;
         }
 
-        // P3: Only one sequenced message → compare sequence vs timestamp context
+        // P3: Only one sequenced message with identical timestamp → sequenced message first
         if (seqA !== -1) return -1;
         if (seqB !== -1) return 1;
 
-        // P4: Fine timestamp comparison fallback
-        if (!isNaN(timeA) && !isNaN(timeB) && timeA !== timeB) return timeA - timeB;
-
-        // P5: Stable tiebreaker via id string comparison
+        // P4: Stable tiebreaker via id string comparison
         return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
     });
 
