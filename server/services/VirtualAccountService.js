@@ -13,13 +13,15 @@ const PaymentFactory = require("./payment/PaymentFactory");
 const logger = require("../utils/logger");
 const realtime = require("./realtimeService");
 
-/**
- * PLATFORM_SETTLEMENT_NUBANS
- * The Anchor settlement accounts shared by the platform itself. Must never be
- * treated as a valid user dedicated account — any DB record with these numbers
- * is a stale placeholder and should be ignored so fresh provisioning occurs.
- */
-const PLATFORM_SETTLEMENT_NUBANS = ['6179630721', '6175916799'];
+const PLATFORM_SETTLEMENT_NUBANS = [
+  '6179630721',
+  '6175916799',
+  '6177724635',
+  '6172662064',
+  '6171397167',
+  '6170660293',
+  '6172312778'
+];
 
 class VirtualAccountService {
   /**

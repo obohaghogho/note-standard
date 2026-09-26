@@ -11,6 +11,11 @@ const logger = require('../../utils/logger');
 const anchorService = require('../anchorService');
 const supabase = require('../../config/database');
 
+const PLATFORM_SETTLEMENT_NUBANS = [
+  '6179630721', '6175916799', '6177724635', '6172662064', '6171397167', '6170660293', '6172312778'
+];
+const PLATFORM_MERCHANT_CUSTOMER_ID = '1784719040852722-anc_bus_cst';
+
 class AnchorBankingProviderV1 extends IBankingProvider {
   constructor() {
     super();
@@ -59,7 +64,10 @@ class AnchorBankingProviderV1 extends IBankingProvider {
       // Validate existing account before using it
       const isValidExisting = existing?.account_number
         && /^\d{10}$/.test(existing.account_number)
-        && !existing.bank_name?.toUpperCase().includes('PROVIDUS');
+        && !existing.bank_name?.toUpperCase().includes('PROVIDUS')
+        && !PLATFORM_SETTLEMENT_NUBANS.includes(String(existing.account_number).trim())
+        && !existing.account_name?.toUpperCase().includes('JOSSY DIGITAL')
+        && existing.provider_customer_code !== PLATFORM_MERCHANT_CUSTOMER_ID;
 
       if (existing && isValidExisting) {
         account = existing;
@@ -75,8 +83,11 @@ class AnchorBankingProviderV1 extends IBankingProvider {
         });
       }
     } catch (err) {
-      // Propagate API unavailability so the router can fall back to Fincra
-      if (err.code === 'ANCHOR_API_UNAVAILABLE' || err.message?.includes('ANCHOR_API_UNAVAILABLE')) {
+      // Propagate API unavailability or account rejection so the router can fall back to Fincra
+      if (
+        err.code === 'ANCHOR_API_UNAVAILABLE' || err.message?.includes('ANCHOR_API_UNAVAILABLE') ||
+        err.code === 'ANCHOR_NO_VALID_ACCOUNT' || err.message?.includes('ANCHOR_NO_VALID_ACCOUNT')
+      ) {
         throw err;
       }
       logger.warn(`[AnchorBankingProviderV1] Virtual account lookup/creation warning: ${err.message}`);
@@ -86,14 +97,16 @@ class AnchorBankingProviderV1 extends IBankingProvider {
     const accountNumber = account?.account_number || account?.accountNumber || '';
     const accountHolder = account?.account_name || account?.accountName || 'NoteStandard User';
 
-    // Don't return deposit instructions with invalid/empty account numbers
-    if (!accountNumber || !/^\d{10}$/.test(accountNumber)) {
+    // Don't return deposit instructions with invalid/empty account numbers or platform NUBANs
+    if (!accountNumber || !/^\d{10}$/.test(accountNumber) || PLATFORM_SETTLEMENT_NUBANS.includes(accountNumber)) {
       const err = new Error('ANCHOR_NO_VALID_ACCOUNT: No valid Anchor virtual account available. Please use Fincra GTBank transfer.');
       err.code = 'ANCHOR_NO_VALID_ACCOUNT';
       throw err;
     }
 
     const refCode = `ANC_${userId.substring(0, 8)}_${Date.now().toString(36)}`;
+    const is9psb = bankName.toUpperCase().includes('9') || bankName.toUpperCase().includes('PAYMENT SERVICE');
+    const bankCode = is9psb ? '120001' : '120001';
 
     return {
       session_id: refCode,
@@ -106,7 +119,7 @@ class AnchorBankingProviderV1 extends IBankingProvider {
         holder: accountHolder,
         number: accountNumber,
         bank_name: bankName,
-        bank_code: '101',
+        bank_code: bankCode,
         type: 'Virtual Account'
       },
       reference: {

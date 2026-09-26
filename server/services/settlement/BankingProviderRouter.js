@@ -92,7 +92,16 @@ class BankingProviderRouter {
       const selected = this.selectBestBankingProvider({ currency, rail });
       targetProvider = selected.provider;
     }
-    return targetProvider.createDepositInstructions({ currency, rail, userId });
+    try {
+      return await targetProvider.createDepositInstructions({ currency, rail, userId });
+    } catch (err) {
+      if ((err.code === 'ANCHOR_NO_VALID_ACCOUNT' || err.code === 'ANCHOR_API_UNAVAILABLE' || err.message?.includes('ANCHOR_')) && targetProvider.getProviderId() === 'anchor') {
+        logger.warn(`[BankingProviderRouter] Anchor provider unavailable/invalid (${err.message}). Falling back to Fincra...`);
+        const fincra = this.getProvider('fincra');
+        return await fincra.createDepositInstructions({ currency, rail, userId });
+      }
+      throw err;
+    }
   }
 }
 

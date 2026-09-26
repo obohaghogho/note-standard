@@ -109,7 +109,15 @@ router.post("/virtual-account", requireAuth, async (req, res, next) => {
 router.get("/accounts", requireAuth, async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const PLATFORM_SETTLEMENT_NUBANS = ["6179630721", "6175916799"];
+    const PLATFORM_SETTLEMENT_NUBANS = [
+      "6179630721",
+      "6175916799",
+      "6177724635",
+      "6172662064",
+      "6171397167",
+      "6170660293",
+      "6172312778"
+    ];
 
     let { data: accounts, error } = await supabase
       .from("dedicated_accounts")
@@ -136,7 +144,7 @@ router.get("/accounts", requireAuth, async (req, res, next) => {
     if (accounts && accounts.length > 0) {
       accounts.forEach((a) => {
         const isProvidus = a.bank_name?.toUpperCase().includes("PROVIDUS");
-        const isPlatformAccount = PLATFORM_SETTLEMENT_NUBANS.includes(a.account_number);
+        const isPlatformAccount = PLATFORM_SETTLEMENT_NUBANS.includes(a.account_number) || a.account_name?.toUpperCase().includes("JOSSY DIGITAL");
         const hasInvalidNuban = !a.account_number || !/^\d{10}$/.test(a.account_number);
         const hasMissingBankName = !a.bank_name;
         const isSharedWithOtherUser = (nubanUserCounts[a.account_number] || 0) > 1;
@@ -148,12 +156,7 @@ router.get("/accounts", requireAuth, async (req, res, next) => {
     }
 
     if (staleAccountIds.length > 0) {
-      logger.warn(`[AnchorRoute] Cleaning up ${staleAccountIds.length} stale/shared Anchor dedicated_accounts for user ${userId}...`);
-      await supabase
-        .from("dedicated_accounts")
-        .delete()
-        .in("id", staleAccountIds);
-
+      logger.warn(`[AnchorRoute] Suppressing ${staleAccountIds.length} stale/platform Anchor dedicated_accounts for user ${userId} (preserving records for historical auditability)...`);
       accounts = (accounts || []).filter(a => !staleAccountIds.includes(a.id));
     }
 

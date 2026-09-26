@@ -9,11 +9,22 @@ const logger = require("../utils/logger");
  * inbound deposits to be mis-attributed. Any Virtual NUBAN resolved from the Anchor API that
  * matches these numbers or platform names must be skipped; a fresh individual NUBAN must be provisioned.
  */
-const PLATFORM_SETTLEMENT_NUBANS = ['6179630721', '6175916799'];
+const PLATFORM_SETTLEMENT_NUBANS = [
+  '6179630721',
+  '6175916799',
+  '6177724635',
+  '6172662064',
+  '6171397167',
+  '6170660293',
+  '6172312778',
+];
+const PLATFORM_MERCHANT_CUSTOMER_ID = '1784719040852722-anc_bus_cst';
 
 function isPlatformSettlementAccount(acctNo, acctName) {
   if (!acctNo) return false;
-  return PLATFORM_SETTLEMENT_NUBANS.includes(String(acctNo).trim());
+  const trimmedNo = String(acctNo).trim();
+  const trimmedName = acctName ? String(acctName).trim().toUpperCase() : '';
+  return PLATFORM_SETTLEMENT_NUBANS.includes(trimmedNo) || trimmedName.includes('JOSSY DIGITAL');
 }
 
 /**
@@ -38,6 +49,7 @@ class AnchorService {
       },
       timeout: 15000,
     });
+    this.pendingProvisioningPromises = new Map();
   }
 
   isEnabled() {
@@ -66,7 +78,7 @@ class AnchorService {
         .eq("customer_type", "individual")
         .maybeSingle();
 
-      if (existingCustomer && existingCustomer.anchor_customer_id) {
+      if (existingCustomer && existingCustomer.anchor_customer_id && existingCustomer.anchor_customer_id !== PLATFORM_MERCHANT_CUSTOMER_ID) {
         return existingCustomer;
       }
 
@@ -98,8 +110,8 @@ class AnchorService {
       const anchorCust = response.data?.data || response.data || {};
       const anchorCustomerId = anchorCust.id || anchorCust.customer_id;
 
-      if (!anchorCustomerId) {
-        throw new Error("Anchor API did not return a valid customer ID");
+      if (!anchorCustomerId || anchorCustomerId === PLATFORM_MERCHANT_CUSTOMER_ID) {
+        throw new Error("Anchor API did not return a valid individual customer ID");
       }
 
       // 3. Store mapping in public.anchor_customers table
@@ -137,13 +149,14 @@ class AnchorService {
           const customers = listRes.data?.data || [];
           const matched = customers.find((c) => {
             const attr = c.attributes || c;
-            return (
+            const isInd = c.type === 'IndividualCustomer' || attr.type === 'IndividualCustomer' || c.id?.includes('anc_ind_cst');
+            return isInd && (
               (attr.email && attr.email.toLowerCase() === email.toLowerCase()) ||
               (phone && attr.phoneNumber && attr.phoneNumber === phone.replace(/^\+/, ""))
             );
-          }) || customers[0];
+          });
 
-          if (matched && matched.id) {
+          if (matched && matched.id && matched.id !== PLATFORM_MERCHANT_CUSTOMER_ID) {
             const anchorCustomerId = matched.id;
             logger.info(`[AnchorService] Resolved existing Anchor customer ID ${anchorCustomerId}`);
             
@@ -186,8 +199,17 @@ class AnchorService {
       throw new Error("userId and email are strictly required to create a virtual account");
     }
 
-    try {
-      // 0. Check if user already has an anchor dedicated_account (Idempotency)
+    // Concurrency protection: handle simultaneous calls for the same userId safely
+    if (!this.pendingProvisioningPromises) {
+      this.pendingProvisioningPromises = new Map();
+    }
+    if (this.pendingProvisioningPromises.has(userId)) {
+      logger.info(`[AnchorService] Concurrency protection active: waiting for existing provisioning request for user ${userId}`);
+      return await this.pendingProvisioningPromises.get(userId);
+    }
+
+    const provisionTask = (async () => {
+      // 0. Check if user already has a valid Anchor dedicated_account (Idempotency)
       const { data: existingDva } = await supabase
         .from("dedicated_accounts")
         .select("*")
@@ -196,24 +218,17 @@ class AnchorService {
         .eq("currency", "NGN")
         .maybeSingle();
 
-      // ── Stale Record Detection ──────────────────────────────────────────────
-      // Detect stale/invalid cached records that would cause "invalid account
-      // number" errors in banking apps (First Bank, Moniepoint, etc.).
-      // A record is stale if:
-      //   1. Bank name contains "PROVIDUS" (Anchor migrated to 9PSB)
-      //   2. Account number is missing or not a valid 10-digit NUBAN
-      //   3. Bank name is empty/placeholder
-      //   4. Account number or name belongs to platform settlement account
       const isStaleProvidus = existingDva?.bank_name?.toUpperCase().includes("PROVIDUS");
       const hasValidNuban = existingDva?.account_number && /^\d{10}$/.test(existingDva.account_number);
       const hasValidBankName = existingDva?.bank_name && 
         !existingDva.bank_name.toUpperCase().includes("PROVIDUS") &&
         existingDva.bank_name !== "0000000000";
       const isPlatformAccount = isPlatformSettlementAccount(existingDva?.account_number, existingDva?.account_name);
-      const isStaleRecord = isStaleProvidus || !hasValidNuban || !hasValidBankName || isPlatformAccount;
+      const isMerchantCustomerCode = existingDva?.provider_customer_code === PLATFORM_MERCHANT_CUSTOMER_ID;
+      const isInvalidAccountRecord = isStaleProvidus || !hasValidNuban || !hasValidBankName || isPlatformAccount || isMerchantCustomerCode;
 
-      if (existingDva && existingDva.account_number && !isStaleRecord) {
-        logger.info(`[AnchorService] Found existing dedicated_account for user ${userId}: ${existingDva.account_number} (${existingDva.bank_name})`);
+      if (existingDva && existingDva.account_number && !isInvalidAccountRecord) {
+        logger.info(`[AnchorService] Found existing valid dedicated_account for user ${userId}: ${existingDva.account_number} (${existingDva.bank_name})`);
         const userRefService = require('./payment/UserBankReferenceService');
         let userRef = null;
         try {
@@ -236,124 +251,53 @@ class AnchorService {
         };
       }
 
-      if (isStaleRecord && existingDva) {
-        logger.warn(`[AnchorService] Deleting stale/platform Anchor account for user ${userId} (account_number: ${existingDva.account_number}, bank_name: ${existingDva.bank_name}). Resyncing with Anchor API...`);
-        await supabase.from("dedicated_accounts").delete().eq("id", existingDva.id);
+      if (isInvalidAccountRecord && existingDva) {
+        logger.warn(`[AnchorService] User ${userId} has legacy/platform account stored (${existingDva.account_number}). Bypassing record and resolving clean customer-linked account (Preserving DB record for audit)...`);
       }
 
-      // 1. Ensure user has an Anchor Customer record
+      // 1. Ensure user has an Anchor Customer record (IndividualCustomer)
       let customer;
       try {
         customer = await this.getOrCreateAnchorCustomer(userId, email, firstName, lastName, phone, bvn);
       } catch (custErr) {
-        // If Anchor API is completely down (502/503/timeout), fail fast — don't serve stale data
         const statusCode = custErr.response?.status;
         if (statusCode === 502 || statusCode === 503 || statusCode === 504 || custErr.code === 'ECONNREFUSED' || custErr.code === 'ETIMEDOUT') {
           const err = new Error('ANCHOR_API_UNAVAILABLE: Anchor banking service is temporarily unavailable. Please use Fincra GTBank transfer instead.');
           err.code = 'ANCHOR_API_UNAVAILABLE';
           throw err;
         }
-        logger.warn(`[AnchorService] Customer onboarding warning (${custErr.message}). Checking existing Virtual NUBANs...`);
+        throw custErr;
       }
 
-      // 1b. Check if Anchor already has an unassigned Virtual NUBAN available for this user.
-      // CRITICAL: We must ensure that any Virtual NUBAN assigned to a user is UNIQUE.
-      // Filter out:
-      //   1. Platform settlement accounts (PLATFORM_SETTLEMENT_NUBANS)
-      //   2. Virtual NUBANs already assigned to ANOTHER user in dedicated_accounts table
+      if (!customer || !customer.anchor_customer_id || customer.anchor_customer_id === PLATFORM_MERCHANT_CUSTOMER_ID) {
+        const err = new Error('ANCHOR_INVALID_CUSTOMER: Unable to resolve valid individual Anchor customer for user.');
+        err.code = 'ANCHOR_INVALID_CUSTOMER';
+        throw err;
+      }
+
+      // 2. Resolve Anchor Settlement Deposit Account
+      logger.info(`[AnchorService] Resolving settlement deposit account for customer ${customer.anchor_customer_id}`);
+      let settlementAcc = null;
       try {
-        const { data: assignedRecords } = await supabase
-          .from("dedicated_accounts")
-          .select("account_number, user_id")
-          .eq("provider", "anchor");
-
-        const assignedToOtherUsers = new Set(
-          (assignedRecords || [])
-            .filter(r => r.user_id !== userId && r.account_number)
-            .map(r => r.account_number)
-        );
-
-        const vnListRes = await this.client.get("/virtual-nubans");
-        const list = vnListRes.data?.data || [];
-
-        // Find an ACTIVE Virtual NUBAN that is NOT a platform settlement account AND NOT assigned to another user
-        const activeVn = list.find((v) => {
-          const isActive = (v.attributes?.status || v.status) === "ACTIVE";
-          const acctNo = v.attributes?.accountNumber || v.accountNumber || "";
-          const isPlatform = isPlatformSettlementAccount(acctNo);
-          const isAssignedToOther = assignedToOtherUsers.has(acctNo);
-          return isActive && !isPlatform && !isAssignedToOther;
-        });
-
-        if (activeVn) {
-          const vAttr = activeVn.attributes || activeVn;
-          const accountNo = vAttr.accountNumber;
-          const accountName = vAttr.accountName || `${firstName || ''} ${lastName || ''}`.trim();
-          const bankName = vAttr.bank?.name || "9 Payment Service Bank";
-
-          // Double-guard: never save a platform settlement NUBAN as a user account
-          if (accountNo && !isPlatformSettlementAccount(accountNo, accountName)) {
-            logger.info(`[AnchorService] Resolved user-specific Anchor Virtual NUBAN: ${accountNo} (${bankName}) for user ${userId}`);
-            const { data: dvaRecord } = await supabase
-              .from("dedicated_accounts")
-              .upsert(
-                {
-                  user_id: userId,
-                  provider: "anchor",
-                  provider_customer_code: customer?.anchor_customer_id || "anchor_merchant_cust",
-                  provider_account_id: activeVn.id || accountNo,
-                  bank_name: bankName,
-                  account_number: accountNo,
-                  account_name: accountName,
-                  currency: "NGN",
-                  status: "ACTIVE",
-                  metadata: activeVn,
-                },
-                { onConflict: "user_id,provider,currency" }
-              )
-              .select("*")
-              .maybeSingle();
-
-            return {
-              id: dvaRecord?.id || activeVn.id,
-              bankName,
-              accountNumber: accountNo,
-              accountName,
-              currency: "NGN",
-              provider: "anchor",
-              customerCode: customer?.anchor_customer_id || "anchor_merchant_cust",
-              providerCustomerCode: customer?.anchor_customer_id || "anchor_merchant_cust",
-              providerAccountId: activeVn.id || accountNo,
-              status: "ACTIVE",
-              metadata: activeVn,
-            };
-          }
-        } else {
-          logger.info(`[AnchorService] No user-specific Virtual NUBAN found in list for user ${userId} — will provision a fresh one via POST /virtual-nubans.`);
-        }
-      } catch (vnErr) {
-        // If Anchor API is completely down, fail fast
-        const statusCode = vnErr.response?.status;
-        if (statusCode === 502 || statusCode === 503 || statusCode === 504 || vnErr.code === 'ECONNREFUSED' || vnErr.code === 'ETIMEDOUT') {
+        const accRes = await this.client.get("/accounts");
+        const accounts = accRes.data?.data || [];
+        settlementAcc = accounts.find((a) => a.attributes?.type === "FBO" || a.attributes?.type === "SETTLEMENT") || accounts[0];
+      } catch (accErr) {
+        const statusCode = accErr.response?.status;
+        if (statusCode === 502 || statusCode === 503 || statusCode === 504 || accErr.code === 'ECONNREFUSED' || accErr.code === 'ETIMEDOUT') {
           const err = new Error('ANCHOR_API_UNAVAILABLE: Anchor banking service is temporarily unavailable. Please use Fincra GTBank transfer instead.');
           err.code = 'ANCHOR_API_UNAVAILABLE';
           throw err;
         }
-        logger.warn(`[AnchorService] Virtual NUBAN list check warning: ${vnErr.message}`);
+        throw accErr;
       }
-
-      // 2. Resolve Anchor Settlement Account
-      logger.info(`[AnchorService] Resolving settlement deposit account for customer ${customer?.anchor_customer_id}`);
-      const accRes = await this.client.get("/accounts");
-      const accounts = accRes.data?.data || [];
-      const settlementAcc = accounts.find((a) => a.attributes?.type === "FBO" || a.attributes?.type === "SETTLEMENT") || accounts[0];
 
       if (!settlementAcc) {
         throw new Error("No Anchor settlement deposit account available");
       }
 
-      // 3. Request Virtual NUBAN from Anchor API
-      logger.info(`[AnchorService] Provisioning Virtual NUBAN on Anchor settlement account ${settlementAcc.id}`);
+      // 3. Request Customer-linked Virtual NUBAN from Anchor API
+      logger.info(`[AnchorService] Provisioning customer-linked Virtual NUBAN for customer ${customer.anchor_customer_id}`);
       const payload = {
         data: {
           type: "VirtualNuban",
@@ -361,6 +305,12 @@ class AnchorService {
             name: `${firstName || ''} ${lastName || ''}`.trim() || email,
           },
           relationships: {
+            customer: {
+              data: {
+                type: "IndividualCustomer",
+                id: customer.anchor_customer_id,
+              },
+            },
             settlementAccount: {
               data: {
                 type: "DepositAccount",
@@ -371,23 +321,60 @@ class AnchorService {
         },
       };
 
-      const response = await this.client.post("/virtual-nubans", payload);
+      let response;
+      try {
+        response = await this.client.post("/virtual-nubans", payload);
+      } catch (apiErr) {
+        const statusCode = apiErr.response?.status;
+        if (statusCode === 502 || statusCode === 503 || statusCode === 504 || apiErr.code === 'ECONNREFUSED' || apiErr.code === 'ETIMEDOUT') {
+          // Timeout ambiguity check (Section 11): Check if account was actually created on DB/Anchor before failing
+          const { data: timeoutCheck } = await supabase
+            .from("dedicated_accounts")
+            .select("*")
+            .eq("user_id", userId)
+            .eq("provider", "anchor")
+            .eq("currency", "NGN")
+            .maybeSingle();
+
+          if (timeoutCheck && timeoutCheck.account_number && !isPlatformSettlementAccount(timeoutCheck.account_number, timeoutCheck.account_name)) {
+            logger.info(`[AnchorService] Timeout occurred but valid account ${timeoutCheck.account_number} was already persisted.`);
+            return timeoutCheck;
+          }
+
+          const err = new Error('ANCHOR_API_UNAVAILABLE: Anchor banking service is temporarily unavailable. Please use Fincra GTBank transfer instead.');
+          err.code = 'ANCHOR_API_UNAVAILABLE';
+          throw err;
+        }
+        throw apiErr;
+      }
 
       const entry = response.data?.data || response.data || {};
       const attr = entry.attributes || entry;
       const accountNo = attr.accountNumber;
       const accountName = attr.accountName || `${firstName || ''} ${lastName || ''}`.trim();
       const bankName = attr.bank?.name || "9 Payment Service Bank";
+      const returnedCustId = entry.relationships?.customer?.data?.id || attr.customerId || customer.anchor_customer_id;
 
-      if (!accountNo) {
-        throw new Error("Anchor API response did not contain account_number");
+      // ── HARD DEFENSIVE VALIDATION GUARD (Sections 5 & 6) ───────────────────
+      if (isPlatformSettlementAccount(accountNo, accountName)) {
+        logger.error(`[AnchorService] DEFENSIVE GUARD: Anchor returned merchant/platform NUBAN (${accountNo}) for user ${userId}. REJECTING.`);
+        const err = new Error('ANCHOR_NO_VALID_ACCOUNT: Provisioned account rejected by defensive merchant NUBAN guard.');
+        err.code = 'ANCHOR_NO_VALID_ACCOUNT';
+        throw err;
       }
 
-      // CRITICAL GUARD: If Anchor returned a platform settlement account as the newly
-      // created Virtual NUBAN, abort rather than saving it for this user.
-      if (isPlatformSettlementAccount(accountNo, accountName)) {
-        logger.error(`[AnchorService] Anchor returned platform settlement NUBAN (${accountNo}) as user account for user ${userId}. Aborting save.`);
-        throw new Error('ANCHOR_INTEGRITY_ERROR: Anchor API returned platform settlement account instead of a user-specific Virtual NUBAN.');
+      if (returnedCustId === PLATFORM_MERCHANT_CUSTOMER_ID) {
+        logger.error(`[AnchorService] DEFENSIVE GUARD: Account linked to platform BusinessCustomer (${returnedCustId}) instead of user IndividualCustomer. REJECTING.`);
+        const err = new Error('ANCHOR_NO_VALID_ACCOUNT: Account rejected by customer linkage guard.');
+        err.code = 'ANCHOR_NO_VALID_ACCOUNT';
+        throw err;
+      }
+
+      if (!accountNo || !/^\d{10}$/.test(accountNo)) {
+        logger.error(`[AnchorService] DEFENSIVE GUARD: Account number is invalid or not 10 digits: ${accountNo}`);
+        const err = new Error('ANCHOR_NO_VALID_ACCOUNT: Anchor API response did not contain a valid 10-digit NUBAN.');
+        err.code = 'ANCHOR_NO_VALID_ACCOUNT';
+        throw err;
       }
 
       // 4. Save virtual account in public.dedicated_accounts table
@@ -409,13 +396,13 @@ class AnchorService {
           { onConflict: "user_id,provider,currency" }
         )
         .select("*")
-        .single();
+        .maybeSingle();
 
       if (dvaError) {
         logger.error(`[AnchorService] Failed saving dedicated_account record: ${dvaError.message}`);
       }
 
-      logger.info(`[AnchorService] Individual Virtual NUBAN ${accountNo} provisioned and saved for user ${userId}`);
+      logger.info(`[AnchorService] Customer-linked Virtual NUBAN ${accountNo} provisioned and saved for user ${userId}`);
       return {
         id: dvaRecord?.id || entry.id,
         bankName,
@@ -429,10 +416,13 @@ class AnchorService {
         status: "ACTIVE",
         metadata: entry,
       };
-    } catch (error) {
-      const errMsg = error.response?.data?.errors?.[0]?.detail || error.response?.data?.message || error.message;
-      logger.error(`[AnchorService] Create Virtual Account Error: ${errMsg}`);
-      throw new Error(errMsg || "Failed to generate Anchor virtual account");
+    })();
+
+    this.pendingProvisioningPromises.set(userId, provisionTask);
+    try {
+      return await provisionTask;
+    } finally {
+      this.pendingProvisioningPromises.delete(userId);
     }
   }
 
