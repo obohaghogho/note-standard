@@ -94,6 +94,24 @@ router.post("/virtual-account", requireAuth, async (req, res, next) => {
     res.json({ success: true, data: result });
   } catch (err) {
     logger.error(`[AnchorRoute] POST /virtual-account error: ${err.message}`);
+
+    if (
+      err.code === 'ANCHOR_API_UNAVAILABLE' ||
+      err.code === 'ANCHOR_NO_VALID_ACCOUNT' ||
+      err.code === 'ANCHOR_INVALID_CUSTOMER' ||
+      err.message?.includes('ANCHOR_') ||
+      err.message?.includes('Access Denied') ||
+      err.message?.includes('Forbidden')
+    ) {
+      return res.json({
+        success: true,
+        available: false,
+        fallbackProvider: 'fincra',
+        reason: err.code || 'ANCHOR_SERVICE_UNAVAILABLE',
+        message: 'Anchor banking service is currently unavailable for individual account provisioning. Please use Fincra GTBank transfer instead.',
+      });
+    }
+
     res.status(400).json({
       success: false,
       message: err.message || "Failed to generate Anchor virtual account",

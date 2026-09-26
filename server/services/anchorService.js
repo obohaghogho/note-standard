@@ -139,8 +139,16 @@ class AnchorService {
 
       return insertedCustomer;
     } catch (error) {
+      const statusCode = error.response?.status;
       const errMsg = error.response?.data?.errors?.[0]?.detail || error.response?.data?.errors?.[0]?.title || error.response?.data?.message || error.message;
       
+      if (statusCode === 403 || statusCode === 401 || /Access Denied/i.test(errMsg) || /Forbidden/i.test(errMsg)) {
+        logger.warn(`[AnchorService] Anchor customer onboarding forbidden/un-provisioned (${errMsg}).`);
+        const err = new Error('ANCHOR_API_UNAVAILABLE: Anchor banking service is un-provisioned for direct customer onboarding. Please use Fincra GTBank transfer instead.');
+        err.code = 'ANCHOR_API_UNAVAILABLE';
+        throw err;
+      }
+
       // Fallback: If customer already exists on Anchor, resolve existing customer record
       if (errMsg && /already exist/i.test(errMsg)) {
         logger.info(`[AnchorService] Customer already exists on Anchor. Searching existing customer list for email ${email}...`);
@@ -184,7 +192,9 @@ class AnchorService {
       }
 
       logger.error(`[AnchorService] Customer Onboarding Failure: ${errMsg}`);
-      throw new Error(errMsg || "Failed to onboard Anchor customer");
+      const err = new Error(errMsg || "Failed to onboard Anchor customer");
+      err.code = 'ANCHOR_API_UNAVAILABLE';
+      throw err;
     }
   }
 
