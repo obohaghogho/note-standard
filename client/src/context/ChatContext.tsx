@@ -2671,10 +2671,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             setMessages(prev => {
                 let next = { ...prev };
                 intents.forEach(intent => {
+                    if (intent.status === 'synced') return;
+                    if (processedEventIdsRef.current.has(`evt:${intent.event_id}`) || seenMessagesRef.current.has(intent.event_id)) return;
+
                     const cid = intent.conversation_id;
                     const current = next[cid] || [];
                     const tempId = intent.client_message_id || intent.event_id;
-                    if (!current.some(m => m.id === tempId || m.event_id === intent.event_id)) {
+                    if (!current.some(m => m.id === tempId || (m.event_id && m.event_id === intent.event_id))) {
                         const optMsg: Message = {
                             id: tempId,
                             event_id: intent.event_id,

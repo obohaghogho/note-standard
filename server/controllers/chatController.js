@@ -289,7 +289,7 @@ exports.getConversations = async (req, res) => {
 
         const { data: lastMsgs } = await supabase
           .from("messages")
-          .select("id, content, sender_id, created_at, type, read_at, delivered_at")
+          .select("id, content, sender_id, created_at, type, read_at, delivered_at, event_id")
           .eq("conversation_id", conv.id)
           .order("created_at", { ascending: false })
           .limit(1);
@@ -1693,7 +1693,7 @@ exports.sendMessage = async (req, res) => {
           const { data: insertData, error: insertError } = await supabase
             .from("messages")
             .insert([insertPayload])
-            .select("id, sequence_number, created_at, updated_at")
+            .select("id, sequence_number, created_at, updated_at, event_id")
             .single();
 
           if (insertError) {
@@ -1711,7 +1711,7 @@ exports.sendMessage = async (req, res) => {
             const { data: retryData, error: retryErr } = await supabase
               .from("messages")
               .insert([fallbackPayload])
-              .select("id, sequence_number, created_at, updated_at")
+              .select("id, sequence_number, created_at, updated_at, event_id")
               .single();
 
             if (retryErr) throw retryErr;
