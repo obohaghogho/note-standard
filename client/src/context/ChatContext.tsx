@@ -2589,9 +2589,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
                         setMessages(prev => {
                             const current = prev[intent.conversation_id] || [];
-                            const tempId = intent.client_message_id || `temp-${intent.event_id}`;
-                            const filtered = current.filter(m => m.id !== tempId && (!m.event_id || m.event_id !== intent.event_id));
-                            const { merged } = mergeMessages(filtered, [canonicalMessage]);
+                            // Fix (causal order): Do NOT pre-filter the optimistic temp message out.
+                            // mergeMessages matches by event_id / id and preserves _clientTimestamp
+                            // from the existing optimistic message onto the canonical server message.
+                            // Pre-filtering destroyed that preservation, causing rapid-fire messages
+                            // to re-sort by server-assigned created_at and invert visual order.
+                            const { merged } = mergeMessages(current, [canonicalMessage]);
                             return { ...prev, [intent.conversation_id]: merged as Message[] };
                         });
 
@@ -2787,6 +2790,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         trackCorrelation(cid, 'sendMessage');
         logger.info('CHAT', 'Initiating send message', { correlationId: cid, conversationId, data: { type } });
 
+        // Capture the exact local send time as the authoritative causal timestamp.
+        // This is preserved through server ACK reconciliation by mergeMessages so that
+        // rapid-fire messages always sort in the user-observed send order, not by
+        // server-assigned created_at (which reflects DB insertion time, not send time).
+        const clientSendTimestamp = Date.now();
+
         const optimisticMessage: Message = {
             id: tempId,
             tempId: tempId,
@@ -2794,7 +2803,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             conversation_id: conversationId,
             sender_id: user.id,
             content,
-            created_at: new Date().toISOString(),
+            created_at: new Date(clientSendTimestamp).toISOString(),
+            _clientTimestamp: clientSendTimestamp,
             type: (type || 'text') as Message['type'],
             isOwn: true,
             status: 'sending',
