@@ -1250,10 +1250,11 @@ exports.markMessageRead = async (req, res) => {
       const receiptPayload = { messageId, conversationId: msgRow.conversation_id, userId, readAt };
       console.log(`[FORENSIC][API] Read ACK Processing | messageId:${messageId} | conversationId:${msgRow.conversation_id} | userId:${userId} | ts:${Date.now()}`);
 
-      // Emit to conversation room (for ChatScreen listeners)
-      await realtime.emitToConversation(msgRow.conversation_id, "chat:message_read", receiptPayload);
-      // ALSO emit directly to the original sender so their ChatList updates too
-      await realtime.emitToUser(msgRow.sender_id, "chat:message_read", receiptPayload);
+      // Emit to conversation room (for ChatScreen listeners) and sender user room in parallel
+      await Promise.all([
+        realtime.emitToConversation(msgRow.conversation_id, "chat:message_read", receiptPayload),
+        realtime.emitToUser(msgRow.sender_id, "chat:message_read", receiptPayload)
+      ]);
       console.log(`[FORENSIC][API] Read ACK Broadcast Done | messageId:${messageId} | senderId:${msgRow.sender_id} | ts:${Date.now()}`);
 
       res.json({ success: true });
@@ -1340,10 +1341,11 @@ exports.markMessageDelivered = async (req, res) => {
       const receiptPayload = { messageId, conversationId: msgRow.conversation_id, userId, delivered_at: deliveredAt };
       console.log(`[FORENSIC][API] Delivery ACK Processing | messageId:${messageId} | conversationId:${msgRow.conversation_id} | userId:${userId} | ts:${Date.now()}`);
 
-      // Emit to conversation room (for ChatScreen listeners)
-      await realtime.emitToConversation(msgRow.conversation_id, "chat:message_delivered", receiptPayload);
-      // ALSO emit directly to the original sender so their ChatList updates too
-      await realtime.emitToUser(msgRow.sender_id, "chat:message_delivered", receiptPayload);
+      // Emit to conversation room (for ChatScreen listeners) and sender user room in parallel
+      await Promise.all([
+        realtime.emitToConversation(msgRow.conversation_id, "chat:message_delivered", receiptPayload),
+        realtime.emitToUser(msgRow.sender_id, "chat:message_delivered", receiptPayload)
+      ]);
       console.log(`[FORENSIC][API] Delivery ACK Broadcast Done | messageId:${messageId} | senderId:${msgRow.sender_id} | ts:${Date.now()}`);
 
       res.json({ success: true });
@@ -1387,6 +1389,7 @@ exports.markMessagesDeliveredBatch = async (req, res) => {
         byConversation[msg.conversation_id].senderIds.add(msg.sender_id);
       });
 
+      const batchEmits = [];
       for (const [convId, group] of Object.entries(byConversation)) {
         const payload = { 
           conversationId: convId, 
@@ -1394,11 +1397,12 @@ exports.markMessagesDeliveredBatch = async (req, res) => {
           userId, 
           delivered_at: now 
         };
-        await realtime.emitToConversation(convId, "chat:messages_delivered_batch", payload);
+        batchEmits.push(realtime.emitToConversation(convId, "chat:messages_delivered_batch", payload));
         for (const senderId of group.senderIds) {
-          await realtime.emitToUser(senderId, "chat:messages_delivered_batch", payload);
+          batchEmits.push(realtime.emitToUser(senderId, "chat:messages_delivered_batch", payload));
         }
       }
+      await Promise.all(batchEmits);
     }
 
     res.json({ success: true, updatedCount: data?.length || 0 });
@@ -1454,9 +1458,11 @@ exports.webhookDeliver = async (req, res) => {
 
       const memberIds = (members && members.length > 0) ? members.map(m => m.user_id) : [targetMessage.sender_id];
 
-      await realtime.emitToUsers(memberIds, 'chat:message_delivered', receiptPayload);
-      await realtime.emitToUsers(memberIds, 'chat:delivery_receipt', receiptPayload);
-      await realtime.emitToConversation(targetMessage.conversation_id, 'chat:message_delivered', receiptPayload);
+      await Promise.all([
+        realtime.emitToUsers(memberIds, 'chat:message_delivered', receiptPayload),
+        realtime.emitToUsers(memberIds, 'chat:delivery_receipt', receiptPayload),
+        realtime.emitToConversation(targetMessage.conversation_id, 'chat:message_delivered', receiptPayload)
+      ]);
     }
 
     res.json({ success: true });
@@ -2856,14 +2862,22 @@ exports.markMessageDelivered = async (req, res, next) => {
 
     if (updateErr) throw updateErr;
 
-    // Emit Realtime Delivery ACK to the original sender
+    // Emit Realtime Delivery ACK to the original sender and conversation room concurrently
     const realtime = require("../services/realtimeService");
-    await realtime.emitToUser(msg.sender_id, "chat:message_delivered", {
-      messageId,
-      conversationId: msg.conversation_id,
-      recipientId: userId,
-      delivered_at: now,
-    });
+    await Promise.all([
+      realtime.emitToUser(msg.sender_id, "chat:message_delivered", {
+        messageId,
+        conversationId: msg.conversation_id,
+        recipientId: userId,
+        delivered_at: now,
+      }),
+      realtime.emitToConversation(msg.conversation_id, "chat:message_delivered", {
+        messageId,
+        conversationId: msg.conversation_id,
+        recipientId: userId,
+        delivered_at: now,
+      })
+    ]);
 
     console.log(`[Chat/Telemetry] MESSAGE_DELIVERED | msgId: ${messageId} | recipient: ${userId} | sender: ${msg.sender_id}`);
     res.json({ success: true, message: updated });
@@ -2905,14 +2919,22 @@ exports.markMessageRead = async (req, res, next) => {
 
     if (updateErr) throw updateErr;
 
-    // Emit Realtime Read ACK to the original sender
+    // Emit Realtime Read ACK to the original sender and conversation room concurrently
     const realtime = require("../services/realtimeService");
-    await realtime.emitToUser(msg.sender_id, "chat:message_read", {
-      messageId,
-      conversationId: msg.conversation_id,
-      recipientId: userId,
-      read_at: now,
-    });
+    await Promise.all([
+      realtime.emitToUser(msg.sender_id, "chat:message_read", {
+        messageId,
+        conversationId: msg.conversation_id,
+        recipientId: userId,
+        read_at: now,
+      }),
+      realtime.emitToConversation(msg.conversation_id, "chat:message_read", {
+        messageId,
+        conversationId: msg.conversation_id,
+        recipientId: userId,
+        read_at: now,
+      })
+    ]);
 
     console.log(`[Chat/Telemetry] MESSAGE_READ | msgId: ${messageId} | reader: ${userId} | sender: ${msg.sender_id}`);
     res.json({ success: true, message: updated });
