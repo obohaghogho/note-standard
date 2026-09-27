@@ -13,6 +13,7 @@
 
 const admin = require('firebase-admin');
 const webpush = require('web-push');
+const https = require('https');
 
 function normalizeBase64Url(str) {
   if (!str) return str;
@@ -107,6 +108,14 @@ class PushDispatcher {
       return PushDispatcher.sendWebPush(supabase, device, payload);
     }
 
+    // Expo Push Token (ExponentPushToken[...]) — route to Expo Push API
+    const isExpoToken = device.type === 'expo_push' ||
+      (typeof device.endpoint === 'string' && device.endpoint.startsWith('ExponentPushToken'));
+
+    if (isExpoToken) {
+      return PushDispatcher.sendExpoPush(supabase, device, payload);
+    }
+
     const isFcmToken = device.type === 'fcm' || 
       (typeof device.endpoint === 'string' && !device.endpoint.startsWith('https://') && !device.endpoint.startsWith('ExponentPushToken'));
 
@@ -118,6 +127,7 @@ class PushDispatcher {
       return PushDispatcher.sendIosPush(fbApp, supabase, device, payload);
     }
 
+    console.warn(`[PushDispatcher] ⚠️ No handler for device type=${device.type} platform=${device.platform} endpoint=${String(device.endpoint).slice(0, 30)}`);
     return false;
   }
 
@@ -242,7 +252,10 @@ class PushDispatcher {
    * iOS APNs / FCM Dispatch.
    */
   static async sendIosPush(fbApp, supabase, device, payload) {
-    if (!fbApp) return false;
+    if (!fbApp) {
+      console.warn(`[PushDispatcher] ⚠️ iOS push skipped for ${device.deviceId || 'device'} — Firebase App not initialized`);
+      return false;
+    }
     try {
       const message = {
         token: device.endpoint,
@@ -276,6 +289,84 @@ class PushDispatcher {
       if (err.code === 'messaging/registration-token-not-registered') {
         PushDispatcher.markEndpointInvalid(supabase, device);
       }
+      return false;
+    }
+  }
+
+  /**
+   * Expo Push API Dispatch (ExponentPushToken[...]).
+   * Calls api.expo.dev/v2/push/send to deliver cross-platform push.
+   */
+  static async sendExpoPush(supabase, device, payload) {
+    try {
+      const pushMessage = {
+        to: device.endpoint,
+        title: String(payload.title || 'New Message'),
+        body: String(payload.body || 'You have a new message'),
+        sound: 'default',
+        priority: 'high',
+        channelId: 'default',
+        data: {
+          type: 'chat_message',
+          messageId: payload.messageId || '',
+          conversationId: payload.conversationId || '',
+          url: payload.url || (payload.conversationId ? `/dashboard/chat?id=${payload.conversationId}` : '/dashboard/chat'),
+          recipientId: payload.userId || '',
+          targetAccountId: payload.userId || '',
+          deliveryWebhookUrl: payload.deliveryWebhookUrl || '',
+          correlationId: payload.correlationId || '',
+        },
+      };
+
+      const postBody = JSON.stringify([pushMessage]);
+
+      await new Promise((resolve, reject) => {
+        const req = https.request(
+          {
+            hostname: 'exp.host',
+            path: '/--/api/v2/push/send',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Accept-Encoding': 'gzip, deflate',
+              'Content-Length': Buffer.byteLength(postBody),
+            },
+          },
+          (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => {
+              if (res.statusCode === 200) {
+                try {
+                  const parsed = JSON.parse(data);
+                  const ticket = parsed?.data?.[0];
+                  if (ticket?.status === 'error') {
+                    console.warn(`[PushDispatcher] ⚠️ Expo push ticket error for ${device.deviceId}: ${ticket.message}`);
+                    if (ticket.details?.error === 'DeviceNotRegistered') {
+                      PushDispatcher.markEndpointInvalid(supabase, device);
+                    }
+                    return reject(new Error(ticket.message));
+                  }
+                } catch (parseErr) {
+                  console.warn('[PushDispatcher] ⚠️ Could not parse Expo API response body — treating as success', parseErr.message);
+                }
+                resolve();
+              } else {
+                reject(new Error(`Expo API HTTP ${res.statusCode}`));
+              }
+            });
+          }
+        );
+        req.on('error', reject);
+        req.write(postBody);
+        req.end();
+      });
+
+      console.log(`[PushDispatcher] ✅ Expo Push sent to ${device.deviceId || device.endpoint.slice(0, 30)}`);
+      return true;
+    } catch (err) {
+      console.error(`[PushDispatcher] ❌ Expo Push failed for ${device.deviceId}:`, err.message);
       return false;
     }
   }

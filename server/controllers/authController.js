@@ -610,18 +610,38 @@ const registerSession = async (req, res) => {
 
     // Automatically provision V2 Push Installation & Account Link for every logged-in device
     // so background push routing works seamlessly without requiring custom prompt popups.
+    //
+    // IMPORTANT: We must preserve any existing push_endpoint / push_p256dh / push_auth that
+    // were registered by a prior WebPush subscription call. The upsert here only updates the
+    // device metadata (platform, type, status) — it must NOT clobber push credentials.
     try {
+      // Fetch existing installation to preserve push credentials
+      const { data: existingInst } = await supabase
+        .from('device_installations')
+        .select('installation_id, push_endpoint, push_p256dh, push_auth, endpoint_status')
+        .eq('device_id', deviceId)
+        .maybeSingle();
+
+      const upsertPayload = {
+        device_id: deviceId,
+        platform: platform || 'android',
+        type: platform === 'android' ? 'fcm' : 'vapid',
+        endpoint_status: existingInst?.push_endpoint ? (existingInst.endpoint_status || 'VALID') : 'PENDING',
+        token_updated_at: new Date().toISOString(),
+        last_seen_at: new Date().toISOString(),
+        last_registration_source: 'AUTO_SESSION_PROVISION',
+      };
+
+      // Preserve existing push credentials — never overwrite with NULL
+      if (existingInst?.push_endpoint) {
+        upsertPayload.push_endpoint = existingInst.push_endpoint;
+        upsertPayload.push_p256dh = existingInst.push_p256dh || null;
+        upsertPayload.push_auth = existingInst.push_auth || null;
+      }
+
       const { data: inst } = await supabase
         .from('device_installations')
-        .upsert({
-          device_id: deviceId,
-          platform: platform || 'android',
-          type: platform === 'android' ? 'fcm' : 'vapid',
-          endpoint_status: 'VALID',
-          token_updated_at: new Date().toISOString(),
-          last_seen_at: new Date().toISOString(),
-          last_registration_source: 'AUTO_SESSION_PROVISION'
-        }, { onConflict: 'device_id' })
+        .upsert(upsertPayload, { onConflict: 'device_id' })
         .select('installation_id')
         .maybeSingle();
 
@@ -634,11 +654,12 @@ const registerSession = async (req, res) => {
             session_state: 'ACTIVE',
             updated_at: new Date().toISOString()
           }, { onConflict: 'installation_id,user_id' });
-        console.log(`[Push V2 Auto-Provision] Linked device ${deviceId} to user ${user.id} (installation: ${inst.installation_id})`);
+        console.log(`[Push V2 Auto-Provision] Linked device ${deviceId} to user ${user.id} (installation: ${inst.installation_id}) | push_endpoint preserved: ${!!existingInst?.push_endpoint}`);
       }
     } catch (v2AutoErr) {
       console.warn('[RegisterSession] V2 installation auto-link warning:', v2AutoErr.message);
     }
+
 
     res.status(200).json({ success: true, session_id: sessionId, device_id: deviceId });
 

@@ -357,6 +357,39 @@ const registerNativeToken = async (req, res, next) => {
 
     if (error) throw error;
 
+    // Dual-sync to device_installations and installation_accounts so V2 DeviceRegistry resolves native tokens
+    try {
+      const { data: inst } = await supabase
+        .from('device_installations')
+        .upsert({
+          device_id: deviceId,
+          push_endpoint: token,
+          platform: platform || 'android',
+          type: type || 'fcm',
+          token_updated_at: new Date().toISOString(),
+          last_seen_at: new Date().toISOString(),
+          last_registration_source: type || 'fcm',
+          endpoint_status: 'VALID',
+          failure_count: 0,
+          last_validation_reason: 'NATIVE_TOKEN_REGISTER'
+        }, { onConflict: 'device_id' })
+        .select('installation_id')
+        .maybeSingle();
+
+      if (inst && inst.installation_id) {
+        await supabase
+          .from('installation_accounts')
+          .upsert({
+            installation_id: inst.installation_id,
+            user_id: userId,
+            session_state: 'ACTIVE',
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'installation_id,user_id' });
+      }
+    } catch (dualErr) {
+      console.warn('[registerNativeToken] Non-fatal dual-sync warning:', dualErr.message);
+    }
+
     res.json({ success: true, message: "Native token registered successfully" });
   } catch (err) {
     next(err);
@@ -403,16 +436,26 @@ const registerInstallation = async (req, res, next) => {
           .neq('device_id', deviceId);
       }
 
-      // 1b. Upsert Device Installation
-      console.log(`[FORENSIC] Upserting device_installations for deviceId: ${deviceId} | Reason: ${reason || 'BOOT_SYNC'}`);
+      // 1b. Check if existing device installation already has valid push credentials to avoid wiping them on session provision
+      const { data: existingDev } = await supabase
+        .from('device_installations')
+        .select('push_endpoint, push_p256dh, push_auth')
+        .eq('device_id', deviceId)
+        .maybeSingle();
+
+      const finalEndpoint = pushEndpoint || existingDev?.push_endpoint || null;
+      const finalP256dh   = pushP256dh   || (pushEndpoint ? null : existingDev?.push_p256dh) || null;
+      const finalAuth     = pushAuth     || (pushEndpoint ? null : existingDev?.push_auth)   || null;
+
+      console.log(`[FORENSIC] Upserting device_installations for deviceId: ${deviceId} | Reason: ${reason || 'BOOT_SYNC'} | Endpoint: ${finalEndpoint ? finalEndpoint.substring(0, 30) + '...' : 'NULL'}`);
       
       const upsertPayload = {
         device_id: deviceId,
-        push_endpoint: pushEndpoint || null,
-        push_p256dh: pushP256dh || null,
-        push_auth: pushAuth || null,
+        push_endpoint: finalEndpoint,
+        push_p256dh: finalP256dh,
+        push_auth: finalAuth,
         platform,
-        type,
+        type: (finalEndpoint && typeof finalEndpoint === 'string' && finalEndpoint.startsWith('https://')) ? 'vapid' : type,
         capabilities: capabilities || { supports_web_push: false, supports_fcm: false, supports_apns: false, supports_background_sync: false },
         token_updated_at: new Date().toISOString(),
         last_seen_at: new Date().toISOString(),
