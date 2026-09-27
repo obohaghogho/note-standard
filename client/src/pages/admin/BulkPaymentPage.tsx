@@ -474,7 +474,7 @@ export const BulkPaymentPage: React.FC = () => {
                         {new Date(batch.created_at).toLocaleString()}
                       </td>
                       <td>
-                        <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'center' }}>
+                        <div className="table-action-group">
                           <button
                             className="btn-secondary"
                             style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem' }}
@@ -616,7 +616,7 @@ export const BulkPaymentPage: React.FC = () => {
                     <div key={idx} className="recipient-row">
                       <input
                         type="text"
-                        className="form-control"
+                        className="form-control recipient-ident-input"
                         placeholder="Username, Email, or User UUID"
                         value={row.recipient_identifier}
                         onChange={(e) => {
@@ -625,26 +625,28 @@ export const BulkPaymentPage: React.FC = () => {
                           setRecipientRows(updated);
                         }}
                       />
-                      <input
-                        type="number"
-                        step="0.01"
-                        className="form-control"
-                        style={{ width: '140px' }}
-                        placeholder="Amount"
-                        value={row.amount}
-                        onChange={(e) => {
-                          const updated = [...recipientRows];
-                          updated[idx].amount = e.target.value;
-                          setRecipientRows(updated);
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="remove-row-btn"
-                        onClick={() => handleRemoveRecipientRow(idx)}
-                      >
-                        <X size={16} />
-                      </button>
+                      <div className="recipient-row-controls">
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="form-control recipient-amount-input"
+                          placeholder="Amount"
+                          value={row.amount}
+                          onChange={(e) => {
+                            const updated = [...recipientRows];
+                            updated[idx].amount = e.target.value;
+                            setRecipientRows(updated);
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="remove-row-btn"
+                          onClick={() => handleRemoveRecipientRow(idx)}
+                          title="Remove recipient"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
                     </div>
                   ))}
                   <button
@@ -657,7 +659,7 @@ export const BulkPaymentPage: React.FC = () => {
                   </button>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
+                <div className="modal-footer">
                   <button className="btn-secondary" onClick={() => setIsCreateModalOpen(false)}>
                     Cancel
                   </button>
@@ -728,7 +730,7 @@ export const BulkPaymentPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1.5rem' }}>
+                <div className="modal-footer modal-footer-space-between">
                   <button className="btn-secondary" onClick={() => setCreateStep('FORM')}>
                     Back to Edit
                   </button>
@@ -806,7 +808,7 @@ export const BulkPaymentPage: React.FC = () => {
               {loadingDetail ? (
                 <p style={{ color: '#9ca3af', fontSize: '0.875rem' }}>Loading batch items...</p>
               ) : (
-                <div style={{ maxHeight: '220px', overflowY: 'auto', background: 'rgba(0,0,0,0.3)', borderRadius: '0.75rem', padding: '0.5rem' }}>
+                <div className="modal-table-wrapper">
                   <table className="bulk-table" style={{ fontSize: '0.8125rem' }}>
                     <thead>
                       <tr>
@@ -833,7 +835,7 @@ export const BulkPaymentPage: React.FC = () => {
               )}
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
+            <div className="modal-footer">
               <button
                 className="btn-secondary"
                 disabled={actionLoading}
@@ -842,9 +844,8 @@ export const BulkPaymentPage: React.FC = () => {
                 Cancel
               </button>
               <button
-                className="btn-execute"
+                className="btn-execute btn-execute-prominent"
                 disabled={actionLoading}
-                style={{ padding: '0.75rem 1.5rem', fontSize: '0.9375rem' }}
                 onClick={handleConfirmExecute}
               >
                 {actionLoading ? 'Executing via Ledger RPC...' : 'Confirm & Execute Financial Mutation'}
@@ -905,7 +906,7 @@ export const BulkPaymentPage: React.FC = () => {
               {loadingDetail ? (
                 <p style={{ color: '#9ca3af' }}>Loading items...</p>
               ) : (
-                <div style={{ maxHeight: '250px', overflowY: 'auto', background: 'rgba(0,0,0,0.3)', borderRadius: '0.75rem' }}>
+                <div className="modal-table-wrapper">
                   <table className="bulk-table" style={{ fontSize: '0.8125rem' }}>
                     <thead>
                       <tr>
@@ -936,7 +937,7 @@ export const BulkPaymentPage: React.FC = () => {
               )}
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <div className="modal-footer">
               <button className="btn-secondary" onClick={() => setIsDetailModalOpen(false)}>
                 Close
               </button>
