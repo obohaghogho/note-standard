@@ -269,6 +269,8 @@ app.use("/api/v1/admin/withdrawals", require("./routes/v1/adminWithdrawals")); /
 app.use("/api/v1/feedback", require("./routes/v1/feedback")); // Enterprise Feedback & Issue Tracking System v1
 app.use("/api/v1", require("./routes/v1/depositInstructionRoutes")); // Enterprise Deposit Instructions v1
 app.use("/api/v1/admin", require("./routes/adminCollectionRoutes")); // Enterprise Collection Admin Routes v1
+app.use("/api/v1/admin/bulk-transfers", require("./routes/v1/bulkTransferRoutes")); // Enterprise Bulk Internal Transfers v1
+app.use("/api/admin/bulk-transfers", require("./routes/v1/bulkTransferRoutes"));
 app.use("/api/limit-requests", requireAuth, require("./routes/limitRequests"));
 app.use("/api/webrtc", require("./routes/webrtc"));
 app.use("/api/teams", teamRoutes);

@@ -1,4 +1,5 @@
 const supabase = require("../config/database");
+const { requireFinancialAdmin } = require("./auth");
 
 // Simple in-memory profile cache to reduce DB load
 const profileCache = new Map(); // userId -> { profile, expiresAt }
@@ -318,6 +319,7 @@ const requireKycReviewerPermission = async (req, res, next) => {
 module.exports = {
   requireAuth,
   requireAdmin,
+  requireFinancialAdmin,
   requireOtcOperatorPermission,
   requireKycReviewerPermission,
 };

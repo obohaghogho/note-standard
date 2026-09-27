@@ -64,4 +64,45 @@ const requireAdmin = async (req, res, next) => {
   }
 };
 
-module.exports = { requireAuth, requireAdmin };
+const requireFinancialAdmin = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ error: "No token provided" });
+    }
+
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("role, status")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError || !profile) {
+      return res.status(403).json({ error: "Profile not found" });
+    }
+
+    if (profile.status === "suspended") {
+      return res.status(403).json({ error: "Account suspended" });
+    }
+
+    if (profile.role !== "admin") {
+      return res.status(403).json({ error: "FORBIDDEN_FINANCIAL_ROLE: Full admin role required for financial operations." });
+    }
+
+    req.user = user;
+    req.userProfile = profile;
+    next();
+  } catch (err) {
+    console.error("Financial admin auth error:", err);
+    next(err);
+  }
+};
+
+module.exports = { requireAuth, requireAdmin, requireFinancialAdmin };
+

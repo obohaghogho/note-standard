@@ -66,6 +66,9 @@ const logAdminAction = async (
   }
 };
 
+// Export logAdminAction for use by other controllers and services
+exports.logAdminAction = logAdminAction;
+
 // GET /api/admin/stats - Dashboard analytics
 exports.getStats = async (req, res) => {
   try {

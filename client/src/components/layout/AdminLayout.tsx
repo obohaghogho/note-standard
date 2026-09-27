@@ -29,7 +29,8 @@ import {
     Activity,
     Sparkles,
     ShieldCheck,
-    DollarSign
+    DollarSign,
+    Send
 } from 'lucide-react';
 
 import { LanguageSelector } from '../common/LanguageSelector';
@@ -149,6 +150,7 @@ export const AdminLayout = () => {
         { to: '/admin/users', icon: Users, label: 'Users' },
         { to: '/admin/kyc-compliance', icon: ShieldCheck, label: 'KYC & Verification' },
         { to: '/admin/crypto-treasury', icon: Coins, label: 'Crypto Treasury' },
+        { to: '/admin/bulk-payments', icon: Send, label: 'Bulk Payments' },
         { to: '/admin/payment-capabilities', icon: Landmark, label: 'Payment Rails' },
         { to: '/admin/collection-accounts', icon: Landmark, label: 'Collection Accounts' },
         { to: '/admin/deposit-monitoring', icon: Activity, label: 'Deposit Monitoring' },

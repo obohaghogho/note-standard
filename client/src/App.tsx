@@ -95,6 +95,7 @@ const GreyBankingPanel = lazyWithRetry(() => import('./pages/admin/GreyBankingPa
 const FincraComplianceDemo = lazyWithRetry(() => import('./pages/admin/FincraComplianceDemo'), 'FincraComplianceDemo');
 const FeeRevenueDashboard = lazyWithRetry(() => import('./pages/admin/FeeRevenueDashboard'), 'FeeRevenueDashboard');
 const KycCompliancePage = lazyWithRetry(() => import('./pages/admin/KycCompliancePage'), 'KycCompliancePage');
+const BulkPaymentPage = lazyWithRetry(() => import('./pages/admin/BulkPaymentPage'), 'BulkPaymentPage');
 
 
 
@@ -228,6 +229,7 @@ function AuthenticatedProviders() {
               <Route path="support-center" element={<SupportCenter />} />
               <Route path="beta-feedback" element={<BetaFeedbackDashboard />} />
               <Route path="kyc-compliance" element={<KycCompliancePage />} />
+              <Route path="bulk-payments" element={<BulkPaymentPage />} />
             </Route>
           </Route>
         </Route>
