@@ -12,10 +12,11 @@ const logger = require('../utils/logger');
 const createCommunityPost = async (req, res, next) => {
   try {
     const { id: userId } = req.user;
-    const { title, content, post_type, category, tags, status, space_id, poll_options, link_url, code_language } = req.body;
+    const { title, content, post_type, category, tags, status, space_id, poll_options, link_url, code_language, media_urls } = req.body;
 
-    if (!title && !content) {
-      return res.status(400).json({ error: "Title or content is required" });
+    const hasMedia = Array.isArray(media_urls) && media_urls.length > 0;
+    if (!title && !content && !hasMedia) {
+      return res.status(400).json({ error: "Title, content, or media is required" });
     }
 
     const { data: post, error: postError } = await supabase
@@ -29,6 +30,7 @@ const createCommunityPost = async (req, res, next) => {
         category: category || 'General',
         tags: tags || [],
         status: status || 'public',
+        media_urls: hasMedia ? media_urls : [],
         link_url,
         code_language
       }])

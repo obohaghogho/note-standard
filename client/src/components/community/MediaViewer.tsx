@@ -16,7 +16,7 @@ export const MediaViewer: React.FC<Props> = ({ urls, initialIndex = 0, onClose }
   const touchStartX = useRef<number | null>(null);
 
   const current = urls[idx];
-  const isVideo = /\.(mp4|webm|ogg)$/i.test(current);
+  const isVideo = /\.(mp4|webm|ogg|mov|m4v)(\?|$)/i.test(current);
 
   // Keyboard navigation
   useEffect(() => {

@@ -309,8 +309,8 @@ export const UniversalPostCard: React.FC<Props> = ({
                     className="relative cursor-pointer bg-gray-100 dark:bg-gray-800"
                     onClick={() => { setMediaViewerIndex(idx); setShowMediaViewer(true); }}
                   >
-                    {url.match(/\.(mp4|webm|ogg)$/i) ? (
-                      <video src={url} className="w-full h-48 object-cover" />
+                    {post.post_type === 'video' || url.match(/\.(mp4|webm|ogg|mov|m4v)(\?|$)/i) ? (
+                      <video src={url} className="w-full h-48 object-cover" controls preload="metadata" />
                     ) : (
                       <img
                         src={url}
