@@ -990,10 +990,14 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const nowStr = new Date().toISOString();
                 const s = socketRef.current;
                 
-                // Collect ALL undelivered message IDs across all conversations in one batch
+                // Collect ALL undelivered message IDs and qualifying unread conversation IDs in one batch
                 const allUndeliveredIds: string[] = [];
+                const qualifyingConvIds: string[] = [];
                 mappedData.forEach((conv: Conversation) => {
                     if ((conv.unreadCount ?? 0) > 0 && conv.lastMessage && conv.lastMessage.sender_id !== user?.id) {
+                        if (conv.id) {
+                            qualifyingConvIds.push(conv.id);
+                        }
                         const msgId = conv.lastMessage.id;
                         if (msgId) {
                             allUndeliveredIds.push(msgId);
@@ -1014,11 +1018,20 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 });
 
                 // Single batch call to Gateway — writes delivered_at and emits double-ticks
-                if (allUndeliveredIds.length > 0 && user?.id) {
+                if ((allUndeliveredIds.length > 0 || qualifyingConvIds.length > 0) && user?.id) {
+                    const authToken = sessionRef.current?.access_token;
+                    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+                    if (authToken) {
+                        headers['Authorization'] = `Bearer ${authToken}`;
+                    }
                     fetch(`${gatewayUrl}/deliver/batch`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ messageIds: allUndeliveredIds, userId: user.id })
+                        headers,
+                        body: JSON.stringify({
+                            messageIds: allUndeliveredIds,
+                            conversationIds: qualifyingConvIds,
+                            userId: user.id
+                        })
                     }).catch(err => console.error('[Chat] Batch delivery ACK failed:', err));
                 }
 

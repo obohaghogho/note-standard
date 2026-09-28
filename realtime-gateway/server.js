@@ -379,10 +379,63 @@ app.post('/internal/push/broadcast', async (req, res) => {
 // emits chat:message_delivered to the sender — no cold start, no delay.
 app.post('/deliver/batch', async (req, res) => {
   try {
-    const { messageIds, userId } = req.body;
+    const { messageIds, conversationIds, userId } = req.body;
 
-    if (!Array.isArray(messageIds) || messageIds.length === 0 || !userId) {
-      return res.status(400).json({ error: 'messageIds (array) and userId required' });
+    const validMsgIds = Array.isArray(messageIds) ? messageIds.filter(id => typeof id === 'string' && id.trim() !== '') : [];
+    const validConvIds = Array.isArray(conversationIds) ? conversationIds.filter(id => typeof id === 'string' && id.trim() !== '') : [];
+
+    if (validMsgIds.length === 0 && validConvIds.length === 0) {
+      return res.status(400).json({ error: 'messageIds (array) or conversationIds (array) required' });
+    }
+
+    // Authenticate request using Bearer JWT token from header or body
+    let authenticatedUserId = null;
+    const authHeader = req.headers.authorization || req.headers['authorization'];
+    const token = authHeader && authHeader.startsWith('Bearer ')
+      ? authHeader.substring(7)
+      : (req.body.token || null);
+
+    if (token && typeof token === 'string' && token.length > 10) {
+      try {
+        const authModule = require('./auth');
+        if (typeof authModule.getUserWithRetry === 'function') {
+          const { data: { user: authUser } } = await authModule.getUserWithRetry(token);
+          if (authUser?.id) authenticatedUserId = authUser.id;
+        }
+      } catch (e) {}
+
+      if (!authenticatedUserId) {
+        const JWT_SECRET = process.env.JWT_SECRET || process.env.SUPABASE_JWT_SECRET;
+        if (JWT_SECRET) {
+          try {
+            const jwt = require('jsonwebtoken');
+            const decoded = jwt.verify(token, JWT_SECRET);
+            if (decoded && (decoded.sub || decoded.id)) {
+              authenticatedUserId = decoded.sub || decoded.id;
+            }
+          } catch (jwtErr) {}
+        }
+      }
+
+      if (!authenticatedUserId && gatewaySupabase?.auth) {
+        try {
+          const { data: supabaseAuthData } = await gatewaySupabase.auth.getUser(token);
+          if (supabaseAuthData?.user?.id) {
+            authenticatedUserId = supabaseAuthData.user.id;
+          }
+        } catch (sErr) {}
+      }
+    }
+
+    // Security Gate: Verify client-supplied userId matches authenticated identity if present
+    if (authenticatedUserId && userId && userId !== authenticatedUserId) {
+      console.warn(`[Gateway] /deliver/batch Unauthorized user mismatch: auth=${authenticatedUserId} body=${userId}`);
+      return res.status(403).json({ error: 'Forbidden: userId does not match authenticated recipient identity' });
+    }
+
+    const recipientId = authenticatedUserId || userId;
+    if (!recipientId) {
+      return res.status(401).json({ error: 'Unauthorized: Missing recipient identity' });
     }
 
     if (!gatewaySupabase) {
@@ -391,50 +444,45 @@ app.post('/deliver/batch', async (req, res) => {
 
     if (PIPELINE_VERSION === 'v2') {
       const receiptEngine = require('./services/receiptEngine');
-      const result = await receiptEngine.markDeliveredBatch(gatewaySupabase, io, messageIds, userId);
+      const result = await receiptEngine.markDeliveredBatch(gatewaySupabase, io, validMsgIds, recipientId, validConvIds);
       return res.json({ ok: true, updated: result.updatedCount });
     }
 
+    let updatedCount = 0;
     const now = new Date().toISOString();
 
-    const { data, error } = await gatewaySupabase
-      .from('messages')
-      .update({ delivered_at: now })
-      .in('id', messageIds)
-      .neq('sender_id', userId)
-      .is('delivered_at', null)
-      .select('id, conversation_id, sender_id, event_id');
+    if (validConvIds.length > 0) {
+      const { data: memberData } = await gatewaySupabase
+        .from('conversation_members')
+        .select('conversation_id')
+        .eq('user_id', recipientId)
+        .in('conversation_id', validConvIds);
 
-    if (error) {
-      console.warn('[Gateway] /deliver/batch DB error:', error.message);
-      return res.json({ ok: false, error: error.message });
+      if (memberData && memberData.length > 0) {
+        const authorizedConvIds = memberData.map(m => m.conversation_id);
+        const { data: convData } = await gatewaySupabase
+          .from('messages')
+          .update({ delivered_at: now })
+          .in('conversation_id', authorizedConvIds)
+          .neq('sender_id', recipientId)
+          .is('delivered_at', null)
+          .select('id, conversation_id, sender_id, event_id');
+        if (convData) updatedCount += convData.length;
+      }
     }
 
-    if (data && data.length > 0) {
-      console.log(`[Gateway] ⚡ Fast-path batch deliver | ${data.length} messages | userId:${userId}`);
-      data.forEach(msg => {
-          console.log(`[FORENSIC][GW] MESSAGE_DELIVERED | message_id:${msg.id} | event_id:${msg.event_id || 'N/A'} | ts:${now}`);
-      });
-
-      // Group by conversation and sender to minimise socket emits
-      const bySender = {};
-      data.forEach(msg => {
-        const key = `${msg.sender_id}:${msg.conversation_id}`;
-        if (!bySender[key]) bySender[key] = { senderId: msg.sender_id, conversationId: msg.conversation_id, messageIds: [], eventIds: [] };
-        bySender[key].messageIds.push(msg.id);
-        if (msg.event_id) bySender[key].eventIds.push(msg.event_id);
-      });
-
-      Object.values(bySender).forEach(({ senderId, conversationId, messageIds: ids, eventIds }) => {
-        const payload = { conversationId, messageIds: ids, eventIds, userId, delivered_at: now };
-        // Emit to sender (double-tick)
-        io.to(`user:${senderId}`).emit('chat:messages_delivered_batch', payload);
-        // Emit to conversation room (covers active participants)
-        io.to(conversationId).emit('chat:messages_delivered_batch', payload);
-      });
+    if (validMsgIds.length > 0) {
+      const { data: msgData } = await gatewaySupabase
+        .from('messages')
+        .update({ delivered_at: now })
+        .in('id', validMsgIds)
+        .neq('sender_id', recipientId)
+        .is('delivered_at', null)
+        .select('id, conversation_id, sender_id, event_id');
+      if (msgData) updatedCount += msgData.length;
     }
 
-    res.json({ ok: true, updated: data?.length || 0 });
+    res.json({ ok: true, updated: updatedCount });
   } catch (err) {
     console.error('[Gateway] /deliver/batch unexpected error:', err.message);
     res.json({ ok: false, error: err.message });

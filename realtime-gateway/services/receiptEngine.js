@@ -140,36 +140,79 @@ async function markRead(supabase, io, conversationId, readerId, messageIds) {
 }
 
 /**
- * Batch transition: SENT → DELIVERED (for reconnect sync)
+ * Batch transition: SENT → DELIVERED (for reconnect sync & multi-message connection ACK)
  *
  * @param {object} supabase
  * @param {object} io
  * @param {string[]} messageIds
  * @param {string} recipientId - the user who received the messages
+ * @param {string[]} [conversationIds] - optional conversation IDs to acknowledge
  * @returns {{ updatedCount: number }}
  */
-async function markDeliveredBatch(supabase, io, messageIds, recipientId) {
-  if (!messageIds?.length || !supabase) return { updatedCount: 0 };
+async function markDeliveredBatch(supabase, io, messageIds = [], recipientId, conversationIds = []) {
+  const hasMsgIds = Array.isArray(messageIds) && messageIds.length > 0;
+  const hasConvIds = Array.isArray(conversationIds) && conversationIds.length > 0;
+
+  if ((!hasMsgIds && !hasConvIds) || !recipientId || !supabase) return { updatedCount: 0 };
 
   const now = new Date().toISOString();
-  const { data, error } = await supabase
-    .from('messages')
-    .update({ delivered_at: now })
-    .in('id', messageIds)
-    .neq('sender_id', recipientId)
-    .is('delivered_at', null)
-    .select('id, conversation_id, sender_id, event_id');
+  const updatedRows = [];
 
-  if (error) {
-    console.warn('[ReceiptEngine] markDeliveredBatch DB error:', error.message);
-    return { updatedCount: 0 };
+  // 1. Process conversation-level ACK path (with strict membership enforcement)
+  if (hasConvIds) {
+    const { data: memberData, error: memberErr } = await supabase
+      .from('conversation_members')
+      .select('conversation_id')
+      .eq('user_id', recipientId)
+      .in('conversation_id', conversationIds);
+
+    if (memberErr) {
+      console.warn('[ReceiptEngine] markDeliveredBatch membership check error:', memberErr.message);
+    } else if (memberData && memberData.length > 0) {
+      const authorizedConvIds = memberData.map(m => m.conversation_id);
+      const { data: convUpdatedData, error: convErr } = await supabase
+        .from('messages')
+        .update({ delivered_at: now })
+        .in('conversation_id', authorizedConvIds)
+        .neq('sender_id', recipientId)
+        .is('delivered_at', null)
+        .select('id, conversation_id, sender_id, event_id');
+
+      if (convErr) {
+        console.warn('[ReceiptEngine] markDeliveredBatch conversation update error:', convErr.message);
+      } else if (convUpdatedData && convUpdatedData.length > 0) {
+        updatedRows.push(...convUpdatedData);
+      }
+    }
   }
 
-  if (!data || data.length === 0) return { updatedCount: 0 };
+  // 2. Process message-level ACK path (existing fast path)
+  if (hasMsgIds) {
+    const { data: msgUpdatedData, error: msgErr } = await supabase
+      .from('messages')
+      .update({ delivered_at: now })
+      .in('id', messageIds)
+      .neq('sender_id', recipientId)
+      .is('delivered_at', null)
+      .select('id, conversation_id, sender_id, event_id');
 
-  // Group by sender+conversation and emit batch receipts
+    if (msgErr) {
+      console.warn('[ReceiptEngine] markDeliveredBatch message update error:', msgErr.message);
+    } else if (msgUpdatedData && msgUpdatedData.length > 0) {
+      const existingIds = new Set(updatedRows.map(r => r.id));
+      msgUpdatedData.forEach(r => {
+        if (!existingIds.has(r.id)) {
+          updatedRows.push(r);
+        }
+      });
+    }
+  }
+
+  if (updatedRows.length === 0) return { updatedCount: 0 };
+
+  // Group by sender+conversation and emit batch receipts for exact updated rows
   const groups = {};
-  data.forEach(msg => {
+  updatedRows.forEach(msg => {
     const key = `${msg.sender_id}:${msg.conversation_id}`;
     if (!groups[key]) groups[key] = { senderId: msg.sender_id, conversationId: msg.conversation_id, ids: [] };
     groups[key].ids.push(msg.id);
@@ -181,8 +224,8 @@ async function markDeliveredBatch(supabase, io, messageIds, recipientId) {
     io.to(conversationId).emit('chat:messages_delivered_batch', receipt);
   });
 
-  console.log(`[ReceiptEngine] DELIVERED_BATCH | count:${data.length} | recipient:${recipientId}`);
-  return { updatedCount: data.length };
+  console.log(`[ReceiptEngine] DELIVERED_BATCH | count:${updatedRows.length} | recipient:${recipientId}`);
+  return { updatedCount: updatedRows.length };
 }
 
 module.exports = { markDelivered, markRead, markDeliveredBatch };
