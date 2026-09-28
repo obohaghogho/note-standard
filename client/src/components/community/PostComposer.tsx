@@ -174,8 +174,8 @@ export const PostComposer: React.FC<Props> = ({ onClose, onPosted, editPost }) =
   const charPct = Math.min(charCount / MAX_CHARS, 1);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="w-full sm:max-w-2xl bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[95vh]">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="w-full sm:max-w-2xl bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col" style={{ maxHeight: 'min(95vh, calc(95vh - env(safe-area-inset-bottom)))' }}>
         
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
@@ -361,7 +361,7 @@ export const PostComposer: React.FC<Props> = ({ onClose, onPosted, editPost }) =
         </div>
 
         {/* Footer toolbar */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-gray-800">
+        <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-gray-800" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
           <div className="flex items-center gap-2">
             {(postType === 'image' || postType === 'video') && (
               <button
