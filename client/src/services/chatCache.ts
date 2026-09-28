@@ -146,7 +146,7 @@ export class ChatCacheEngine {
         request.onsuccess = () => {
           const result: (Message & { owner_user_id?: string })[] = request.result || [];
           const filtered = userId 
-            ? result.filter(msg => !msg.owner_user_id || msg.owner_user_id === userId)
+            ? result.filter(msg => msg.owner_user_id === userId)
             : result;
           filtered.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
           resolve(filtered);
@@ -173,7 +173,7 @@ export class ChatCacheEngine {
           const allMsgs: (Message & { owner_user_id?: string })[] = request.result || [];
           const grouped: Record<string, Message[]> = {};
           for (const msg of allMsgs) {
-            if (userId && msg.owner_user_id && msg.owner_user_id !== userId) {
+            if (userId && msg.owner_user_id !== userId) {
               continue;
             }
             if (msg.conversation_id && (!validSet || validSet.has(msg.conversation_id))) {

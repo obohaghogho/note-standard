@@ -215,14 +215,21 @@ export const AdminChat = () => {
     useEffect(() => {
         if (!activeChat || !session?.access_token) return;
 
+        const targetChatId = activeChat.id;
+        // 1. Immediately clear previous conversation's message state to prevent state bleed
+        setMessages([]);
+
         const fetchMessages = async () => {
             try {
-                const res = await fetch(`${API_URL}/api/chat/conversations/${activeChat.id}/messages`, {
+                const res = await fetch(`${API_URL}/api/chat/conversations/${targetChatId}/messages`, {
                     headers: { 'Authorization': `Bearer ${session.access_token}` }
                 });
                 if (res.ok) {
                     const data = await res.json() || [];
-                    setMessages(data);
+                    // 2. Race protection: only apply if the active chat has not changed during fetch latency
+                    if (activeChatRef.current?.id === targetChatId) {
+                        setMessages(data);
+                    }
                 }
             } catch (err) {
                 console.error('Failed to fetch messages:', err);

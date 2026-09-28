@@ -1079,6 +1079,9 @@ exports.getMessages = async (req, res) => {
       const primaryArr = data || [];
       await _hydrateReplyTo(primaryArr);
       await _mapSenderTypeBatch(primaryArr, userId);
+      if (cursorCreatedAt) {
+        return res.json(primaryArr);
+      }
       res.json(primaryArr.reverse());
     } catch (innerErr) {
       console.warn("[Chat Controller] Inner query error:", innerErr.message);
@@ -1087,9 +1090,15 @@ exports.getMessages = async (req, res) => {
         .from("messages")
         .select("*")
         .eq("conversation_id", conversationId)
-        .eq("is_deleted", false)
-        .order("created_at", { ascending: false })
-        .limit(parseInt(limit));
+        .eq("is_deleted", false);
+
+      if (cursorCreatedAt) {
+        finalQuery = finalQuery.gt("created_at", cursorCreatedAt).order("created_at", { ascending: true });
+      } else {
+        finalQuery = finalQuery.order("created_at", { ascending: false });
+      }
+
+      finalQuery = finalQuery.limit(parseInt(limit));
 
       if (before) finalQuery = finalQuery.lt("created_at", before);
       if (clearedAt) finalQuery = finalQuery.gt("created_at", clearedAt);
@@ -1099,6 +1108,9 @@ exports.getMessages = async (req, res) => {
       const finalArr = finalData || [];
       await _hydrateReplyTo(finalArr);
       await _mapSenderTypeBatch(finalArr, userId);
+      if (cursorCreatedAt) {
+        return res.json(finalArr);
+      }
       res.json(finalArr.reverse());
     }
   } catch (err) {

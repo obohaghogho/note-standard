@@ -446,16 +446,35 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         return () => clearInterval(interval);
     }, [user, session, connected]);
     // Immediate State Isolation on User Identity Change
+    const lastSeenUserIdRef = useRef<string | null>(null);
+
     useEffect(() => {
         const handleAccountSwitch = () => {
             console.log('[ChatContext] Account switch detected — immediately clearing all chat state');
+            const outgoingId = lastSeenUserIdRef.current || prevUserIdRef.current || lastUserIdRef.current;
             clearState();
+            if (outgoingId) {
+                ChatCacheEngine.clearConversationsForUser(outgoingId).catch(() => {});
+            }
         };
 
-        if (user?.id && prevUserIdRef.current && prevUserIdRef.current !== user.id) {
+        const currentId = user?.id || null;
+        const lastId = lastSeenUserIdRef.current;
+
+        if (currentId && lastId && lastId !== currentId) {
+            handleAccountSwitch();
+        } else if (!currentId && lastId) {
+            // User logged out — immediately purge in-memory state so previous user's data doesn't persist
             handleAccountSwitch();
         }
-        prevUserIdRef.current = user?.id || null;
+
+        if (currentId) {
+            lastSeenUserIdRef.current = currentId;
+            prevUserIdRef.current = currentId;
+            lastUserIdRef.current = currentId;
+        } else {
+            lastSeenUserIdRef.current = null;
+        }
 
         window.addEventListener('account-switched', handleAccountSwitch);
         window.addEventListener('account-switch-start', handleAccountSwitch);
