@@ -299,15 +299,17 @@ export async function uploadMediaFile(
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${API_URL}/api/media/upload`);
+    xhr.open('POST', `${API_URL}/api/upload/media`);
     Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
     };
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        try { resolve(JSON.parse(xhr.responseText).url); }
-        catch { reject(new Error('Invalid upload response')); }
+        try {
+          const data = JSON.parse(xhr.responseText);
+          resolve(data.url || data.secure_url);
+        } catch { reject(new Error('Invalid upload response')); }
       } else {
         reject(new Error(`Upload failed (${xhr.status})`));
       }
