@@ -436,16 +436,31 @@ const registerInstallation = async (req, res, next) => {
           .neq('device_id', deviceId);
       }
 
-      // 1b. Check if existing device installation already has valid push credentials to avoid wiping them on session provision
+      // 1b. Check if existing device installation or push_subscriptions already has valid push credentials to avoid wiping them on session provision
       const { data: existingDev } = await supabase
         .from('device_installations')
         .select('push_endpoint, push_p256dh, push_auth')
         .eq('device_id', deviceId)
         .maybeSingle();
 
-      const finalEndpoint = pushEndpoint || existingDev?.push_endpoint || null;
-      const finalP256dh   = pushP256dh   || (pushEndpoint ? null : existingDev?.push_p256dh) || null;
-      const finalAuth     = pushAuth     || (pushEndpoint ? null : existingDev?.push_auth)   || null;
+      let fallbackSub = null;
+      if (!pushEndpoint && !existingDev?.push_endpoint) {
+        const { data: v1Sub } = await supabase
+          .from('push_subscriptions')
+          .select('endpoint, p256dh, auth')
+          .eq('user_id', userId)
+          .or('status.in.(healthy,stale),status.is.null')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (v1Sub && v1Sub.endpoint) {
+          fallbackSub = v1Sub;
+        }
+      }
+
+      const finalEndpoint = pushEndpoint || existingDev?.push_endpoint || fallbackSub?.endpoint || null;
+      const finalP256dh   = pushP256dh   || existingDev?.push_p256dh   || fallbackSub?.p256dh   || null;
+      const finalAuth     = pushAuth     || existingDev?.push_auth     || fallbackSub?.auth     || null;
 
       console.log(`[FORENSIC] Upserting device_installations for deviceId: ${deviceId} | Reason: ${reason || 'BOOT_SYNC'} | Endpoint: ${finalEndpoint ? finalEndpoint.substring(0, 30) + '...' : 'NULL'}`);
       
