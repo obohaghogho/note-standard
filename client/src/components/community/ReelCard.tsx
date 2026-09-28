@@ -32,31 +32,40 @@ export type ReelPost = {
 interface ReelCardProps {
   reel: ReelPost;
   isActive: boolean;
+  isMuted?: boolean;
+  onToggleMute?: () => void;
+  isInResourceWindow?: boolean;
   currentUserId?: string;
   currentUserRole?: string;
   onOpenComments: (reelId: string) => void;
   onLikeToggle?: (reelId: string, currentLiked: boolean) => void;
   onDeleteReel?: (reelId: string) => void;
+  onRecordView?: (reelId: string) => void;
 }
 
 export const ReelCard: React.FC<ReelCardProps> = ({
   reel,
   isActive,
+  isMuted = true,
+  onToggleMute,
+  isInResourceWindow = true,
   currentUserId,
   currentUserRole,
   onOpenComments,
   onLikeToggle,
   onDeleteReel,
+  onRecordView,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
   const [liked, setLiked] = useState(reel.user_has_liked || reel.is_liked || false);
   const [likesCount, setLikesCount] = useState(reel.likes_count || 0);
   const [bookmarked, setBookmarked] = useState(reel.user_has_bookmarked || reel.is_bookmarked || false);
   const [following, setFollowing] = useState(reel.is_following || false);
   const [showHeartAnim, setShowHeartAnim] = useState(false);
   const lastTapRef = useRef<number>(0);
+  const viewTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const hasViewTrackedRef = useRef<boolean>(false);
 
   const canDelete = Boolean(
     onDeleteReel && (
@@ -83,10 +92,40 @@ export const ReelCard: React.FC<ReelCardProps> = ({
     setBookmarked(reel.user_has_bookmarked || reel.is_bookmarked || false);
   }, [reel]);
 
+  // Keep video element muted property synchronized with shared isMuted prop
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) {
+      video.muted = isMuted;
+    }
+  }, [isMuted]);
+
+  // 2-second playback duration view tracking trigger
+  useEffect(() => {
+    if (isActive && !hasViewTrackedRef.current) {
+      viewTimerRef.current = setTimeout(() => {
+        hasViewTrackedRef.current = true;
+        if (onRecordView) {
+          onRecordView(reel.id);
+        }
+      }, 2000);
+    } else if (!isActive && viewTimerRef.current) {
+      clearTimeout(viewTimerRef.current);
+      viewTimerRef.current = null;
+    }
+
+    return () => {
+      if (viewTimerRef.current) {
+        clearTimeout(viewTimerRef.current);
+        viewTimerRef.current = null;
+      }
+    };
+  }, [isActive, reel.id, onRecordView]);
+
   // Auto-play/pause when active changes
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !isInResourceWindow) return;
 
     if (isActive) {
       const playPromise = video.play();
@@ -99,7 +138,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
       video.pause();
       setIsPlaying(false);
     }
-  }, [isActive]);
+  }, [isActive, isInResourceWindow]);
 
   const togglePlay = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -121,16 +160,8 @@ export const ReelCard: React.FC<ReelCardProps> = ({
 
   const toggleMute = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const video = videoRef.current;
-    if (!video) return;
-
-    const newMuted = !isMuted;
-    video.muted = newMuted;
-    setIsMuted(newMuted);
-
-    // If unmuting, ensure video is actively playing with audio enabled
-    if (!newMuted) {
-      video.play().then(() => setIsPlaying(true)).catch(() => {});
+    if (onToggleMute) {
+      onToggleMute();
     }
   };
 
@@ -229,8 +260,8 @@ export const ReelCard: React.FC<ReelCardProps> = ({
       onClick={handleDoubleTap}
       className="relative w-full h-full max-h-[660px] max-w-[340px] xs:max-w-sm sm:max-w-md mx-auto rounded-2xl overflow-hidden snap-start shrink-0 bg-black shadow-2xl flex flex-col justify-between select-none cursor-pointer border border-white/10"
     >
-      {/* Background Video */}
-      {reel.media_url ? (
+      {/* Background Video (Only mounted within safe active-1..active+1 resource window) */}
+      {reel.media_url && isInResourceWindow ? (
         <video
           ref={videoRef}
           src={reel.media_url}
@@ -238,12 +269,19 @@ export const ReelCard: React.FC<ReelCardProps> = ({
           playsInline
           loop
           muted={isMuted}
+          preload="metadata"
           onTimeUpdate={() => {
             const video = videoRef.current;
             if (video && video.currentTime >= 90) {
               video.currentTime = 0;
             }
           }}
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+      ) : reel.thumbnail_url ? (
+        <img
+          src={reel.thumbnail_url}
+          alt={reel.content || 'Reel preview'}
           className="absolute inset-0 w-full h-full object-cover"
         />
       ) : (

@@ -16,6 +16,20 @@ export const ReelUploadModal: React.FC<ReelUploadModalProps> = ({ onClose, onSuc
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoPreviewRef = useRef<string | null>(null);
+
+  const revokePreviewUrl = () => {
+    if (videoPreviewRef.current) {
+      URL.revokeObjectURL(videoPreviewRef.current);
+      videoPreviewRef.current = null;
+    }
+  };
+
+  React.useEffect(() => {
+    return () => {
+      revokePreviewUrl();
+    };
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -35,7 +49,9 @@ export const ReelUploadModal: React.FC<ReelUploadModalProps> = ({ onClose, onSuc
     setError(null);
     setFile(selectedFile);
 
+    revokePreviewUrl();
     const url = URL.createObjectURL(selectedFile);
+    videoPreviewRef.current = url;
     setVideoPreview(url);
 
     // Calculate video duration
@@ -141,6 +157,7 @@ export const ReelUploadModal: React.FC<ReelUploadModalProps> = ({ onClose, onSuc
       }
 
       onSuccess();
+      revokePreviewUrl();
       onClose();
     } catch (err: any) {
       setError(err.message || 'Error publishing Reel.');
@@ -159,7 +176,10 @@ export const ReelUploadModal: React.FC<ReelUploadModalProps> = ({ onClose, onSuc
             <span>Create NoteStandard Reel</span>
           </div>
           <button
-            onClick={onClose}
+            onClick={() => {
+              revokePreviewUrl();
+              onClose();
+            }}
             className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
           >
             <X size={20} />
@@ -183,6 +203,7 @@ export const ReelUploadModal: React.FC<ReelUploadModalProps> = ({ onClose, onSuc
                 <button
                   type="button"
                   onClick={() => {
+                    revokePreviewUrl();
                     setFile(null);
                     setVideoPreview(null);
                   }}

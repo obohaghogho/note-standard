@@ -32,6 +32,15 @@ export const Reels: React.FC = () => {
     } catch {}
   }
 
+  const [isMuted, setIsMuted] = useState(true);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const handleToggleMute = useCallback(() => {
+    setIsMuted(prev => !prev);
+  }, []);
+
   const handleDeleteReel = async (reelId: string) => {
     try {
       await deletePost(reelId);
@@ -52,6 +61,8 @@ export const Reels: React.FC = () => {
         const data = await res.json();
         const list = data.reels || [];
         setReels(list);
+        setHasMore(Boolean(data.hasMore));
+        setNextCursor(data.nextCursor || null);
         if (list.length > 0) {
           setActiveReelId(list[0].id);
         }
@@ -62,6 +73,32 @@ export const Reels: React.FC = () => {
       setLoading(false);
     }
   }, []);
+
+  const fetchMoreReels = useCallback(async () => {
+    if (loadingMore || !hasMore || !nextCursor) return;
+    try {
+      setLoadingMore(true);
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/api/community/reels?limit=20&cursor=${encodeURIComponent(nextCursor)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const newList: ReelPost[] = data.reels || [];
+        setReels(prev => {
+          const existingIds = new Set(prev.map(r => r.id));
+          const filteredNew = newList.filter(r => !existingIds.has(r.id));
+          return [...prev, ...filteredNew];
+        });
+        setHasMore(Boolean(data.hasMore));
+        setNextCursor(data.nextCursor || null);
+      }
+    } catch (err) {
+      console.error('Error fetching more reels:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore, nextCursor]);
 
   useEffect(() => {
     fetchReels();
@@ -79,6 +116,10 @@ export const Reels: React.FC = () => {
             const reelId = entry.target.getAttribute('data-reel-id');
             if (reelId) {
               setActiveReelId(reelId);
+              const activeIdx = reels.findIndex(r => r.id === reelId);
+              if (activeIdx >= 0 && activeIdx >= reels.length - 3) {
+                fetchMoreReels();
+              }
             }
           }
         });
@@ -94,7 +135,7 @@ export const Reels: React.FC = () => {
     });
 
     return () => observer.disconnect();
-  }, [reels]);
+  }, [reels, fetchMoreReels]);
 
   // Comments Drawer handler
   const handleOpenComments = async (reelId: string) => {
@@ -200,26 +241,36 @@ export const Reels: React.FC = () => {
             </button>
           </div>
         ) : (
-          reels.map((reel) => (
-            <div
-              key={reel.id}
-              data-reel-id={reel.id}
-              ref={(el) => {
-                if (el) cardRefs.current.set(reel.id, el);
-                else cardRefs.current.delete(reel.id);
-              }}
-              className="w-full h-full max-h-[700px] flex items-center justify-center p-1 sm:p-3 snap-start shrink-0 my-auto"
-            >
-              <ReelCard
-                reel={reel}
-                isActive={activeReelId === reel.id}
-                currentUserId={currentUserId}
-                currentUserRole={currentUserRole}
-                onOpenComments={handleOpenComments}
-                onDeleteReel={handleDeleteReel}
-              />
-            </div>
-          ))
+          (() => {
+            const activeIndex = reels.findIndex(r => r.id === activeReelId);
+            const safeActiveIdx = activeIndex >= 0 ? activeIndex : 0;
+            return reels.map((reel, index) => {
+              const isInResourceWindow = Math.abs(index - safeActiveIdx) <= 1;
+              return (
+                <div
+                  key={reel.id}
+                  data-reel-id={reel.id}
+                  ref={(el) => {
+                    if (el) cardRefs.current.set(reel.id, el);
+                    else cardRefs.current.delete(reel.id);
+                  }}
+                  className="w-full h-full max-h-[700px] flex items-center justify-center p-1 sm:p-3 snap-start shrink-0 my-auto"
+                >
+                  <ReelCard
+                    reel={reel}
+                    isActive={activeReelId === reel.id}
+                    isMuted={isMuted}
+                    onToggleMute={handleToggleMute}
+                    isInResourceWindow={isInResourceWindow}
+                    currentUserId={currentUserId}
+                    currentUserRole={currentUserRole}
+                    onOpenComments={handleOpenComments}
+                    onDeleteReel={handleDeleteReel}
+                  />
+                </div>
+              );
+            });
+          })()
         )}
       </div>
 
