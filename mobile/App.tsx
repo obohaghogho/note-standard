@@ -26,19 +26,25 @@ export default function App() {
       console.log('[App] Bootstrapping background services...');
 
       // Firebase push notifications
-      await PushHandler.init();
+      try {
+        await PushHandler.init();
+      } catch (pushErr) {
+        console.warn('[App] PushHandler.init non-critical warning:', pushErr);
+      }
 
-      // Battery optimization prompt (Android only)
+      // Battery optimization prompt (Android only) — non-blocking post-render execution
       if (Platform.OS === 'android') {
-        try {
-          const shouldRequest = await BatteryService.shouldRequestOptimization();
-          const hadMissedCall = await BatteryService.checkMissedCalls();
-          if (shouldRequest || hadMissedCall) {
-            await BatteryService.requestIgnoreBatteryOptimization();
+        setTimeout(async () => {
+          try {
+            const shouldRequest = await BatteryService.shouldRequestOptimization();
+            const hadMissedCall = await BatteryService.checkMissedCalls();
+            if (shouldRequest || hadMissedCall) {
+              await BatteryService.requestIgnoreBatteryOptimization();
+            }
+          } catch (err) {
+            console.warn('[App] Battery optimization check failed:', err);
           }
-        } catch (err) {
-          console.warn('[App] Battery optimization check failed:', err);
-        }
+        }, 1000);
       }
 
       console.log('[App] Bootstrap complete.');

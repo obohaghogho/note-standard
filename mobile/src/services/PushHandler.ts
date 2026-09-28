@@ -50,12 +50,16 @@ export class PushHandler {
   static async init() {
     console.log('[PushHandler] 🛠️ Initializing Push Integration...');
 
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
+    let finalStatus = 'undetermined';
+    try {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      finalStatus = existingStatus;
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+    } catch (permErr: any) {
+      console.warn('[PushHandler] ⚠️ Notification permission lookup notice:', permErr?.message);
     }
 
     this.setupCallKeepListeners();
