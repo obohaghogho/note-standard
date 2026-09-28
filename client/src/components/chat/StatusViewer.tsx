@@ -32,6 +32,9 @@ export default function StatusViewer() {
   const [showViewers, setShowViewers] = useState(false);
   const [activeDuration, setActiveDuration] = useState(STATUS_DURATION);
   
+  const [floatingReactions, setFloatingReactions] = useState<{ id: string; emoji: string; x: number }[]>([]);
+  const lastReactionRef = useRef<{ statusId: string; emoji: string; time: number } | null>(null);
+
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const elapsedRef = useRef(0);
@@ -128,6 +131,7 @@ export default function StatusViewer() {
   useEffect(() => {
     setActiveDuration(STATUS_DURATION);
     mountTimeRef.current = Date.now();
+    setFloatingReactions([]);
   }, [status?.id]);
 
   // Sync background music with play/pause state
@@ -275,17 +279,43 @@ export default function StatusViewer() {
     }
   };
 
-  const handleReact = async (emoji: string) => {
+  const handleReact = (emoji: string) => {
     if (!status) return;
-    try {
-      const convId = await react(status.id, emoji);
-      toast.success(`Sent ${emoji}`);
-      if (convId) {
-        setActiveConversationId(convId);
-      }
-    } catch (e) {
-      console.error(e);
+
+    // 1. Instant local visual burst feedback (<16ms)
+    const burstId = `${Date.now()}-${Math.random()}`;
+    const randomX = 35 + Math.random() * 30; // Float between 35% and 65% of screen width
+    setFloatingReactions(prev => [...prev.slice(-4), { id: burstId, emoji, x: randomX }]);
+
+    setTimeout(() => {
+      setFloatingReactions(prev => prev.filter(r => r.id !== burstId));
+    }, 900);
+
+    // 2. Client-side Rapid-Tap Deduplication & Idempotency Lock
+    const now = Date.now();
+    if (
+      lastReactionRef.current &&
+      lastReactionRef.current.statusId === status.id &&
+      lastReactionRef.current.emoji === emoji &&
+      now - lastReactionRef.current.time < 1200
+    ) {
+      // Rapid tap — instant burst feedback rendered, skip duplicate network dispatch
+      return;
     }
+    lastReactionRef.current = { statusId: status.id, emoji, time: now };
+
+    // 3. Non-blocking Asynchronous Background Request & Optimistic UI
+    toast.success(`Sent ${emoji}`, { duration: 1500 });
+    react(status.id, emoji)
+      .then(convId => {
+        if (convId) {
+          setActiveConversationId(convId);
+        }
+      })
+      .catch(err => {
+        console.error('[StatusViewer] Reaction dispatch failed:', err);
+        toast.error('Failed to register reaction');
+      });
   };
 
   const handleDelete = async () => {
@@ -469,6 +499,31 @@ export default function StatusViewer() {
                   {parseFormattedText(status.content)}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Instant Floating Emoji Reaction Burst Overlay */}
+          {floatingReactions.length > 0 && (
+            <div className="absolute inset-0 pointer-events-none z-40 overflow-hidden flex items-end justify-center">
+              <style>{`
+                @keyframes statusEmojiFloatUp {
+                  0% { transform: translateY(0) scale(0.5); opacity: 1; }
+                  50% { transform: translateY(-130px) scale(1.4); opacity: 0.95; }
+                  100% { transform: translateY(-260px) scale(1.8); opacity: 0; }
+                }
+              `}</style>
+              {floatingReactions.map(f => (
+                <div
+                  key={f.id}
+                  className="absolute bottom-20 text-5xl select-none drop-shadow-2xl"
+                  style={{
+                    left: `${f.x}%`,
+                    animation: 'statusEmojiFloatUp 0.9s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards'
+                  }}
+                >
+                  {f.emoji}
+                </div>
+              ))}
             </div>
           )}
 

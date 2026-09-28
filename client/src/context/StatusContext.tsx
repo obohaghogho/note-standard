@@ -295,9 +295,46 @@ export const StatusProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   const react = useCallback(async (statusId: string, emoji: string) => {
-    const { data } = await api.post(`/status/${statusId}/react`, { emoji });
-    return data.conversation_id as string | undefined;
-  }, []);
+    let previousReactions: Reaction[] | undefined;
+
+    // 1. Optimistic local state update in StatusContext feed
+    setFeed(prevFeed => prevFeed.map(userEntry => {
+      const hasStatus = userEntry.statuses.some(s => s.id === statusId);
+      if (!hasStatus) return userEntry;
+
+      const updatedStatuses = userEntry.statuses.map(st => {
+        if (st.id !== statusId) return st;
+        previousReactions = st.reactions;
+        const currentReactions = st.reactions || [];
+        const filtered = currentReactions.filter(r => r.user_id !== user?.id);
+        const newReaction: Reaction = {
+          id: `opt-${Date.now()}`,
+          status_id: statusId,
+          user_id: user?.id || '',
+          emoji,
+          created_at: new Date().toISOString()
+        };
+        return { ...st, reactions: [...filtered, newReaction] };
+      });
+      return { ...userEntry, statuses: updatedStatuses };
+    }));
+
+    try {
+      const { data } = await api.post(`/status/${statusId}/react`, { emoji });
+      return data.conversation_id as string | undefined;
+    } catch (err) {
+      // Rollback optimistic update if network request fails
+      if (previousReactions !== undefined) {
+        setFeed(prevFeed => prevFeed.map(userEntry => ({
+          ...userEntry,
+          statuses: userEntry.statuses.map(st =>
+            st.id === statusId ? { ...st, reactions: previousReactions } : st
+          )
+        })));
+      }
+      throw err;
+    }
+  }, [user?.id]);
 
   const reply = useCallback(async (statusId: string, content: string) => {
     const { data } = await api.post(`/status/${statusId}/reply`, { content });

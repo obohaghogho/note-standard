@@ -476,11 +476,23 @@ router.post('/:id/react', requireAuth, async (req, res) => {
     if (!status) return res.status(404).json({ error: 'Not found' });
     if (!await canViewStatus(status, req.user.id)) return res.status(403).json({ error: 'Forbidden' });
 
+    let isDuplicateReaction = false;
     if (!emoji) {
       await supabase.from('status_reactions').delete()
         .eq('status_id', status.id).eq('user_id', req.user.id);
       return res.json({ success: true });
     } else {
+      const { data: existingReaction } = await supabase
+        .from('status_reactions')
+        .select('emoji')
+        .eq('status_id', status.id)
+        .eq('user_id', req.user.id)
+        .maybeSingle();
+
+      if (existingReaction && existingReaction.emoji === emoji) {
+        isDuplicateReaction = true;
+      }
+
       await supabase.from('status_reactions').upsert(
         { status_id: status.id, user_id: req.user.id, emoji },
         { onConflict: 'status_id,user_id' }
@@ -535,6 +547,10 @@ router.post('/:id/react', requireAuth, async (req, res) => {
       }
       const { error: membersError } = await supabase.from('conversation_members').insert(memberInserts);
       if (membersError) throw membersError;
+    }
+
+    if (isDuplicateReaction) {
+      return res.json({ success: true, conversation_id: convId, duplicate: true });
     }
 
     // Send emoji reaction message into chat conversation room
