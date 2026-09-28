@@ -174,11 +174,16 @@ export const PostComposer: React.FC<Props> = ({ onClose, onPosted, editPost }) =
   const charPct = Math.min(charCount / MAX_CHARS, 1);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="w-full sm:max-w-2xl bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col" style={{ maxHeight: 'min(95vh, calc(95vh - env(safe-area-inset-bottom)))' }}>
+    <div
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 pb-[calc(4.25rem+env(safe-area-inset-bottom,0px))] sm:pb-4 bg-black/60 backdrop-blur-sm"
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        className="w-full sm:max-w-2xl bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[calc(100dvh-5.5rem)] sm:max-h-[90vh] overflow-hidden min-h-0"
+      >
         
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800 shrink-0">
           <h2 className="text-base font-bold text-gray-900 dark:text-white">
             {editPost ? 'Edit Post' : 'Create Post'}
           </h2>
@@ -189,7 +194,7 @@ export const PostComposer: React.FC<Props> = ({ onClose, onPosted, editPost }) =
 
         {/* Post type tabs */}
         {!editPost && (
-          <div className="flex items-center gap-1 px-5 pt-4 pb-2">
+          <div className="flex items-center gap-1 px-5 pt-4 pb-2 overflow-x-auto shrink-0">
             {([
               { type: 'text', icon: <Type size={15} />, label: 'Text' },
               { type: 'image', icon: <ImageIcon size={15} />, label: 'Image' },
@@ -199,8 +204,13 @@ export const PostComposer: React.FC<Props> = ({ onClose, onPosted, editPost }) =
             ] as const).map(({ type, icon, label }) => (
               <button
                 key={type}
-                onClick={() => setPostType(type)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${postType === type ? 'bg-blue-600 text-white' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                onClick={() => {
+                  setPostType(type);
+                  if (type === 'image' || type === 'video') {
+                    setTimeout(() => fileInputRef.current?.click(), 50);
+                  }
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 ${postType === type ? 'bg-blue-600 text-white' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
               >
                 {icon} {label}
               </button>
@@ -209,10 +219,30 @@ export const PostComposer: React.FC<Props> = ({ onClose, onPosted, editPost }) =
         )}
 
         {/* Scrollable body */}
-        <div className="overflow-y-auto flex-1 px-5 py-3 space-y-4">
+        <div className="overflow-y-auto flex-1 min-h-0 px-5 py-3 space-y-4">
           {draft && !editPost && (
             <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-lg">
               ✏ Draft restored. Changes are auto-saved.
+            </div>
+          )}
+
+          {/* Dedicated Video / Image Upload dropzone */}
+          {(postType === 'video' || postType === 'image') && mediaPreviews.length === 0 && (
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-blue-400/60 dark:border-blue-600/60 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/50 dark:hover:bg-blue-900/30 cursor-pointer transition-colors text-center"
+            >
+              {postType === 'video' ? (
+                <Video className="w-10 h-10 text-blue-500 mb-2" />
+              ) : (
+                <ImageIcon className="w-10 h-10 text-blue-500 mb-2" />
+              )}
+              <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                {postType === 'video' ? 'Click to select & upload video' : 'Click to select & upload images'}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {postType === 'video' ? 'MP4, WebM, MOV supported' : 'PNG, JPG, GIF, WebP supported'}
+              </p>
             </div>
           )}
 
@@ -232,7 +262,7 @@ export const PostComposer: React.FC<Props> = ({ onClose, onPosted, editPost }) =
               value={content}
               onChange={e => setContent(e.target.value)}
               placeholder="Share your knowledge… Use #hashtag and @mention"
-              rows={5}
+              rows={4}
               maxLength={MAX_CHARS}
               className="w-full bg-transparent text-gray-800 dark:text-gray-200 placeholder-gray-400 text-sm leading-relaxed focus:outline-none resize-none"
             />
@@ -297,7 +327,11 @@ export const PostComposer: React.FC<Props> = ({ onClose, onPosted, editPost }) =
             <div className="grid grid-cols-3 gap-2">
               {mediaPreviews.map((url, idx) => (
                 <div key={idx} className="relative rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 aspect-square">
-                  <img src={url} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                  {postType === 'video' || url.match(/\.(mp4|webm|mov)(\?.*)?$/i) ? (
+                    <video src={url} className="w-full h-full object-cover" />
+                  ) : (
+                    <img src={url} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                  )}
                   {uploadProgress[idx] !== undefined && uploadProgress[idx] < 100 && (
                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                       <span className="text-white text-xs font-bold">{uploadProgress[idx]}%</span>
@@ -361,19 +395,42 @@ export const PostComposer: React.FC<Props> = ({ onClose, onPosted, editPost }) =
         </div>
 
         {/* Footer toolbar */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-gray-800" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+        <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 rounded-b-2xl shrink-0">
           <div className="flex items-center gap-2">
-            {(postType === 'image' || postType === 'video') && (
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="p-2 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
-                aria-label="Attach media"
-              >
-                <ImageIcon size={18} />
-              </button>
-            )}
-            {/* ALWAYS mounted so fileInputRef is valid on the very first tap.
-                Only `accept` changes when postType switches — no remount needed. */}
+            <button
+              type="button"
+              onClick={() => {
+                setPostType('image');
+                setTimeout(() => fileInputRef.current?.click(), 50);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
+                postType === 'image'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                  : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+              }`}
+              aria-label="Attach image"
+            >
+              <ImageIcon size={16} />
+              <span>Image</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setPostType('video');
+                setTimeout(() => fileInputRef.current?.click(), 50);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
+                postType === 'video'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                  : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+              }`}
+              aria-label="Attach video"
+            >
+              <Video size={16} />
+              <span>Video</span>
+            </button>
+
             <input
               ref={fileInputRef}
               type="file"
@@ -382,15 +439,12 @@ export const PostComposer: React.FC<Props> = ({ onClose, onPosted, editPost }) =
               className="hidden"
               onChange={handleFileSelect}
             />
-            <button className="p-2 text-gray-500 dark:text-gray-400 hover:text-purple-500 dark:hover:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-full transition-colors" aria-label="Mention user">
-              <AtSign size={18} />
-            </button>
           </div>
 
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors"
+            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-bold rounded-xl transition-colors shadow-md shrink-0"
           >
             {submitting ? <Loader2 size={15} className="animate-spin" /> : null}
             {editPost ? 'Save Changes' : 'Post'}
