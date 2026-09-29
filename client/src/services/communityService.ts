@@ -249,6 +249,40 @@ export async function votePollOption(postId: string, optionId: string): Promise<
   return res.json();
 }
 
+export interface ReelViewMetadata {
+  watch_duration_seconds?: number;
+  is_muted?: boolean;
+  completed?: boolean;
+  client_event_id?: string;
+  session_id?: string;
+}
+
+export async function recordReelView(
+  reelId: string,
+  metadata: ReelViewMetadata = {}
+): Promise<{ success: boolean; recorded: boolean; views_count: number }> {
+  try {
+    const res = await authFetch(`${API_URL}/api/community/reels/${reelId}/view`, {
+      method: 'POST',
+      body: JSON.stringify({
+        watch_duration_seconds: metadata.watch_duration_seconds ?? 2.0,
+        is_muted: metadata.is_muted ?? true,
+        completed: metadata.completed ?? false,
+        client_event_id: metadata.client_event_id,
+        session_id: metadata.session_id,
+      }),
+    });
+    if (!res.ok) {
+      return { success: false, recorded: false, views_count: 0 };
+    }
+    return res.json();
+  } catch {
+    // Non-blocking failure guarantee: Fail silently if network/server is unavailable
+    return { success: false, recorded: false, views_count: 0 };
+  }
+}
+
+
 // ─── Comments ──────────────────────────────────────────────────────────────────
 export async function getComments(postId: string): Promise<CommunityComment[]> {
   const res = await authFetch(`${API_URL}/api/community/post/${postId}/comments`);
