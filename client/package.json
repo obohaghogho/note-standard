@@ -72,11 +72,5 @@
   "engines": {
     "node": "22.x",
     "npm": ">=10"
-  },
-  "optionalDependencies": {
-    "@rollup/rollup-linux-arm64-gnu": "4.24.0",
-    "@rollup/rollup-linux-x64-gnu": "4.24.0",
-    "lightningcss-linux-arm64-gnu": "1.31.1",
-    "lightningcss-linux-x64-gnu": "1.31.1"
   }
 }
