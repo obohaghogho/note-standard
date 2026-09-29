@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { PWAInstallProvider } from './context/PWAInstallContext';
 import { SocketProvider } from './context/SocketContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { PublicRoute } from './components/auth/PublicRoute';
 import { ChatProvider } from './context/ChatContext';
 import { ChatThemeProvider } from './context/ChatThemeContext';
 import { NotificationProvider } from './context/NotificationContext';
@@ -134,9 +135,9 @@ function AuthenticatedProviders() {
       </div>
     }>
       <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
+        <Route path="/" element={<PublicRoute><LandingPage /></PublicRoute>} />
+        <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+        <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/refund" element={<RefundPage />} />
