@@ -40,7 +40,7 @@ interface ReelCardProps {
   onOpenComments: (reelId: string) => void;
   onLikeToggle?: (reelId: string, currentLiked: boolean) => void;
   onDeleteReel?: (reelId: string) => void;
-  onRecordView?: (reelId: string) => void;
+  onRecordView?: (reelId: string, metadata?: { watch_duration_seconds?: number; is_muted?: boolean; completed?: boolean }) => void;
 }
 
 export const ReelCard: React.FC<ReelCardProps> = ({
@@ -64,8 +64,8 @@ export const ReelCard: React.FC<ReelCardProps> = ({
   const [following, setFollowing] = useState(reel.is_following || false);
   const [showHeartAnim, setShowHeartAnim] = useState(false);
   const lastTapRef = useRef<number>(0);
-  const viewTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasViewTrackedRef = useRef<boolean>(false);
+  const activePlaybackTimeRef = useRef<number>(0);
 
   const canDelete = Boolean(
     onDeleteReel && (
@@ -100,27 +100,36 @@ export const ReelCard: React.FC<ReelCardProps> = ({
     }
   }, [isMuted]);
 
-  // 2-second playback duration view tracking trigger
+  // 2-second actual active playback view tracking trigger
   useEffect(() => {
-    if (isActive && !hasViewTrackedRef.current) {
-      viewTimerRef.current = setTimeout(() => {
-        hasViewTrackedRef.current = true;
-        if (onRecordView) {
-          onRecordView(reel.id);
+    let interval: NodeJS.Timeout | null = null;
+
+    const checkAndIncrement = () => {
+      if (isActive && isPlaying && !document.hidden && !hasViewTrackedRef.current) {
+        activePlaybackTimeRef.current += 0.2;
+        if (activePlaybackTimeRef.current >= 2.0) {
+          hasViewTrackedRef.current = true;
+          if (onRecordView) {
+            onRecordView(reel.id, {
+              watch_duration_seconds: activePlaybackTimeRef.current,
+              is_muted: isMuted,
+              completed: false,
+            });
+          }
+          if (interval) clearInterval(interval);
         }
-      }, 2000);
-    } else if (!isActive && viewTimerRef.current) {
-      clearTimeout(viewTimerRef.current);
-      viewTimerRef.current = null;
+      }
+    };
+
+    if (isActive && isPlaying && !hasViewTrackedRef.current) {
+      interval = setInterval(checkAndIncrement, 200);
     }
 
     return () => {
-      if (viewTimerRef.current) {
-        clearTimeout(viewTimerRef.current);
-        viewTimerRef.current = null;
-      }
+      if (interval) clearInterval(interval);
     };
-  }, [isActive, reel.id, onRecordView]);
+  }, [isActive, isPlaying, isMuted, reel.id, onRecordView]);
+
 
   // Auto-play/pause when active changes
   useEffect(() => {
@@ -258,7 +267,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
   return (
     <div
       onClick={handleDoubleTap}
-      className="relative w-full h-full max-h-[660px] max-w-[340px] xs:max-w-sm sm:max-w-md mx-auto rounded-2xl overflow-hidden snap-start shrink-0 bg-black shadow-2xl flex flex-col justify-between select-none cursor-pointer border border-white/10"
+      className="relative w-full h-full sm:max-h-[calc(100vh-5rem)] sm:max-w-[420px] mx-auto rounded-none sm:rounded-2xl overflow-hidden snap-start shrink-0 bg-black shadow-2xl flex flex-col justify-between select-none cursor-pointer border-0 sm:border sm:border-white/10"
     >
       {/* Background Video (Only mounted within safe active-1..active+1 resource window) */}
       {reel.media_url && isInResourceWindow ? (
@@ -269,7 +278,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
           playsInline
           loop
           muted={isMuted}
-          preload="metadata"
+          preload={isInResourceWindow ? "auto" : "metadata"}
           onTimeUpdate={() => {
             const video = videoRef.current;
             if (video && video.currentTime >= 90) {
@@ -285,26 +294,32 @@ export const ReelCard: React.FC<ReelCardProps> = ({
           className="absolute inset-0 w-full h-full object-cover"
         />
       ) : (
-        <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-purple-900 to-black flex items-center justify-center p-6 text-center">
-          <p className="text-white text-lg font-medium">{reel.content}</p>
+        <div className="absolute inset-0 bg-gradient-to-br from-indigo-950 via-purple-950 to-black flex items-center justify-center p-6 text-center">
+          <p className="text-white text-lg font-medium drop-shadow">{reel.content}</p>
         </div>
       )}
 
-      {/* Top Gradient Overlay */}
-      <div className="absolute top-0 left-0 right-0 h-28 bg-gradient-to-b from-black/80 via-black/30 to-transparent pointer-events-none z-10" />
+      {/* Top Gradient Overlay for Header Contrast */}
+      <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/80 via-black/35 to-transparent pointer-events-none z-10" />
 
-      {/* Top Header Overlay Bar (Mute Icon on Left, Delete Icon on Right) */}
-      <div className="absolute top-2.5 left-2.5 right-2.5 z-30 flex items-center justify-between pointer-events-none">
-        {/* Mute/Unmute Speaker Icon Button */}
+      {/* Top Header Floating Controls Bar (Mute Sound Pill on Left, Delete Icon on Right) */}
+      <div className="absolute top-3 left-3 right-3 z-30 flex items-center justify-between pointer-events-none">
+        {/* Floating Sound Toggle Pill */}
         <button
           onClick={toggleMute}
-          className="w-8 h-8 rounded-full bg-black/60 backdrop-blur-md text-white pointer-events-auto hover:bg-black/80 transition-all border border-white/20 flex items-center justify-center shadow-lg active:scale-95 cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/50 backdrop-blur-md text-white pointer-events-auto hover:bg-black/75 transition-all border border-white/20 shadow-xl active:scale-95 cursor-pointer text-xs font-semibold group"
           title={isMuted ? "Unmute Sound" : "Mute Sound"}
         >
           {isMuted ? (
-            <VolumeX size={16} className="text-red-400" />
+            <>
+              <VolumeX size={14} className="text-red-400 group-hover:scale-110 transition-transform" />
+              <span className="text-[11px]">Muted</span>
+            </>
           ) : (
-            <Volume2 size={16} className="text-emerald-400 animate-pulse" />
+            <>
+              <Volume2 size={14} className="text-emerald-400 animate-pulse group-hover:scale-110 transition-transform" />
+              <span className="text-[11px] text-emerald-300">Sound On</span>
+            </>
           )}
         </button>
 
@@ -312,7 +327,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
         {canDelete && (
           <button
             onClick={handleDeleteClick}
-            className="w-8 h-8 rounded-full bg-black/60 backdrop-blur-md text-red-400 hover:text-white hover:bg-red-600 hover:border-red-500/60 pointer-events-auto transition-all border border-white/20 shadow-lg active:scale-95 cursor-pointer flex items-center justify-center group"
+            className="w-8 h-8 rounded-full bg-black/50 backdrop-blur-md text-red-400 hover:text-white hover:bg-red-600/80 hover:border-red-500/60 pointer-events-auto transition-all border border-white/20 shadow-xl active:scale-95 cursor-pointer flex items-center justify-center group"
             title="Delete Reel Video"
           >
             <Trash2 size={15} className="group-hover:scale-110 transition-transform" />
@@ -325,7 +340,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
         <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
           <button
             onClick={togglePlay}
-            className="p-4 sm:p-5 rounded-full bg-black/60 backdrop-blur-md text-white pointer-events-auto hover:scale-110 active:scale-95 transition-all border border-white/20 shadow-2xl group cursor-pointer"
+            className="p-4 sm:p-5 rounded-full bg-black/60 backdrop-blur-md text-white pointer-events-auto hover:scale-110 active:scale-95 transition-all border border-white/25 shadow-2xl group cursor-pointer"
             title="Click to Play Reel Video"
           >
             <Play size={32} className="fill-white text-white translate-x-0.5 group-hover:text-primary transition-colors" />
@@ -336,15 +351,15 @@ export const ReelCard: React.FC<ReelCardProps> = ({
       {/* Double Tap Heart Animation Overlay */}
       {showHeartAnim && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30 animate-ping">
-          <Heart size={90} className="text-red-500 fill-red-500 drop-shadow-lg" />
+          <Heart size={96} className="text-red-500 fill-red-500 drop-shadow-2xl" />
         </div>
       )}
 
-      {/* Bottom Gradient Overlay */}
-      <div className="absolute bottom-0 left-0 right-0 h-72 bg-gradient-to-t from-black/95 via-black/75 to-transparent pointer-events-none z-10" />
+      {/* Bottom Gradient Overlay for Metadata Contrast */}
+      <div className="absolute bottom-0 left-0 right-0 h-80 bg-gradient-to-t from-black/95 via-black/65 to-transparent pointer-events-none z-10" />
 
-      {/* Bottom Left Author Info & Caption Area */}
-      <div className="absolute bottom-3 left-3 right-14 sm:right-16 z-20 flex flex-col gap-1.5 pointer-events-auto max-h-[75%] overflow-hidden pr-1">
+      {/* Bottom Left Creator Metadata & Caption Area */}
+      <div className="absolute bottom-4 left-3 right-16 sm:right-20 z-20 flex flex-col gap-2 pointer-events-auto max-h-[60%] overflow-hidden pr-1">
         {/* Author Header Row */}
         <div className="flex items-center gap-2 min-w-0">
           <img
@@ -353,27 +368,27 @@ export const ReelCard: React.FC<ReelCardProps> = ({
               `https://ui-avatars.com/api/?name=${reel.author?.username || 'User'}&background=6366f1&color=fff`
             }
             alt={reel.author?.username}
-            className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover border border-white/30 shrink-0 shadow-md"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover border-2 border-white/40 shrink-0 shadow-lg"
           />
-          <span className="font-bold text-white text-xs sm:text-sm drop-shadow-md truncate shrink min-w-0 max-w-[120px] sm:max-w-[160px]">
+          <span className="font-bold text-white text-xs sm:text-sm drop-shadow-md truncate shrink min-w-0 max-w-[130px] sm:max-w-[180px]">
             @{reel.author?.username || 'creator'}
           </span>
 
           <button
             onClick={handleFollow}
-            className={`shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1 transition-all shadow-md ${
+            className={`shrink-0 px-3 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1 transition-all shadow-md active:scale-95 cursor-pointer ${
               following
-                ? 'bg-white/20 text-white border border-white/20 backdrop-blur-md'
-                : 'bg-primary text-white hover:bg-primary/90'
+                ? 'bg-white/20 text-white border border-white/25 backdrop-blur-md'
+                : 'bg-primary hover:bg-primary/90 text-white shadow-primary/30'
             }`}
           >
             {following ? (
               <>
-                <Check size={10} /> Following
+                <Check size={11} /> Following
               </>
             ) : (
               <>
-                <UserPlus size={10} /> Follow
+                <UserPlus size={11} /> Follow
               </>
             )}
           </button>
@@ -381,46 +396,46 @@ export const ReelCard: React.FC<ReelCardProps> = ({
 
         {/* Reel Topic Caption */}
         {reel.content && (
-          <p className="text-white text-[11px] sm:text-xs line-clamp-2 leading-snug font-sans drop-shadow-md">
+          <p className="text-white text-xs sm:text-sm line-clamp-3 leading-snug font-sans drop-shadow-md">
             {reel.content}
           </p>
         )}
 
         {/* Tags & Topic Pill */}
-        <div className="flex items-center gap-1 flex-wrap pt-0.5">
+        <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
           {reel.tags && reel.tags.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {reel.tags.slice(0, 3).map((tag, idx) => (
                 <span
                   key={idx}
-                  className="text-[9px] sm:text-[10px] text-blue-300 bg-blue-500/20 backdrop-blur-md px-2 py-0.5 rounded-full font-medium border border-blue-500/30"
+                  className="text-[10px] text-blue-200 bg-blue-500/25 backdrop-blur-md px-2.5 py-0.5 rounded-full font-medium border border-blue-400/30 shadow-sm"
                 >
                   #{tag}
                 </span>
               ))}
             </div>
           )}
-          <div className="flex items-center gap-1 text-[9px] sm:text-[10px] text-gray-300 bg-white/10 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/10">
-            <Sparkles size={9} className="text-yellow-400" />
+          <div className="flex items-center gap-1 text-[10px] text-gray-200 bg-white/15 backdrop-blur-md px-2.5 py-0.5 rounded-full border border-white/15 shadow-sm">
+            <Sparkles size={10} className="text-yellow-400" />
             <span>NoteStandard Topic</span>
           </div>
         </div>
       </div>
 
-      {/* Bottom Right Floating Action Icons Column */}
-      <div className="absolute bottom-3 right-2 sm:right-3 z-20 flex flex-col items-center gap-2.5 sm:gap-3 pointer-events-auto">
+      {/* Right Side Vertical Action Rail */}
+      <div className="absolute bottom-5 right-2.5 sm:right-4 z-20 flex flex-col items-center gap-3.5 sm:gap-4 pointer-events-auto">
         {/* Like */}
         <button
           onClick={handleLike}
-          className="flex flex-col items-center gap-0.5 text-white group cursor-pointer"
+          className="flex flex-col items-center gap-1 text-white group cursor-pointer"
         >
-          <div className="p-2 sm:p-2.5 rounded-full bg-black/40 backdrop-blur-md group-hover:scale-110 transition-transform border border-white/10 shadow-lg">
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-black/45 backdrop-blur-md group-hover:scale-110 active:scale-95 transition-all border border-white/15 shadow-xl flex items-center justify-center">
             <Heart
-              size={18}
+              size={20}
               className={liked ? 'text-red-500 fill-red-500' : 'text-white'}
             />
           </div>
-          <span className="text-[10px] font-medium text-gray-200 drop-shadow">
+          <span className="text-[11px] font-semibold text-gray-100 drop-shadow-md">
             {likesCount.toLocaleString()}
           </span>
         </button>
@@ -431,12 +446,12 @@ export const ReelCard: React.FC<ReelCardProps> = ({
             e.stopPropagation();
             onOpenComments(reel.id);
           }}
-          className="flex flex-col items-center gap-0.5 text-white group cursor-pointer"
+          className="flex flex-col items-center gap-1 text-white group cursor-pointer"
         >
-          <div className="p-2 sm:p-2.5 rounded-full bg-black/40 backdrop-blur-md group-hover:scale-110 transition-transform border border-white/10 shadow-lg">
-            <MessageCircle size={18} />
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-black/45 backdrop-blur-md group-hover:scale-110 active:scale-95 transition-all border border-white/15 shadow-xl flex items-center justify-center">
+            <MessageCircle size={20} />
           </div>
-          <span className="text-[10px] font-medium text-gray-200 drop-shadow">
+          <span className="text-[11px] font-semibold text-gray-100 drop-shadow-md">
             {(reel.comments_count || 0).toLocaleString()}
           </span>
         </button>
@@ -444,28 +459,28 @@ export const ReelCard: React.FC<ReelCardProps> = ({
         {/* Bookmark */}
         <button
           onClick={handleBookmark}
-          className="flex flex-col items-center gap-0.5 text-white group cursor-pointer"
+          className="flex flex-col items-center gap-1 text-white group cursor-pointer"
         >
-          <div className="p-2 sm:p-2.5 rounded-full bg-black/40 backdrop-blur-md group-hover:scale-110 transition-transform border border-white/10 shadow-lg">
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-black/45 backdrop-blur-md group-hover:scale-110 active:scale-95 transition-all border border-white/15 shadow-xl flex items-center justify-center">
             <Bookmark
-              size={18}
+              size={20}
               className={
                 bookmarked ? 'text-yellow-400 fill-yellow-400' : 'text-white'
               }
             />
           </div>
-          <span className="text-[10px] font-medium text-gray-200 drop-shadow">Save</span>
+          <span className="text-[11px] font-semibold text-gray-100 drop-shadow-md">Save</span>
         </button>
 
         {/* Share */}
         <button
           onClick={handleShare}
-          className="flex flex-col items-center gap-0.5 text-white group cursor-pointer"
+          className="flex flex-col items-center gap-1 text-white group cursor-pointer"
         >
-          <div className="p-2 sm:p-2.5 rounded-full bg-black/40 backdrop-blur-md group-hover:scale-110 transition-transform border border-white/10 shadow-lg">
-            <Share2 size={18} />
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-black/45 backdrop-blur-md group-hover:scale-110 active:scale-95 transition-all border border-white/15 shadow-xl flex items-center justify-center">
+            <Share2 size={20} />
           </div>
-          <span className="text-[10px] font-medium text-gray-200 drop-shadow">Share</span>
+          <span className="text-[11px] font-semibold text-gray-100 drop-shadow-md">Share</span>
         </button>
       </div>
     </div>

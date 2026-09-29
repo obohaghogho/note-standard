@@ -3,7 +3,7 @@ import { ReelCard, type ReelPost } from '../../components/community/ReelCard';
 import { ReelUploadModal } from '../../components/community/ReelUploadModal';
 import { Loader2, Plus, Sparkles, Video, RefreshCw, X, MessageCircle, Send } from 'lucide-react';
 import { API_URL } from '../../lib/api';
-import { deletePost } from '../../services/communityService';
+import { deletePost, recordReelView } from '../../services/communityService';
 import { useAuth } from '../../context/AuthContext';
 
 export const Reels: React.FC = () => {
@@ -19,6 +19,7 @@ export const Reels: React.FC = () => {
   const [submittingComment, setSubmittingComment] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const trackedSessionViewsRef = useRef<Set<string>>(new Set());
 
   // Extract current authenticated user information from AuthContext & fallback
   const storedUserStr = localStorage.getItem('user');
@@ -40,6 +41,27 @@ export const Reels: React.FC = () => {
   const handleToggleMute = useCallback(() => {
     setIsMuted(prev => !prev);
   }, []);
+
+  const handleRecordView = useCallback(async (reelId: string, metadata?: { watch_duration_seconds?: number; is_muted?: boolean; completed?: boolean }) => {
+    if (trackedSessionViewsRef.current.has(reelId)) return;
+    trackedSessionViewsRef.current.add(reelId);
+
+    try {
+      const res = await recordReelView(reelId, metadata);
+      if (res && res.success && typeof res.views_count === 'number') {
+        setReels(prev =>
+          prev.map(r =>
+            r.id === reelId
+              ? { ...r, views_count: res.views_count }
+              : r
+          )
+        );
+      }
+    } catch {
+      // Non-blocking failure guarantee: Fail silently if analytics endpoint drops
+    }
+  }, []);
+
 
   const handleDeleteReel = async (reelId: string) => {
     try {
@@ -197,27 +219,27 @@ export const Reels: React.FC = () => {
   };
 
   return (
-    <div className="relative w-full h-[calc(100dvh-8rem)] lg:h-[calc(100vh-4rem)] bg-black flex flex-col overflow-hidden">
-      {/* Top Navigation Header */}
-      <div className="w-full px-4 py-3 bg-black/90 backdrop-blur-md border-b border-white/10 flex items-center justify-between shrink-0 z-30 shadow-md">
-        <div className="flex items-center gap-2 text-white font-bold text-base sm:text-lg">
-          <Sparkles className="text-yellow-400 shrink-0" size={20} />
+    <div className="relative w-full h-[calc(100dvh-4rem)] lg:h-[calc(100vh-4rem)] bg-black flex flex-col overflow-hidden">
+      {/* Floating Top Branding & Action Overlay */}
+      <div className="absolute top-3 left-3 right-3 sm:left-4 sm:right-4 z-40 flex items-center justify-between pointer-events-none">
+        <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/15 shadow-xl text-white font-bold text-xs sm:text-sm pointer-events-auto">
+          <Sparkles className="text-yellow-400 shrink-0" size={15} />
           <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent">NoteStandard Reels</span>
         </div>
 
         <button
           onClick={() => setShowUploadModal(true)}
-          className="flex items-center gap-1.5 bg-gradient-to-r from-indigo-500 via-primary to-purple-600 hover:brightness-110 text-white px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-lg shadow-primary/20 transition-all active:scale-95 cursor-pointer"
+          className="flex items-center gap-1.5 bg-gradient-to-r from-indigo-500 via-primary to-purple-600 hover:brightness-110 text-white px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-xl shadow-primary/30 transition-all active:scale-95 cursor-pointer pointer-events-auto"
         >
           <Plus size={15} />
           <span>Post Reel</span>
         </button>
       </div>
 
-      {/* Main Snap-Scroll Container */}
+      {/* Main Full-Height Snap-Scroll Container */}
       <div
         ref={containerRef}
-        className="w-full flex-1 overflow-y-scroll snap-y snap-mandatory scrollbar-none py-2 px-1 sm:px-0"
+        className="w-full h-full overflow-y-scroll snap-y snap-mandatory scrollbar-none p-0 sm:py-3"
       >
         {loading ? (
           <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 gap-3">
@@ -254,7 +276,7 @@ export const Reels: React.FC = () => {
                     if (el) cardRefs.current.set(reel.id, el);
                     else cardRefs.current.delete(reel.id);
                   }}
-                  className="w-full h-full max-h-[700px] flex items-center justify-center p-1 sm:p-3 snap-start shrink-0 my-auto"
+                  className="w-full h-full flex items-center justify-center p-0 sm:p-2 snap-start shrink-0 my-auto"
                 >
                   <ReelCard
                     reel={reel}
@@ -266,6 +288,7 @@ export const Reels: React.FC = () => {
                     currentUserRole={currentUserRole}
                     onOpenComments={handleOpenComments}
                     onDeleteReel={handleDeleteReel}
+                    onRecordView={handleRecordView}
                   />
                 </div>
               );
