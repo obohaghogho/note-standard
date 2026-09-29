@@ -194,6 +194,239 @@ class CreatorAnalyticsService {
     );
   }
 
+  // ─── Creator Reels Analytics (MVP) ─────────────────────────────────
+  async getReelsPortfolioAnalytics(creatorId, period = '30d') {
+    // 1. Scope Reels strictly to creator ID
+    const { data: reels, error: reelsErr } = await supabase
+      .from('community_posts')
+      .select('id, content, post_type, is_reel, media_urls, video_duration, views_count, created_at')
+      .eq('author_id', creatorId)
+      .or('is_reel.eq.true,post_type.eq.reel,post_type.eq.video')
+      .order('views_count', { ascending: false });
+
+    if (reelsErr) throw reelsErr;
+
+    const creatorReels = reels || [];
+    if (creatorReels.length === 0) {
+      return {
+        summary: {
+          total_reels: 0,
+          total_views: 0,
+          unique_viewers: 0,
+          authenticated_viewers: 0,
+          anonymous_viewers: 0,
+          total_watch_time_seconds: 0,
+          avg_watch_duration_seconds: 0,
+          total_likes: 0,
+          total_comments: 0,
+          total_bookmarks: 0,
+          engagement_rate_pct: 0
+        },
+        trend: [],
+        top_reels: []
+      };
+    }
+
+    const reelIds = creatorReels.map(r => r.id);
+
+    // Calculate date filter
+    let startDateStr = null;
+    if (period === '7d') {
+      startDateStr = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+    } else if (period === '30d') {
+      startDateStr = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+    } else if (period === '90d') {
+      startDateStr = new Date(Date.now() - 90 * 86400000).toISOString().split('T')[0];
+    }
+
+    // 2. Fetch view events for creator's Reels within date filter
+    let viewQuery = supabase
+      .from('reel_view_events')
+      .select('reel_id, viewer_id, anon_session_id, session_bucket, watch_duration_seconds')
+      .in('reel_id', reelIds);
+
+    if (startDateStr) {
+      viewQuery = viewQuery.gte('session_bucket', startDateStr);
+    }
+
+    // 3. Fetch engagement counts independently (prevents SQL join multiplication)
+    const [
+      { data: viewEventsData, error: viewErr },
+      { count: likesCount },
+      { count: commentsCount },
+      { count: bookmarksCount }
+    ] = await Promise.all([
+      viewQuery,
+      supabase.from('community_likes').select('*', { count: 'exact', head: true }).in('post_id', reelIds),
+      supabase.from('community_comments').select('*', { count: 'exact', head: true }).in('post_id', reelIds),
+      supabase.from('community_bookmarks').select('*', { count: 'exact', head: true }).in('post_id', reelIds)
+    ]);
+
+    if (viewErr) throw viewErr;
+    const viewEvents = viewEventsData || [];
+
+    // Aggregations
+    const authViewersSet = new Set();
+    const anonViewersSet = new Set();
+    const overallViewersSet = new Set();
+    let totalWatchTimeSec = 0;
+
+    const dailyBucketMap = {};
+
+    viewEvents.forEach(evt => {
+      if (evt.viewer_id) {
+        authViewersSet.add(evt.viewer_id);
+        overallViewersSet.add(evt.viewer_id);
+      }
+      if (evt.anon_session_id) {
+        anonViewersSet.add(evt.anon_session_id);
+        overallViewersSet.add(evt.anon_session_id);
+      }
+      const dur = Number(evt.watch_duration_seconds) || 0;
+      totalWatchTimeSec += dur;
+
+      // Group trend by bucket date
+      const bucket = evt.session_bucket || new Date(evt.created_at || Date.now()).toISOString().split('T')[0];
+      if (!dailyBucketMap[bucket]) {
+        dailyBucketMap[bucket] = { date: bucket, views: 0, watch_time_seconds: 0 };
+      }
+      dailyBucketMap[bucket].views += 1;
+      dailyBucketMap[bucket].watch_time_seconds += dur;
+    });
+
+    const totalQualifiedViews = viewEvents.length > 0 ? viewEvents.length : creatorReels.reduce((s, r) => s + (r.views_count || 0), 0);
+    const avgWatchDuration = totalQualifiedViews > 0 ? Number((totalWatchTimeSec / totalQualifiedViews).toFixed(2)) : 0;
+
+    const totalLikes = likesCount || 0;
+    const totalComments = commentsCount || 0;
+    const totalBookmarks = bookmarksCount || 0;
+    const engagementRatePct = totalQualifiedViews > 0
+      ? Number((((totalLikes + totalComments + totalBookmarks) / totalQualifiedViews) * 100).toFixed(2))
+      : 0;
+
+    // Build trend in chronological ascending order
+    const trend = Object.values(dailyBucketMap).sort((a, b) => a.date.localeCompare(b.date));
+
+    // Format top Reels
+    const topReels = creatorReels.slice(0, 10).map(r => {
+      const rViews = r.views_count || 0;
+      const rWatchEvents = viewEvents.filter(ev => ev.reel_id === r.id);
+      const rWatchSec = rWatchEvents.reduce((acc, ev) => acc + (Number(ev.watch_duration_seconds) || 0), 0);
+      const rAvgWatch = rWatchEvents.length > 0 ? Number((rWatchSec / rWatchEvents.length).toFixed(2)) : 0;
+
+      return {
+        id: r.id,
+        content: r.content || '',
+        media_url: Array.isArray(r.media_urls) ? r.media_urls[0] : (r.media_urls || null),
+        video_duration: r.video_duration || 0,
+        views_count: rViews,
+        avg_watch_duration_seconds: rAvgWatch,
+        created_at: r.created_at
+      };
+    });
+
+    return {
+      summary: {
+        total_reels: creatorReels.length,
+        total_views: totalQualifiedViews,
+        unique_viewers: overallViewersSet.size,
+        authenticated_viewers: authViewersSet.size,
+        anonymous_viewers: anonViewersSet.size,
+        total_watch_time_seconds: Number(totalWatchTimeSec.toFixed(2)),
+        avg_watch_duration_seconds: avgWatchDuration,
+        total_likes: totalLikes,
+        total_comments: totalComments,
+        total_bookmarks: totalBookmarks,
+        engagement_rate_pct: engagementRatePct
+      },
+      trend,
+      top_reels: topReels
+    };
+  }
+
+  async getSingleReelAnalytics(creatorId, reelId) {
+    // 1. Verify ownership & post existence
+    const { data: reel, error: reelErr } = await supabase
+      .from('community_posts')
+      .select('id, author_id, content, post_type, is_reel, media_urls, video_duration, views_count, created_at')
+      .eq('id', reelId)
+      .maybeSingle();
+
+    if (reelErr || !reel) {
+      const err = new Error('Reel not found');
+      err.status = 404;
+      throw err;
+    }
+
+    if (reel.author_id !== creatorId) {
+      const err = new Error('Access denied: You are not the author of this Reel');
+      err.status = 403;
+      throw err;
+    }
+
+    // 2. Fetch view events & engagement
+    const [
+      { data: viewEventsData, error: viewErr },
+      { count: likesCount },
+      { count: commentsCount },
+      { count: bookmarksCount }
+    ] = await Promise.all([
+      supabase.from('reel_view_events').select('viewer_id, anon_session_id, watch_duration_seconds, is_muted').eq('reel_id', reelId),
+      supabase.from('community_likes').select('*', { count: 'exact', head: true }).eq('post_id', reelId),
+      supabase.from('community_comments').select('*', { count: 'exact', head: true }).eq('post_id', reelId),
+      supabase.from('community_bookmarks').select('*', { count: 'exact', head: true }).eq('post_id', reelId)
+    ]);
+
+    if (viewErr) throw viewErr;
+
+    const viewEvents = viewEventsData || [];
+    const authViewersSet = new Set();
+    const anonViewersSet = new Set();
+    const overallViewersSet = new Set();
+    let totalWatchSec = 0;
+
+    viewEvents.forEach(evt => {
+      if (evt.viewer_id) {
+        authViewersSet.add(evt.viewer_id);
+        overallViewersSet.add(evt.viewer_id);
+      }
+      if (evt.anon_session_id) {
+        anonViewersSet.add(evt.anon_session_id);
+        overallViewersSet.add(evt.anon_session_id);
+      }
+      totalWatchSec += Number(evt.watch_duration_seconds) || 0;
+    });
+
+    const viewsCount = reel.views_count || viewEvents.length;
+    const avgWatchSec = viewEvents.length > 0 ? Number((totalWatchSec / viewEvents.length).toFixed(2)) : 0;
+    const likes = likesCount || 0;
+    const comments = commentsCount || 0;
+    const bookmarks = bookmarksCount || 0;
+    const engagementRatePct = viewsCount > 0
+      ? Number((((likes + comments + bookmarks) / viewsCount) * 100).toFixed(2))
+      : 0;
+
+    return {
+      reel: {
+        id: reel.id,
+        content: reel.content || '',
+        media_url: Array.isArray(reel.media_urls) ? reel.media_urls[0] : (reel.media_urls || null),
+        video_duration: reel.video_duration || 0,
+        published_at: reel.created_at,
+        views_count: viewsCount,
+        unique_viewers: overallViewersSet.size,
+        authenticated_viewers: authViewersSet.size,
+        anonymous_viewers: anonViewersSet.size,
+        total_watch_time_seconds: Number(totalWatchSec.toFixed(2)),
+        avg_watch_duration_seconds: avgWatchSec,
+        likes_count: likes,
+        comments_count: comments,
+        bookmarks_count: bookmarks,
+        engagement_rate_pct: engagementRatePct
+      }
+    };
+  }
+
   // ─── Internal helpers ─────────────────────────────────────
   async _getSnapshots(creatorId, days) {
     const { data } = await supabase

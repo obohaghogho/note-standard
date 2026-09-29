@@ -148,3 +148,34 @@ exports.deleteDraft = async (req, res, next) => {
     next(err);
   }
 };
+
+exports.getReelsAnalytics = async (req, res, next) => {
+  try {
+    const creatorId = req.user.id;
+    const period = req.query.period || '30d';
+
+    const analytics = await creatorAnalyticsService.getReelsPortfolioAnalytics(creatorId, period);
+    res.json({ success: true, ...analytics });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.getSingleReelAnalytics = async (req, res, next) => {
+  try {
+    const creatorId = req.user.id;
+    const { reelId } = req.params;
+
+    if (!reelId) {
+      return res.status(400).json({ error: 'Reel ID is required' });
+    }
+
+    const analytics = await creatorAnalyticsService.getSingleReelAnalytics(creatorId, reelId);
+    res.json({ success: true, ...analytics });
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    next(err);
+  }
+};

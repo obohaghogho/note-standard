@@ -22,4 +22,8 @@ router.delete('/drafts/:id', creatorController.deleteDraft);
 router.post('/certificates/issue', certificateController.issueCertificate);
 router.get('/certificates/verify/:token', certificateController.verifyCertificate);
 
+// Creator Reels Analytics (MVP)
+router.get('/reels/analytics', creatorController.getReelsAnalytics);
+router.get('/reels/:reelId/analytics', creatorController.getSingleReelAnalytics);
+
 module.exports = router;
