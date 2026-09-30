@@ -17,6 +17,14 @@ export function navigate(name: string, params?: any) {
 export default function AppNavigator() {
   const { isAuthenticated, isLoading } = useAuth();
 
+  const handleNavReady = React.useCallback(() => {
+    NotificationRouter.setAppReady();
+    try {
+      const SplashScreen = require('expo-splash-screen');
+      SplashScreen.hideAsync().catch(() => {});
+    } catch (e) {}
+  }, []);
+
   if (isLoading) {
     return (
       <View style={styles.loading}>
@@ -28,9 +36,7 @@ export default function AppNavigator() {
   return (
     <NavigationContainer 
       ref={navigationRef}
-      onReady={() => {
-        NotificationRouter.setAppReady();
-      }}
+      onReady={handleNavReady}
     >
       {isAuthenticated ? <MainStack /> : <AuthStack />}
     </NavigationContainer>

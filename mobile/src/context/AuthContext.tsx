@@ -35,11 +35,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loadUser = useCallback(async () => {
     try {
-      const u = await AuthService.getUser();
-      const token = await AuthService.getToken();
+      const [u, token, accs] = await Promise.all([
+        AuthService.getUser(),
+        AuthService.getToken(),
+        AuthService.getStoredAccounts(),
+      ]);
+
       if (u && token) setUser(u);
-      
-      const accs = await AuthService.getStoredAccounts();
       setAccounts(accs);
 
       if (token && u) {

@@ -20,6 +20,12 @@ LogBox.ignoreLogs([
 
 import IncomingCallModal from './src/components/IncomingCallModal';
 
+// Prevent native splash screen from hiding prematurely before first useful UI render
+try {
+  const SplashScreen = require('expo-splash-screen');
+  SplashScreen.preventAutoHideAsync().catch(() => {});
+} catch (e) {}
+
 export default function App() {
   useEffect(() => {
     const bootstrap = async () => {

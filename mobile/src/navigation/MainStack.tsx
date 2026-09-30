@@ -1,31 +1,6 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import MainTabs from './MainTabs';
-import NoteEditorScreen from '../screens/NoteEditorScreen';
-import WalletActionScreen from '../screens/WalletActionScreen';
-import ExchangeScreen from '../screens/ExchangeScreen';
-
-// Parity secondary screens
-import VirtualAccountModal from '../screens/wallet/VirtualAccountModal';
-import TransferScreen from '../screens/wallet/TransferScreen';
-import WithdrawalOtpModal from '../screens/wallet/WithdrawalOtpModal';
-import BankAccountsScreen from '../screens/wallet/BankAccountsScreen';
-import ShareNoteModal from '../screens/notes/ShareNoteModal';
-import PublicProfileScreen from '../screens/profile/PublicProfileScreen';
-import TeamDetailScreen from '../screens/teams/TeamDetailScreen';
-import CreateTeamModal from '../screens/teams/CreateTeamModal';
-import NotificationsScreen from '../screens/notifications/NotificationsScreen';
-import SearchScreen from '../screens/search/SearchScreen';
-import UserIssueTrackerScreen from '../screens/support/UserIssueTrackerScreen';
-import SecuritySettingsScreen from '../screens/profile/SecuritySettingsScreen';
-import { ProfileEditScreen } from '../screens/profile/ProfileEditScreen';
-import { KycVerificationScreen } from '../screens/profile/KycVerificationScreen';
-import { CommunityFeedScreen } from '../screens/community/CommunityFeedScreen';
-import { AffiliateScreen } from '../screens/affiliate/AffiliateScreen';
-import { AdsDashboardScreen } from '../screens/ads/AdsDashboardScreen';
-import { CampaignBuilderScreen } from '../screens/ads/CampaignBuilderScreen';
-import { SubscriptionPlansScreen } from '../screens/subscription/SubscriptionPlansScreen';
-import { BillingHistoryScreen } from '../screens/subscription/BillingHistoryScreen';
 
 export type MainStackParamList = {
   MainTabs: undefined;
@@ -62,119 +37,119 @@ export default function MainStack() {
       <Stack.Screen name="MainTabs" component={MainTabs} />
       <Stack.Screen
         name="NoteEditor"
-        component={NoteEditorScreen}
+        getComponent={() => require('../screens/NoteEditorScreen').default}
         options={{ animation: 'slide_from_bottom' }}
       />
       <Stack.Screen
         name="WalletAction"
-        component={WalletActionScreen}
+        getComponent={() => require('../screens/WalletActionScreen').default}
         options={{ animation: 'slide_from_bottom' }}
       />
       <Stack.Screen
         name="Exchange"
-        component={ExchangeScreen}
+        getComponent={() => require('../screens/ExchangeScreen').default}
         options={{ animation: 'slide_from_bottom' }}
       />
 
       {/* Parity Secondary Screens & Modals */}
       <Stack.Screen
         name="VirtualAccountDetails"
-        component={VirtualAccountModal}
+        getComponent={() => require('../screens/wallet/VirtualAccountModal').default}
         options={{ animation: 'slide_from_bottom' }}
       />
       <Stack.Screen
         name="Transfer"
-        component={TransferScreen}
+        getComponent={() => require('../screens/wallet/TransferScreen').default}
         options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="WithdrawalOtp"
-        component={WithdrawalOtpModal}
+        getComponent={() => require('../screens/wallet/WithdrawalOtpModal').default}
         options={{ animation: 'fade' }}
       />
       <Stack.Screen
         name="BankAccounts"
-        component={BankAccountsScreen}
+        getComponent={() => require('../screens/wallet/BankAccountsScreen').default}
         options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="ShareNote"
-        component={ShareNoteModal}
+        getComponent={() => require('../screens/notes/ShareNoteModal').default}
         options={{ animation: 'slide_from_bottom' }}
       />
       <Stack.Screen
         name="PublicProfile"
-        component={PublicProfileScreen}
+        getComponent={() => require('../screens/profile/PublicProfileScreen').default}
         options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="ProfileEdit"
-        component={ProfileEditScreen}
+        getComponent={() => require('../screens/profile/ProfileEditScreen').ProfileEditScreen}
         options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="KycVerification"
-        component={KycVerificationScreen}
+        getComponent={() => require('../screens/profile/KycVerificationScreen').KycVerificationScreen}
         options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="CommunityFeed"
-        component={CommunityFeedScreen}
+        getComponent={() => require('../screens/community/CommunityFeedScreen').CommunityFeedScreen}
         options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="Affiliate"
-        component={AffiliateScreen}
+        getComponent={() => require('../screens/affiliate/AffiliateScreen').AffiliateScreen}
         options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="AdsDashboard"
-        component={AdsDashboardScreen}
+        getComponent={() => require('../screens/ads/AdsDashboardScreen').AdsDashboardScreen}
         options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="CampaignBuilder"
-        component={CampaignBuilderScreen}
+        getComponent={() => require('../screens/ads/CampaignBuilderScreen').CampaignBuilderScreen}
         options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="SubscriptionPlans"
-        component={SubscriptionPlansScreen}
+        getComponent={() => require('../screens/subscription/SubscriptionPlansScreen').SubscriptionPlansScreen}
         options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="BillingHistory"
-        component={BillingHistoryScreen}
+        getComponent={() => require('../screens/subscription/BillingHistoryScreen').BillingHistoryScreen}
         options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="TeamDetail"
-        component={TeamDetailScreen}
+        getComponent={() => require('../screens/teams/TeamDetailScreen').default}
         options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="CreateTeam"
-        component={CreateTeamModal}
+        getComponent={() => require('../screens/teams/CreateTeamModal').default}
         options={{ animation: 'slide_from_bottom' }}
       />
       <Stack.Screen
         name="Notifications"
-        component={NotificationsScreen}
+        getComponent={() => require('../screens/notifications/NotificationsScreen').default}
         options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="Search"
-        component={SearchScreen}
+        getComponent={() => require('../screens/search/SearchScreen').default}
         options={{ animation: 'fade' }}
       />
       <Stack.Screen
         name="UserIssueTracker"
-        component={UserIssueTrackerScreen}
+        getComponent={() => require('../screens/support/UserIssueTrackerScreen').default}
         options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="SecuritySettings"
-        component={SecuritySettingsScreen}
+        getComponent={() => require('../screens/profile/SecuritySettingsScreen').default}
         options={{ animation: 'slide_from_right' }}
       />
     </Stack.Navigator>

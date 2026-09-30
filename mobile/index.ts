@@ -21,20 +21,20 @@ const callKeepOptions = {
   }
 };
 
-try {
-  RNCallKeep.setup(callKeepOptions);
-  RNCallKeep.setAvailable(true);
-} catch (err) {
-  console.error('[CallKeep] Setup error:', err);
-}
+// Defer native CallKeep setup out of synchronous module evaluation path
+setTimeout(() => {
+  try {
+    RNCallKeep.setup(callKeepOptions);
+    RNCallKeep.setAvailable(true);
+    PushHandler.setupCallKeepListeners();
+  } catch (err) {
+    console.error('[CallKeep] Setup error:', err);
+  }
+}, 0);
 
 import App from './App';
-import { PushHandler } from './src/services/PushHandler';
 import CallService from './src/services/CallService';
 import { v4 as uuidv4 } from 'uuid';
-
-// Bind CallKeep listeners globally so they work in headless mode
-PushHandler.setupCallKeepListeners();
 
 // Handle Android FCM token rotation in the background
 messaging().onTokenRefresh(async (token) => {
