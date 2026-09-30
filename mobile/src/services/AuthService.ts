@@ -80,21 +80,33 @@ export class AuthService {
     }
 
     static async logout() {
-        const user = await this.getUser();
-        if (user) {
-            const account = await AccountManager.getAccount(user.id);
-            if (account && account.sessionId) {
-                // Background backend logout
-                const { API_URL } = require('../Config');
-                const axios = require('axios').default;
-                axios.post(`${API_URL}/api/auth/logout`, { session_id: account.sessionId }).catch((e: any) => console.warn('Backend logout failed', e.message));
+        try {
+            const user = await this.getUser().catch(() => null);
+            if (user) {
+                const account = await AccountManager.getAccount(user.id).catch(() => null);
+                if (account && account.sessionId) {
+                    try {
+                        const { API_URL } = require('../Config');
+                        const axios = require('axios').default;
+                        await axios.post(
+                            `${API_URL}/api/auth/logout`, 
+                            { session_id: account.sessionId },
+                            { timeout: 4000 }
+                        ).catch((e: any) => console.warn('Backend logout failed/timed out:', e.message));
+                    } catch (e: any) {
+                        console.warn('Backend logout error:', e.message);
+                    }
+                }
+                await AccountManager.removeAccount(user.id).catch(e => console.warn('AccountManager.removeAccount error:', e.message));
             }
-            await AccountManager.removeAccount(user.id);
+        } catch (err: any) {
+            console.warn('[AuthService] Logout pre-cleanup error:', err.message);
+        } finally {
+            await AsyncStorage.removeItem(TOKEN_KEY).catch(() => {});
+            await AsyncStorage.removeItem(REFRESH_TOKEN_KEY).catch(() => {});
+            await AsyncStorage.removeItem(USER_KEY).catch(() => {});
+            EventEmitter.emit('auth:logout', null);
         }
-        await AsyncStorage.removeItem(TOKEN_KEY);
-        await AsyncStorage.removeItem(REFRESH_TOKEN_KEY);
-        await AsyncStorage.removeItem(USER_KEY);
-        EventEmitter.emit('auth:logout', null);
     }
 
     /**

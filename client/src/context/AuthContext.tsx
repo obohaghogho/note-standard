@@ -52,6 +52,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isMounted = useRef(true);
   const switchInProgress = useRef(false);
   const switchIdRef = useRef(0);
+  const isLoggingOutRef = useRef(false);
 
   // Rule 6: Sink state to safeCall guard
   useEffect(() => {
@@ -159,27 +160,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
+    isLoggingOutRef.current = true;
+    const currentUserId = user?.id;
     try {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('notestandard_fincra_demo_session');
         sessionStorage.removeItem('notestandard_fincra_demo_session');
       }
+
+      // Invalidate active account in accountManager BEFORE calling Supabase signOut
+      accountManager.setActiveAccountId(null);
+      if (currentUserId) {
+        accountManager.updateAccountTokens(currentUserId, { access_token: '', refresh_token: '', expires_at: 0 });
+      }
+
       setUser(null);
       setProfile(null);
       setSession(null);
+      setSubscription(null);
+      localStorage.removeItem("token");
 
-      const { error } = await supabase.auth.signOut().catch(() => ({ error: null }));
+      const { error } = await supabase.auth.signOut().catch((err) => {
+        console.warn('Supabase signOut error/warning:', err);
+        return { error: null };
+      });
       if (error) throw error;
-      
-      if (user?.id) {
-        accountManager.updateAccountTokens(user.id, { access_token: '', refresh_token: '', expires_at: 0 });
-      }
       
       resetRateLimiters();
       toast.success('Signed out successfully');
     } catch (error) {
       console.error('Error signing out:', error);
       toast.error('Failed to sign out');
+    } finally {
+      setUser(null);
+      setProfile(null);
+      setSession(null);
+      setSubscription(null);
+      accountManager.setActiveAccountId(null);
+      localStorage.removeItem("token");
+      setLoading(false);
+      isLoggingOutRef.current = false;
     }
   };
 
@@ -521,6 +541,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // If we are switching, we ignore SIGNED_OUT from the old account
         if (switchInProgress.current) return;
 
+        // Intentional logout guard: skip auto-rehydration if user explicitly initiated signOut
+        if (isLoggingOutRef.current) {
+          localStorage.removeItem("token");
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          setSubscription(null);
+          accountManager.setActiveAccountId(null);
+          resetRateLimiters();
+          setLoading(false);
+          return;
+        }
+
         // Persistent Session Rehydration Guard: If native storage emitted SIGNED_OUT due to a transient network timeout
         // or storage drop, attempt to re-establish session from multi-account store before wiping state.
         const activeId = accountManager.getActiveAccountId();
@@ -547,6 +580,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSubscription(null);
         accountManager.setActiveAccountId(null);
         resetRateLimiters();
+        setLoading(false);
         return;
       }
 

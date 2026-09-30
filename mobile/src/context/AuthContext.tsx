@@ -32,14 +32,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Ref to hold the userId that needs to be signaled once React commits the new user.
   // This ensures signalAccountReady() fires AFTER the setUser() render cycle completes.
   const pendingSignalUserIdRef = React.useRef<string | null>(null);
+  const loadGenerationRef = React.useRef(0);
 
   const loadUser = useCallback(async () => {
+    const currentGen = ++loadGenerationRef.current;
     try {
       const [u, token, accs] = await Promise.all([
         AuthService.getUser(),
         AuthService.getToken(),
         AuthService.getStoredAccounts(),
       ]);
+
+      if (currentGen !== loadGenerationRef.current) {
+        console.log('[AuthContext] Discarding stale loadUser completion (logout/new generation occurred)');
+        return;
+      }
 
       if (u && token) setUser(u);
       setAccounts(accs);
@@ -58,7 +65,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) {
       console.error('[AuthContext] Load error:', err);
     } finally {
-      setIsLoading(false);
+      if (currentGen === loadGenerationRef.current) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
@@ -228,9 +237,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    await AuthService.logout();
-    setUser(null);
-    setAccounts([]);
+    loadGenerationRef.current++; // Discard any running loadUser() call
+    setIsLoading(true);
+    try {
+      await AuthService.logout();
+    } catch (err) {
+      console.warn('[AuthContext] Logout execution warning:', err);
+    } finally {
+      setUser(null);
+      setAccounts([]);
+      setIsLoading(false);
+    }
   };
 
   const switchAccount = async (userId: string) => {
