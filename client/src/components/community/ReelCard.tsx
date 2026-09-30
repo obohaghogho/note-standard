@@ -300,14 +300,14 @@ export const ReelCard: React.FC<ReelCardProps> = ({
       )}
 
       {/* Top Gradient Overlay for Header Contrast */}
-      <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/80 via-black/35 to-transparent pointer-events-none z-10" />
+      <div className="absolute top-0 left-0 right-0 h-36 bg-gradient-to-b from-black/85 via-black/35 to-transparent pointer-events-none z-10" />
 
-      {/* Top Header Floating Controls Bar (Mute Sound Pill on Left, Delete Icon on Right) */}
-      <div className="absolute top-3 left-3 right-3 z-30 flex items-center justify-between pointer-events-none">
+      {/* Top Floating Controls Bar (Mute Sound Pill on Left, Delete Icon on Right - Positioned at top-14/top-16 to prevent collision with top branding overlay) */}
+      <div className="absolute top-14 sm:top-16 left-3 right-3 z-30 flex items-center justify-between pointer-events-none">
         {/* Floating Sound Toggle Pill */}
         <button
           onClick={toggleMute}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/50 backdrop-blur-md text-white pointer-events-auto hover:bg-black/75 transition-all border border-white/20 shadow-xl active:scale-95 cursor-pointer text-xs font-semibold group"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/55 backdrop-blur-md text-white pointer-events-auto hover:bg-black/80 transition-all border border-white/20 shadow-xl active:scale-95 cursor-pointer text-xs font-semibold group"
           title={isMuted ? "Unmute Sound" : "Mute Sound"}
         >
           {isMuted ? (
@@ -327,7 +327,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
         {canDelete && (
           <button
             onClick={handleDeleteClick}
-            className="w-8 h-8 rounded-full bg-black/50 backdrop-blur-md text-red-400 hover:text-white hover:bg-red-600/80 hover:border-red-500/60 pointer-events-auto transition-all border border-white/20 shadow-xl active:scale-95 cursor-pointer flex items-center justify-center group"
+            className="w-8 h-8 rounded-full bg-black/55 backdrop-blur-md text-red-400 hover:text-white hover:bg-red-600/80 hover:border-red-500/60 pointer-events-auto transition-all border border-white/20 shadow-xl active:scale-95 cursor-pointer flex items-center justify-center group"
             title="Delete Reel Video"
           >
             <Trash2 size={15} className="group-hover:scale-110 transition-transform" />
@@ -359,7 +359,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
       <div className="absolute bottom-0 left-0 right-0 h-80 bg-gradient-to-t from-black/95 via-black/65 to-transparent pointer-events-none z-10" />
 
       {/* Bottom Left Creator Metadata & Caption Area */}
-      <div className="absolute bottom-4 left-3 right-16 sm:right-20 z-20 flex flex-col gap-2 pointer-events-auto max-h-[60%] overflow-hidden pr-1">
+      <div className="absolute bottom-6 sm:bottom-8 left-3 sm:left-4 right-16 sm:right-20 z-30 flex flex-col gap-2 pointer-events-auto max-h-[60%] overflow-hidden pr-1 pb-safe">
         {/* Author Header Row */}
         <div className="flex items-center gap-2 min-w-0">
           <img
@@ -396,7 +396,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
 
         {/* Reel Topic Caption */}
         {reel.content && (
-          <p className="text-white text-xs sm:text-sm line-clamp-3 leading-snug font-sans drop-shadow-md">
+          <p className="text-white text-xs sm:text-sm line-clamp-3 leading-snug font-sans drop-shadow-md select-text">
             {reel.content}
           </p>
         )}
@@ -423,7 +423,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
       </div>
 
       {/* Right Side Vertical Action Rail */}
-      <div className="absolute bottom-5 right-2.5 sm:right-4 z-20 flex flex-col items-center gap-3.5 sm:gap-4 pointer-events-auto">
+      <div className="absolute bottom-6 sm:bottom-8 right-2.5 sm:right-4 z-30 flex flex-col items-center gap-3 sm:gap-4 pointer-events-auto pb-safe">
         {/* Like */}
         <button
           onClick={handleLike}

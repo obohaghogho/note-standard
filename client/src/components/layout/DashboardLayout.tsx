@@ -33,9 +33,10 @@ export function DashboardLayout() {
         );
     }
 
-    const isStandalonePageOnMobile = location.pathname.startsWith('/dashboard/chat') || location.pathname.startsWith('/dashboard/teams');
+    const isReelsPage = location.pathname.startsWith('/dashboard/reels');
+    const isStandalonePageOnMobile = location.pathname.startsWith('/dashboard/chat') || location.pathname.startsWith('/dashboard/teams') || isReelsPage;
     
-    // Standard Header/Top bar - HIDDEN on mobile when a chat or team workspace is active
+    // Standard Header/Top bar - HIDDEN on mobile when a chat, team workspace, or Reels is active
     const renderHeader = () => {
         if (isStandalonePageOnMobile) return null;
         
@@ -84,7 +85,7 @@ export function DashboardLayout() {
     return (
         <div className={cn(
             "h-screen-safe text-white flex relative overflow-hidden w-full max-w-full",
-            isStandalonePageOnMobile ? "bg-gray-950" : "bg-crystal pt-safe pb-safe"
+            isStandalonePageOnMobile ? "bg-black" : "bg-crystal pt-safe pb-safe"
         )}>
             {!isStandalonePageOnMobile && <BroadcastBanner />}
             {!isStandalonePageOnMobile && <BetaWelcomeBanner />}
@@ -103,7 +104,7 @@ export function DashboardLayout() {
                 className={cn(
                     "flex-1 transition-all duration-300 min-w-0 flex flex-col h-full relative w-full max-w-full overflow-x-hidden",
                     !isStandalonePageOnMobile && "pb-safe lg:ml-[16rem]",
-                    isStandalonePageOnMobile && "absolute inset-0 z-[60] bg-gray-950 m-0 p-0 lg:relative lg:inset-auto lg:z-0 lg:bg-transparent lg:ml-[16rem] overflow-hidden"
+                    isStandalonePageOnMobile && "absolute inset-0 z-[60] bg-black m-0 p-0 lg:relative lg:inset-auto lg:z-0 lg:bg-transparent lg:ml-[16rem] overflow-hidden"
                 )}
             >
                 {renderHeader()}

@@ -219,10 +219,10 @@ export const Reels: React.FC = () => {
   };
 
   return (
-    <div className="relative w-full h-[calc(100dvh-4rem)] lg:h-[calc(100vh-4rem)] bg-black flex flex-col overflow-hidden">
+    <div className="relative w-full h-full min-h-0 bg-black flex flex-col overflow-hidden">
       {/* Floating Top Branding & Action Overlay */}
-      <div className="absolute top-3 left-3 right-3 sm:left-4 sm:right-4 z-40 flex items-center justify-between pointer-events-none">
-        <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/15 shadow-xl text-white font-bold text-xs sm:text-sm pointer-events-auto">
+      <div className="absolute top-3 left-3 right-3 sm:top-4 sm:left-4 sm:right-4 z-40 flex items-center justify-between pointer-events-none pt-safe">
+        <div className="flex items-center gap-1.5 bg-black/50 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/20 shadow-xl text-white font-bold text-xs sm:text-sm pointer-events-auto">
           <Sparkles className="text-yellow-400 shrink-0" size={15} />
           <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent">NoteStandard Reels</span>
         </div>
@@ -239,7 +239,7 @@ export const Reels: React.FC = () => {
       {/* Main Full-Height Snap-Scroll Container */}
       <div
         ref={containerRef}
-        className="w-full h-full overflow-y-scroll snap-y snap-mandatory scrollbar-none p-0 sm:py-3"
+        className="w-full h-full overflow-y-scroll snap-y snap-mandatory scrollbar-none p-0"
       >
         {loading ? (
           <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 gap-3">
@@ -276,7 +276,7 @@ export const Reels: React.FC = () => {
                     if (el) cardRefs.current.set(reel.id, el);
                     else cardRefs.current.delete(reel.id);
                   }}
-                  className="w-full h-full flex items-center justify-center p-0 sm:p-2 snap-start shrink-0 my-auto"
+                  className="w-full h-full flex items-center justify-center p-0 sm:py-2 snap-start shrink-0 my-auto"
                 >
                   <ReelCard
                     reel={reel}

@@ -24,9 +24,12 @@ export const MobileBottomNav: React.FC = () => {
     return sum + (typeof count === 'number' ? count : 0);
   }, 0);
 
-  // Hide bottom nav on active chat view or team workspace on mobile to maximize viewport
-  const isChatViewActive = (location.pathname.startsWith('/dashboard/chat/') && location.pathname !== '/dashboard/chat') || location.pathname.startsWith('/dashboard/teams');
-  if (isChatViewActive) return null;
+  // Hide bottom nav on active chat view, team workspace, or Reels to maximize immersive viewport
+  const isImmersiveViewActive =
+    (location.pathname.startsWith('/dashboard/chat/') && location.pathname !== '/dashboard/chat') ||
+    location.pathname.startsWith('/dashboard/teams') ||
+    location.pathname.startsWith('/dashboard/reels');
+  if (isImmersiveViewActive) return null;
 
   const items = [
     { id: 'home', label: t('nav.home', 'Home'), icon: LayoutDashboard, to: '/dashboard' },
