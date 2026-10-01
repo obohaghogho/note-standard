@@ -438,20 +438,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Rule 10: Session Rehydration on App Load
         // First check native Supabase storage which handles cross-tab syncing and auto-refresh natively
-        let { data: { session: initialSession } } = await supabase.auth.getSession();
+        let { data: { session: initialSession } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
 
         // If native storage lost the session (e.g. cleared somehow), try to rehydrate from our multi-account manager
         if (!initialSession) {
           const activeId = accountManager.getActiveAccountId();
           if (activeId) {
             const acc = accountManager.getAccount(activeId);
-            if (acc) {
+            if (acc?.tokens?.refresh_token) {
               console.log(`[Auth] Native session missing. Rehydrating active account from multi-account manager: ${acc.email}`);
-              const { data } = await supabase.auth.setSession({
-                access_token: acc.tokens.access_token,
+              // Invalidate activeAccountId before setSession to prevent recursive rehydration loops on failure
+              accountManager.setActiveAccountId(null);
+              const { data, error } = await supabase.auth.setSession({
+                access_token: acc.tokens.access_token || '',
                 refresh_token: acc.tokens.refresh_token
-              });
-              initialSession = data.session;
+              }).catch(err => ({ data: { session: null }, error: err }));
+
+              if (data?.session) {
+                initialSession = data.session;
+                accountManager.setActiveAccountId(acc.id);
+                accountManager.updateAccountTokens(acc.id, data.session);
+              } else {
+                console.warn(`[Auth] Rehydration failed for ${acc.email} (${error?.message || 'invalid tokens'}). Clearing stale account tokens.`);
+                accountManager.updateAccountTokens(acc.id, { access_token: '', refresh_token: '', expires_at: 0 });
+              }
+            } else {
+              accountManager.setActiveAccountId(null);
             }
           }
         }
@@ -561,6 +573,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const acc = accountManager.getAccount(activeId);
           if (acc?.tokens?.refresh_token) {
             console.log(`[Auth] Transient SIGNED_OUT detected for active account ${acc.email}. Attempting token rehydration...`);
+            // Invalidate activeAccountId prior to setSession call to break potential resurrection recursion on failure
+            accountManager.setActiveAccountId(null);
+
             const { data, error } = await supabase.auth.setSession({
               access_token: acc.tokens.access_token || '',
               refresh_token: acc.tokens.refresh_token
@@ -568,8 +583,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             if (data?.session) {
               console.log(`[Auth] ✅ Successfully rehydrated session for ${acc.email} after SIGNED_OUT event.`);
+              accountManager.setActiveAccountId(acc.id);
+              accountManager.updateAccountTokens(acc.id, data.session);
               return;
+            } else {
+              console.warn(`[Auth] ❌ Rehydration failed for ${acc.email} after SIGNED_OUT event (${error?.message || 'invalid tokens'}). Clearing stale account tokens.`);
+              accountManager.updateAccountTokens(acc.id, { access_token: '', refresh_token: '', expires_at: 0 });
             }
+          } else {
+            accountManager.setActiveAccountId(null);
           }
         }
 
