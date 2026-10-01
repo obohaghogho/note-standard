@@ -55,6 +55,7 @@ export default function Settings() {
     const [website, setWebsite] = useState('');
     const [countryCode, setCountryCode] = useState('');
     const [phone, setPhone] = useState('');
+    const [sex, setSex] = useState<'Male' | 'Female' | null>((authProfile as any)?.sex || null);
     const [loading, setLoading] = useState(!authProfile); // Only load if we don't have profile yet
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -107,6 +108,7 @@ export default function Settings() {
             setWebsite(authProfile.website || '');
             setCountryCode(authProfile.country_code || '');
             setPhone(authProfile.phone || '');
+            setSex((authProfile as any).sex || null);
             setPreferredChatLanguage(authProfile.preferred_language || 'en');
             setVoiceCallPrivacy(((authProfile as any)?.voice_call_privacy as 'everyone' | 'connections' | 'nobody') || 'everyone');
             setVideoCallPrivacy(((authProfile as any)?.video_call_privacy as 'everyone' | 'connections' | 'nobody') || 'everyone');
@@ -258,6 +260,7 @@ export default function Settings() {
                             website,
                             country_code: countryCode,
                             phone,
+                            sex,
                         })
                         .eq('id', user.id);
 
@@ -280,6 +283,7 @@ export default function Settings() {
                             website,
                             country_code: countryCode,
                             phone,
+                            sex,
                         }
                     });
 
@@ -1056,6 +1060,30 @@ export default function Settings() {
                                     <option value="BR" className="bg-gray-900">Brazil</option>
                                     <option value="IN" className="bg-gray-900">India</option>
                                 </select>
+                            </div>
+
+                            {/* Sex Indicator */}
+                            <div className="flex flex-col gap-1.5">
+                                <label htmlFor="sex" className="block text-sm font-medium text-gray-300 cursor-pointer">
+                                    Sex
+                                </label>
+                                <select
+                                    id="sex"
+                                    name="sex"
+                                    value={sex || ''}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setSex(val === 'Male' || val === 'Female' ? val : null);
+                                    }}
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-primary text-sm transition-colors cursor-pointer"
+                                >
+                                    <option value="" className="bg-gray-900 text-gray-400">Select Sex (Optional)</option>
+                                    <option value="Male" className="bg-gray-900 text-white">Male</option>
+                                    <option value="Female" className="bg-gray-900 text-white">Female</option>
+                                </select>
+                                <p className="text-xs text-gray-500">
+                                    Optional identity indicator for profile display (Male or Female).
+                                </p>
                             </div>
 
                             {/* Save Button */}

@@ -22,6 +22,103 @@ router.post("/forgot-password", cors(), emailLimiter, forgotPassword);
 // Apply rate limiting to critical paths
 router.use("/accept-terms", authLimiter);
 
+const { requireAuth } = require("../middleware/authMiddleware");
+
+// GET /api/auth/me - Fetch current user profile
+router.get("/me", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .single();
+
+    if (error || !profile) {
+      return res.status(404).json({ error: "PROFILE_NOT_FOUND", message: "User profile not found." });
+    }
+
+    res.json({ success: true, profile });
+  } catch (err) {
+    res.status(500).json({ error: "SERVER_ERROR", message: err.message });
+  }
+});
+
+// PATCH /api/auth/me - Update user profile attributes safely
+router.patch("/me", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const {
+      full_name,
+      username,
+      bio,
+      website,
+      phone,
+      country_code,
+      location_visibility,
+      avatar_url,
+      cover_url,
+      sex,
+    } = req.body;
+
+    // 1. Strict Sex Validation
+    if (sex !== undefined && sex !== null && !["Male", "Female"].includes(sex)) {
+      return res.status(400).json({
+        error: "INVALID_SEX_VALUE",
+        message: "Sex must be 'Male', 'Female', or null.",
+      });
+    }
+
+    // 2. Reject attempts to self-promote restricted KYC/Admin attributes via profile update
+    if (
+      req.body.kyc_level !== undefined ||
+      req.body.is_verified !== undefined ||
+      req.body.can_review_kyc !== undefined ||
+      req.body.role !== undefined ||
+      req.body.plan_tier !== undefined
+    ) {
+      return res.status(403).json({
+        error: "UNAUTHORIZED_FIELD_MODIFICATION",
+        message: "Protected KYC and system attributes (kyc_level, is_verified, can_review_kyc, role, plan_tier) cannot be updated via profile settings.",
+      });
+    }
+
+    const updates = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (full_name !== undefined) updates.full_name = full_name;
+    if (username !== undefined) updates.username = username;
+    if (bio !== undefined) updates.bio = bio;
+    if (website !== undefined) updates.website = website;
+    if (phone !== undefined) updates.phone = phone;
+    if (country_code !== undefined) updates.country_code = country_code;
+    if (location_visibility !== undefined) updates.location_visibility = location_visibility;
+    if (avatar_url !== undefined) updates.avatar_url = avatar_url;
+    if (cover_url !== undefined) updates.cover_url = cover_url;
+    if (sex !== undefined) updates.sex = sex;
+
+    const { data: updatedProfile, error } = await supabase
+      .from("profiles")
+      .update(updates)
+      .eq("id", userId)
+      .select("*")
+      .single();
+
+    if (error) {
+      if (error.code === "23505") {
+        return res.status(409).json({ error: "DUPLICATE_USERNAME", message: "Username already taken." });
+      }
+      throw error;
+    }
+
+    res.json({ success: true, profile: updatedProfile });
+  } catch (err) {
+    console.error("[Auth/me] Update profile error:", err.message);
+    res.status(500).json({ error: "PROFILE_UPDATE_FAILED", message: err.message });
+  }
+});
+
 router.post("/sync-profile", (req, res) => {
   // Logic to sync user profile if needed
   res.json({ message: "Profile sync endpoint" });

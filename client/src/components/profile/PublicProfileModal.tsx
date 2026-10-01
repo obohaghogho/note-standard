@@ -28,6 +28,7 @@ export interface PublicProfile {
   is_verified?: boolean;
   kyc_level?: string;
   plan_tier?: string;
+  sex?: 'Male' | 'Female' | null;
   created_at?: string;
 
   followers_count: number;

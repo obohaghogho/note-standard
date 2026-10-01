@@ -22,6 +22,7 @@ export interface User {
     plan_tier?: string;
     is_pro?: boolean;
     is_advertiser?: boolean;
+    sex?: 'Male' | 'Female' | null;
 }
 
 export class AuthService {

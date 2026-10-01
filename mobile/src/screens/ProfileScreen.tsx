@@ -109,6 +109,7 @@ export default function ProfileScreen() {
         <MenuItem icon="✏️" label="Edit Profile & Photos" value="Avatar, Cover, Bio, Phone" onPress={() => navigation.navigate('ProfileEdit')} />
         <MenuItem icon="🌐" label="Language / Locale" value={lang} onPress={() => setShowLangModal(true)} />
         <MenuItem icon="👤" label="Full Name" value={name} />
+        {user?.sex ? <MenuItem icon="🚻" label="Sex" value={user.sex} /> : null}
         <MenuItem icon="📧" label="Email" value={email} />
         <MenuItem icon="🔒" label="Security & Password" onPress={() => navigation.navigate('SecuritySettings')} />
         <MenuItem icon="💳" label="Saved Payout Accounts" onPress={() => navigation.navigate('BankAccounts')} />

@@ -26,6 +26,7 @@ export interface Profile {
   country_code?: string;
   phone?: string;
   kyc_level?: number;
+  sex?: 'Male' | 'Female' | null;
 }
 
 export interface Subscription {

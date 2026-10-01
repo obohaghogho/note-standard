@@ -148,6 +148,11 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, isOwner }
               </a>
             </div>
           )}
+          {profile.sex && (
+            <div className="flex items-center gap-1.5 shrink-0 px-2 py-0.5 bg-white/5 rounded-md border border-white/10 text-slate-300 font-medium text-xs">
+              <span>Sex: <strong>{profile.sex}</strong></span>
+            </div>
+          )}
           {profile.created_at && (
             <div className="flex items-center gap-1.5 shrink-0">
               <Calendar size={14} className="text-gray-500" />

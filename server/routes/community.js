@@ -4,13 +4,13 @@ const { requireAuth } = require("../middleware/auth");
 const { 
   createCommunityPost, addComment, toggleLike, getFeed, getComments,
   toggleBookmark, deletePost, editPost, deleteComment, editComment,
-  toggleFollow, reportItem, reportUser, votePollOption, getReels, createReel, sharePost, getPostById
+  toggleFollow, reportItem, reportUser, votePollOption, getReels, createReel, sharePost, getPostById, recordReelView
 } = require("../controllers/communityController");
 const spaceController = require("../controllers/spaceController");
 const spaceAiController = require("../controllers/spaceAiController");
 const aiTutorController = require("../controllers/aiTutorController");
 const supabase = require("../config/database");
-const { followLimiter, reportLimiter, profileViewLimiter } = require("../middleware/rateLimiter");
+const { followLimiter, reportLimiter, profileViewLimiter, reelViewLimiter } = require("../middleware/rateLimiter");
 const logger = require("../utils/logger");
 const { sanitizeProfileForViewer, sanitizeProfilesForViewer } = require("../utils/privacySanitizer");
 
@@ -20,6 +20,9 @@ router.use(requireAuth);
 router.get("/feed", getFeed);
 router.get("/reels", getReels);
 router.post("/reels", createReel);
+router.post("/reels/:postId/view", reelViewLimiter, recordReelView);
+router.post("/reels/:id/view", reelViewLimiter, recordReelView);
+
 router.post("/post", createCommunityPost);
 router.get("/post/:postId", getPostById);
 router.put("/post/:postId", editPost);
@@ -98,7 +101,7 @@ const getProfileHandler = async (req, res, next, isUsername = false) => {
 
     let query = supabase
       .from('profiles')
-      .select('id, username, full_name, avatar_url, cover_url, bio, website, country_code, location_visibility, is_verified, kyc_level, created_at');
+      .select('id, username, full_name, avatar_url, cover_url, bio, website, country_code, location_visibility, is_verified, kyc_level, sex, created_at');
 
     if (isUsername) {
       query = query.ilike('username', identifier);

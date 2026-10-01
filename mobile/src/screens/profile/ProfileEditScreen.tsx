@@ -57,6 +57,7 @@ export const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation
   const [locationVisibility, setLocationVisibility] = useState<'visible' | 'hidden'>((user as any)?.location_visibility || 'hidden');
   const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url || '');
   const [coverUrl, setCoverUrl] = useState(user?.cover_url || '');
+  const [sex, setSex] = useState<'Male' | 'Female' | null>(user?.sex || null);
 
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -75,6 +76,7 @@ export const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation
       setLocationVisibility((user as any)?.location_visibility || 'hidden');
       setAvatarUrl(user.avatar_url || '');
       setCoverUrl(user.cover_url || '');
+      setSex(user.sex || null);
     }
   }, [user]);
 
@@ -147,6 +149,7 @@ export const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation
         location_visibility: locationVisibility,
         avatar_url: avatarUrl,
         cover_url: coverUrl,
+        sex,
       };
 
 
@@ -294,6 +297,29 @@ export const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ navigation
                 placeholderTextColor="#64748B"
                 keyboardType="phone-pad"
               />
+            </View>
+          </View>
+
+          {/* Sex Selection */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Sex (Optional)</Text>
+            <View style={styles.sexSegmentContainer}>
+              <TouchableOpacity
+                style={[styles.sexSegmentBtn, sex === 'Male' && styles.sexSegmentActive]}
+                onPress={() => setSex(sex === 'Male' ? null : 'Male')}
+              >
+                <Text style={[styles.sexSegmentText, sex === 'Male' && styles.sexSegmentTextActive]}>
+                  {sex === 'Male' ? '✓ Male' : 'Male'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.sexSegmentBtn, sex === 'Female' && styles.sexSegmentActive]}
+                onPress={() => setSex(sex === 'Female' ? null : 'Female')}
+              >
+                <Text style={[styles.sexSegmentText, sex === 'Female' && styles.sexSegmentTextActive]}>
+                  {sex === 'Female' ? '✓ Female' : 'Female'}
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -531,5 +557,32 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  sexSegmentContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  sexSegmentBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sexSegmentActive: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#60A5FA',
+  },
+  sexSegmentText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  sexSegmentTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
 });
