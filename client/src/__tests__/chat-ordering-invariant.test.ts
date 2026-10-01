@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { mergeMessages, Message } from '../../../shared/messageMergeEngine';
+import { mergeMessages, Message } from '../../../shared/messageMergeEngine.ts';
 
 describe('Final Pre-Deployment Safety Gate Test Suite', () => {
 

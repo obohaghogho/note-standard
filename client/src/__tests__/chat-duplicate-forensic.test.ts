@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { mergeMessages, Message } from '../../../shared/messageMergeEngine';
+import { mergeMessages, Message } from '../../../shared/messageMergeEngine.ts';
 import { OfflineQueueEngine } from '../../../shared/offlineQueueEngine';
 
 describe('Chat Duplicate Forensic Investigation', () => {
@@ -130,5 +130,115 @@ describe('Chat Duplicate Forensic Investigation', () => {
     const { merged } = mergeMessages([], msgs);
     expect(merged).toHaveLength(4);
     expect(merged.map(m => m.id)).toEqual(['srv-1', 'srv-2', 'srv-3', 'srv-4']);
+  });
+
+  test('Case F: Realtime echo with camelCase eventId reconciles with optimistic temp- message without visual duplication', () => {
+    const clientEventId = 'b8f237f6-6d50-4698-95a3-23f0db622c14';
+    const tempId = `temp-${Date.now()}`;
+    const seenMessages = new Set<string>();
+
+    // 1. Optimistic message created on send
+    seenMessages.add(clientEventId);
+    seenMessages.add(tempId);
+
+    const optimisticMsg: Message = {
+      id: tempId,
+      tempId,
+      event_id: clientEventId,
+      conversation_id: 'c1',
+      sender_id: 'u1',
+      content: 'Hello production world',
+      created_at: new Date().toISOString(),
+      status: 'sending'
+    };
+
+    let state = mergeMessages([], [optimisticMsg]).merged;
+    expect(state).toHaveLength(1);
+    expect(state[0].id).toBe(tempId);
+
+    // 2. Realtime socket echo arrives carrying camelCase eventId
+    const socketPayloadRaw = {
+      id: 'srv-uuid-888',
+      eventId: clientEventId,
+      conversation_id: 'c1',
+      sender_id: 'u1',
+      content: 'Hello production world',
+      created_at: new Date().toISOString(),
+      sequence_number: 105,
+      status: 'sent'
+    };
+
+    // Correlation resolution logic matching ChatContext processIncomingMessage fix
+    const incomingEvtId = socketPayloadRaw.event_id || socketPayloadRaw.eventId;
+    const seenKey = incomingEvtId || socketPayloadRaw.id;
+
+    // Assert deduplication gate correctly recognizes registered clientEventId
+    expect(seenMessages.has(seenKey)).toBe(true);
+
+    // When normalized and passed to mergeMessages
+    const normalizedSocketMsg: Message = {
+      ...socketPayloadRaw,
+      event_id: incomingEvtId
+    };
+
+    const resSocket = mergeMessages(state, [normalizedSocketMsg]);
+    state = resSocket.merged;
+
+    // Assert state STILL has EXACTLY 1 message and tempId is collapsed to server UUID
+    expect(state).toHaveLength(1);
+    expect(state[0].id).toBe('srv-uuid-888');
+    expect(state[0].event_id).toBe(clientEventId);
+
+    // 3. HTTP ACK completes later
+    const httpAckMsg: Message = {
+      id: 'srv-uuid-888',
+      event_id: clientEventId,
+      conversation_id: 'c1',
+      sender_id: 'u1',
+      content: 'Hello production world',
+      sequence_number: 105,
+      created_at: new Date().toISOString(),
+      status: 'sent'
+    };
+
+    const resHttp = mergeMessages(state, [httpAckMsg]);
+    state = resHttp.merged;
+
+    expect(state).toHaveLength(1);
+    expect(state[0].id).toBe('srv-uuid-888');
+  });
+
+  test('Case G: All 5 correlation property names (event_id, eventId, client_event_id, client_request_id, clientRequestId) map to the same identity', () => {
+    const keys = ['event_id', 'eventId', 'client_event_id', 'client_request_id', 'clientRequestId'];
+    const targetEventId = 'canonical-evt-uuid-123';
+
+    for (const keyProp of keys) {
+      const optMsg: Message = {
+        id: 'temp-999',
+        event_id: targetEventId,
+        conversation_id: 'c1',
+        sender_id: 'u1',
+        content: 'Test correlation key',
+        created_at: new Date().toISOString(),
+        status: 'sending'
+      };
+
+      const incomingPayload: any = {
+        id: 'srv-999',
+        conversation_id: 'c1',
+        sender_id: 'u1',
+        content: 'Test correlation key',
+        created_at: new Date().toISOString(),
+        sequence_number: 50
+      };
+      incomingPayload[keyProp] = targetEventId;
+
+      const incomingEvtId = incomingPayload.event_id || incomingPayload.eventId || incomingPayload.client_event_id || incomingPayload.client_request_id || incomingPayload.clientRequestId;
+      const normalized: Message = { ...incomingPayload, event_id: incomingEvtId };
+
+      const { merged } = mergeMessages([optMsg], [normalized]);
+      expect(merged).toHaveLength(1);
+      expect(merged[0].id).toBe('srv-999');
+    }
   });
 });

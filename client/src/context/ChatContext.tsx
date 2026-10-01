@@ -1613,9 +1613,14 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }
 
             // ── GLOBAL SEEN CACHE GUARD ──────────────────────────────────────
-            // Single-pass gate using dedupeMessages canonical key (event_id || id).
+            // Single-pass gate using dedupeMessages canonical key.
             // Must run BEFORE any state updates to prevent socket double-inserts.
-            const seenKey = msg.event_id || msg.id;
+            const incomingEvtId = msg.event_id || msg.eventId || msg.client_event_id || msg.client_request_id || msg.clientRequestId;
+            if (!msg.event_id && incomingEvtId) {
+                msg.event_id = incomingEvtId;
+            }
+
+            const seenKey = incomingEvtId || msg.event_id || msg.id;
             if (seenMessagesRef.current.has(seenKey)) {
                 console.log(`[CLIENT_TRACE] seenMessages guard: DROPPED | key: ${seenKey}`);
                 return;
@@ -1781,7 +1786,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 }
             }
 
-            const newMessage: Message = { ...msg, isOwn: isOwnMessage };
+            const newMessage: Message = { ...msg, event_id: incomingEvtId || msg.event_id, isOwn: isOwnMessage };
             console.log(`[CLIENT_TRACE] [${Date.now()}] processIncomingMessage: PASS (all gates cleared) | id: ${msg.id} | convId: ${msg.conversation_id}`);
 
             // ── Update lastSyncTimestamp to the newest message we've processed
