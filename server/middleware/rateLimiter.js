@@ -148,3 +148,12 @@ exports.profileViewLimiter = rateLimit({
   legacyHeaders: false,
   skip: skipLocalhostOrDev,
 });
+
+exports.reelViewLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 60,
+  message: { error: "Rate limit exceeded for Reel view tracking." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: skipLocalhostOrDev,
+});

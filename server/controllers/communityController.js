@@ -578,6 +578,7 @@ const getReels = async (req, res, next) => {
       user_has_bookmarked: userBookmarkedPostIds.has(p.id),
       likes_count: likesCountMap[p.id] !== undefined ? likesCountMap[p.id] : (p.likes_count || 0),
       comments_count: commentsCountMap[p.id] !== undefined ? commentsCountMap[p.id] : (p.comments_count || 0),
+      views_count: p.views_count || 0,
     }));
 
     const hasMore = formatted.length > limitNum;
@@ -694,6 +695,52 @@ const getPostById = async (req, res, next) => {
   }
 };
 
+/**
+ * Record a qualified view on a Reel (atomic RPC + deduplication)
+ */
+const recordReelView = async (req, res, next) => {
+  try {
+    const postId = req.params.postId || req.params.id;
+    const userId = req.user?.id;
+    const { client_event_id, session_id, watch_duration_seconds = 2.0, is_muted = true, completed = false } = req.body || {};
+
+    if (!postId) {
+      return res.status(400).json({ error: "Reel ID is required" });
+    }
+
+    const numericDuration = Math.min(Math.max(Number(watch_duration_seconds) || 2.0, 0.0), 600.0);
+    const anonSessionId = !userId ? (session_id || client_event_id || null) : null;
+
+    const { data, error } = await supabase.rpc('record_reel_view', {
+      p_reel_id: postId,
+      p_viewer_id: userId || null,
+      p_anon_session_id: anonSessionId,
+      p_watch_duration: numericDuration,
+      p_is_muted: Boolean(is_muted),
+      p_completed: Boolean(completed)
+    });
+
+    if (error) {
+      logger.warn(`[CommunityController] recordReelView RPC failed (${error.message}), querying views_count directly.`);
+      const { data: post } = await supabase.from('community_posts').select('views_count').eq('id', postId).maybeSingle();
+      return res.json({ success: true, recorded: false, views_count: post?.views_count || 0 });
+    }
+
+    const result = Array.isArray(data) ? data[0] : data;
+    const inserted = Boolean(result?.inserted);
+    const viewsCount = Number(result?.views_count || 0);
+
+    return res.json({
+      success: true,
+      recorded: inserted,
+      views_count: viewsCount
+    });
+  } catch (err) {
+    logger.error('[CommunityController] recordReelView error:', err.message);
+    res.status(200).json({ success: true, recorded: false, views_count: 0 });
+  }
+};
+
 module.exports = {
   createCommunityPost,
   addComment,
@@ -712,6 +759,7 @@ module.exports = {
   getReels,
   createReel,
   sharePost,
-  getPostById
+  getPostById,
+  recordReelView
 };
 
