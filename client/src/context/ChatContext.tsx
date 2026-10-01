@@ -1834,7 +1834,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
             // Pre-injection guard
             let safeNewMessage = newMessage;
-            const incomingEvtId = msg.event_id || msg.eventId || msg.client_event_id || msg.client_request_id || msg.clientRequestId;
             if (!newMessage.reply_to?.id) {
                 const currentMsgs = messagesRef.current[msg.conversation_id] || [];
                 const existingInState = currentMsgs.find(
