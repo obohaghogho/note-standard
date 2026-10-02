@@ -242,6 +242,24 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     // ── Load Conversations ─────────────────────────────────────────────────────
     const loadConversations = useCallback(async () => {
+        const currentUser = userRef.current;
+        if (!currentUser) return;
+
+        // Instant local cache read if state is empty
+        if (conversationsRef.current.length === 0) {
+            try {
+                const cached = await AsyncStorage.getItem(`chat_convs_cache:${currentUser.id}`);
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        const validCached = parsed.filter((c: any) => !deletedConvIdsRef.current.has(c.id));
+                        setConversations(validCached);
+                        conversationsRef.current = validCached;
+                    }
+                }
+            } catch (_) {}
+        }
+
         try {
             const res = await apiClient.get('/chat/conversations');
             const data: any[] = res.data || [];
@@ -258,6 +276,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             setConversations(validConvs);
             conversationsRef.current = validConvs;
             joinAllRooms(validConvs);
+            AsyncStorage.setItem(`chat_convs_cache:${currentUser.id}`, JSON.stringify(validConvs)).catch(() => {});
         } catch (err) {
             console.error('[ChatContext] Failed to load conversations', err);
         }
@@ -265,32 +284,50 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     // ── Load Messages ──────────────────────────────────────────────────────────
     const loadMessages = useCallback(async (conversationId: string) => {
-        if (!user) return;
+        const currentUser = userRef.current;
+        if (!currentUser) return;
+
+        const targetConv = conversationsRef.current.find((c: any) => c.id === conversationId);
+        const convClearedAt = clearedAtMapRef.current.get(conversationId) || targetConv?.membership?.cleared_at || targetConv?.cleared_at;
+        const clearedAtMs = convClearedAt ? new Date(convClearedAt).getTime() : 0;
+
+        // Instant local cache read if messages for this conversation are not yet in memory
+        const currentInMemory = messagesRef.current?.[conversationId];
+        if (!currentInMemory || currentInMemory.length === 0) {
+            try {
+                const cachedRaw = await AsyncStorage.getItem(`chat_msg_cache:${currentUser.id}:${conversationId}`);
+                if (cachedRaw) {
+                    const cachedList: any[] = JSON.parse(cachedRaw);
+                    if (Array.isArray(cachedList) && cachedList.length > 0) {
+                        const validCached = cachedList.filter((msg: any) =>
+                            !msg.is_deleted && !deletedMessageIdsRef.current.has(msg.id) && (!clearedAtMs || new Date(msg.created_at).getTime() > clearedAtMs)
+                        );
+                        if (validCached.length > 0) {
+                            setMessages(prev => ({
+                                ...prev,
+                                [conversationId]: validCached
+                            }));
+                        }
+                    }
+                }
+            } catch (_) {}
+        }
+
         try {
             const res = await apiClient.get(`/chat/conversations/${conversationId}/messages`);
             const rawData: any[] = res.data || [];
 
-            const targetConv = conversationsRef.current.find((c: any) => c.id === conversationId);
-            const convClearedAt = clearedAtMapRef.current.get(conversationId) || targetConv?.membership?.cleared_at || targetConv?.cleared_at;
-            const clearedAtMs = convClearedAt ? new Date(convClearedAt).getTime() : 0;
-
-            const CHUNK_SIZE = 10;
-            const processedData: any[] = [];
-            for (let i = 0; i < rawData.length; i += CHUNK_SIZE) {
-                const chunk = rawData.slice(i, i + CHUNK_SIZE);
-                const chunkResults = await Promise.all(
-                    chunk.map(async (rawMsg: any) => {
-                        const plainContent = await mobileTransportAdapter.decodeIncomingMessage(rawMsg, user.id);
-                        return { ...rawMsg, content: plainContent || '[Decryption Failed]' };
-                    })
-                );
-                processedData.push(...chunkResults);
-            }
+            // FAST BATCH DECRYPTION: Single-pass zero-N+1 decryption
+            const processedData = await mobileTransportAdapter.decodeMessageBatch(
+                rawData,
+                currentUser.id,
+                targetConv?.members
+            );
 
             const normalized = processedData.map(normalizeEvent);
             const validated = (normalized as any[])
                 .filter((msg: any) => validateMessagePayload(msg).valid)
-                .map((msg: any) => ({ ...msg, isOwn: msg.sender_id === user.id }));
+                .map((msg: any) => ({ ...msg, isOwn: msg.sender_id === currentUser.id }));
 
             const validMessages = validated.filter((msg: any) =>
                 !msg.is_deleted && !deletedMessageIdsRef.current.has(msg.id) && (!clearedAtMs || new Date(msg.created_at).getTime() > clearedAtMs)
@@ -298,15 +335,22 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
             startTransition(() => {
                 setMessages(prev => {
-                    if (validMessages.length === 0) {
-                        return { ...prev, [conversationId]: [] };
-                    }
                     const existing = (prev[conversationId] || []).filter(m =>
                         !m.is_deleted && !deletedMessageIdsRef.current.has(m.id) && (!clearedAtMs || new Date(m.created_at).getTime() > clearedAtMs)
                     );
+                    const merged = validMessages.length === 0
+                        ? (existing.length === 0 ? [] : existing)
+                        : (mergeMessages(existing, validMessages).merged as Message[]);
+
+                    // Safely cache top 100 merged messages locally
+                    if (merged.length > 0) {
+                        const cachePayload = merged.slice(-100);
+                        AsyncStorage.setItem(`chat_msg_cache:${currentUser.id}:${conversationId}`, JSON.stringify(cachePayload)).catch(() => {});
+                    }
+
                     return {
                         ...prev,
-                        [conversationId]: mergeMessages(existing, validMessages).merged as Message[]
+                        [conversationId]: merged
                     };
                 });
             });
@@ -931,10 +975,14 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     const clearChatHistory = useCallback(async (conversationId: string) => {
         const timestamp = new Date().toISOString();
+        const currentUser = userRef.current;
         // Write watermark FIRST so any concurrent socket messages are already blocked
         clearedAtMapRef.current.set(conversationId, timestamp);
         // Mark as stale so next open forces a fresh loadMessages instead of cache
         staleClearedConvIdsRef.current.add(conversationId);
+        if (currentUser?.id) {
+            AsyncStorage.removeItem(`chat_msg_cache:${currentUser.id}:${conversationId}`).catch(() => {});
+        }
         setMessages(prev => ({ ...prev, [conversationId]: [] }));
         setConversations(prev => prev.map(c => {
             if (c.id === conversationId) {
@@ -956,6 +1004,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     const deleteConversation = useCallback(async (conversationId: string) => {
         deletedConvIdsRef.current.add(conversationId);
+        const currentUser = userRef.current;
+        if (currentUser?.id) {
+            AsyncStorage.removeItem(`chat_msg_cache:${currentUser.id}:${conversationId}`).catch(() => {});
+        }
         setMessages(prev => {
             const next = { ...prev };
             delete next[conversationId];

@@ -1,10 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import EventEmitter from './EventEmitter';
 import { AccountManager, StoredAccount } from '../utils/AccountManager';
+import { mobileTransportAdapter } from '../utils/mobileTransportAdapter';
 
 const TOKEN_KEY = 'auth_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
 const USER_KEY = 'user_data';
+
+// Fast in-memory session cache to avoid reading AsyncStorage on every single API request
+let cachedToken: string | null = null;
+let cachedRefreshToken: string | null = null;
+let cachedUser: User | null = null;
+let cachedAccount: StoredAccount | null = null;
 
 export interface User {
     id: string;
@@ -26,7 +33,26 @@ export interface User {
 }
 
 export class AuthService {
+    static clearMemoryCache() {
+        cachedToken = null;
+        cachedRefreshToken = null;
+        cachedUser = null;
+        cachedAccount = null;
+        mobileTransportAdapter.clearCache();
+    }
+
+    static async getCachedAccount(userId: string): Promise<StoredAccount | null> {
+        if (cachedAccount && cachedAccount.id === userId) return cachedAccount;
+        try {
+            cachedAccount = (await AccountManager.getAccount(userId)) || null;
+            return cachedAccount;
+        } catch {
+            return null;
+        }
+    }
+
     static async setToken(token: string) {
+        cachedToken = token;
         await AsyncStorage.setItem(TOKEN_KEY, token);
         // Also update in multi-account store if we have an active user
         const user = await this.getUser();
@@ -36,10 +62,13 @@ export class AuthService {
     }
 
     static async getToken() {
-        return await AsyncStorage.getItem(TOKEN_KEY);
+        if (cachedToken) return cachedToken;
+        cachedToken = await AsyncStorage.getItem(TOKEN_KEY);
+        return cachedToken;
     }
 
     static async setRefreshToken(token: string) {
+        cachedRefreshToken = token;
         await AsyncStorage.setItem(REFRESH_TOKEN_KEY, token);
         // Also update in multi-account store
         const user = await this.getUser();
@@ -52,10 +81,13 @@ export class AuthService {
     }
 
     static async getRefreshToken() {
-        return await AsyncStorage.getItem(REFRESH_TOKEN_KEY);
+        if (cachedRefreshToken) return cachedRefreshToken;
+        cachedRefreshToken = await AsyncStorage.getItem(REFRESH_TOKEN_KEY);
+        return cachedRefreshToken;
     }
 
     static async setUser(user: User, sessionId?: string, deviceId?: string) {
+        cachedUser = user;
         await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
         // Save to multi-account store
         const token = await this.getToken();
@@ -72,15 +104,19 @@ export class AuthService {
                 sessionId,
                 deviceId
             });
+            cachedAccount = (await AccountManager.getAccount(user.id)) || null;
         }
     }
 
     static async getUser(): Promise<User | null> {
+        if (cachedUser) return cachedUser;
         const user = await AsyncStorage.getItem(USER_KEY);
-        return user ? JSON.parse(user) : null;
+        cachedUser = user ? JSON.parse(user) : null;
+        return cachedUser;
     }
 
     static async logout() {
+        this.clearMemoryCache();
         try {
             const user = await this.getUser().catch(() => null);
             if (user) {
@@ -103,6 +139,7 @@ export class AuthService {
         } catch (err: any) {
             console.warn('[AuthService] Logout pre-cleanup error:', err.message);
         } finally {
+            this.clearMemoryCache();
             await AsyncStorage.removeItem(TOKEN_KEY).catch(() => {});
             await AsyncStorage.removeItem(REFRESH_TOKEN_KEY).catch(() => {});
             await AsyncStorage.removeItem(USER_KEY).catch(() => {});
@@ -114,6 +151,7 @@ export class AuthService {
      * Clears tokens and marks session as stale/invalid, but KEEPS the account.
      */
     static async expireSession(userId: string, isPermanent: boolean = false) {
+        this.clearMemoryCache();
         await AccountManager.setTokenState(userId, isPermanent ? "invalid" : "stale");
         await AccountManager.clearTokens(userId);
         
@@ -199,6 +237,7 @@ export class AuthService {
      * Switches the active session to another stored account with Lazy Hydration
      */
     static async switchAccount(userId: string): Promise<boolean> {
+        this.clearMemoryCache();
         const account = await AccountManager.getAccount(userId);
         if (!account) return false;
 
@@ -213,9 +252,6 @@ export class AuthService {
             return false; // Needs re-login
         }
 
-        // Flag as stale so apiClient aggressively refreshes if needed, but don't block.
-        // Actually, we don't even need to flag it. apiClient will figure it out via 401s.
-
         const userData: User = {
             id: account.id,
             email: account.email,
@@ -223,6 +259,11 @@ export class AuthService {
             full_name: account.full_name,
             avatar_url: account.avatar_url,
         };
+
+        cachedToken = account.token;
+        cachedRefreshToken = account.refresh_token || null;
+        cachedUser = userData;
+        cachedAccount = account;
 
         await AsyncStorage.setItem(TOKEN_KEY, account.token);
         if (account.refresh_token) {
@@ -241,3 +282,4 @@ export class AuthService {
         return await AccountManager.getAllAccounts();
     }
 }
+

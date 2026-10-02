@@ -32,8 +32,7 @@ apiClient.interceptors.request.use(
       }
       const user = await AuthService.getUser();
       if (user) {
-        const { AccountManager } = require('../utils/AccountManager');
-        const account = await AccountManager.getAccount(user.id);
+        const account = await AuthService.getCachedAccount(user.id);
         if (account?.sessionId) config.headers['X-Session-ID'] = account.sessionId;
         if (account?.deviceId) config.headers['X-Device-ID'] = account.deviceId;
       }

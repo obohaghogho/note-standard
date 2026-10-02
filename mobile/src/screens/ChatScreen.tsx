@@ -163,12 +163,7 @@ export default function ChatScreen({ navigation, route }: Props) {
 
     useEffect(() => {
         if (isFocused) {
-            // CRITICAL: defer setActiveConversationId until AFTER the
-            // keyboard animation and screen transition completes.
-            const task = InteractionManager.runAfterInteractions(() => {
-                setActiveConversationId(conversationId);
-            });
-            return () => task.cancel();
+            setActiveConversationId(conversationId);
         } else {
             setActiveConversationId(null);
         }

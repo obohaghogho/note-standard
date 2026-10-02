@@ -1,6 +1,8 @@
 import * as SecureStore from 'expo-secure-store';
 import { fromByteArray, toByteArray } from 'base64-js';
 
+let cachedPrivateKey: Uint8Array | null = null;
+
 export const storage = {
     async save(key: string, value: string) {
         await SecureStore.setItemAsync(key, value);
@@ -18,11 +20,21 @@ export const storage = {
     async savePrivateKey(key: Uint8Array) {
         const base64 = fromByteArray(key);
         await SecureStore.setItemAsync('e2ee_private_key', base64);
+        cachedPrivateKey = key;
     },
 
     async getPrivateKey(): Promise<Uint8Array | null> {
+        if (cachedPrivateKey) {
+            return cachedPrivateKey;
+        }
         const base64 = await SecureStore.getItemAsync('e2ee_private_key');
         if (!base64) return null;
-        return toByteArray(base64);
+        cachedPrivateKey = toByteArray(base64);
+        return cachedPrivateKey;
+    },
+
+    clearPrivateKeyCache() {
+        cachedPrivateKey = null;
     }
 };
+
