@@ -15,25 +15,48 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ path, fetchUrl }) => {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const durationHackAppliedRef = useRef(false);
 
+    const loadAudioUrl = React.useCallback(async () => {
+        if (!path) return;
+        if (path.startsWith('blob:') || path.startsWith('data:')) {
+            setUrl(path);
+            setError(null);
+            return;
+        }
+        setError(null);
+        try {
+            const u = await fetchUrl(path);
+            if (u) {
+                setUrl(u);
+            } else {
+                setError('Unable to load audio');
+            }
+        } catch {
+            setError('Unable to load audio');
+        }
+    }, [path, fetchUrl]);
+
     useEffect(() => {
+        let isMounted = true;
         if (!path) return;
         if (path.startsWith('blob:') || path.startsWith('data:')) {
             setUrl(path);
             return;
         }
-        let isMounted = true;
         setError(null);
         fetchUrl(path).then(u => {
-            if (isMounted) setUrl(u);
+            if (isMounted) {
+                if (u) setUrl(u);
+                else setError('Unable to load audio');
+            }
         }).catch(() => {
-            if (isMounted) setError('Failed to load audio');
+            if (isMounted) setError('Unable to load audio');
         });
         return () => { isMounted = false; };
     }, [path, fetchUrl]);
 
     const onError = () => {
         console.error('[AudioPlayer] Error loading audio:', audioRef.current?.error);
-        setError('Unsupported format or loading error');
+        setError('Playback format error');
     };
 
     const togglePlay = () => {
@@ -92,7 +115,16 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ path, fetchUrl }) => {
             <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 p-2.5 rounded-lg text-red-400 text-xs w-full max-w-sm">
                 <Mic size={14} className="flex-shrink-0" />
                 <span className="flex-1 truncate">{error}</span>
-                <a href={url || '#'} download className="text-blue-400 underline flex-shrink-0">Download</a>
+                <button
+                    type="button"
+                    onClick={() => loadAudioUrl()}
+                    className="text-blue-400 hover:underline flex-shrink-0 font-medium cursor-pointer"
+                >
+                    Retry
+                </button>
+                {url && (
+                    <a href={url} download className="text-blue-400 underline flex-shrink-0 ml-1">Download</a>
+                )}
             </div>
         );
     }

@@ -35,14 +35,52 @@ exports.createAttachmentRecord = async (req, res) => {
 
 exports.processAudio = async (req, res) => {
     try {
-        const { storagePath, conversationId } = req.body;
+        const { storagePath, conversationId, mimeType, fileSize } = req.body;
         const userId = req.user.id;
 
         if (!storagePath || !conversationId) {
             return res.status(400).json({ error: 'Storage path and conversation ID are required' });
         }
 
-        // 1. Process and convert the audio
+        const normalizedMime = (mimeType || '').toLowerCase();
+        const isNativeMp4 = normalizedMime.includes('mp4') || normalizedMime.includes('m4a') || normalizedMime.includes('aac') || storagePath.endsWith('.m4a') || storagePath.endsWith('.mp4');
+
+        if (isNativeMp4) {
+            const timestamp = Date.now();
+            const finalFileName = `voice_${timestamp}.m4a`;
+            const finalPath = `${conversationId}/${finalFileName}`;
+
+            // Move the storage object from temp/raw_... to final conversation folder
+            const { error: moveError } = await supabase.storage
+                .from('chat-media')
+                .move(storagePath, finalPath);
+
+            const activePath = moveError ? storagePath : finalPath;
+            const activeName = moveError ? path.basename(storagePath) : finalFileName;
+
+            const { data, error } = await supabase
+                .from('media_attachments')
+                .insert([{
+                    uploader_id: userId,
+                    conversation_id: conversationId,
+                    file_name: activeName,
+                    file_type: 'audio/mp4',
+                    file_size: fileSize || 0,
+                    storage_path: activePath,
+                    metadata: {
+                        original_path: storagePath,
+                        passthrough: true,
+                        mimeType: 'audio/mp4'
+                    }
+                }])
+                .select()
+                .single();
+
+            if (error) throw error;
+            return res.json(data);
+        }
+
+        // Convert WebM/OGG to .m4a via FFmpeg (Strict: fail explicitly on transcode error)
         const processed = await audioProcessor.convertToM4A(storagePath, conversationId);
 
         // 2. Create Attachment Record
@@ -66,9 +104,10 @@ exports.processAudio = async (req, res) => {
 
         if (error) throw error;
 
-        // 3. Delete the original (optional but recommended for storage management)
-        // We do it async to not block the response
-        supabase.storage.from('chat-media').remove([storagePath]).catch(e => console.error('Cleanup error:', e));
+        // 3. Delete original raw temp file after successful conversion
+        if (storagePath !== processed.storagePath) {
+            supabase.storage.from('chat-media').remove([storagePath]).catch(e => console.error('Cleanup error:', e));
+        }
 
         res.json(data);
     } catch (err) {

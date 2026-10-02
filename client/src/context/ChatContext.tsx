@@ -2930,9 +2930,39 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
         const clientEventId = safeRandomUUID();
-        const fileName = (file as File).name || `audio_${Date.now()}.webm`;
+
+        // Derive exact MIME type and file name/extension without forcing audio/webm
+        let fileType = file.type ? file.type.split(';')[0].toLowerCase() : '';
+        let fileName = (file as File).name || '';
+
+        if (!fileType) {
+            if (type === 'audio') fileType = 'audio/mp4';
+            else if (type === 'image') fileType = 'image/jpeg';
+            else if (type === 'video') fileType = 'video/mp4';
+            else fileType = 'application/octet-stream';
+        }
+
+        if (!fileName) {
+            let ext = '.bin';
+            if (fileType.includes('quicktime')) ext = '.mov';
+            else if (fileType.startsWith('video/mp4')) ext = '.mp4';
+            else if (fileType.startsWith('video/webm')) ext = '.webm';
+            else if (fileType.includes('mp4') || fileType.includes('m4a') || fileType.includes('aac')) ext = '.m4a';
+            else if (fileType.includes('webm')) ext = '.webm';
+            else if (fileType.includes('ogg')) ext = '.ogg';
+            else if (fileType.includes('mpeg') || fileType.includes('mp3')) ext = '.mp3';
+            else if (fileType.includes('jpeg') || fileType.includes('jpg')) ext = '.jpg';
+            else if (fileType.includes('png')) ext = '.png';
+            else if (fileType.includes('webp')) ext = '.webp';
+            else if (type === 'audio') ext = '.m4a';
+            else if (type === 'image') ext = '.jpg';
+            else if (type === 'video') ext = '.mp4';
+
+            const prefix = type === 'audio' ? 'voice' : type;
+            fileName = `${prefix}_${Date.now()}${ext}`;
+        }
+
         const fileSize = file.size;
-        const fileType = file.type;
 
         // 1. Generate local blob/object URL for instant rendering
         const localUrl = URL.createObjectURL(file);
@@ -3035,16 +3065,14 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://tngcvgisfctggvivcnva.supabase.co';
                 const uploadUrl = `${supabaseUrl}/storage/v1/object/chat-media/${filePath}`;
                 
+                // Use the exact recorded/selected fileType for upload header
+                const uploadContentType = (type === 'file' && !fileType) ? 'application/octet-stream' : fileType;
+
                 const res = await fetch(uploadUrl, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${session?.access_token}`,
-                        // Use the actual file type for images/videos/audio. For documents (type === 'file'),
-                // use application/octet-stream as a safe fallback because Supabase Storage 
-                // rejects specific document MIME types (e.g. application/json) with a 415 error.
-                'Content-Type': type === 'audio' 
-                    ? 'audio/webm' 
-                    : (fileType ? fileType.split(';')[0] : 'application/octet-stream'),
+                        'Content-Type': uploadContentType,
                         'x-upsert': 'false'
                     },
                     body: file, // Works with File or Blob natively in browser
@@ -3057,10 +3085,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
                 let attachment = null;
                 if (type === 'audio') {
-                    // Trigger backend transcode processing
+                    // Trigger backend transcode/passthrough processing
                     const transcodeRes = await api.post('/media/process-audio', {
                         storagePath: filePath,
-                        conversationId
+                        conversationId,
+                        mimeType: fileType,
+                        fileSize
                     });
                     attachment = transcodeRes.data;
                 } else {
