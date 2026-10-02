@@ -67,14 +67,11 @@ export const ReelCard: React.FC<ReelCardProps> = ({
   const hasViewTrackedRef = useRef<boolean>(false);
   const activePlaybackTimeRef = useRef<number>(0);
 
-  const canDelete = Boolean(
-    onDeleteReel && (
-      (currentUserId && (reel.author_id === currentUserId || reel.author?.id === currentUserId)) ||
-      currentUserRole === 'admin' ||
-      currentUserRole === 'superadmin' ||
-      !currentUserId // Fallback show if handler is bound
-    )
+  const isOwner = Boolean(
+    currentUserId && (reel.author_id === currentUserId || reel.author?.id === currentUserId)
   );
+  const isAdmin = currentUserRole === 'admin' || currentUserRole === 'superadmin';
+  const canDelete = Boolean(onDeleteReel && (isOwner || isAdmin));
 
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation();

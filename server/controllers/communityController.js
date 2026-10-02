@@ -304,14 +304,35 @@ const deletePost = async (req, res, next) => {
     const { id: userId, role } = req.user;
     const { postId } = req.params;
 
-    let query = supabase.from('community_posts').delete().eq('id', postId);
-    if (role !== 'admin' && role !== 'superadmin') {
-      query = query.eq('author_id', userId);
+    if (!postId) {
+      return res.status(400).json({ error: 'Post ID is required' });
     }
 
-    const { error } = await query;
-    if (error) throw error;
-    res.json({ success: true });
+    const { data: post, error: fetchError } = await supabase
+      .from('community_posts')
+      .select('id, author_id')
+      .eq('id', postId)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    const isOwner = post.author_id === userId;
+    const isAdmin = role === 'admin' || role === 'superadmin';
+
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'Unauthorized: You can only delete your own posts/reels' });
+    }
+
+    const { error: deleteError } = await supabase
+      .from('community_posts')
+      .delete()
+      .eq('id', postId);
+
+    if (deleteError) throw deleteError;
+    res.json({ success: true, message: 'Post deleted successfully' });
   } catch (err) { next(err); }
 };
 
