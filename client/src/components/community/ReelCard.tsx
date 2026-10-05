@@ -1,7 +1,31 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Heart, MessageCircle, Bookmark, Share2, Volume2, VolumeX, Play, UserPlus, Check, Sparkles, Trash2 } from 'lucide-react';
+import { Heart, MessageCircle, Bookmark, Share2, Volume2, VolumeX, Play, UserPlus, Check, Sparkles, Trash2, Eye } from 'lucide-react';
 import { API_URL } from '../../lib/api';
 import { toggleLike, toggleBookmark } from '../../services/communityService';
+
+/**
+ * Deterministic View Count Formatter for NoteStandard Reels.
+ * Formats raw view counts into clean, professional, human-readable strings.
+ */
+export function formatReelViews(count?: number | null): { formatted: string; full: string } {
+  const num = Math.max(0, Math.floor(Number(count) || 0));
+  const full = `${num.toLocaleString()} ${num === 1 ? 'view' : 'views'}`;
+
+  if (num < 1000) {
+    return { formatted: `${num} ${num === 1 ? 'view' : 'views'}`, full };
+  }
+
+  let valString = '';
+  if (num >= 1000000) {
+    const val = num / 1000000;
+    valString = (val % 1 === 0 || val >= 100 ? val.toFixed(0) : val.toFixed(1).replace(/\.0$/, '')) + 'M';
+  } else {
+    const val = num / 1000;
+    valString = (val % 1 === 0 || val >= 100 ? val.toFixed(0) : val.toFixed(1).replace(/\.0$/, '')) + 'K';
+  }
+
+  return { formatted: `${valString} views`, full };
+}
 
 export type ReelPost = {
   id: string;
@@ -20,6 +44,7 @@ export type ReelPost = {
   likes_count?: number;
   comments_count?: number;
   shares_count?: number;
+  views_count?: number;
   is_liked?: boolean;
   is_bookmarked?: boolean;
   user_has_liked?: boolean;
@@ -61,6 +86,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
   const [liked, setLiked] = useState(reel.user_has_liked || reel.is_liked || false);
   const [likesCount, setLikesCount] = useState(reel.likes_count || 0);
   const [bookmarked, setBookmarked] = useState(reel.user_has_bookmarked || reel.is_bookmarked || false);
+  const [viewsCount, setViewsCount] = useState(reel.views_count || 0);
   const [following, setFollowing] = useState(reel.is_following || false);
   const [showHeartAnim, setShowHeartAnim] = useState(false);
   const lastTapRef = useRef<number>(0);
@@ -87,7 +113,10 @@ export const ReelCard: React.FC<ReelCardProps> = ({
     setLiked(reel.user_has_liked || reel.is_liked || false);
     setLikesCount(reel.likes_count || 0);
     setBookmarked(reel.user_has_bookmarked || reel.is_bookmarked || false);
+    setViewsCount(reel.views_count || 0);
   }, [reel]);
+
+  const { formatted: formattedViews, full: fullViewsText } = formatReelViews(viewsCount);
 
   // Keep video element muted property synchronized with shared isMuted prop
   useEffect(() => {
@@ -400,6 +429,16 @@ export const ReelCard: React.FC<ReelCardProps> = ({
 
         {/* Tags & Topic Pill */}
         <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+          {/* Public View Count Indicator Pill */}
+          <div
+            className="flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold text-white bg-black/55 backdrop-blur-md px-2.5 py-0.5 rounded-full border border-white/20 shadow-md cursor-default select-none"
+            title={fullViewsText}
+            aria-label={fullViewsText}
+          >
+            <Eye size={12} className="text-cyan-400 shrink-0" aria-hidden="true" />
+            <span className="drop-shadow-sm font-mono sm:font-sans">{formattedViews}</span>
+          </div>
+
           {reel.tags && reel.tags.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {reel.tags.slice(0, 3).map((tag, idx) => (
