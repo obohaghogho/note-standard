@@ -7,14 +7,14 @@ const router = express.Router();
  * No auth required — must be accessible to all clients including outdated ones.
  */
 const APP_CONFIG = {
-  latest_version: '1.6.8',
+  latest_version: '1.8.5',
   minimum_version: '1.6.8',
   force_update: true,
-  update_message: 'Critical Fix v1.6.8: Push Notification Reliability & Performance Improvements.',
+  update_message: 'NoteStandard v1.8.5: Performance & Push Reliability Updates.',
   changelog: [
-    'Fixed: Aggressive cleanup of invalid push subscriptions to restore delivery receipts.',
-    'Performance: Eliminated duplicate push network requests to save battery and data.',
-    'Result: Real-time message delivery receipts (double-ticks) are now highly reliable.'
+    'Fixed: Real-time chat message delivery receipts and state reconciliation.',
+    'Performance: Instant chat opening and optimized background delivery ACKs.',
+    'Reliability: Enhanced PWA service worker caching and version sync.'
   ]
 };
 

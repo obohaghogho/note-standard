@@ -948,7 +948,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     const currentUserId = user?.id;
                     prev.forEach(p => {
                         if (!existingMap.has(p.id) && !tombstones.has(p.id)) {
-                            const isOwn = !currentUserId || !p.members || p.members.length === 0 || p.members.some(m => m.user_id === currentUserId);
+                            const isOwn = !currentUserId || !p.members || p.members.length === 0 || p.members.some(m => (m?.user_id || m?.profile?.id || m?.profile_id || m?.userId || m?.id) === currentUserId);
                             const isActive  = p.id === activeConversationIdRef.current;
                             const isTemp    = p.id.startsWith('temp-');
                             const isRecent  = !!(p as any)._localCreatedAt &&
@@ -1621,11 +1621,30 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             }
 
             const seenKey = incomingEvtId || msg.event_id || msg.id;
-            if (seenMessagesRef.current.has(seenKey)) {
-                console.log(`[CLIENT_TRACE] seenMessages guard: DROPPED | key: ${seenKey}`);
-                return;
+            const isAlreadySeen = seenMessagesRef.current.has(seenKey);
+
+            if (isAlreadySeen) {
+                // Determine if this is an authoritative server confirmation for an in-flight optimistic message
+                const currentConvMsgs = messagesRef.current[msg.conversation_id] || [];
+                const hasOptimisticMatch = currentConvMsgs.some(
+                    m => m.id.startsWith('temp-') && (
+                        m.id === msg.id || 
+                        m.id === `temp-${incomingEvtId}` || 
+                        (incomingEvtId && (m.event_id === incomingEvtId || m.eventId === incomingEvtId))
+                    )
+                );
+
+                // If it's NOT an optimistic match, it's a true duplicate — drop it.
+                if (!hasOptimisticMatch) {
+                    console.log(`[CLIENT_TRACE] seenMessages guard: DROPPED true duplicate | key: ${seenKey}`);
+                    return;
+                }
+                console.log(`[CLIENT_TRACE] seenMessages guard: RECONCILING authoritative server confirmation for key: ${seenKey}`);
             }
             seenMessagesRef.current.add(seenKey);
+            if (msg.id && !msg.id.startsWith('temp-')) {
+                seenMessagesRef.current.add(msg.id);
+            }
             // Bound the set to prevent memory leaks (cap at 3000 entries)
             if (seenMessagesRef.current.size > 3000) {
                 const first = seenMessagesRef.current.values().next().value;
@@ -3448,12 +3467,16 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     const acceptConversation = async (conversationId: string) => {
+        const currentUserId = user?.id;
         // Optimistically set current member status to 'accepted'
         setConversations(prev => prev.map(c => {
             if (c.id === conversationId) {
                 return {
                     ...c,
-                    members: c.members.map(m => m.user_id === user?.id ? { ...m, status: 'accepted' } : m)
+                    members: (c.members || []).map((m: any) => {
+                        const mUserId = m?.user_id || m?.profile?.id || m?.profile_id || m?.userId || m?.id;
+                        return mUserId === currentUserId ? { ...m, status: 'accepted' } : m;
+                    })
                 };
             }
             return c;

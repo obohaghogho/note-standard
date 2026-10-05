@@ -62,8 +62,12 @@ const ChatWindow: React.FC = () => {
     const isUserMember = useMemo(() => {
         if (!activeConversation || !user?.id) return false;
         if (!activeConversation.members || activeConversation.members.length === 0) return true;
-        return activeConversation.members.some((m: { user_id: string }) => m.user_id === user.id);
-    }, [activeConversation, user?.id]);
+        const currentUserId = user.id;
+        return activeConversation.members.some((m: any) => {
+            const memberUserId = m?.user_id || m?.profile?.id || m?.profile_id || m?.userId || (m?.id !== activeConversationId ? m?.id : undefined);
+            return memberUserId === currentUserId;
+        });
+    }, [activeConversation, user?.id, activeConversationId]);
 
     const currentMessages = useMemo(() => {
         if (!isUserMember) return [];

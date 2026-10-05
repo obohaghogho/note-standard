@@ -36,8 +36,10 @@ async function triggerHardUpdate(): Promise<void> {
     }
   } catch { /* non-critical */ }
 
-  // Record the attempt so VersionGuard doesn't re-block for 45 s after reload
-  sessionStorage.setItem('vg_update_attempt', String(Date.now()));
+  // Record the attempt in both sessionStorage and localStorage so VersionGuard doesn't re-block after reload on iOS PWA
+  const nowStr = String(Date.now());
+  try { sessionStorage.setItem('vg_update_attempt', nowStr); } catch (_) {}
+  try { localStorage.setItem('vg_update_attempt', nowStr); } catch (_) {}
 
   // Brief pause lets the new SW take control before reload
   await new Promise((r) => setTimeout(r, 400));
@@ -73,9 +75,10 @@ export const VersionGuard: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const checkVersion = async () => {
       // Suppress the check for UPDATE_COOLDOWN_MS after the user clicked "Update Now".
-      // This prevents the blocking screen from reappearing immediately after reload
-      // while the new service worker is still activating / caches are still warming.
-      const lastAttempt = Number(sessionStorage.getItem('vg_update_attempt') || 0);
+      // Checks both sessionStorage and localStorage (handles iOS Standalone PWA reload clearing).
+      const sAttempt = Number(sessionStorage.getItem('vg_update_attempt') || 0);
+      const lAttempt = Number(localStorage.getItem('vg_update_attempt') || 0);
+      const lastAttempt = Math.max(sAttempt, lAttempt);
       if (Date.now() - lastAttempt < UPDATE_COOLDOWN_MS) {
         console.log('[VersionGuard] Skipping check — update was just triggered.');
         return;
