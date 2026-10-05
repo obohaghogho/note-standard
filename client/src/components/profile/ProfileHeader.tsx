@@ -128,7 +128,13 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, isOwner }
 
         {/* Metadata Details */}
         <div className="flex flex-wrap gap-y-2 gap-x-4 text-xs sm:text-sm text-gray-400 mt-1 items-center">
-          {(profile.plan_tier === 'pro' || profile.kyc_level === 'premium' || profile.kyc_level === 'admin') && (
+          {profile.is_creator && (
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-purple-500/10 border border-purple-500/20 text-purple-300 font-bold rounded-full shrink-0 text-xs shadow-sm">
+              <span>✨ {profile.creator_category || 'Creator'}</span>
+            </div>
+          )}
+
+          {(profile.plan_tier === 'pro' || profile.kyc_level === 'premium' || profile.kyc_level === 'admin') && !profile.is_creator && (
             <div className="flex items-center gap-1.5 px-2.5 py-0.5 bg-white/5 rounded-full border border-white/10 text-white font-bold shrink-0 text-xs">
               ⭐ Creator
             </div>
@@ -146,6 +152,24 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, isOwner }
               <a href={profile.website} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline truncate">
                 {profile.website.replace(/^https?:\/\//, '')}
               </a>
+            </div>
+          )}
+          {profile.social_links && typeof profile.social_links === 'object' && Object.keys(profile.social_links).length > 0 && (
+            <div className="flex items-center gap-2 shrink-0">
+              {Object.entries(profile.social_links).map(([platform, url]) => {
+                if (!url || typeof url !== 'string' || !url.startsWith('https://')) return null;
+                return (
+                  <a
+                    key={platform}
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2 py-0.5 bg-white/5 hover:bg-white/10 text-purple-300 border border-white/10 rounded-md text-xs font-semibold capitalize transition-colors"
+                  >
+                    {platform}
+                  </a>
+                );
+              })}
             </div>
           )}
           {profile.sex && (

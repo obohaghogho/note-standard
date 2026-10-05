@@ -30,6 +30,9 @@ export interface PublicProfile {
   plan_tier?: string;
   sex?: 'Male' | 'Female' | null;
   created_at?: string;
+  is_creator?: boolean;
+  creator_category?: string;
+  social_links?: Record<string, string>;
 
   followers_count: number;
   following_count: number;

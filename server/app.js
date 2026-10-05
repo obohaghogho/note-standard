@@ -283,6 +283,7 @@ app.use("/api/session", sessionRoutes);
 app.use("/api/ai-tutor", aiTutorRoutes);
 app.use("/api/notes/ai", notesAiRoutes);
 app.use("/api/creator", creatorRoutes);
+app.use("/api/v1/creator", creatorRoutes);
 
 // v2.5: Operations Dashboard
 app.use("/api/ops", opsRoutes);

@@ -6,6 +6,9 @@ const certificateController = require('../controllers/certificateController');
 
 router.use(requireAuth);
 
+// Creator Mode Activation / Updates
+router.post('/mode', creatorController.toggleCreatorMode);
+
 // Creator Dashboard
 router.get('/dashboard', creatorController.getDashboard);
 

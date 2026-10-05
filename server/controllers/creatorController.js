@@ -1,6 +1,7 @@
 const supabase = require('../config/database');
 const creatorAnalyticsService = require('../services/creator/CreatorAnalyticsService');
 const graphService = require('../services/graph/GraphService');
+const { CREATOR_CATEGORIES, ALLOWED_SOCIAL_PLATFORMS } = require('../constants/creatorCategories');
 
 exports.getDashboard = async (req, res, next) => {
   try {
@@ -176,6 +177,117 @@ exports.getSingleReelAnalytics = async (req, res, next) => {
     if (err.status) {
       return res.status(err.status).json({ error: err.message });
     }
+    next(err);
+  }
+};
+
+exports.toggleCreatorMode = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { creator_mode_enabled, creator_category, social_links } = req.body;
+
+    if (creator_mode_enabled !== undefined && typeof creator_mode_enabled !== 'boolean') {
+      return res.status(400).json({ error: 'creator_mode_enabled must be a boolean' });
+    }
+
+    if (creator_category !== undefined && creator_category !== null && creator_category !== '') {
+      if (!CREATOR_CATEGORIES.includes(creator_category)) {
+        return res.status(400).json({ error: 'Invalid creator category' });
+      }
+    }
+
+    let sanitizedSocialLinks = undefined;
+    if (social_links !== undefined && social_links !== null) {
+      if (typeof social_links !== 'object' || Array.isArray(social_links)) {
+        return res.status(400).json({ error: 'social_links must be an object' });
+      }
+
+      const keys = Object.keys(social_links);
+      for (const key of keys) {
+        if (!ALLOWED_SOCIAL_PLATFORMS.includes(key)) {
+          return res.status(400).json({ error: `Invalid social platform key: ${key}` });
+        }
+
+        const urlVal = social_links[key];
+        if (urlVal !== undefined && urlVal !== null && urlVal !== '') {
+          if (typeof urlVal !== 'string' || urlVal.length > 255) {
+            return res.status(400).json({ error: `Invalid URL length for ${key}` });
+          }
+
+          if (!urlVal.startsWith('https://')) {
+            return res.status(400).json({ error: `Invalid social link URL for ${key}: HTTPS required` });
+          }
+
+          if (urlVal.includes('javascript:') || urlVal.includes('data:')) {
+            return res.status(400).json({ error: `Malicious URL scheme detected for ${key}` });
+          }
+
+          try {
+            const parsedUrl = new URL(urlVal);
+            if (parsedUrl.protocol !== 'https:') {
+              return res.status(400).json({ error: `Invalid protocol for ${key}` });
+            }
+            const host = parsedUrl.hostname.toLowerCase();
+            if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host.startsWith('192.168.') || host.startsWith('10.')) {
+              return res.status(400).json({ error: `Loopback/Private IP addresses rejected for ${key}` });
+            }
+          } catch (e) {
+            return res.status(400).json({ error: `Malformed URL for ${key}` });
+          }
+        }
+      }
+
+      sanitizedSocialLinks = {};
+      for (const k of ALLOWED_SOCIAL_PLATFORMS) {
+        if (social_links[k] !== undefined && social_links[k] !== null && social_links[k] !== '') {
+          sanitizedSocialLinks[k] = String(social_links[k]).trim();
+        }
+      }
+    }
+
+    const { data: profile, error: fetchErr } = await supabase
+      .from('profiles')
+      .select('is_creator, creator_mode_enabled, creator_category, creator_onboarded_at, social_links')
+      .eq('id', userId)
+      .single();
+
+    if (fetchErr || !profile) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    const modeEnabled = typeof creator_mode_enabled === 'boolean' ? creator_mode_enabled : profile.creator_mode_enabled;
+    const newIsCreator = profile.is_creator || modeEnabled;
+    const newOnboardedAt = profile.creator_onboarded_at || (newIsCreator ? new Date().toISOString() : null);
+    const newCategory = (creator_category !== undefined && creator_category !== null && creator_category !== '') ? creator_category : profile.creator_category;
+    const newSocialLinks = sanitizedSocialLinks !== undefined ? sanitizedSocialLinks : (profile.social_links || {});
+
+    const { data: updated, error: updateErr } = await supabase
+      .from('profiles')
+      .update({
+        is_creator: newIsCreator,
+        creator_mode_enabled: modeEnabled,
+        creator_category: newCategory,
+        creator_onboarded_at: newOnboardedAt,
+        social_links: newSocialLinks,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId)
+      .select('is_creator, creator_mode_enabled, creator_category, creator_onboarded_at, social_links')
+      .single();
+
+    if (updateErr) {
+      throw updateErr;
+    }
+
+    return res.json({
+      success: true,
+      is_creator: updated.is_creator,
+      creator_mode_enabled: updated.creator_mode_enabled,
+      creator_category: updated.creator_category,
+      creator_onboarded_at: updated.creator_onboarded_at,
+      social_links: updated.social_links
+    });
+  } catch (err) {
     next(err);
   }
 };

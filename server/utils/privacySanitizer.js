@@ -27,6 +27,10 @@ function sanitizeProfileForViewer(profile, requestingUserId) {
     return sanitized;
   }
 
+  // Private Creator Workspace Preference Enforcement
+  delete sanitized.creator_mode_enabled;
+  delete sanitized.creator_onboarded_at;
+
   // Location Privacy Enforcement
   const locationVisibility = profile.location_visibility || 'hidden';
 

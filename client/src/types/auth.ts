@@ -27,6 +27,11 @@ export interface Profile {
   phone?: string;
   kyc_level?: number;
   sex?: 'Male' | 'Female' | null;
+  is_creator?: boolean;
+  creator_mode_enabled?: boolean;
+  creator_category?: string;
+  creator_onboarded_at?: string;
+  social_links?: Record<string, string>;
 }
 
 export interface Subscription {

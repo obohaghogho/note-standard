@@ -13,7 +13,7 @@ import { toast } from 'react-hot-toast';
 import { AdManager } from '../../components/ads/AdManager';
 import { adService } from '../../services/ads';
 import { Toggle } from '../../components/common/Toggle';
-import { User, Camera, Save, Loader2, Megaphone, BadgeCheck, Shield, Lock, Download, Trash2, Activity as ActivityIcon, MessageSquare, Globe, Phone, Mail, CheckCircle2 } from 'lucide-react';
+import { User, Camera, Save, Loader2, Megaphone, BadgeCheck, Shield, Lock, Download, Trash2, Activity as ActivityIcon, MessageSquare, Globe, Phone, Mail, CheckCircle2, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { UserBadge } from '../../components/common/UserBadge';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
@@ -56,6 +56,11 @@ export default function Settings() {
     const [countryCode, setCountryCode] = useState('');
     const [phone, setPhone] = useState('');
     const [sex, setSex] = useState<'Male' | 'Female' | null>((authProfile as any)?.sex || null);
+    const [isCreator, setIsCreator] = useState(authProfile?.is_creator ?? false);
+    const [creatorModeEnabled, setCreatorModeEnabled] = useState(authProfile?.creator_mode_enabled ?? false);
+    const [creatorCategory, setCreatorCategory] = useState(authProfile?.creator_category ?? '');
+    const [socialLinks, setSocialLinks] = useState<Record<string, string>>(authProfile?.social_links ?? {});
+    const [savingCreatorMode, setSavingCreatorMode] = useState(false);
     const [loading, setLoading] = useState(!authProfile); // Only load if we don't have profile yet
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -109,6 +114,10 @@ export default function Settings() {
             setCountryCode(authProfile.country_code || '');
             setPhone(authProfile.phone || '');
             setSex((authProfile as any).sex || null);
+            setIsCreator(authProfile.is_creator ?? false);
+            setCreatorModeEnabled(authProfile.creator_mode_enabled ?? false);
+            setCreatorCategory(authProfile.creator_category ?? '');
+            setSocialLinks(authProfile.social_links ?? {});
             setPreferredChatLanguage(authProfile.preferred_language || 'en');
             setVoiceCallPrivacy(((authProfile as any)?.voice_call_privacy as 'everyone' | 'connections' | 'nobody') || 'everyone');
             setVideoCallPrivacy(((authProfile as any)?.video_call_privacy as 'everyone' | 'connections' | 'nobody') || 'everyone');
@@ -121,6 +130,46 @@ export default function Settings() {
             setLoading(false);
         }
     }, [authProfile, user]);
+
+    const handleSaveCreatorMode = async (modeEnabled: boolean, category?: string, links?: Record<string, string>) => {
+        if (!user) return;
+        setSavingCreatorMode(true);
+        try {
+            const { data: sessionData } = await supabase.auth.getSession();
+            const token = sessionData.session?.access_token;
+            if (!token) throw new Error("Authentication required");
+
+            const response = await fetch('/api/v1/creator/mode', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    creator_mode_enabled: modeEnabled,
+                    creator_category: category !== undefined ? category : creatorCategory,
+                    social_links: links !== undefined ? links : socialLinks
+                })
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to update Creator Mode');
+            }
+
+            setIsCreator(data.is_creator);
+            setCreatorModeEnabled(data.creator_mode_enabled);
+            setCreatorCategory(data.creator_category || '');
+            setSocialLinks(data.social_links || {});
+
+            await refreshProfile?.();
+            toast.success(modeEnabled ? 'Creator Mode activated!' : 'Creator Mode workspace paused.');
+        } catch (err: any) {
+            toast.error(err.message || 'Failed to update Creator Mode');
+        } finally {
+            setSavingCreatorMode(false);
+        }
+    };
 
     const handleSaveCallPrivacy = async (voice: string, video: string) => {
         if (!user) return;
@@ -1084,6 +1133,100 @@ export default function Settings() {
                                 <p className="text-xs text-gray-500">
                                     Optional identity indicator for profile display (Male or Female).
                                 </p>
+                            </div>
+
+                            {/* Creator Mode Section */}
+                            <div className="mt-8 pt-6 border-t border-white/10">
+                                <Card variant="glass" className="p-4 sm:p-6 border border-purple-500/20 bg-purple-500/5 min-w-0">
+                                    <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                                        <div>
+                                            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                                                <Sparkles className="text-purple-400" size={20} />
+                                                NoteStandard Creator Mode
+                                                {isCreator && (
+                                                    <span className="text-xs bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2.5 py-0.5 rounded-full font-medium">
+                                                        Creator Active
+                                                    </span>
+                                                )}
+                                            </h3>
+                                            <p className="text-xs text-gray-400 mt-1">
+                                                Enable Creator Mode to highlight your creator category, showcase social links, and prepare for Creator Studio tools.
+                                            </p>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            disabled={savingCreatorMode}
+                                            onClick={() => handleSaveCreatorMode(!creatorModeEnabled)}
+                                            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
+                                                creatorModeEnabled
+                                                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20 hover:bg-purple-500'
+                                                    : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                                            }`}
+                                        >
+                                            {savingCreatorMode ? (
+                                                <Loader2 size={14} className="animate-spin" />
+                                            ) : (
+                                                <Sparkles size={14} />
+                                            )}
+                                            {creatorModeEnabled ? 'Creator Mode ON' : 'Turn ON Creator Mode'}
+                                        </button>
+                                    </div>
+
+                                    {creatorModeEnabled && (
+                                        <div className="space-y-4 pt-4 border-t border-white/10">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                                                    Creator Category
+                                                </label>
+                                                <select
+                                                    value={creatorCategory}
+                                                    onChange={(e) => setCreatorCategory(e.target.value)}
+                                                    className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:ring-2 focus:ring-purple-500 outline-none cursor-pointer"
+                                                >
+                                                    <option value="" className="bg-gray-900">Select a category</option>
+                                                    <option value="Education & Academics" className="bg-gray-900">Education & Academics</option>
+                                                    <option value="Technology & Software" className="bg-gray-900">Technology & Software</option>
+                                                    <option value="Creative & Arts" className="bg-gray-900">Creative & Arts</option>
+                                                    <option value="Business & Finance" className="bg-gray-900">Business & Finance</option>
+                                                    <option value="Lifestyle & Productivity" className="bg-gray-900">Lifestyle & Productivity</option>
+                                                    <option value="Entertainment & Media" className="bg-gray-900">Entertainment & Media</option>
+                                                </select>
+                                            </div>
+
+                                            <div className="space-y-3">
+                                                <label className="block text-sm font-medium text-gray-300">
+                                                    Social Media Profiles (HTTPS Only)
+                                                </label>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                    {['twitter', 'instagram', 'youtube', 'linkedin', 'tiktok', 'github'].map((platform) => (
+                                                        <div key={platform} className="flex flex-col gap-1">
+                                                            <label className="text-xs text-gray-400 capitalize">{platform}</label>
+                                                            <input
+                                                                type="url"
+                                                                placeholder={`https://${platform}.com/yourhandle`}
+                                                                value={socialLinks[platform] || ''}
+                                                                onChange={(e) => setSocialLinks(prev => ({ ...prev, [platform]: e.target.value }))}
+                                                                className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:border-purple-500"
+                                                            />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            <div className="pt-2 flex justify-end">
+                                                <Button
+                                                    size="sm"
+                                                    loading={savingCreatorMode}
+                                                    onClick={() => handleSaveCreatorMode(creatorModeEnabled, creatorCategory, socialLinks)}
+                                                    className="bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs px-4 py-2 rounded-lg"
+                                                >
+                                                    Save Creator Details
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </Card>
                             </div>
 
                             {/* Save Button */}
