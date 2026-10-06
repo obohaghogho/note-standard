@@ -6,7 +6,8 @@ const { CREATOR_CATEGORIES, ALLOWED_SOCIAL_PLATFORMS } = require('../constants/c
 exports.getDashboard = async (req, res, next) => {
   try {
     const creatorId = req.user.id;
-    const summary = await creatorAnalyticsService.getDashboardSummary(creatorId);
+    const period = req.query.period || '30d';
+    const summary = await creatorAnalyticsService.getConsolidatedDashboard(creatorId, period);
     res.json(summary);
   } catch (err) {
     next(err);

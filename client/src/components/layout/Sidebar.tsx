@@ -21,7 +21,8 @@ import {
     X,
     AlertTriangle,
     Wallet,
-    Video
+    Video,
+    Sparkles
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { Button } from '../common/Button';
@@ -47,7 +48,7 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
     const { t } = useTranslation();
     const location = useLocation();
     const navigate = useNavigate();
-    const { user, signOut, switchAccount, removeAccount, addAccount, isPro, isAdmin } = useAuth();
+    const { user, profile, signOut, switchAccount, removeAccount, addAccount, isPro, isAdmin } = useAuth();
     const { unreadCount } = useNotifications();
     
 
@@ -55,11 +56,14 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
     const allAccounts = getStoredAccounts();
     const { unreadCounts: backgroundUnreadCounts } = useMultiAccountNotifications();
 
+    const isCreatorUser = Boolean(profile?.is_creator === true && profile?.creator_mode_enabled === true);
+
     const navItems = [
         { icon: LayoutDashboard, label: t('nav.home'), to: '/dashboard' },
         { icon: Notebook, label: t('nav.notes'), to: '/dashboard/notes' },
         { icon: Globe, label: t('nav.feed'), to: '/dashboard/feed' },
         { icon: Video, label: 'Reels', to: '/dashboard/reels' },
+        ...(isCreatorUser ? [{ icon: Sparkles, label: 'Creator Studio', to: '/dashboard/creator' }] : []),
         { icon: TrendingUp, label: t('nav.trends'), to: '/dashboard/trends' },
         { icon: MessageSquare, label: t('nav.chat'), to: '/dashboard/chat' },
         { icon: Share2, label: t('nav.shared'), to: '/dashboard/shared' },

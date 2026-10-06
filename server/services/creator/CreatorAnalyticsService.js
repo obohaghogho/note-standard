@@ -3,6 +3,224 @@ const graphService = require('../graph/GraphService');
 
 class CreatorAnalyticsService {
 
+  // ─── Consolidated Creator Studio Dashboard ────────────────
+  async getConsolidatedDashboard(creatorId, period = '30d') {
+    // 1. Fetch Creator Identity & Mode Profile
+    const { data: profile, error: profileErr } = await supabase
+      .from('profiles')
+      .select('is_creator, creator_mode_enabled, creator_category, creator_onboarded_at, social_links')
+      .eq('id', creatorId)
+      .maybeSingle();
+
+    if (profileErr || !profile) {
+      const err = new Error('Creator profile not found');
+      err.status = 404;
+      throw err;
+    }
+
+    const isCreator = profile.is_creator === true;
+    const modeEnabled = profile.creator_mode_enabled === true;
+
+    // State A: Not a creator identity
+    if (!isCreator && !modeEnabled) {
+      return {
+        success: true,
+        mode_status: 'not_creator',
+        creator_profile: {
+          is_creator: false,
+          creator_mode_enabled: false,
+          creator_category: profile.creator_category || null,
+          creator_onboarded_at: profile.creator_onboarded_at || null,
+          social_links: profile.social_links || {}
+        }
+      };
+    }
+
+    // State B: Is a creator, but workspace mode disabled
+    if (isCreator && !modeEnabled) {
+      return {
+        success: true,
+        mode_status: 'mode_disabled',
+        creator_profile: {
+          is_creator: true,
+          creator_mode_enabled: false,
+          creator_category: profile.creator_category || null,
+          creator_onboarded_at: profile.creator_onboarded_at || null,
+          social_links: profile.social_links || {}
+        }
+      };
+    }
+
+    // State C: Active Creator Workspace
+    // Period contract validation (7d, 30d, 90d)
+    let numDays = 30;
+    if (period === '7d') numDays = 7;
+    else if (period === '90d') numDays = 90;
+    else numDays = 30;
+
+    const periodStr = `${numDays}d`;
+    const startDateObj = new Date(Date.now() - numDays * 86400000);
+    const startDateStr = startDateObj.toISOString().split('T')[0];
+    const startDateISO = startDateObj.toISOString();
+
+    // Fetch author's Reels
+    const { data: reels, error: reelsErr } = await supabase
+      .from('community_posts')
+      .select('id, content, post_type, is_reel, media_urls, video_duration, views_count, created_at')
+      .eq('author_id', creatorId)
+      .or('is_reel.eq.true,post_type.eq.reel,post_type.eq.video')
+      .order('views_count', { ascending: false });
+
+    if (reelsErr) throw reelsErr;
+    const creatorReels = reels || [];
+    const reelIds = creatorReels.map(r => r.id);
+
+    // Compute lifetime views across author's Reels
+    const lifetimeViews = creatorReels.reduce((sum, r) => sum + (Number(r.views_count) || 0), 0);
+
+    // Metadata counts for engagement, followers, and period view events
+    const [
+      likesRes,
+      commentsRes,
+      bookmarksRes,
+      totalFollowersRes,
+      newFollowersRes,
+      viewEventsRes
+    ] = await Promise.all([
+      reelIds.length > 0
+        ? supabase.from('community_likes').select('*', { count: 'exact', head: true }).in('post_id', reelIds)
+        : { count: 0 },
+      reelIds.length > 0
+        ? supabase.from('community_comments').select('*', { count: 'exact', head: true }).in('post_id', reelIds)
+        : { count: 0 },
+      reelIds.length > 0
+        ? supabase.from('community_bookmarks').select('*', { count: 'exact', head: true }).in('post_id', reelIds)
+        : { count: 0 },
+      supabase.from('community_follows').select('*', { count: 'exact', head: true }).eq('following_id', creatorId),
+      supabase.from('community_follows').select('*', { count: 'exact', head: true }).eq('following_id', creatorId).gte('created_at', startDateISO),
+      reelIds.length > 0
+        ? supabase.from('reel_view_events').select('reel_id, viewer_id, anon_session_id, session_bucket, watch_duration_seconds').in('reel_id', reelIds).gte('session_bucket', startDateStr)
+        : { data: [], error: null }
+    ]);
+
+    if (viewEventsRes.error) throw viewEventsRes.error;
+
+    const totalLikes = likesRes.count || 0;
+    const totalComments = commentsRes.count || 0;
+    const totalBookmarks = bookmarksRes.count || 0;
+    const totalFollowers = totalFollowersRes.count || 0;
+    const newFollowersPeriod = newFollowersRes.count || 0;
+    const viewEvents = viewEventsRes.data || [];
+
+    // Lifetime Engagement Rate calculation: ((Lifetime Likes + Comments + Saves) / Lifetime Views) * 100
+    const engagementRatePct = lifetimeViews > 0
+      ? Number((((totalLikes + totalComments + totalBookmarks) / lifetimeViews) * 100).toFixed(2))
+      : 0;
+
+    // Aggregate Period View Events & Daily Trend
+    const authViewersSet = new Set();
+    const anonViewersSet = new Set();
+    const overallViewersSet = new Set();
+    let totalWatchTimeSec = 0;
+    const dailyBucketMap = {};
+
+    viewEvents.forEach(evt => {
+      if (evt.viewer_id) {
+        authViewersSet.add(evt.viewer_id);
+        overallViewersSet.add(evt.viewer_id);
+      }
+      if (evt.anon_session_id) {
+        anonViewersSet.add(evt.anon_session_id);
+        overallViewersSet.add(evt.anon_session_id);
+      }
+      const dur = Number(evt.watch_duration_seconds) || 0;
+      totalWatchTimeSec += dur;
+
+      const bucket = evt.session_bucket || new Date(evt.created_at || Date.now()).toISOString().split('T')[0];
+      if (!dailyBucketMap[bucket]) {
+        dailyBucketMap[bucket] = { date: bucket, views: 0, watch_time_seconds: 0 };
+      }
+      dailyBucketMap[bucket].views += 1;
+      dailyBucketMap[bucket].watch_time_seconds += dur;
+    });
+
+    const totalPeriodViews = viewEvents.length;
+    const avgWatchDuration = totalPeriodViews > 0 ? Number((totalWatchTimeSec / totalPeriodViews).toFixed(2)) : 0;
+
+    // Build contiguous daily trend array filled with 0s for missing dates in UTC
+    const trendList = [];
+    for (let i = numDays - 1; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86400000).toISOString().split('T')[0];
+      if (dailyBucketMap[d]) {
+        trendList.push({
+          date: d,
+          views: dailyBucketMap[d].views,
+          watch_time_seconds: Number(dailyBucketMap[d].watch_time_seconds.toFixed(2))
+        });
+      } else {
+        trendList.push({
+          date: d,
+          views: 0,
+          watch_time_seconds: 0
+        });
+      }
+    }
+
+    // Top 10 Reels (Ordered by views_count DESC, created_at DESC)
+    const topReels = creatorReels.slice(0, 10).map(r => {
+      const rViews = Number(r.views_count) || 0;
+      const rEvents = viewEvents.filter(ev => ev.reel_id === r.id);
+      const rWatchSec = rEvents.reduce((acc, ev) => acc + (Number(ev.watch_duration_seconds) || 0), 0);
+      const rAvgWatch = rEvents.length > 0 ? Number((rWatchSec / rEvents.length).toFixed(2)) : 0;
+
+      return {
+        id: r.id,
+        content: r.content || '',
+        media_url: Array.isArray(r.media_urls) ? r.media_urls[0] : (r.media_urls || null),
+        video_duration: r.video_duration || 0,
+        views_count: rViews,
+        avg_watch_duration_seconds: rAvgWatch,
+        created_at: r.created_at
+      };
+    });
+
+    return {
+      success: true,
+      mode_status: 'active',
+      period: periodStr,
+      creator_profile: {
+        is_creator: profile.is_creator || false,
+        creator_mode_enabled: profile.creator_mode_enabled || false,
+        creator_category: profile.creator_category || null,
+        creator_onboarded_at: profile.creator_onboarded_at || null,
+        social_links: profile.social_links || {}
+      },
+      overview: {
+        total_views: totalPeriodViews,
+        lifetime_views: lifetimeViews,
+        unique_viewers: overallViewersSet.size,
+        total_followers: totalFollowers,
+        followers_gained_period: newFollowersPeriod,
+        total_likes: totalLikes,
+        total_comments: totalComments,
+        total_saves: totalBookmarks,
+        engagement_rate_pct: engagementRatePct,
+        total_published_reels: creatorReels.length
+      },
+      reels_summary: {
+        total_watch_time_seconds: Number(totalWatchTimeSec.toFixed(2)),
+        avg_watch_duration_seconds: avgWatchDuration,
+        authenticated_viewers: authViewersSet.size,
+        anonymous_viewers: anonViewersSet.size
+      },
+      trend: trendList,
+      top_reels: topReels,
+      monetization: {
+        status: 'coming_soon'
+      }
+    };
+  }
+
   // ─── Get Dashboard Summary ────────────────────────────────
   // Returns the last 30-day trend + today's snapshot.
   // Reads from pre-computed snapshots — never live aggregates.
