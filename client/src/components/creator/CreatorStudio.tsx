@@ -4,7 +4,7 @@ import {
   BarChart2, Calendar, X, Loader2, Settings, ShieldCheck, CheckCircle2,
   AlertCircle, ArrowRight, Globe, Lock, Info
 } from 'lucide-react';
-import { api } from '../../lib/api';
+import api from '../../api/axiosInstance';
 import { useAuth } from '../../context/AuthContext';
 
 const CREATOR_CATEGORIES = [
