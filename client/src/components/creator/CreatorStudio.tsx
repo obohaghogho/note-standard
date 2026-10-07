@@ -201,8 +201,8 @@ export const CreatorStudio: React.FC = () => {
         });
         if (res.data?.draft) {
           await fetchDrafts();
-          setActiveTab('drafts');
-          setActionNotice(`Draft quiz created: "${title}". Switch to Drafts to review & publish.`);
+          setPublishingPostDraft(res.data.draft);
+          setActionNotice(`Draft quiz created: "${title}". Opening Post Composer...`);
         }
       } else if (suggestion.type === 'outdated_content') {
         const count = suggestion.affected_count || 1;
@@ -219,8 +219,8 @@ export const CreatorStudio: React.FC = () => {
         });
         if (res.data?.draft) {
           await fetchDrafts();
-          setActiveTab('drafts');
-          setActionNotice(`Draft flashcard set created: "${title}". Switch to Drafts to review & publish.`);
+          setPublishingPostDraft(res.data.draft);
+          setActionNotice(`Draft flashcard set created: "${title}". Opening Post Composer...`);
         }
       } else if (suggestion.type === 'high_dropoff') {
         const firstNode = suggestion.affected_nodes?.[0];
@@ -245,8 +245,8 @@ export const CreatorStudio: React.FC = () => {
         });
         if (res.data?.draft) {
           await fetchDrafts();
-          setActiveTab('drafts');
-          setActionNotice(`Draft post created: "${title}". Switch to Drafts to review & publish.`);
+          setPublishingPostDraft(res.data.draft);
+          setActionNotice(`Draft post created: "${title}". Opening Post Composer...`);
         }
       }
     } catch (err: any) {
