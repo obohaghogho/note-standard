@@ -8,7 +8,7 @@ import api from '../../api/axiosInstance';
 import { useAuth } from '../../context/AuthContext';
 import ReelUploadModal from '../community/ReelUploadModal';
 import { editPost, deletePost } from '../../services/communityService';
-import AiCreatorAssistant from './AiCreatorAssistant';
+import AiCreatorAssistant, { Suggestion } from './AiCreatorAssistant';
 
 const CREATOR_CATEGORIES = [
   'Education & Academics',
@@ -162,10 +162,86 @@ export const CreatorStudio: React.FC = () => {
 
   // Quick-Publish & Content Management State
   const [showCreateReelModal, setShowCreateReelModal] = useState(false);
+  const [createReelInitialTitle, setCreateReelInitialTitle] = useState<string>('');
+  const [createReelInitialContent, setCreateReelInitialContent] = useState<string>('');
   const [editingReel, setEditingReel] = useState<{ id: string; title: string; content: string } | null>(null);
   const [deletingReelId, setDeletingReelId] = useState<string | null>(null);
   const [actionSubmitting, setActionSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+
+  const handleRecommendationAction = async (suggestion: Suggestion) => {
+    setActionNotice(null);
+    try {
+      if (suggestion.type === 'missing_quiz') {
+        const firstNode = suggestion.affected_nodes?.[0];
+        const title = firstNode?.title ? `Quiz: ${firstNode.title}` : 'New Knowledge Quiz';
+        const res = await api.post('/creator/drafts', {
+          contentType: 'quiz',
+          title,
+          contentPayload: {
+            content_type: 'quiz',
+            target_node_id: firstNode?.id || null,
+            target_node_title: firstNode?.title || null,
+            note: 'Pre-populated quiz draft generated from Content Health recommendation.'
+          },
+          status: 'draft'
+        });
+        if (res.data?.draft) {
+          await fetchDrafts();
+          setActiveTab('drafts');
+          setActionNotice(`Draft quiz created: "${title}". Switch to Drafts to review & publish.`);
+        }
+      } else if (suggestion.type === 'outdated_content') {
+        const count = suggestion.affected_count || 1;
+        const title = `Flashcard Refresh (${count} set${count > 1 ? 's' : ''})`;
+        const res = await api.post('/creator/drafts', {
+          contentType: 'flashcard',
+          title,
+          contentPayload: {
+            content_type: 'flashcard',
+            affected_count: count,
+            note: 'Flashcard set refresh draft generated from Content Health recommendation.'
+          },
+          status: 'draft'
+        });
+        if (res.data?.draft) {
+          await fetchDrafts();
+          setActiveTab('drafts');
+          setActionNotice(`Draft flashcard set created: "${title}". Switch to Drafts to review & publish.`);
+        }
+      } else if (suggestion.type === 'high_dropoff') {
+        const firstNode = suggestion.affected_nodes?.[0];
+        const nodeTitle = firstNode?.node_id ? `Remaster Content (${firstNode.node_id.slice(0, 8)})` : 'Remaster Reel';
+        setCreateReelInitialTitle(nodeTitle);
+        setCreateReelInitialContent(`Reworking high drop-off content (${firstNode?.drop_off_pct ?? 60}% drop-off detected).`);
+        setShowCreateReelModal(true);
+        setActionNotice(`Reel Studio opened to remaster high drop-off content.`);
+      } else if (suggestion.type === 'weak_concepts') {
+        const concepts = suggestion.concepts || [];
+        const conceptStr = concepts.slice(0, 2).join(', ') || 'Struggling Concept';
+        const title = `Concept Deep Dive: ${conceptStr}`;
+        const res = await api.post('/creator/drafts', {
+          contentType: 'post',
+          title,
+          contentPayload: {
+            content_type: 'post',
+            concepts,
+            note: `Targeted post draft addressing struggling learner concepts: ${concepts.join(', ')}.`
+          },
+          status: 'draft'
+        });
+        if (res.data?.draft) {
+          await fetchDrafts();
+          setActiveTab('drafts');
+          setActionNotice(`Draft post created: "${title}". Switch to Drafts to review & publish.`);
+        }
+      }
+    } catch (err: any) {
+      console.error('Failed to execute recommendation action:', err);
+      setActionNotice(`Action failed: ${err.response?.data?.error || err.message}`);
+    }
+  };
 
   // Settings State
   const [category, setCategory] = useState<string>('');
@@ -754,8 +830,23 @@ export const CreatorStudio: React.FC = () => {
             </div>
           )}
 
+          {actionNotice && (
+            <div className="p-4 bg-primary/10 border border-primary/20 rounded-card text-xs flex items-center justify-between text-primary shadow-sm transition-all">
+              <div className="flex items-center gap-2 font-bold">
+                <CheckCircle2 size={16} className="shrink-0" />
+                <span>{actionNotice}</span>
+              </div>
+              <button
+                onClick={() => setActionNotice(null)}
+                className="text-muted hover:text-heading transition-colors"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
           {/* AI Content Health & Actionable Insights Component */}
-          <AiCreatorAssistant />
+          <AiCreatorAssistant onAction={handleRecommendationAction} />
 
           {/* Monetization Informational Boundary Notice */}
           <div className="p-5 bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-500/30 rounded-card flex items-start gap-4">
@@ -1503,9 +1594,17 @@ export const CreatorStudio: React.FC = () => {
       {/* REEL UPLOAD MODAL */}
       {showCreateReelModal && (
         <ReelUploadModal
-          onClose={() => setShowCreateReelModal(false)}
+          initialTitle={createReelInitialTitle || undefined}
+          initialContent={createReelInitialContent || undefined}
+          onClose={() => {
+            setShowCreateReelModal(false);
+            setCreateReelInitialTitle('');
+            setCreateReelInitialContent('');
+          }}
           onSuccess={async () => {
             setShowCreateReelModal(false);
+            setCreateReelInitialTitle('');
+            setCreateReelInitialContent('');
             await fetchDashboard();
           }}
         />

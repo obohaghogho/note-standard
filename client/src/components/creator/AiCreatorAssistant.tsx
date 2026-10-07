@@ -2,20 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { Sparkles, AlertCircle, FileText, CheckCircle, ArrowRight, Activity, ShieldCheck, Loader2 } from 'lucide-react';
 import api from '../../api/axiosInstance';
 
-interface Suggestion {
+export interface Suggestion {
   type: 'outdated_content' | 'missing_quiz' | 'high_dropoff' | 'weak_concepts';
   priority: 'high' | 'medium' | 'low';
   message: string;
   action: string;
   affected_count?: number;
-  affected_nodes?: Array<{ id?: string; title?: string }>;
+  affected_nodes?: Array<{ id?: string; title?: string; node_id?: string; node_type?: string; drop_off_pct?: number }>;
   concepts?: string[];
 }
 
-export const AiCreatorAssistant: React.FC<{ spaceId?: string }> = ({ spaceId }) => {
+export interface AiCreatorAssistantProps {
+  spaceId?: string;
+  onAction?: (suggestion: Suggestion) => void | Promise<void>;
+}
+
+export const AiCreatorAssistant: React.FC<AiCreatorAssistantProps> = ({ spaceId, onAction }) => {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [processingIdx, setProcessingIdx] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchRecs = async () => {
@@ -37,6 +43,18 @@ export const AiCreatorAssistant: React.FC<{ spaceId?: string }> = ({ spaceId }) 
     };
     fetchRecs();
   }, [spaceId]);
+
+  const handleActionClick = async (suggestion: Suggestion, idx: number) => {
+    if (!onAction || processingIdx !== null) return;
+    setProcessingIdx(idx);
+    try {
+      await onAction(suggestion);
+    } catch (err) {
+      console.error('Error executing recommendation action:', err);
+    } finally {
+      setProcessingIdx(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -109,9 +127,23 @@ export const AiCreatorAssistant: React.FC<{ spaceId?: string }> = ({ spaceId }) 
               </p>
               {s.action && (
                 <div className="pt-1">
-                  <span className="text-xs font-bold text-primary hover:underline cursor-pointer inline-flex items-center gap-1">
-                    {s.action} <ArrowRight size={13} />
-                  </span>
+                  <button
+                    disabled={processingIdx !== null}
+                    onClick={() => handleActionClick(s, idx)}
+                    className="text-xs font-bold text-primary hover:underline disabled:opacity-50 inline-flex items-center gap-1 transition-all"
+                  >
+                    {processingIdx === idx ? (
+                      <>
+                        <Loader2 className="animate-spin text-primary" size={13} />
+                        <span>Processing Action...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>{s.action}</span>
+                        <ArrowRight size={13} />
+                      </>
+                    )}
+                  </button>
                 </div>
               )}
             </div>
