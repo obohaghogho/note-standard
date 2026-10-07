@@ -11,6 +11,8 @@ import {
   uploadMediaFile,
 } from '../../services/communityService';
 
+import { API_URL } from '../../lib/api';
+
 const CATEGORIES = ['General', 'Technology', 'Business', 'Science', 'Education', 'Health', 'Finance', 'Design', 'Career', 'Other'];
 const MAX_CHARS = 5000;
 
@@ -18,17 +20,29 @@ interface Props {
   onClose: () => void;
   onPosted: (post: CommunityPost) => void;
   editPost?: CommunityPost;
+  initialTitle?: string;
+  initialContent?: string;
+  initialCategory?: string;
+  draftId?: string;
 }
 
 type PostType = 'text' | 'image' | 'video' | 'poll' | 'link';
 
-export const PostComposer: React.FC<Props> = ({ onClose, onPosted, editPost }) => {
+export const PostComposer: React.FC<Props> = ({
+  onClose,
+  onPosted,
+  editPost,
+  initialTitle,
+  initialContent,
+  initialCategory,
+  draftId
+}) => {
   const { socket } = useSocket();
 
   const [postType, setPostType] = useState<PostType>(editPost?.post_type as PostType || 'text');
-  const [title, setTitle] = useState(editPost?.title || '');
-  const [content, setContent] = useState(editPost?.content || '');
-  const [category, setCategory] = useState(editPost?.category || 'General');
+  const [title, setTitle] = useState(editPost?.title || initialTitle || '');
+  const [content, setContent] = useState(editPost?.content || initialContent || '');
+  const [category, setCategory] = useState(editPost?.category || initialCategory || 'General');
   const [tags, setTags] = useState<string[]>(editPost?.tags || []);
   const [tagInput, setTagInput] = useState('');
   const [linkUrl, setLinkUrl] = useState(editPost?.link_url || '');
@@ -48,9 +62,9 @@ export const PostComposer: React.FC<Props> = ({ onClose, onPosted, editPost }) =
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const DRAFT_KEY = 'community_post_draft';
 
-  // Load draft on mount (only for new posts)
+  // Load draft on mount (only for new posts if no initialTitle/initialContent provided)
   useEffect(() => {
-    if (!editPost) {
+    if (!editPost && !initialTitle && !initialContent) {
       const saved = localStorage.getItem(DRAFT_KEY);
       if (saved) {
         try {
@@ -63,7 +77,7 @@ export const PostComposer: React.FC<Props> = ({ onClose, onPosted, editPost }) =
         }
       }
     }
-  }, [editPost]);
+  }, [editPost, initialTitle, initialContent]);
 
   // Auto-save draft
   useEffect(() => {
@@ -159,6 +173,23 @@ export const PostComposer: React.FC<Props> = ({ onClose, onPosted, editPost }) =
         if (socket) socket.emit('community:post_created', { post: result });
         // Clear draft
         localStorage.removeItem(DRAFT_KEY);
+
+        if (draftId) {
+          try {
+            const token = localStorage.getItem('token');
+            if (token) {
+              const delRes = await fetch(`${API_URL}/creator/drafts/${draftId}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              if (!delRes.ok) {
+                console.warn('Draft cleanup warning: draft deletion failed post-publication', draftId);
+              }
+            }
+          } catch (cleanupErr) {
+            console.warn('Draft cleanup error:', cleanupErr);
+          }
+        }
       }
 
       onPosted(result);

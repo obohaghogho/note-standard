@@ -7,6 +7,7 @@ import {
 import api from '../../api/axiosInstance';
 import { useAuth } from '../../context/AuthContext';
 import ReelUploadModal from '../community/ReelUploadModal';
+import { PostComposer } from '../community/PostComposer';
 import { editPost, deletePost } from '../../services/communityService';
 import AiCreatorAssistant, { Suggestion } from './AiCreatorAssistant';
 
@@ -154,6 +155,7 @@ export const CreatorStudio: React.FC = () => {
 
   const [deletingDraftId, setDeletingDraftId] = useState<string | null>(null);
   const [publishingDraft, setPublishingDraft] = useState<DraftItem | null>(null);
+  const [publishingPostDraft, setPublishingPostDraft] = useState<DraftItem | null>(null);
 
   // Single Reel Modal
   const [selectedReelId, setSelectedReelId] = useState<string | null>(null);
@@ -1110,18 +1112,29 @@ export const CreatorStudio: React.FC = () => {
                     </div>
                     <h4 className="text-sm font-bold text-heading line-clamp-1">{draft.title || 'Untitled Draft'}</h4>
                     <p className="text-xs text-muted line-clamp-3 leading-relaxed">
-                      {draft.content_payload?.content || 'No content preview available.'}
+                      {draft.content_payload?.content || draft.content_payload?.note || 'No content preview available.'}
                     </p>
                   </div>
 
-                  <div className="pt-3 border-t border-border flex items-center justify-between gap-2">
-                    <button
-                      onClick={() => setPublishingDraft(draft)}
-                      className="px-3 py-1.5 rounded-button bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-all flex items-center gap-1"
-                      title="Pre-fill Reel Upload modal with this draft"
-                    >
-                      <Sparkles size={13} /> Publish as Reel
-                    </button>
+                  <div className="pt-3 border-t border-border flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {draft.content_type !== 'reel' && (
+                        <button
+                          onClick={() => setPublishingPostDraft(draft)}
+                          className="px-2.5 py-1.5 rounded-button bg-primary text-white hover:bg-primary-hover text-xs font-bold transition-all flex items-center gap-1 shadow-sm"
+                          title="Open Post Composer with this draft"
+                        >
+                          <Globe size={13} /> Publish as Post
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setPublishingDraft(draft)}
+                        className="px-2.5 py-1.5 rounded-button bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-all flex items-center gap-1"
+                        title="Pre-fill Reel Upload modal with this draft"
+                      >
+                        <Sparkles size={13} /> Publish as Reel
+                      </button>
+                    </div>
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => handleOpenEditDraft(draft)}
@@ -1576,11 +1589,26 @@ export const CreatorStudio: React.FC = () => {
         </div>
       )}
 
+      {/* DRAFT -> POST PRE-POPULATED PUBLISH MODAL */}
+      {publishingPostDraft && (
+        <PostComposer
+          initialTitle={publishingPostDraft.title || ''}
+          initialContent={publishingPostDraft.content_payload?.content || publishingPostDraft.content_payload?.note || ''}
+          draftId={publishingPostDraft.id}
+          onClose={() => setPublishingPostDraft(null)}
+          onPosted={async () => {
+            setPublishingPostDraft(null);
+            await fetchDrafts();
+            await fetchDashboard();
+          }}
+        />
+      )}
+
       {/* DRAFT -> REEL PRE-POPULATED PUBLISH MODAL */}
       {publishingDraft && (
         <ReelUploadModal
           initialTitle={publishingDraft.title}
-          initialContent={publishingDraft.content_payload?.content}
+          initialContent={publishingDraft.content_payload?.content || publishingDraft.content_payload?.note}
           draftId={publishingDraft.id}
           onClose={() => setPublishingDraft(null)}
           onSuccess={async () => {
