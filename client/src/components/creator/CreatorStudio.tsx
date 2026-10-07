@@ -38,9 +38,12 @@ interface CreatorProfile {
 
 interface CreatorReadiness {
   overall_score: number;
-  publishing_score: number;
-  engagement_score: number;
-  audience_score: number;
+  active_learners_score?: number;
+  completion_rate_score?: number;
+  content_quality_score?: number;
+  ai_engagement_score?: number;
+  publishing_consistency_score?: number;
+  community_trust_score?: number;
   is_ready: boolean;
 }
 
@@ -722,18 +725,30 @@ export const CreatorStudio: React.FC = () => {
               </div>
 
               {/* Sub-scores Breakdown */}
-              <div className="grid grid-cols-3 gap-3 text-center pt-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-center pt-2">
                 <div className="p-2.5 bg-elevated rounded-lg border border-border space-y-0.5">
-                  <span className="text-[10px] text-muted font-bold uppercase">Publishing Score</span>
-                  <p className="text-sm font-extrabold text-heading">{creatorReadiness.publishing_score} / 100</p>
+                  <span className="text-[10px] text-muted font-bold uppercase">Active Learners</span>
+                  <p className="text-sm font-extrabold text-heading">{creatorReadiness.active_learners_score ?? 0} / 100</p>
                 </div>
                 <div className="p-2.5 bg-elevated rounded-lg border border-border space-y-0.5">
-                  <span className="text-[10px] text-muted font-bold uppercase">Engagement Score</span>
-                  <p className="text-sm font-extrabold text-heading">{creatorReadiness.engagement_score} / 100</p>
+                  <span className="text-[10px] text-muted font-bold uppercase">Completion Rate</span>
+                  <p className="text-sm font-extrabold text-heading">{creatorReadiness.completion_rate_score ?? 0}%</p>
                 </div>
                 <div className="p-2.5 bg-elevated rounded-lg border border-border space-y-0.5">
-                  <span className="text-[10px] text-muted font-bold uppercase">Audience Score</span>
-                  <p className="text-sm font-extrabold text-heading">{creatorReadiness.audience_score} / 100</p>
+                  <span className="text-[10px] text-muted font-bold uppercase">Content Quality</span>
+                  <p className="text-sm font-extrabold text-heading">{creatorReadiness.content_quality_score ?? 0} / 100</p>
+                </div>
+                <div className="p-2.5 bg-elevated rounded-lg border border-border space-y-0.5">
+                  <span className="text-[10px] text-muted font-bold uppercase">AI Engagement</span>
+                  <p className="text-sm font-extrabold text-heading">{creatorReadiness.ai_engagement_score ?? 0} / 100</p>
+                </div>
+                <div className="p-2.5 bg-elevated rounded-lg border border-border space-y-0.5">
+                  <span className="text-[10px] text-muted font-bold uppercase">Consistency</span>
+                  <p className="text-sm font-extrabold text-heading">{creatorReadiness.publishing_consistency_score ?? 0} / 100</p>
+                </div>
+                <div className="p-2.5 bg-elevated rounded-lg border border-border space-y-0.5">
+                  <span className="text-[10px] text-muted font-bold uppercase">Community Trust</span>
+                  <p className="text-sm font-extrabold text-heading">{creatorReadiness.community_trust_score ?? 0} / 100</p>
                 </div>
               </div>
             </div>

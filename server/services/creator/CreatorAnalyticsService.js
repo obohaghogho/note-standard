@@ -203,18 +203,32 @@ class CreatorAnalyticsService {
       };
     });
 
-    // Compute Creator Readiness & Content Health Score
-    const publishingScore = Math.min(creatorReels.length * 20, 100);
-    const engagementScore = Math.min(Math.round(engagementRatePct * 10), 100);
-    const audienceScore = Math.min(totalFollowers * 5, 100);
-    const overallReadinessScore = Math.min(Math.round((publishingScore * 0.4) + (engagementScore * 0.4) + (audienceScore * 0.2)), 100);
+    // Fetch pre-computed readiness or compute live using original 6-dimension formula
+    let readinessData = await this._getRevenueReadiness(creatorId);
+    if (!readinessData || !readinessData.overall_score) {
+      const computedScores = await this.computeRevenueReadiness(creatorId);
+      readinessData = computedScores;
+    } else {
+      const { data: fullReadiness } = await supabase
+        .from('creator_revenue_readiness')
+        .select('overall_score, active_learners_score, completion_rate_score, content_quality_score, ai_engagement_score, publishing_consistency_score, community_trust_score, is_monetization_eligible')
+        .eq('creator_id', creatorId)
+        .maybeSingle();
+      if (fullReadiness) {
+        readinessData = fullReadiness;
+      }
+    }
 
+    const overallReadinessScore = readinessData.overall_score || 0;
     const creatorReadiness = {
       overall_score: overallReadinessScore,
-      publishing_score: publishingScore,
-      engagement_score: engagementScore,
-      audience_score: audienceScore,
-      is_ready: overallReadinessScore >= 70
+      active_learners_score: readinessData.active_learners_score || 0,
+      completion_rate_score: readinessData.completion_rate_score || 0,
+      content_quality_score: readinessData.content_quality_score || 0,
+      ai_engagement_score: readinessData.ai_engagement_score || 0,
+      publishing_consistency_score: readinessData.publishing_consistency_score || 0,
+      community_trust_score: readinessData.community_trust_score || 0,
+      is_ready: overallReadinessScore >= 70 || readinessData.is_monetization_eligible || false
     };
 
     return {
@@ -357,7 +371,20 @@ class CreatorAnalyticsService {
       calculated_at: new Date().toISOString()
     }, { onConflict: 'creator_id' });
 
-    return scores;
+    const overallScore = Math.round(
+      (scores.active_learners_score +
+       scores.completion_rate_score +
+       scores.content_quality_score +
+       scores.ai_engagement_score +
+       scores.publishing_consistency_score +
+       scores.community_trust_score) / 6
+    );
+
+    return {
+      ...scores,
+      overall_score: overallScore,
+      is_monetization_eligible: overallScore >= 70
+    };
   }
 
   // ─── AI Creator Recommendations ───────────────────────────
