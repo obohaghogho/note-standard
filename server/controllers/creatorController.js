@@ -46,7 +46,7 @@ exports.getDrafts = async (req, res, next) => {
     const creatorId = req.user.id;
     const { data, error } = await supabase
       .from('creator_drafts')
-      .select('id, content_type, title, status, scheduled_publish_at, updated_at')
+      .select('id, content_type, space_id, title, content_payload, status, scheduled_publish_at, updated_at')
       .eq('creator_id', creatorId)
       .order('updated_at', { ascending: false });
 

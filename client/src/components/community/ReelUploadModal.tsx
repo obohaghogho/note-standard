@@ -5,13 +5,29 @@ import { API_URL } from '../../lib/api';
 interface ReelUploadModalProps {
   onClose: () => void;
   onSuccess: () => void;
+  initialTitle?: string;
+  initialContent?: string;
+  draftId?: string;
 }
 
-export const ReelUploadModal: React.FC<ReelUploadModalProps> = ({ onClose, onSuccess }) => {
+export const ReelUploadModal: React.FC<ReelUploadModalProps> = ({
+  onClose,
+  onSuccess,
+  initialTitle,
+  initialContent,
+  draftId
+}) => {
   const [file, setFile] = useState<File | null>(null);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [videoDuration, setVideoDuration] = useState<number>(0);
-  const [content, setContent] = useState('');
+  const [content, setContent] = useState(() => {
+    const titleStr = (initialTitle || '').trim();
+    const contentStr = (initialContent || '').trim();
+    if (titleStr && contentStr && !contentStr.startsWith(titleStr)) {
+      return `${titleStr}\n\n${contentStr}`;
+    }
+    return contentStr || titleStr || '';
+  });
   const [tags, setTags] = useState('');
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -154,6 +170,23 @@ export const ReelUploadModal: React.FC<ReelUploadModalProps> = ({ onClose, onSuc
       if (!reelRes.ok) {
         const errData = await reelRes.json().catch(() => ({}));
         throw new Error(errData.error || 'Failed to publish Reel.');
+      }
+
+      // Draft retention rule: Only delete draft after confirmed successful Reel publication
+      if (draftId) {
+        try {
+          const delRes = await fetch(`${API_URL}/api/creator/drafts/${draftId}`, {
+            method: 'DELETE',
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          if (!delRes.ok) {
+            console.warn('Draft cleanup warning: draft deletion failed post-publication', draftId);
+          }
+        } catch (cleanupErr) {
+          console.warn('Draft cleanup error:', cleanupErr);
+        }
       }
 
       onSuccess();

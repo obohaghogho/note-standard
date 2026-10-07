@@ -35,6 +35,27 @@ interface CreatorProfile {
   social_links: Record<string, string>;
 }
 
+interface AudienceGrowth {
+  current_followers: number;
+  period: string;
+  new_followers_period: number;
+  daily_growth_trend: Array<{ date: string; new_followers: number }>;
+}
+
+interface DraftItem {
+  id: string;
+  content_type: string;
+  space_id?: string;
+  title: string;
+  content_payload?: {
+    content?: string;
+    media_url?: string;
+  };
+  status: string;
+  scheduled_publish_at?: string;
+  updated_at: string;
+}
+
 interface OverviewMetrics {
   total_views: number;
   lifetime_views: number;
@@ -91,7 +112,7 @@ interface SingleReelAnalytics {
 
 export const CreatorStudio: React.FC = () => {
   const { refreshProfile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'reels' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'reels' | 'drafts' | 'settings'>('overview');
   const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('30d');
 
   const [loading, setLoading] = useState(true);
@@ -100,9 +121,26 @@ export const CreatorStudio: React.FC = () => {
   const [modeStatus, setModeStatus] = useState<'not_creator' | 'mode_disabled' | 'active'>('active');
   const [creatorProfile, setCreatorProfile] = useState<CreatorProfile | null>(null);
   const [overview, setOverview] = useState<OverviewMetrics | null>(null);
+  const [audienceGrowth, setAudienceGrowth] = useState<AudienceGrowth | null>(null);
   const [reelsSummary, setReelsSummary] = useState<ReelsSummary | null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [topReels, setTopReels] = useState<TopReel[]>([]);
+
+  // Drafts State & Modals
+  const [drafts, setDrafts] = useState<DraftItem[]>([]);
+  const [loadingDrafts, setLoadingDrafts] = useState(false);
+  const [draftsError, setDraftsError] = useState<string | null>(null);
+
+  const [showDraftModal, setShowDraftModal] = useState(false);
+  const [editingDraft, setEditingDraft] = useState<DraftItem | null>(null);
+  const [draftFormTitle, setDraftFormTitle] = useState('');
+  const [draftFormContent, setDraftFormContent] = useState('');
+  const [draftFormContentType, setDraftFormContentType] = useState('reel');
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [draftFormError, setDraftFormError] = useState<string | null>(null);
+
+  const [deletingDraftId, setDeletingDraftId] = useState<string | null>(null);
+  const [publishingDraft, setPublishingDraft] = useState<DraftItem | null>(null);
 
   // Single Reel Modal
   const [selectedReelId, setSelectedReelId] = useState<string | null>(null);
@@ -138,6 +176,7 @@ export const CreatorStudio: React.FC = () => {
         }
         if (data.mode_status === 'active') {
           setOverview(data.overview);
+          setAudienceGrowth(data.audience_growth || null);
           setReelsSummary(data.reels_summary);
           setTrend(data.trend || []);
           setTopReels(data.top_reels || []);
@@ -153,9 +192,96 @@ export const CreatorStudio: React.FC = () => {
     }
   };
 
+  const fetchDrafts = async () => {
+    setLoadingDrafts(true);
+    setDraftsError(null);
+    try {
+      const res = await api.get('/creator/drafts');
+      if (res.data && Array.isArray(res.data.drafts)) {
+        setDrafts(res.data.drafts);
+      }
+    } catch (err: any) {
+      console.error('Error fetching creator drafts:', err);
+      setDraftsError(err.response?.data?.error || 'Failed to load creator drafts.');
+    } finally {
+      setLoadingDrafts(false);
+    }
+  };
+
   useEffect(() => {
     fetchDashboard();
   }, [period]);
+
+  useEffect(() => {
+    if (activeTab === 'drafts') {
+      fetchDrafts();
+    }
+  }, [activeTab]);
+
+  const handleOpenCreateDraft = () => {
+    setEditingDraft(null);
+    setDraftFormTitle('');
+    setDraftFormContent('');
+    setDraftFormContentType('reel');
+    setDraftFormError(null);
+    setShowDraftModal(true);
+  };
+
+  const handleOpenEditDraft = (draft: DraftItem) => {
+    setEditingDraft(draft);
+    setDraftFormTitle(draft.title || '');
+    setDraftFormContent(draft.content_payload?.content || '');
+    setDraftFormContentType(draft.content_type || 'reel');
+    setDraftFormError(null);
+    setShowDraftModal(true);
+  };
+
+  const handleSaveDraft = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!draftFormTitle.trim()) {
+      setDraftFormError('Title is required.');
+      return;
+    }
+    setSavingDraft(true);
+    setDraftFormError(null);
+    try {
+      const payload = {
+        draftId: editingDraft?.id,
+        contentType: draftFormContentType,
+        title: draftFormTitle.trim(),
+        contentPayload: {
+          content: draftFormContent.trim(),
+        },
+        status: editingDraft?.status || 'draft',
+      };
+      const res = await api.post('/creator/drafts', payload);
+      if (res.data && res.data.draft) {
+        setShowDraftModal(false);
+        await fetchDrafts();
+      }
+    } catch (err: any) {
+      console.error('Error saving draft:', err);
+      setDraftFormError(err.response?.data?.error || 'Failed to save draft.');
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const handleDeleteDraft = async () => {
+    if (!deletingDraftId) return;
+    setActionSubmitting(true);
+    setActionError(null);
+    try {
+      await api.delete(`/creator/drafts/${deletingDraftId}`);
+      setDeletingDraftId(null);
+      await fetchDrafts();
+    } catch (err: any) {
+      console.error('Error deleting draft:', err);
+      setActionError(err.response?.data?.error || 'Failed to delete draft.');
+    } finally {
+      setActionSubmitting(false);
+    }
+  };
 
   const handleToggleMode = async (enable: boolean) => {
     setTogglingMode(true);
@@ -406,6 +532,17 @@ export const CreatorStudio: React.FC = () => {
           <span>Reels Performance</span>
         </button>
         <button
+          onClick={() => setActiveTab('drafts')}
+          className={`pb-3 px-4 font-bold text-sm flex items-center gap-2 transition-colors border-b-2 ${
+            activeTab === 'drafts'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted hover:text-heading'
+          }`}
+        >
+          <Edit3 size={16} />
+          <span>Drafts & Planner</span>
+        </button>
+        <button
           onClick={() => setActiveTab('settings')}
           className={`pb-3 px-4 font-bold text-sm flex items-center gap-2 transition-colors border-b-2 ${
             activeTab === 'settings'
@@ -493,6 +630,48 @@ export const CreatorStudio: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Audience & Follower Growth Trend */}
+          {audienceGrowth && (
+            <div className="bg-surface border border-border p-5 rounded-card space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <h3 className="text-sm font-bold text-heading flex items-center gap-2">
+                  <Users size={16} className="text-emerald-500" />
+                  <span>Audience Follower Growth ({period.toUpperCase()})</span>
+                </h3>
+                <div className="text-xs text-muted">
+                  Current Followers: <strong className="text-heading font-extrabold">{audienceGrowth.current_followers.toLocaleString()}</strong> · <strong className="text-emerald-500 font-extrabold">+{audienceGrowth.new_followers_period.toLocaleString()}</strong> New Followers in {period}
+                </div>
+              </div>
+
+              {audienceGrowth.daily_growth_trend.length > 0 ? (
+                <div className="flex items-end gap-1.5 h-32 pt-4 border-b border-border pb-2 overflow-x-auto no-scrollbar">
+                  {audienceGrowth.daily_growth_trend.map((pt, idx) => {
+                    const maxNew = Math.max(...audienceGrowth.daily_growth_trend.map(t => t.new_followers), 1);
+                    const heightPct = Math.max((pt.new_followers / maxNew) * 100, 6);
+                    return (
+                      <div key={idx} className="flex-1 min-w-[20px] flex flex-col items-center gap-1 group relative">
+                        <div className="absolute -top-9 opacity-0 group-hover:opacity-100 transition-opacity bg-black text-white text-[10px] py-1 px-2 rounded shadow whitespace-nowrap z-10 pointer-events-none">
+                          {pt.date}: +{pt.new_followers} new followers
+                        </div>
+                        <div
+                          style={{ height: `${heightPct}%` }}
+                          className="w-full bg-gradient-to-t from-emerald-600/60 to-emerald-400 rounded-t transition-all group-hover:brightness-125"
+                        />
+                        <span className="text-[9px] text-muted truncate w-full text-center">
+                          {pt.date.slice(5)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-4 text-center text-xs text-muted">
+                  No follower activity recorded in this period.
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Monetization Informational Boundary Notice */}
           <div className="p-5 bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-500/30 rounded-card flex items-start gap-4">
@@ -693,7 +872,106 @@ export const CreatorStudio: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: SETTINGS */}
+      {/* TAB 3: DRAFTS & CONTENT PLANNER */}
+      {activeTab === 'drafts' && (
+        <div className="space-y-6">
+          {/* Toolbar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-surface border border-border p-4 rounded-card">
+            <div className="flex items-center gap-2 font-bold text-sm text-heading">
+              <Edit3 className="text-primary" size={18} />
+              <span>Drafts & Content Planner</span>
+            </div>
+            <button
+              onClick={handleOpenCreateDraft}
+              className="px-3.5 py-2 rounded-button bg-primary text-white hover:bg-primary-hover text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+            >
+              <Plus size={16} /> + New Draft
+            </button>
+          </div>
+
+          {loadingDrafts ? (
+            <div className="p-12 text-center text-muted flex flex-col items-center justify-center gap-3">
+              <Loader2 className="animate-spin text-primary" size={32} />
+              <p className="text-xs font-semibold">Loading drafts...</p>
+            </div>
+          ) : draftsError ? (
+            <div className="p-6 bg-red-500/10 border border-red-500/20 text-red-500 rounded-card text-center space-y-3">
+              <AlertCircle size={28} className="mx-auto" />
+              <p className="text-xs font-semibold">{draftsError}</p>
+              <button onClick={fetchDrafts} className="px-3 py-1.5 bg-primary text-white rounded-button text-xs font-bold">
+                Retry Loading
+              </button>
+            </div>
+          ) : drafts.length === 0 ? (
+            <div className="p-12 bg-surface border border-border rounded-card text-center space-y-4">
+              <div className="p-3 rounded-full bg-primary/10 text-primary w-fit mx-auto">
+                <Edit3 size={32} />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-heading">No Drafts Saved Yet</h3>
+                <p className="text-xs text-muted max-w-sm mx-auto">
+                  Save content ideas, Reel scripts, and note drafts before publishing them to NoteStandard.
+                </p>
+              </div>
+              <button
+                onClick={handleOpenCreateDraft}
+                className="px-4 py-2 bg-primary text-white hover:bg-primary-hover font-bold text-xs rounded-button inline-flex items-center gap-1.5 shadow-sm"
+              >
+                <Plus size={16} /> Create Your First Draft
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {drafts.map(draft => (
+                <div key={draft.id} className="bg-surface border border-border rounded-card p-5 space-y-3 flex flex-col justify-between hover:border-border-hover transition-all shadow-sm">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-primary/10 text-primary border border-primary/20">
+                        {draft.content_type || 'Draft'}
+                      </span>
+                      <span className="text-[10px] text-muted">
+                        Updated {new Date(draft.updated_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <h4 className="text-sm font-bold text-heading line-clamp-1">{draft.title || 'Untitled Draft'}</h4>
+                    <p className="text-xs text-muted line-clamp-3 leading-relaxed">
+                      {draft.content_payload?.content || 'No content preview available.'}
+                    </p>
+                  </div>
+
+                  <div className="pt-3 border-t border-border flex items-center justify-between gap-2">
+                    <button
+                      onClick={() => setPublishingDraft(draft)}
+                      className="px-3 py-1.5 rounded-button bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-all flex items-center gap-1"
+                      title="Pre-fill Reel Upload modal with this draft"
+                    >
+                      <Sparkles size={13} /> Publish as Reel
+                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleOpenEditDraft(draft)}
+                        className="p-1.5 rounded bg-elevated hover:bg-border text-heading transition-all"
+                        title="Edit Draft"
+                      >
+                        <Edit3 size={14} />
+                      </button>
+                      <button
+                        onClick={() => setDeletingDraftId(draft.id)}
+                        className="p-1.5 rounded bg-red-500/10 hover:bg-red-500/20 text-red-500 transition-all"
+                        title="Delete Draft"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 4: SETTINGS */}
       {activeTab === 'settings' && (
         <form onSubmit={handleSaveSettings} className="bg-surface border border-border rounded-card p-6 space-y-6 shadow-sm">
           <div className="space-y-1">
@@ -982,6 +1260,160 @@ export const CreatorStudio: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* DRAFT CREATE / EDIT MODAL */}
+      {showDraftModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface border border-border rounded-card max-w-md w-full p-6 space-y-4 relative shadow-2xl">
+            <button
+              onClick={() => setShowDraftModal(false)}
+              className="absolute top-4 right-4 text-muted hover:text-heading transition-colors"
+            >
+              <X size={20} />
+            </button>
+
+            <h3 className="text-base font-bold text-heading flex items-center gap-2">
+              <Edit3 size={18} className="text-primary" />
+              <span>{editingDraft ? 'Edit Draft' : 'Create New Draft'}</span>
+            </h3>
+
+            {draftFormError && (
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-xs flex items-center gap-2">
+                <AlertCircle size={16} className="shrink-0" />
+                <span>{draftFormError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveDraft} className="space-y-4 text-xs">
+              <div className="space-y-1">
+                <label className="font-bold text-heading">Content Type</label>
+                <select
+                  value={draftFormContentType}
+                  onChange={e => setDraftFormContentType(e.target.value)}
+                  className="w-full px-3 py-2 bg-elevated border border-border rounded-input text-xs text-heading focus:outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  <option value="reel">Reel Video Script / Note</option>
+                  <option value="post">Community Post Draft</option>
+                  <option value="article">Longform Article Draft</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-heading">Draft Title *</label>
+                <input
+                  type="text"
+                  value={draftFormTitle}
+                  onChange={e => setDraftFormTitle(e.target.value)}
+                  placeholder="Enter draft title..."
+                  className="w-full px-3 py-2 bg-elevated border border-border rounded-input text-xs text-heading focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-heading">Content Payload</label>
+                <textarea
+                  value={draftFormContent}
+                  onChange={e => setDraftFormContent(e.target.value)}
+                  rows={5}
+                  placeholder="Draft content, notes, or script details..."
+                  className="w-full px-3 py-2 bg-elevated border border-border rounded-input text-xs text-heading focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-border flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDraftModal(false)}
+                  className="px-4 py-2 rounded-button text-xs font-bold text-muted hover:text-heading border border-border hover:bg-elevated transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingDraft}
+                  className="px-5 py-2 bg-primary text-white hover:bg-primary-hover font-bold text-xs rounded-button flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
+                >
+                  {savingDraft ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />}
+                  <span>{editingDraft ? 'Save Changes' : 'Create Draft'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE DRAFT CONFIRMATION MODAL */}
+      {deletingDraftId && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface border border-border rounded-card max-w-sm w-full p-6 space-y-4 relative shadow-2xl">
+            <button
+              onClick={() => {
+                setDeletingDraftId(null);
+                setActionError(null);
+              }}
+              className="absolute top-4 right-4 text-muted hover:text-heading transition-colors"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="p-3 rounded-full bg-red-500/10 text-red-500 w-fit mx-auto">
+              <Trash2 size={28} />
+            </div>
+
+            <div className="space-y-1 text-center">
+              <h3 className="text-base font-bold text-heading">Delete Draft</h3>
+              <p className="text-xs text-muted leading-relaxed">
+                Are you sure you want to delete this draft? This action cannot be undone.
+              </p>
+            </div>
+
+            {actionError && (
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-xs flex items-center gap-2">
+                <AlertCircle size={16} className="shrink-0" />
+                <span>{actionError}</span>
+              </div>
+            )}
+
+            <div className="pt-2 flex items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeletingDraftId(null);
+                  setActionError(null);
+                }}
+                className="px-4 py-2 rounded-button text-xs font-bold text-muted hover:text-heading border border-border hover:bg-elevated transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteDraft}
+                disabled={actionSubmitting}
+                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-button flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
+              >
+                {actionSubmitting ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />}
+                <span>Delete Draft</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DRAFT -> REEL PRE-POPULATED PUBLISH MODAL */}
+      {publishingDraft && (
+        <ReelUploadModal
+          initialTitle={publishingDraft.title}
+          initialContent={publishingDraft.content_payload?.content}
+          draftId={publishingDraft.id}
+          onClose={() => setPublishingDraft(null)}
+          onSuccess={async () => {
+            setPublishingDraft(null);
+            await fetchDrafts();
+            await fetchDashboard();
+          }}
+        />
       )}
 
       {/* REEL UPLOAD MODAL */}

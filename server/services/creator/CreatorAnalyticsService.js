@@ -78,13 +78,14 @@ class CreatorAnalyticsService {
     // Compute lifetime views across author's Reels
     const lifetimeViews = creatorReels.reduce((sum, r) => sum + (Number(r.views_count) || 0), 0);
 
-    // Metadata counts for engagement, followers, and period view events
+    // Metadata counts for engagement, followers, follow events, and period view events
     const [
       likesRes,
       commentsRes,
       bookmarksRes,
       totalFollowersRes,
       newFollowersRes,
+      followEventsRes,
       viewEventsRes
     ] = await Promise.all([
       reelIds.length > 0
@@ -98,6 +99,7 @@ class CreatorAnalyticsService {
         : { count: 0 },
       supabase.from('community_follows').select('*', { count: 'exact', head: true }).eq('following_id', creatorId),
       supabase.from('community_follows').select('*', { count: 'exact', head: true }).eq('following_id', creatorId).gte('created_at', startDateISO),
+      supabase.from('community_follows').select('created_at').eq('following_id', creatorId).gte('created_at', startDateISO),
       reelIds.length > 0
         ? supabase.from('reel_view_events').select('reel_id, viewer_id, anon_session_id, session_bucket, watch_duration_seconds').in('reel_id', reelIds).gte('session_bucket', startDateStr)
         : { data: [], error: null }
@@ -110,7 +112,24 @@ class CreatorAnalyticsService {
     const totalBookmarks = bookmarksRes.count || 0;
     const totalFollowers = totalFollowersRes.count || 0;
     const newFollowersPeriod = newFollowersRes.count || 0;
+    const followEvents = followEventsRes.data || [];
     const viewEvents = viewEventsRes.data || [];
+
+    // Calculate daily follower growth trend
+    const followerDailyMap = {};
+    followEvents.forEach(f => {
+      const d = new Date(f.created_at || Date.now()).toISOString().split('T')[0];
+      followerDailyMap[d] = (followerDailyMap[d] || 0) + 1;
+    });
+
+    const followerTrendList = [];
+    for (let i = numDays - 1; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86400000).toISOString().split('T')[0];
+      followerTrendList.push({
+        date: d,
+        new_followers: followerDailyMap[d] || 0
+      });
+    }
 
     // Lifetime Engagement Rate calculation: ((Lifetime Likes + Comments + Saves) / Lifetime Views) * 100
     const engagementRatePct = lifetimeViews > 0
@@ -206,6 +225,12 @@ class CreatorAnalyticsService {
         total_saves: totalBookmarks,
         engagement_rate_pct: engagementRatePct,
         total_published_reels: creatorReels.length
+      },
+      audience_growth: {
+        current_followers: totalFollowers,
+        period: periodStr,
+        new_followers_period: newFollowersPeriod,
+        daily_growth_trend: followerTrendList
       },
       reels_summary: {
         total_watch_time_seconds: Number(totalWatchTimeSec.toFixed(2)),
