@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Sparkles, Video, Eye, Users, Play, Heart, MessageCircle, Bookmark,
   BarChart2, Calendar, X, Loader2, Settings, ShieldCheck, CheckCircle2,
-  AlertCircle, ArrowRight, Globe, Lock, Info, Plus, Edit3, Trash2, Activity
+  AlertCircle, ArrowRight, Globe, Lock, Info, Plus, PlusCircle, Edit3, Trash2, Activity
 } from 'lucide-react';
 import api from '../../api/axiosInstance';
 import { useAuth } from '../../context/AuthContext';
@@ -472,6 +472,37 @@ export const CreatorStudio: React.FC = () => {
       console.error('Error loading single Reel analytics:', err);
     } finally {
       setLoadingSingleReel(false);
+    }
+  };
+
+  const handleCreateReelFollowupDraft = async () => {
+    if (!singleReel || actionSubmitting) return;
+    setActionSubmitting(true);
+    setActionError(null);
+    try {
+      const reelContent = singleReel.content || 'Untitled Reel';
+      const draftTitle = `Follow-up: ${singleReel.content ? singleReel.content.slice(0, 40) : 'Reel'}`;
+      const draftContent = `Follow-up to Reel: "${reelContent}"\n\n`;
+
+      const res = await api.post('/creator/drafts', {
+        contentType: 'post',
+        title: draftTitle,
+        contentPayload: {
+          content: draftContent,
+          target_reel_id: singleReel.id
+        },
+        status: 'draft'
+      });
+
+      if (res.data && res.data.draft) {
+        setSelectedReelId(null);
+        setPublishingPostDraft(res.data.draft);
+      }
+    } catch (err: any) {
+      console.error('Error creating Reel follow-up draft:', err);
+      setActionError(err.response?.data?.error || 'Failed to create follow-up post draft.');
+    } finally {
+      setActionSubmitting(false);
     }
   };
 
@@ -1406,6 +1437,31 @@ export const CreatorStudio: React.FC = () => {
                     <span className="text-muted">Composite Engagement Rate:</span>
                     <span className="font-extrabold text-heading">{singleReel.engagement_rate_pct}%</span>
                   </div>
+                </div>
+
+                <div className="pt-2 flex flex-col gap-2">
+                  {actionError && (
+                    <div className="p-2 bg-red-500/10 border border-red-500/20 rounded text-red-500 text-[11px]">
+                      {actionError}
+                    </div>
+                  )}
+                  <button
+                    onClick={handleCreateReelFollowupDraft}
+                    disabled={actionSubmitting}
+                    className="w-full py-2.5 px-4 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 text-xs disabled:opacity-50"
+                  >
+                    {actionSubmitting ? (
+                      <>
+                        <Loader2 className="animate-spin" size={14} />
+                        <span>Creating Draft...</span>
+                      </>
+                    ) : (
+                      <>
+                        <PlusCircle size={14} />
+                        <span>Create Follow-up Post</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
             )}
