@@ -8,6 +8,7 @@ import api from '../../api/axiosInstance';
 import { useAuth } from '../../context/AuthContext';
 import ReelUploadModal from '../community/ReelUploadModal';
 import { editPost, deletePost } from '../../services/communityService';
+import AiCreatorAssistant from './AiCreatorAssistant';
 
 const CREATOR_CATEGORIES = [
   'Education & Academics',
@@ -33,6 +34,14 @@ interface CreatorProfile {
   creator_category: string | null;
   creator_onboarded_at: string | null;
   social_links: Record<string, string>;
+}
+
+interface CreatorReadiness {
+  overall_score: number;
+  publishing_score: number;
+  engagement_score: number;
+  audience_score: number;
+  is_ready: boolean;
 }
 
 interface AudienceGrowth {
@@ -121,6 +130,7 @@ export const CreatorStudio: React.FC = () => {
   const [modeStatus, setModeStatus] = useState<'not_creator' | 'mode_disabled' | 'active'>('active');
   const [creatorProfile, setCreatorProfile] = useState<CreatorProfile | null>(null);
   const [overview, setOverview] = useState<OverviewMetrics | null>(null);
+  const [creatorReadiness, setCreatorReadiness] = useState<CreatorReadiness | null>(null);
   const [audienceGrowth, setAudienceGrowth] = useState<AudienceGrowth | null>(null);
   const [reelsSummary, setReelsSummary] = useState<ReelsSummary | null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
@@ -176,6 +186,7 @@ export const CreatorStudio: React.FC = () => {
         }
         if (data.mode_status === 'active') {
           setOverview(data.overview);
+          setCreatorReadiness(data.creator_readiness || null);
           setAudienceGrowth(data.audience_growth || null);
           setReelsSummary(data.reels_summary);
           setTrend(data.trend || []);
@@ -672,6 +683,64 @@ export const CreatorStudio: React.FC = () => {
               )}
             </div>
           )}
+
+          {/* Creator Health & Readiness Score Card */}
+          {creatorReadiness && (
+            <div className="bg-surface border border-border p-5 rounded-card space-y-4 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-heading flex items-center gap-2">
+                    <ShieldCheck size={18} className="text-primary" />
+                    <span>Creator Health & Readiness Index</span>
+                  </h3>
+                  <p className="text-xs text-muted">
+                    Composite quality score based on publishing consistency, content engagement rate, and audience reach.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="text-right">
+                    <span className="text-2xl font-extrabold text-heading">
+                      {creatorReadiness.overall_score}
+                    </span>
+                    <span className="text-xs text-muted"> / 100</span>
+                    <p className="text-[10px] text-muted">Overall Health Index</p>
+                  </div>
+                  <div className={`px-2.5 py-1 rounded text-xs font-bold ${
+                    creatorReadiness.is_ready ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-primary/10 text-primary border border-primary/20'
+                  }`}>
+                    {creatorReadiness.is_ready ? '🟢 High Health' : '🔵 Building Health'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div className="w-full h-2 rounded-full bg-elevated overflow-hidden border border-border">
+                <div
+                  className="h-full bg-gradient-to-r from-primary via-indigo-500 to-emerald-400 transition-all duration-500"
+                  style={{ width: `${Math.min(creatorReadiness.overall_score, 100)}%` }}
+                />
+              </div>
+
+              {/* Sub-scores Breakdown */}
+              <div className="grid grid-cols-3 gap-3 text-center pt-2">
+                <div className="p-2.5 bg-elevated rounded-lg border border-border space-y-0.5">
+                  <span className="text-[10px] text-muted font-bold uppercase">Publishing Score</span>
+                  <p className="text-sm font-extrabold text-heading">{creatorReadiness.publishing_score} / 100</p>
+                </div>
+                <div className="p-2.5 bg-elevated rounded-lg border border-border space-y-0.5">
+                  <span className="text-[10px] text-muted font-bold uppercase">Engagement Score</span>
+                  <p className="text-sm font-extrabold text-heading">{creatorReadiness.engagement_score} / 100</p>
+                </div>
+                <div className="p-2.5 bg-elevated rounded-lg border border-border space-y-0.5">
+                  <span className="text-[10px] text-muted font-bold uppercase">Audience Score</span>
+                  <p className="text-sm font-extrabold text-heading">{creatorReadiness.audience_score} / 100</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* AI Content Health & Actionable Insights Component */}
+          <AiCreatorAssistant />
 
           {/* Monetization Informational Boundary Notice */}
           <div className="p-5 bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-500/30 rounded-card flex items-start gap-4">

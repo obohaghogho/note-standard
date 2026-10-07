@@ -203,6 +203,20 @@ class CreatorAnalyticsService {
       };
     });
 
+    // Compute Creator Readiness & Content Health Score
+    const publishingScore = Math.min(creatorReels.length * 20, 100);
+    const engagementScore = Math.min(Math.round(engagementRatePct * 10), 100);
+    const audienceScore = Math.min(totalFollowers * 5, 100);
+    const overallReadinessScore = Math.min(Math.round((publishingScore * 0.4) + (engagementScore * 0.4) + (audienceScore * 0.2)), 100);
+
+    const creatorReadiness = {
+      overall_score: overallReadinessScore,
+      publishing_score: publishingScore,
+      engagement_score: engagementScore,
+      audience_score: audienceScore,
+      is_ready: overallReadinessScore >= 70
+    };
+
     return {
       success: true,
       mode_status: 'active',
@@ -226,6 +240,7 @@ class CreatorAnalyticsService {
         engagement_rate_pct: engagementRatePct,
         total_published_reels: creatorReels.length
       },
+      creator_readiness: creatorReadiness,
       audience_growth: {
         current_followers: totalFollowers,
         period: periodStr,

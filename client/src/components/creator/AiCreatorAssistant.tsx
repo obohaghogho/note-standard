@@ -1,7 +1,6 @@
- 
 import React, { useState, useEffect } from 'react';
-import { Sparkles, AlertCircle, FileText, CheckCircle, ArrowRight } from 'lucide-react';
-import { api } from '../../lib/api';
+import { Sparkles, AlertCircle, FileText, CheckCircle, ArrowRight, Activity, ShieldCheck, Loader2 } from 'lucide-react';
+import api from '../../api/axiosInstance';
 
 interface Suggestion {
   type: 'outdated_content' | 'missing_quiz' | 'high_dropoff' | 'weak_concepts';
@@ -9,21 +8,29 @@ interface Suggestion {
   message: string;
   action: string;
   affected_count?: number;
-  affected_nodes?: unknown[];
+  affected_nodes?: Array<{ id?: string; title?: string }>;
   concepts?: string[];
 }
 
-export const AiCreatorAssistant = ({ spaceId }: { spaceId?: string }) => {
+export const AiCreatorAssistant: React.FC<{ spaceId?: string }> = ({ spaceId }) => {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchRecs = async () => {
+      setLoading(true);
+      setError(null);
       try {
-        const res = await api.get(`/community/creator/recommendations${spaceId ? `?spaceId=${spaceId}` : ''}`);
-        setSuggestions(res.data.recommendations || []);
-      } catch (err) {
-        console.error(err);
+        const res = await api.get(`/creator/recommendations${spaceId ? `?spaceId=${spaceId}` : ''}`);
+        if (res.data && Array.isArray(res.data.recommendations)) {
+          setSuggestions(res.data.recommendations);
+        } else {
+          setSuggestions([]);
+        }
+      } catch (err: any) {
+        console.error('Error loading content recommendations:', err);
+        setError(err.response?.data?.error || 'Unable to load content health insights.');
       } finally {
         setLoading(false);
       }
@@ -31,58 +38,87 @@ export const AiCreatorAssistant = ({ spaceId }: { spaceId?: string }) => {
     fetchRecs();
   }, [spaceId]);
 
-  if (loading) return <div className="p-6 flex items-center justify-center text-muted"><Sparkles className="animate-spin mr-2"/> Analyzing your content...</div>;
-
-  if (suggestions.length === 0) {
+  if (loading) {
     return (
-      <div className="bg-surface border border-border rounded-card p-8 text-center shadow-sm">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-success/10 text-success mb-4">
-          <CheckCircle size={24} />
-        </div>
-        <h3 className="text-lg font-bold text-heading mb-2">Content is looking healthy!</h3>
-        <p className="text-muted text-sm">Your Knowledge Graph is stable. No major knowledge gaps or drop-off issues detected right now.</p>
+      <div className="p-6 bg-surface border border-border rounded-card flex items-center justify-center text-xs font-semibold text-muted gap-2 shadow-sm">
+        <Loader2 className="animate-spin text-primary" size={18} />
+        <span>Analyzing content health and knowledge graph connections...</span>
       </div>
     );
   }
 
-  const iconMap = {
-    outdated_content: <AlertCircle className="text-danger" size={20}/>,
-    missing_quiz: <FileText className="text-warning" size={20}/>,
-    high_dropoff: <AlertCircle className="text-danger" size={20}/>,
-    weak_concepts: <BrainCircuit className="text-primary" size={20}/>
+  if (error) {
+    return (
+      <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-500 rounded-card text-xs flex items-center gap-2">
+        <AlertCircle size={16} className="shrink-0" />
+        <span>{error}</span>
+      </div>
+    );
+  }
+
+  if (suggestions.length === 0) {
+    return (
+      <div className="bg-surface border border-border rounded-card p-6 text-center space-y-2 shadow-sm">
+        <div className="inline-flex items-center justify-center p-3 rounded-full bg-emerald-500/10 text-emerald-500 mx-auto">
+          <CheckCircle size={24} />
+        </div>
+        <h3 className="text-sm font-bold text-heading">Content Health is Optimal</h3>
+        <p className="text-xs text-muted max-w-md mx-auto">
+          Your Knowledge Graph and learning content are stable. No outdated sets, missing quizzes, or high reader drop-off issues detected.
+        </p>
+      </div>
+    );
+  }
+
+  const iconMap: Record<string, React.ReactNode> = {
+    outdated_content: <AlertCircle className="text-red-500 shrink-0" size={18} />,
+    missing_quiz: <FileText className="text-amber-500 shrink-0" size={18} />,
+    high_dropoff: <Activity className="text-red-500 shrink-0" size={18} />,
+    weak_concepts: <Sparkles className="text-primary shrink-0" size={18} />
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 mb-4">
-        <Sparkles size={20} className="text-primary" />
-        <h3 className="text-lg font-bold text-heading">AI Content Recommendations</h3>
-      </div>
-      
-      {suggestions.map((s, idx) => (
-        <div key={idx} className="bg-surface border border-border rounded-xl p-5 shadow-sm flex items-start gap-4">
-          <div className="mt-0.5 shrink-0">
-            {iconMap[s.type] || <Sparkles className="text-primary" size={20}/>}
-          </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${s.priority === 'high' ? 'bg-danger/10 text-danger' : 'bg-warning/10 text-warning'}`}>
-                {s.priority} Priority
-              </span>
-            </div>
-            <p className="text-sm text-heading font-medium leading-relaxed mb-3">
-              {s.message}
-            </p>
-            <button className="flex items-center gap-1.5 text-xs font-bold text-primary hover:underline">
-              {s.action} <ArrowRight size={14}/>
-            </button>
-          </div>
+    <div className="bg-surface border border-border rounded-card p-5 space-y-4 shadow-sm">
+      <div className="flex items-center justify-between pb-3 border-b border-border">
+        <div className="flex items-center gap-2">
+          <Sparkles size={18} className="text-primary" />
+          <h3 className="text-sm font-bold text-heading">AI Content Health & Actionable Insights</h3>
         </div>
-      ))}
+        <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
+          <ShieldCheck size={12} /> Database Analysis
+        </span>
+      </div>
+
+      <div className="space-y-3">
+        {suggestions.map((s, idx) => (
+          <div key={idx} className="p-4 bg-elevated border border-border rounded-xl space-y-2 text-xs flex items-start gap-3">
+            <div className="mt-0.5">
+              {iconMap[s.type] || <Sparkles className="text-primary shrink-0" size={18} />}
+            </div>
+            <div className="flex-1 space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded ${
+                  s.priority === 'high' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                }`}>
+                  {s.priority} Priority
+                </span>
+                <span className="text-[10px] text-muted capitalize">{s.type.replace('_', ' ')}</span>
+              </div>
+              <p className="text-xs font-semibold text-heading leading-relaxed">
+                {s.message}
+              </p>
+              {s.action && (
+                <div className="pt-1">
+                  <span className="text-xs font-bold text-primary hover:underline cursor-pointer inline-flex items-center gap-1">
+                    {s.action} <ArrowRight size={13} />
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
-
-const BrainCircuit = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M9 13a4.5 4.5 0 0 0 3-4"/><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/><path d="M3.477 10.896a4 4 0 0 1 .585-.396"/><path d="M6 18a4 4 0 0 1-1.967-.516"/><path d="M12 13h4"/><path d="M12 18h6a2 2 0 0 1 2 2v1"/><path d="M12 8h8"/><path d="M16 8V5a2 2 0 0 1 2-2"/><circle cx="16" cy="13" r=".5"/><circle cx="18" cy="3" r=".5"/><circle cx="20" cy="21" r=".5"/><circle cx="20" cy="8" r=".5"/></svg>
-);
+export default AiCreatorAssistant;
