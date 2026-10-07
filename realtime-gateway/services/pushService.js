@@ -1,3 +1,4 @@
+require('./vapidSanitizer');
 let admin = null;
 let apn = null;
 let webpush = null;
