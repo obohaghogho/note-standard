@@ -135,27 +135,13 @@ export default function Settings() {
         if (!user) return;
         setSavingCreatorMode(true);
         try {
-            const { data: sessionData } = await supabase.auth.getSession();
-            const token = sessionData.session?.access_token;
-            if (!token) throw new Error("Authentication required");
-
-            const response = await fetch('/api/v1/creator/mode', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    creator_mode_enabled: modeEnabled,
-                    creator_category: category !== undefined ? category : creatorCategory,
-                    social_links: links !== undefined ? links : socialLinks
-                })
+            const res = await api.post('/v1/creator/mode', {
+                creator_mode_enabled: modeEnabled,
+                creator_category: category !== undefined ? category : creatorCategory,
+                social_links: links !== undefined ? links : socialLinks
             });
 
-            const data = await response.json();
-            if (!response.ok) {
-                throw new Error(data.error || 'Failed to update Creator Mode');
-            }
+            const data = res.data;
 
             setIsCreator(data.is_creator);
             setCreatorModeEnabled(data.creator_mode_enabled);
@@ -165,7 +151,7 @@ export default function Settings() {
             await refreshProfile?.();
             toast.success(modeEnabled ? 'Creator Mode activated!' : 'Creator Mode workspace paused.');
         } catch (err: any) {
-            toast.error(err.message || 'Failed to update Creator Mode');
+            toast.error(err.response?.data?.error || err.message || 'Failed to update Creator Mode');
         } finally {
             setSavingCreatorMode(false);
         }
