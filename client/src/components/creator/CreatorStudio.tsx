@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import {
   Sparkles, Video, Eye, Users, Play, Heart, MessageCircle, Bookmark,
   BarChart2, Calendar, X, Loader2, Settings, ShieldCheck, CheckCircle2,
-  AlertCircle, ArrowRight, Globe, Lock, Info
+  AlertCircle, ArrowRight, Globe, Lock, Info, Plus, Edit3, Trash2
 } from 'lucide-react';
 import api from '../../api/axiosInstance';
 import { useAuth } from '../../context/AuthContext';
+import ReelUploadModal from '../community/ReelUploadModal';
+import { editPost, deletePost } from '../../services/communityService';
 
 const CREATOR_CATEGORIES = [
   'Education & Academics',
@@ -107,6 +109,13 @@ export const CreatorStudio: React.FC = () => {
   const [singleReel, setSingleReel] = useState<SingleReelAnalytics | null>(null);
   const [loadingSingleReel, setLoadingSingleReel] = useState(false);
 
+  // Quick-Publish & Content Management State
+  const [showCreateReelModal, setShowCreateReelModal] = useState(false);
+  const [editingReel, setEditingReel] = useState<{ id: string; title: string; content: string } | null>(null);
+  const [deletingReelId, setDeletingReelId] = useState<string | null>(null);
+  const [actionSubmitting, setActionSubmitting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
   // Settings State
   const [category, setCategory] = useState<string>('');
   const [socials, setSocials] = useState<Record<string, string>>({});
@@ -201,6 +210,42 @@ export const CreatorStudio: React.FC = () => {
       console.error('Error loading single Reel analytics:', err);
     } finally {
       setLoadingSingleReel(false);
+    }
+  };
+
+  const handleSaveEditReel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingReel) return;
+    setActionSubmitting(true);
+    setActionError(null);
+    try {
+      await editPost(editingReel.id, {
+        title: editingReel.title.trim() || undefined,
+        content: editingReel.content,
+      });
+      setEditingReel(null);
+      await fetchDashboard();
+    } catch (err: any) {
+      console.error('Error editing Reel:', err);
+      setActionError(err.message || 'Failed to update Reel.');
+    } finally {
+      setActionSubmitting(false);
+    }
+  };
+
+  const handleDeleteReel = async () => {
+    if (!deletingReelId) return;
+    setActionSubmitting(true);
+    setActionError(null);
+    try {
+      await deletePost(deletingReelId);
+      setDeletingReelId(null);
+      await fetchDashboard();
+    } catch (err: any) {
+      console.error('Error deleting Reel:', err);
+      setActionError(err.message || 'Failed to delete Reel.');
+    } finally {
+      setActionSubmitting(false);
     }
   };
 
@@ -321,6 +366,12 @@ export const CreatorStudio: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowCreateReelModal(true)}
+            className="px-3.5 py-2 rounded-button bg-primary text-white hover:bg-primary-hover text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+          >
+            <Plus size={16} /> + Create Reel
+          </button>
           <button
             onClick={() => setActiveTab('settings')}
             className="px-3.5 py-2 rounded-button bg-elevated border border-border hover:bg-border text-heading text-xs font-bold flex items-center gap-1.5 transition-all"
@@ -467,23 +518,31 @@ export const CreatorStudio: React.FC = () => {
       {activeTab === 'reels' && (
         <div className="space-y-6">
           {/* Period Selector Toolbar */}
-          <div className="flex items-center justify-between bg-surface border border-border p-4 rounded-card">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-surface border border-border p-4 rounded-card">
             <div className="flex items-center gap-2 font-bold text-sm text-heading">
               <BarChart2 className="text-primary" size={18} />
               <span>Reels Analytics ({period.toUpperCase()})</span>
             </div>
-            <div className="flex items-center gap-1 bg-elevated border border-border p-1 rounded-lg">
-              {(['7d', '30d', '90d'] as const).map(p => (
-                <button
-                  key={p}
-                  onClick={() => setPeriod(p)}
-                  className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
-                    period === p ? 'bg-primary text-white shadow-sm' : 'text-muted hover:text-heading'
-                  }`}
-                >
-                  {p.toUpperCase()}
-                </button>
-              ))}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowCreateReelModal(true)}
+                className="px-3.5 py-2 rounded-button bg-primary text-white hover:bg-primary-hover text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+              >
+                <Plus size={16} /> + Create Reel
+              </button>
+              <div className="flex items-center gap-1 bg-elevated border border-border p-1 rounded-lg">
+                {(['7d', '30d', '90d'] as const).map(p => (
+                  <button
+                    key={p}
+                    onClick={() => setPeriod(p)}
+                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
+                      period === p ? 'bg-primary text-white shadow-sm' : 'text-muted hover:text-heading'
+                    }`}
+                  >
+                    {p.toUpperCase()}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -597,12 +656,34 @@ export const CreatorStudio: React.FC = () => {
                         <p className="text-xs font-bold text-heading">{reel.avg_watch_duration_seconds}s</p>
                         <p className="text-[10px] text-muted">Avg Watch</p>
                       </div>
-                      <button
-                        onClick={() => handleInspectReel(reel.id)}
-                        className="px-3 py-1 rounded bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-all"
-                      >
-                        Inspect
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleInspectReel(reel.id)}
+                          className="px-3 py-1 rounded bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-all"
+                        >
+                          Inspect
+                        </button>
+                        <button
+                          onClick={() => {
+                            setActionError(null);
+                            setEditingReel({ id: reel.id, title: '', content: reel.content || '' });
+                          }}
+                          className="px-2.5 py-1 rounded bg-elevated hover:bg-border text-heading text-xs font-bold transition-all flex items-center gap-1 border border-border"
+                          title="Edit Reel Caption & Title"
+                        >
+                          <Edit3 size={13} /> Edit
+                        </button>
+                        <button
+                          onClick={() => {
+                            setActionError(null);
+                            setDeletingReelId(reel.id);
+                          }}
+                          className="px-2.5 py-1 rounded bg-red-500/10 hover:bg-red-500/20 text-red-500 text-xs font-bold transition-all flex items-center gap-1 border border-red-500/20"
+                          title="Delete Reel"
+                        >
+                          <Trash2 size={13} /> Delete
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -770,6 +851,150 @@ export const CreatorStudio: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* EDIT REEL CAPTION & TITLE MODAL */}
+      {editingReel && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface border border-border rounded-card max-w-md w-full p-6 space-y-5 relative shadow-2xl">
+            <button
+              onClick={() => {
+                setEditingReel(null);
+                setActionError(null);
+              }}
+              className="absolute top-4 right-4 text-muted hover:text-heading transition-colors"
+            >
+              <X size={20} />
+            </button>
+
+            <h3 className="text-base font-bold text-heading flex items-center gap-2">
+              <Edit3 size={18} className="text-primary" />
+              <span>Edit Reel Caption & Title</span>
+            </h3>
+
+            {actionError && (
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-xs flex items-center gap-2">
+                <AlertCircle size={16} className="shrink-0" />
+                <span>{actionError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveEditReel} className="space-y-4 text-xs">
+              <div className="space-y-1">
+                <label className="font-bold text-heading">Reel Title (Optional)</label>
+                <input
+                  type="text"
+                  value={editingReel.title}
+                  onChange={e => setEditingReel({ ...editingReel, title: e.target.value })}
+                  placeholder="Enter optional reel title..."
+                  className="w-full px-3 py-2 bg-elevated border border-border rounded-input text-xs text-heading focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-heading">Reel Caption</label>
+                <textarea
+                  value={editingReel.content}
+                  onChange={e => setEditingReel({ ...editingReel, content: e.target.value })}
+                  rows={4}
+                  placeholder="Update reel caption..."
+                  className="w-full px-3 py-2 bg-elevated border border-border rounded-input text-xs text-heading focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  required
+                />
+              </div>
+
+              <div className="pt-3 border-t border-border flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingReel(null);
+                    setActionError(null);
+                  }}
+                  className="px-4 py-2 rounded-button text-xs font-bold text-muted hover:text-heading border border-border hover:bg-elevated transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionSubmitting}
+                  className="px-5 py-2 bg-primary text-white hover:bg-primary-hover font-bold text-xs rounded-button flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
+                >
+                  {actionSubmitting ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />}
+                  <span>Save Changes</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE REEL CONFIRMATION MODAL */}
+      {deletingReelId && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface border border-border rounded-card max-w-sm w-full p-6 space-y-4 relative shadow-2xl">
+            <button
+              onClick={() => {
+                setDeletingReelId(null);
+                setActionError(null);
+              }}
+              className="absolute top-4 right-4 text-muted hover:text-heading transition-colors"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="p-3 rounded-full bg-red-500/10 text-red-500 w-fit mx-auto">
+              <Trash2 size={28} />
+            </div>
+
+            <div className="space-y-1 text-center">
+              <h3 className="text-base font-bold text-heading">Delete Reel</h3>
+              <p className="text-xs text-muted leading-relaxed">
+                Are you sure you want to delete this Reel? This action will permanently remove the Reel and its performance history.
+              </p>
+            </div>
+
+            {actionError && (
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-xs flex items-center gap-2">
+                <AlertCircle size={16} className="shrink-0" />
+                <span>{actionError}</span>
+              </div>
+            )}
+
+            <div className="pt-2 flex items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeletingReelId(null);
+                  setActionError(null);
+                }}
+                className="px-4 py-2 rounded-button text-xs font-bold text-muted hover:text-heading border border-border hover:bg-elevated transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteReel}
+                disabled={actionSubmitting}
+                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-button flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
+              >
+                {actionSubmitting ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />}
+                <span>Delete Reel</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REEL UPLOAD MODAL */}
+      {showCreateReelModal && (
+        <ReelUploadModal
+          onClose={() => setShowCreateReelModal(false)}
+          onSuccess={async () => {
+            setShowCreateReelModal(false);
+            await fetchDashboard();
+          }}
+        />
+      )}
     </div>
   );
 };
+
