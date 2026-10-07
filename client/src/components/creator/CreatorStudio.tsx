@@ -1118,7 +1118,7 @@ export const CreatorStudio: React.FC = () => {
 
                   <div className="pt-3 border-t border-border flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      {draft.content_type !== 'reel' && (
+                      {['post', 'quiz', 'flashcard', 'wiki'].includes(draft.content_type) && (
                         <button
                           onClick={() => setPublishingPostDraft(draft)}
                           className="px-2.5 py-1.5 rounded-button bg-primary text-white hover:bg-primary-hover text-xs font-bold transition-all flex items-center gap-1 shadow-sm"
