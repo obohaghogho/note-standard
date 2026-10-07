@@ -3,25 +3,34 @@ import react from '@vitejs/plugin-react'
 import tailwindxml from '@tailwindcss/vite'
 import path from 'path'
 import prerender from '@prerenderer/rollup-plugin'
-import JSDOMRenderer from '@prerenderer/renderer-jsdom'
+import PuppeteerRenderer from '@prerenderer/renderer-puppeteer'
 import { fileURLToPath } from 'url'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
+
+const isVercelBuild = process.env.VERCEL === '1';
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(), 
     tailwindxml(),
-    prerender({
-      routes: ['/', '/about', '/contact'],
-      renderer: new JSDOMRenderer(),
-      server: {
-        port: 3000,
-        host: 'localhost',
-      },
-    })
+    ...(isVercelBuild ? [] : [
+      prerender({
+        routes: ['/', '/about', '/contact'],
+        renderer: new PuppeteerRenderer({
+          renderAfterTime: 2000,
+          launchOptions: {
+            executablePath: process.env.CHROME_PATH || (process.platform === 'win32' ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' : undefined),
+          },
+        }),
+        server: {
+          port: 3000,
+          host: 'localhost',
+        },
+      })
+    ])
   ],
   resolve: {
     alias: {
