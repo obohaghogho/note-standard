@@ -443,8 +443,28 @@ const registerInstallation = async (req, res, next) => {
         .eq('device_id', deviceId)
         .maybeSingle();
 
+      let targetEndpoint = pushEndpoint || existingDev?.push_endpoint || null;
+      let targetP256dh   = pushP256dh   || (existingDev?.push_endpoint === targetEndpoint ? existingDev?.push_p256dh : null);
+      let targetAuth     = pushAuth     || (existingDev?.push_endpoint === targetEndpoint ? existingDev?.push_auth : null);
+
+      // If we have an endpoint but are missing keys, resolve matching V1 push_subscriptions record for same user & EXACT endpoint
+      if (targetEndpoint && (!targetP256dh || !targetAuth)) {
+        const { data: v1Exact } = await supabase
+          .from('push_subscriptions')
+          .select('endpoint, p256dh, auth')
+          .eq('user_id', userId)
+          .eq('endpoint', targetEndpoint)
+          .or('status.in.(healthy,stale),status.is.null')
+          .maybeSingle();
+
+        if (v1Exact && v1Exact.p256dh && v1Exact.auth) {
+          targetP256dh = targetP256dh || v1Exact.p256dh;
+          targetAuth   = targetAuth   || v1Exact.auth;
+        }
+      }
+
       let fallbackSub = null;
-      if (!pushEndpoint && !existingDev?.push_endpoint) {
+      if (!targetEndpoint) {
         const { data: v1Sub } = await supabase
           .from('push_subscriptions')
           .select('endpoint, p256dh, auth')
@@ -458,9 +478,10 @@ const registerInstallation = async (req, res, next) => {
         }
       }
 
-      const finalEndpoint = pushEndpoint || existingDev?.push_endpoint || fallbackSub?.endpoint || null;
-      const finalP256dh   = pushP256dh   || existingDev?.push_p256dh   || fallbackSub?.p256dh   || null;
-      const finalAuth     = pushAuth     || existingDev?.push_auth     || fallbackSub?.auth     || null;
+      const finalEndpoint = targetEndpoint || fallbackSub?.endpoint || null;
+      const v1KeysMatch   = fallbackSub && fallbackSub.endpoint === finalEndpoint;
+      const finalP256dh   = targetP256dh || (v1KeysMatch ? fallbackSub.p256dh : null) || null;
+      const finalAuth     = targetAuth   || (v1KeysMatch ? fallbackSub.auth   : null) || null;
 
       console.log(`[FORENSIC] Upserting device_installations for deviceId: ${deviceId} | Reason: ${reason || 'BOOT_SYNC'} | Endpoint: ${finalEndpoint ? finalEndpoint.substring(0, 30) + '...' : 'NULL'}`);
       

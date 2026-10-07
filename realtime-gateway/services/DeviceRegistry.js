@@ -41,6 +41,22 @@ class DeviceRegistry {
     const deviceMap = new Map(); // Keyed by endpoint or token string to enforce strict deduplication
 
     try {
+      // 0. Query V1 Web Push Subscriptions for Key Material Fallback & Deduplication
+      const v1Map = new Map();
+      const { data: v1Data, error: v1Error } = await supabase
+        .from('push_subscriptions')
+        .select('endpoint, p256dh, auth, platform, device_id, status, last_seen_at')
+        .eq('user_id', userId)
+        .or('status.in.(healthy,stale),status.is.null');
+
+      if (!v1Error && v1Data) {
+        for (const sub of v1Data) {
+          if (sub.endpoint && sub.p256dh && sub.auth) {
+            v1Map.set(sub.endpoint, sub);
+          }
+        }
+      }
+
       // 1. Query V2 Multi-Account Installation Tables
       const { data: v2Data, error: v2Error } = await supabase
         .from('installation_accounts')
@@ -58,7 +74,19 @@ class DeviceRegistry {
           for (const dev of devices) {
             if (!dev || !dev.push_endpoint || dev.endpoint_status === 'INVALID') continue;
             const isVapidDev = dev.type === 'vapid' || (typeof dev.push_endpoint === 'string' && dev.push_endpoint.startsWith('https://'));
-            if (isVapidDev && (!dev.push_p256dh || !dev.push_auth)) continue;
+
+            // Check supplied V2 keys or fallback to matching V1 key material for this EXACT endpoint
+            let p256dh = dev.push_p256dh || null;
+            let auth = dev.push_auth || null;
+            if (isVapidDev && (!p256dh || !auth)) {
+              const v1Match = v1Map.get(dev.push_endpoint);
+              if (v1Match && v1Match.p256dh && v1Match.auth) {
+                p256dh = p256dh || v1Match.p256dh;
+                auth = auth || v1Match.auth;
+              }
+            }
+
+            if (isVapidDev && (!p256dh || !auth)) continue;
 
             const endpointKey = dev.push_endpoint;
             const platformClass = DeviceRegistry.classifyPlatform(dev.platform, dev.type);
@@ -70,8 +98,8 @@ class DeviceRegistry {
               rawPlatform: dev.platform,
               type: dev.type,
               endpoint: dev.push_endpoint,
-              p256dh: dev.push_p256dh || null,
-              auth: dev.push_auth || null,
+              p256dh: p256dh,
+              auth: auth,
               source: 'device_installations_v2',
               healthy: dev.endpoint_status === 'VALID',
               sessionState: inst.session_state || 'ACTIVE',
@@ -90,12 +118,6 @@ class DeviceRegistry {
       // wasted dispatch attempts, redundant error logs, and misleading telemetry.
       // 'stale' subscriptions (no push in 30+ days) are still worth trying — they may
       // simply be low-frequency users whose token is still valid.
-      const { data: v1Data, error: v1Error } = await supabase
-        .from('push_subscriptions')
-        .select('endpoint, p256dh, auth, platform, device_id, status, last_seen_at')
-        .eq('user_id', userId)
-        .or('status.in.(healthy,stale),status.is.null');
-
       if (!v1Error && v1Data) {
         for (const sub of v1Data) {
           if (!sub.endpoint || !sub.p256dh || !sub.auth) continue;

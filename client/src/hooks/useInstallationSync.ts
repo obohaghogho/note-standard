@@ -45,7 +45,35 @@ export function useInstallationSync(userId: string | null | undefined) {
         const deviceId = await getDeviceId();
         const subJson = sub.toJSON();
 
-        console.log('[V2 Sync] Syncing installation. deviceId:', deviceId, 'endpoint:', sub.endpoint.substring(0, 40) + '...');
+        const endpoint = subJson.endpoint || sub.endpoint;
+        let p256dh = subJson.keys?.p256dh || null;
+        let auth = subJson.keys?.auth || null;
+
+        if (!p256dh && sub.getKey) {
+          try {
+            const rawP256dh = sub.getKey('p256dh');
+            if (rawP256dh) {
+              const bytes = new Uint8Array(rawP256dh);
+              let binary = '';
+              for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+              p256dh = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            }
+          } catch { /* noop */ }
+        }
+
+        if (!auth && sub.getKey) {
+          try {
+            const rawAuth = sub.getKey('auth');
+            if (rawAuth) {
+              const bytes = new Uint8Array(rawAuth);
+              let binary = '';
+              for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+              auth = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            }
+          } catch { /* noop */ }
+        }
+
+        console.log('[V2 Sync] Syncing installation. deviceId:', deviceId, 'endpoint:', endpoint ? endpoint.substring(0, 40) + '...' : 'NULL');
 
         const resp = await fetch(`${API_URL}/api/notifications/register-installation`, {
           method: 'POST',
@@ -55,9 +83,9 @@ export function useInstallationSync(userId: string | null | undefined) {
           },
           body: JSON.stringify({
             deviceId,
-            pushEndpoint: sub.endpoint,
-            pushP256dh: subJson.keys?.p256dh || null,
-            pushAuth: subJson.keys?.auth || null,
+            pushEndpoint: endpoint,
+            pushP256dh: p256dh || undefined,
+            pushAuth: auth || undefined,
             platform: 'web',
             type: 'vapid',
             capabilities: {
