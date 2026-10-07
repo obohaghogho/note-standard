@@ -269,6 +269,7 @@ class CreatorAnalyticsService {
       },
       trend: trendList,
       top_reels: topReels,
+      top_insights: await this._getTopInsights(creatorId),
       monetization: {
         status: 'coming_soon'
       }

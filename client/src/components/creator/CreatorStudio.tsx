@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Sparkles, Video, Eye, Users, Play, Heart, MessageCircle, Bookmark,
   BarChart2, Calendar, X, Loader2, Settings, ShieldCheck, CheckCircle2,
-  AlertCircle, ArrowRight, Globe, Lock, Info, Plus, Edit3, Trash2
+  AlertCircle, ArrowRight, Globe, Lock, Info, Plus, Edit3, Trash2, Activity
 } from 'lucide-react';
 import api from '../../api/axiosInstance';
 import { useAuth } from '../../context/AuthContext';
@@ -10,6 +10,15 @@ import ReelUploadModal from '../community/ReelUploadModal';
 import { PostComposer } from '../community/PostComposer';
 import { editPost, deletePost } from '../../services/communityService';
 import AiCreatorAssistant, { Suggestion } from './AiCreatorAssistant';
+
+interface ContentInsight {
+  node_id: string;
+  node_type: string;
+  avg_completion_pct: number;
+  drop_off_pct: number;
+  avg_quiz_accuracy: number;
+  ai_question_count: number;
+}
 
 const CREATOR_CATEGORIES = [
   'Education & Academics',
@@ -139,6 +148,7 @@ export const CreatorStudio: React.FC = () => {
   const [reelsSummary, setReelsSummary] = useState<ReelsSummary | null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [topReels, setTopReels] = useState<TopReel[]>([]);
+  const [topInsights, setTopInsights] = useState<ContentInsight[]>([]);
 
   // Drafts State & Modals
   const [drafts, setDrafts] = useState<DraftItem[]>([]);
@@ -245,6 +255,39 @@ export const CreatorStudio: React.FC = () => {
     }
   };
 
+  const handleRemediateInsight = async (insight: ContentInsight) => {
+    setActionNotice(null);
+    setActionError(null);
+    setActionSubmitting(true);
+    try {
+      const title = `Content Revision: ${insight.node_type || 'Node'} (${insight.node_id.slice(0, 8)})`;
+      const content = `Revision draft to address ${insight.drop_off_pct || 0}% reader drop-off detected on ${insight.node_type || 'content'} node (${insight.node_id}).`;
+
+      const res = await api.post('/creator/drafts', {
+        contentType: 'post',
+        title,
+        contentPayload: {
+          content,
+          target_node_id: insight.node_id,
+          node_type: insight.node_type,
+          drop_off_pct: insight.drop_off_pct
+        },
+        status: 'draft'
+      });
+
+      if (res.data?.draft) {
+        await fetchDrafts();
+        setPublishingPostDraft(res.data.draft);
+        setActionNotice(`Draft revision created for node ${insight.node_id.slice(0, 8)}. Opening Post Composer...`);
+      }
+    } catch (err: any) {
+      console.error('Failed to create remediation draft:', err);
+      setActionError(err.response?.data?.error || 'Failed to create remediation draft.');
+    } finally {
+      setActionSubmitting(false);
+    }
+  };
+
   // Settings State
   const [category, setCategory] = useState<string>('');
   const [socials, setSocials] = useState<Record<string, string>>({});
@@ -272,6 +315,7 @@ export const CreatorStudio: React.FC = () => {
           setReelsSummary(data.reels_summary);
           setTrend(data.trend || []);
           setTopReels(data.top_reels || []);
+          setTopInsights(data.top_insights || []);
         }
       } else {
         setError('Failed to load Creator Studio dashboard.');
@@ -849,6 +893,57 @@ export const CreatorStudio: React.FC = () => {
 
           {/* AI Content Health & Actionable Insights Component */}
           <AiCreatorAssistant onAction={handleRecommendationAction} />
+
+          {/* Content Drop-Off & Node Performance Insights */}
+          {topInsights.length > 0 && (
+            <div className="bg-surface border border-border p-5 rounded-card space-y-4 shadow-sm">
+              <div className="flex items-center justify-between pb-3 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <Activity size={18} className="text-red-500" />
+                  <h3 className="text-sm font-bold text-heading">Content Drop-Off & Node Performance Insights</h3>
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-red-500/10 text-red-500 border border-red-500/20">
+                  Telemetry Analysis
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {topInsights.map((insight) => (
+                  <div key={insight.node_id} className="p-4 bg-elevated border border-border rounded-xl space-y-3 text-xs flex flex-col justify-between">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-red-500/10 text-red-500 border border-red-500/20">
+                          High Drop-Off ({insight.drop_off_pct}% Drop-Off)
+                        </span>
+                        <span className="text-[10px] text-muted uppercase font-bold">{insight.node_type || 'Node'}</span>
+                      </div>
+
+                      <div className="space-y-1">
+                        <h4 className="text-xs font-bold text-heading">
+                          Node {insight.node_id.slice(0, 8)} ({insight.node_type || 'content'})
+                        </h4>
+                        <p className="text-[11px] text-muted leading-relaxed">
+                          Completion: <strong>{insight.avg_completion_pct}%</strong> · Quiz Accuracy: <strong>{insight.avg_quiz_accuracy}%</strong> · AI Tutor Questions: <strong>{insight.ai_question_count}</strong>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-border flex items-center justify-between">
+                      <button
+                        disabled={actionSubmitting}
+                        onClick={() => handleRemediateInsight(insight)}
+                        className="px-3 py-1.5 rounded-button bg-primary text-white hover:bg-primary-hover text-xs font-bold transition-all flex items-center gap-1 shadow-sm disabled:opacity-50"
+                        title="Create revision draft and open Post Composer"
+                      >
+                        <Sparkles size={13} /> Remediate Content
+                      </button>
+                      <span className="text-[10px] text-muted italic">Pre-fill revision draft</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Monetization Informational Boundary Notice */}
           <div className="p-5 bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-500/30 rounded-card flex items-start gap-4">
