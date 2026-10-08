@@ -641,6 +641,49 @@ export const CreatorStudio: React.FC = () => {
     );
   }
 
+  const getNextAction = () => {
+    if (!creatorReadiness) return null;
+    const dimensions = [
+      { key: 'publishing_consistency_score', label: 'Publishing Consistency', score: creatorReadiness.publishing_consistency_score ?? 0 },
+      { key: 'completion_rate_score', label: 'Completion Rate', score: creatorReadiness.completion_rate_score ?? 0 },
+      { key: 'content_quality_score', label: 'Content Quality', score: creatorReadiness.content_quality_score ?? 0 },
+      { key: 'ai_engagement_score', label: 'AI Engagement', score: creatorReadiness.ai_engagement_score ?? 0 },
+      { key: 'community_trust_score', label: 'Community Trust', score: creatorReadiness.community_trust_score ?? 0 },
+      { key: 'active_learners_score', label: 'Active Learners', score: creatorReadiness.active_learners_score ?? 0 },
+    ];
+
+    const lowest = dimensions.reduce((min, curr) => curr.score < min.score ? curr : min, dimensions[0]);
+
+    if (creatorReadiness.is_ready && lowest.score >= 80) {
+      return {
+        label: 'All Readiness Dimensions',
+        message: 'Your creator readiness is exceptionally high. Keep up the great work!',
+        buttonText: 'Publish New Content',
+        action: handleOpenCreateDraft,
+        icon: <Sparkles size={16} />
+      };
+    }
+
+    switch (lowest.key) {
+      case 'publishing_consistency_score':
+        return { label: lowest.label, message: `Your lowest readiness area is ${lowest.label}.`, buttonText: 'Create New Draft', action: handleOpenCreateDraft, icon: <Edit3 size={16} /> };
+      case 'completion_rate_score':
+        return { label: lowest.label, message: `Your lowest readiness area is ${lowest.label}.`, buttonText: 'Review Drop-Off Insights', action: () => document.getElementById('drop-off-insights')?.scrollIntoView({ behavior: 'smooth' }), icon: <Activity size={16} /> };
+      case 'content_quality_score':
+        return { label: lowest.label, message: `Your lowest readiness area is ${lowest.label}.`, buttonText: 'Use AI Assistant', action: () => document.getElementById('ai-creator-assistant')?.scrollIntoView({ behavior: 'smooth' }), icon: <Sparkles size={16} /> };
+      case 'ai_engagement_score':
+        return { label: lowest.label, message: `Your lowest readiness area is ${lowest.label}.`, buttonText: 'Generate Interactive Content', action: () => document.getElementById('ai-creator-assistant')?.scrollIntoView({ behavior: 'smooth' }), icon: <Sparkles size={16} /> };
+      case 'community_trust_score':
+        return { label: lowest.label, message: `Your lowest readiness area is ${lowest.label}.`, buttonText: 'Publish a Reel', action: () => setShowCreateReelModal(true), icon: <Video size={16} /> };
+      case 'active_learners_score':
+        return { label: lowest.label, message: `Your lowest readiness area is ${lowest.label}.`, buttonText: 'Publish a Reel', action: () => setShowCreateReelModal(true), icon: <Users size={16} /> };
+      default:
+        return null;
+    }
+  };
+
+  const nextAction = getNextAction();
+
   // State C: Active Creator Studio
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -904,6 +947,26 @@ export const CreatorStudio: React.FC = () => {
                   <p className="text-sm font-extrabold text-heading">{creatorReadiness.community_trust_score ?? 0} / 100</p>
                 </div>
               </div>
+
+              {/* Phase 11: Highest-Impact Next Action Bridge */}
+              {nextAction && (
+                <div className="pt-4 mt-4 border-t border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-bold text-heading flex items-center gap-2">
+                      <ArrowRight size={14} className="text-primary" />
+                      Highest-Impact Next Action
+                    </h4>
+                    <p className="text-[11px] text-muted">{nextAction.message}</p>
+                  </div>
+                  <button
+                    onClick={nextAction.action}
+                    className="px-4 py-2 bg-primary text-white hover:bg-primary-hover font-bold text-xs rounded-button flex items-center gap-1.5 shadow-sm transition-all"
+                  >
+                    {nextAction.icon}
+                    <span>{nextAction.buttonText}</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -923,11 +986,13 @@ export const CreatorStudio: React.FC = () => {
           )}
 
           {/* AI Content Health & Actionable Insights Component */}
-          <AiCreatorAssistant onAction={handleRecommendationAction} />
+          <div id="ai-creator-assistant">
+            <AiCreatorAssistant onAction={handleRecommendationAction} />
+          </div>
 
           {/* Content Drop-Off & Node Performance Insights */}
           {topInsights.length > 0 && (
-            <div className="bg-surface border border-border p-5 rounded-card space-y-4 shadow-sm">
+            <div id="drop-off-insights" className="bg-surface border border-border p-5 rounded-card space-y-4 shadow-sm">
               <div className="flex items-center justify-between pb-3 border-b border-border">
                 <div className="flex items-center gap-2">
                   <Activity size={18} className="text-red-500" />
