@@ -262,6 +262,25 @@ export const CreatorStudio: React.FC = () => {
           setPublishingPostDraft(res.data.draft);
           setActionNotice(`Draft post created: "${title}". Opening Post Composer...`);
         }
+      } else if (suggestion.type === 'search_gap') {
+        const gaps = suggestion.search_gaps || [];
+        const gapStr = gaps.slice(0, 2).join(', ') || 'Unanswered Search Topic';
+        const title = `Content Draft: ${gapStr}`;
+        const res = await api.post('/creator/drafts', {
+          contentType: 'post',
+          title,
+          contentPayload: {
+            content_type: 'post',
+            search_gaps: gaps,
+            note: `Targeted post draft addressing unanswered learner search queries: ${gaps.join(', ')}.`
+          },
+          status: 'draft'
+        });
+        if (res.data?.draft) {
+          await fetchDrafts();
+          setPublishingPostDraft(res.data.draft);
+          setActionNotice(`Draft post created addressing search gaps: "${title}". Opening Post Composer...`);
+        }
       }
     } catch (err: any) {
       console.error('Failed to execute recommendation action:', err);

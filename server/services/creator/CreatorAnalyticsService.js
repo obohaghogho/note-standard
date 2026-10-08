@@ -524,6 +524,28 @@ class CreatorAnalyticsService {
       });
     }
 
+    // 5. Check for learner search gaps
+    const { data: searchGapInsights } = await supabase
+      .from('content_insights')
+      .select('related_search_gaps')
+      .eq('creator_id', creatorId)
+      .not('related_search_gaps', 'eq', '{}')
+      .limit(5);
+
+    const allSearchGaps = (searchGapInsights ?? []).flatMap(i => i.related_search_gaps ?? []);
+    if (allSearchGaps.length) {
+      const uniqueSearchGaps = [...new Set(allSearchGaps.map(g => String(g).trim()))].filter(Boolean).slice(0, 5);
+      if (uniqueSearchGaps.length > 0) {
+        suggestions.push({
+          type: 'search_gap',
+          priority: 'medium',
+          message: `Learners searched for missing topics: ${uniqueSearchGaps.join(', ')}. Create content to answer these learner searches.`,
+          action: 'Address search gaps',
+          search_gaps: uniqueSearchGaps
+        });
+      }
+    }
+
     return suggestions.sort((a, b) =>
       (a.priority === 'high' ? 0 : 1) - (b.priority === 'high' ? 0 : 1)
     );

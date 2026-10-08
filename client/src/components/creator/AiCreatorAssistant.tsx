@@ -3,13 +3,14 @@ import { Sparkles, AlertCircle, FileText, CheckCircle, ArrowRight, Activity, Shi
 import api from '../../api/axiosInstance';
 
 export interface Suggestion {
-  type: 'outdated_content' | 'missing_quiz' | 'high_dropoff' | 'weak_concepts';
+  type: 'outdated_content' | 'missing_quiz' | 'high_dropoff' | 'weak_concepts' | 'search_gap';
   priority: 'high' | 'medium' | 'low';
   message: string;
   action: string;
   affected_count?: number;
   affected_nodes?: Array<{ id?: string; title?: string; node_id?: string; node_type?: string; drop_off_pct?: number }>;
   concepts?: string[];
+  search_gaps?: string[];
 }
 
 export interface AiCreatorAssistantProps {
