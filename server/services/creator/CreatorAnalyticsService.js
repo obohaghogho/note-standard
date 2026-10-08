@@ -231,29 +231,50 @@ class CreatorAnalyticsService {
       is_ready: overallReadinessScore >= 70 || readinessData.is_monetization_eligible || false
     };
 
-    // Phase 13: Fetch latest pre-computed learning impact snapshot
-    const { data: latestSnapshot } = await supabase
-      .from('creator_analytics_snapshots')
-      .select('quiz_completions, avg_quiz_score, learning_path_completions, retention_7d_pct, retention_30d_pct')
-      .eq('creator_id', creatorId)
-      .order('snapshot_date', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // Phase 13: Fetch pre-computed learning impact snapshots for the selected period
+    const snapshots = await this._getSnapshots(creatorId, numDays);
 
     let learningImpact = {
       status: 'unavailable',
       metrics: null
     };
 
-    if (latestSnapshot) {
+    if (snapshots.length > 0) {
+      let totalQuizCompletions = 0;
+      let totalPathCompletions = 0;
+      let weightedQuizScoreSum = 0;
+      let totalQuizCompletionsWithScore = 0;
+
+      snapshots.forEach(s => {
+        const qComp = Number(s.quiz_completions) || 0;
+        const pComp = Number(s.learning_path_completions) || 0;
+        totalQuizCompletions += qComp;
+        totalPathCompletions += pComp;
+
+        if (qComp > 0 && s.avg_quiz_score !== null && s.avg_quiz_score !== undefined) {
+          weightedQuizScoreSum += qComp * Number(s.avg_quiz_score);
+          totalQuizCompletionsWithScore += qComp;
+        }
+      });
+
+      const weightedAvgQuizScore = totalQuizCompletionsWithScore > 0
+        ? Number((weightedQuizScoreSum / totalQuizCompletionsWithScore).toFixed(2))
+        : null;
+
+      const latest7dRow = snapshots.find(s => s.retention_7d_pct !== null && s.retention_7d_pct !== undefined);
+      const retention7d = latest7dRow ? Number(latest7dRow.retention_7d_pct) : null;
+
+      const latest30dRow = snapshots.find(s => s.retention_30d_pct !== null && s.retention_30d_pct !== undefined);
+      const retention30d = latest30dRow ? Number(latest30dRow.retention_30d_pct) : null;
+
       learningImpact = {
         status: 'available',
         metrics: {
-          quiz_completions: latestSnapshot.quiz_completions ?? 0,
-          avg_quiz_score: latestSnapshot.avg_quiz_score !== null && latestSnapshot.avg_quiz_score !== undefined ? Number(latestSnapshot.avg_quiz_score) : null,
-          learning_path_completions: latestSnapshot.learning_path_completions ?? 0,
-          retention_7d_pct: latestSnapshot.retention_7d_pct !== null && latestSnapshot.retention_7d_pct !== undefined ? Number(latestSnapshot.retention_7d_pct) : null,
-          retention_30d_pct: latestSnapshot.retention_30d_pct !== null && latestSnapshot.retention_30d_pct !== undefined ? Number(latestSnapshot.retention_30d_pct) : null
+          quiz_completions: totalQuizCompletions,
+          avg_quiz_score: weightedAvgQuizScore,
+          learning_path_completions: totalPathCompletions,
+          retention_7d_pct: retention7d,
+          retention_30d_pct: retention30d
         }
       };
     }
