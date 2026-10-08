@@ -270,8 +270,8 @@ export const CreatorStudio: React.FC = () => {
         title = `Content Revision: ${insight.node_type || 'Node'} (${insight.node_id.slice(0, 8)})`;
         content = `Revision draft to address ${insight.drop_off_pct || 0}% reader drop-off detected on ${insight.node_type || 'content'} node (${insight.node_id}).`;
       } else {
-        title = `Content Revision: ${insight.node_type || 'Node'} (${insight.node_id.slice(0, 8)})`;
-        content = `Revision draft to address ${insight.drop_off_pct || 0}% reader drop-off detected on ${insight.node_type || 'content'} node (${insight.node_id}).`;
+        title = `Content Review: ${insight.node_type || 'Node'} (${insight.node_id.slice(0, 8)})`;
+        content = `Review draft for ${insight.node_type || 'content'} node (${insight.node_id}).`;
       }
 
       const res = await api.post('/creator/drafts', {
@@ -1028,8 +1028,8 @@ export const CreatorStudio: React.FC = () => {
                             High Drop-Off ({insight.drop_off_pct}% Drop-Off)
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-red-500/10 text-red-500 border border-red-500/20">
-                            High Drop-Off ({insight.drop_off_pct || 0}% Drop-Off)
+                          <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-slate-500/10 text-slate-500 border border-slate-500/20">
+                            Content Review
                           </span>
                         )}
                         <span className="text-[10px] text-muted uppercase font-bold">{insight.node_type || 'Node'}</span>
