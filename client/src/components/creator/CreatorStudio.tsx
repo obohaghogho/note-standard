@@ -260,8 +260,19 @@ export const CreatorStudio: React.FC = () => {
     setActionError(null);
     setActionSubmitting(true);
     try {
-      const title = `Content Revision: ${insight.node_type || 'Node'} (${insight.node_id.slice(0, 8)})`;
-      const content = `Revision draft to address ${insight.drop_off_pct || 0}% reader drop-off detected on ${insight.node_type || 'content'} node (${insight.node_id}).`;
+      let title = '';
+      let content = '';
+
+      if (typeof insight.ai_question_count === 'number' && insight.ai_question_count > 0) {
+        title = `Concept Clarification: ${insight.node_type || 'Node'} (${insight.node_id.slice(0, 8)})`;
+        content = `Draft addressing learner confusion (generated ${insight.ai_question_count} AI questions) on ${insight.node_type || 'content'} node (${insight.node_id}).`;
+      } else if (typeof insight.drop_off_pct === 'number' && insight.drop_off_pct > 60) {
+        title = `Content Revision: ${insight.node_type || 'Node'} (${insight.node_id.slice(0, 8)})`;
+        content = `Revision draft to address ${insight.drop_off_pct || 0}% reader drop-off detected on ${insight.node_type || 'content'} node (${insight.node_id}).`;
+      } else {
+        title = `Content Revision: ${insight.node_type || 'Node'} (${insight.node_id.slice(0, 8)})`;
+        content = `Revision draft to address ${insight.drop_off_pct || 0}% reader drop-off detected on ${insight.node_type || 'content'} node (${insight.node_id}).`;
+      }
 
       const res = await api.post('/creator/drafts', {
         contentType: 'post',
@@ -1008,9 +1019,19 @@ export const CreatorStudio: React.FC = () => {
                   <div key={insight.node_id} className="p-4 bg-elevated border border-border rounded-xl space-y-3 text-xs flex flex-col justify-between">
                     <div className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-red-500/10 text-red-500 border border-red-500/20">
-                          High Drop-Off ({insight.drop_off_pct}% Drop-Off)
-                        </span>
+                        {typeof insight.ai_question_count === 'number' && insight.ai_question_count > 0 ? (
+                          <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                            High AI Confusion
+                          </span>
+                        ) : typeof insight.drop_off_pct === 'number' && insight.drop_off_pct > 60 ? (
+                          <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-red-500/10 text-red-500 border border-red-500/20">
+                            High Drop-Off ({insight.drop_off_pct}% Drop-Off)
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-red-500/10 text-red-500 border border-red-500/20">
+                            High Drop-Off ({insight.drop_off_pct || 0}% Drop-Off)
+                          </span>
+                        )}
                         <span className="text-[10px] text-muted uppercase font-bold">{insight.node_type || 'Node'}</span>
                       </div>
 
@@ -1031,7 +1052,13 @@ export const CreatorStudio: React.FC = () => {
                         className="px-3 py-1.5 rounded-button bg-primary text-white hover:bg-primary-hover text-xs font-bold transition-all flex items-center gap-1 shadow-sm disabled:opacity-50"
                         title="Create revision draft and open Post Composer"
                       >
-                        <Sparkles size={13} /> Remediate Content
+                        <Sparkles size={13} /> {
+                          typeof insight.ai_question_count === 'number' && insight.ai_question_count > 0
+                            ? 'Clarify Concept'
+                            : typeof insight.drop_off_pct === 'number' && insight.drop_off_pct > 60
+                            ? 'Remediate Content'
+                            : 'Remediate Content'
+                        }
                       </button>
                       <span className="text-[10px] text-muted italic">Pre-fill revision draft</span>
                     </div>
