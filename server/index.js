@@ -58,6 +58,7 @@ const LiquidityForecastWorker       = require("./workers/LiquidityForecastWorker
 // ── Enterprise Financial Platform Workers (Phase 16) ──────────────────────────
 const NightlyReconciliationWorker  = require("./workers/NightlyReconciliationWorker");
 const SLAMetricsWorker             = require("./workers/SLAMetricsWorker");
+const DailyCreatorAnalyticsWorker  = require("./workers/DailyCreatorAnalyticsWorker");
 
 // ── Phase 17: Event replay worker ─────────────────────────────────────────────
 let EventReplayWorker;
@@ -110,6 +111,7 @@ server.listen(PORT, "0.0.0.0", async () => {
   // ── Phase 16: Enterprise Financial Platform Workers ───────────────────────
   NightlyReconciliationWorker.start();
   SLAMetricsWorker.start();
+  DailyCreatorAnalyticsWorker.start();
   if (EventReplayWorker?.start) EventReplayWorker.start();
 
   // ── Phase 18A: Crypto Enterprise Workers ──────────────────────────────────

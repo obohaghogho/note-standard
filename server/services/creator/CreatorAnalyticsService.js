@@ -231,6 +231,33 @@ class CreatorAnalyticsService {
       is_ready: overallReadinessScore >= 70 || readinessData.is_monetization_eligible || false
     };
 
+    // Phase 13: Fetch latest pre-computed learning impact snapshot
+    const { data: latestSnapshot } = await supabase
+      .from('creator_analytics_snapshots')
+      .select('quiz_completions, avg_quiz_score, learning_path_completions, retention_7d_pct, retention_30d_pct')
+      .eq('creator_id', creatorId)
+      .order('snapshot_date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    let learningImpact = {
+      status: 'unavailable',
+      metrics: null
+    };
+
+    if (latestSnapshot) {
+      learningImpact = {
+        status: 'available',
+        metrics: {
+          quiz_completions: latestSnapshot.quiz_completions ?? 0,
+          avg_quiz_score: latestSnapshot.avg_quiz_score !== null && latestSnapshot.avg_quiz_score !== undefined ? Number(latestSnapshot.avg_quiz_score) : null,
+          learning_path_completions: latestSnapshot.learning_path_completions ?? 0,
+          retention_7d_pct: latestSnapshot.retention_7d_pct !== null && latestSnapshot.retention_7d_pct !== undefined ? Number(latestSnapshot.retention_7d_pct) : null,
+          retention_30d_pct: latestSnapshot.retention_30d_pct !== null && latestSnapshot.retention_30d_pct !== undefined ? Number(latestSnapshot.retention_30d_pct) : null
+        }
+      };
+    }
+
     return {
       success: true,
       mode_status: 'active',
@@ -272,7 +299,8 @@ class CreatorAnalyticsService {
       top_insights: await this._getTopInsights(creatorId),
       monetization: {
         status: 'coming_soon'
-      }
+      },
+      learning_impact: learningImpact
     };
   }
 

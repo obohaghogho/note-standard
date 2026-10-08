@@ -132,6 +132,19 @@ interface SingleReelAnalytics {
   engagement_rate_pct: number;
 }
 
+interface LearningImpactMetrics {
+  quiz_completions: number;
+  avg_quiz_score: number | null;
+  learning_path_completions: number;
+  retention_7d_pct: number | null;
+  retention_30d_pct: number | null;
+}
+
+interface LearningImpact {
+  status: 'available' | 'unavailable';
+  metrics: LearningImpactMetrics | null;
+}
+
 export const CreatorStudio: React.FC = () => {
   const { refreshProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'reels' | 'drafts' | 'settings'>('overview');
@@ -145,6 +158,7 @@ export const CreatorStudio: React.FC = () => {
   const [overview, setOverview] = useState<OverviewMetrics | null>(null);
   const [creatorReadiness, setCreatorReadiness] = useState<CreatorReadiness | null>(null);
   const [audienceGrowth, setAudienceGrowth] = useState<AudienceGrowth | null>(null);
+  const [learningImpact, setLearningImpact] = useState<LearningImpact | null>(null);
   const [reelsSummary, setReelsSummary] = useState<ReelsSummary | null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [topReels, setTopReels] = useState<TopReel[]>([]);
@@ -323,6 +337,7 @@ export const CreatorStudio: React.FC = () => {
           setOverview(data.overview);
           setCreatorReadiness(data.creator_readiness || null);
           setAudienceGrowth(data.audience_growth || null);
+          setLearningImpact(data.learning_impact || null);
           setReelsSummary(data.reels_summary);
           setTrend(data.trend || []);
           setTopReels(data.top_reels || []);
@@ -851,6 +866,70 @@ export const CreatorStudio: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Phase 13: Learning Impact & Learner Retention */}
+          {learningImpact && (
+            <div className="bg-surface border border-border p-5 rounded-card space-y-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-heading flex items-center gap-2">
+                  <Activity size={16} className="text-primary" />
+                  <span>Learning Impact & Learner Retention</span>
+                </h3>
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                  learningImpact.status === 'available'
+                    ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                    : 'bg-muted/10 text-muted border border-border'
+                }`}>
+                  {learningImpact.status === 'available' ? 'Snapshot Active' : 'Snapshot Unavailable'}
+                </span>
+              </div>
+
+              {learningImpact.status === 'available' && learningImpact.metrics ? (
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
+                  <div className="p-3 bg-elevated rounded-lg space-y-1">
+                    <span className="text-[11px] text-muted font-bold uppercase">Quiz Completions</span>
+                    <p className="text-xl font-extrabold text-heading">
+                      {learningImpact.metrics.quiz_completions.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-elevated rounded-lg space-y-1">
+                    <span className="text-[11px] text-muted font-bold uppercase">Avg Quiz Score</span>
+                    <p className="text-xl font-extrabold text-heading">
+                      {learningImpact.metrics.avg_quiz_score !== null
+                        ? `${learningImpact.metrics.avg_quiz_score}%`
+                        : 'N/A'}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-elevated rounded-lg space-y-1">
+                    <span className="text-[11px] text-muted font-bold uppercase">Path Completions</span>
+                    <p className="text-xl font-extrabold text-heading">
+                      {learningImpact.metrics.learning_path_completions.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-elevated rounded-lg space-y-1">
+                    <span className="text-[11px] text-muted font-bold uppercase">7-Day Retention</span>
+                    <p className="text-xl font-extrabold text-heading">
+                      {learningImpact.metrics.retention_7d_pct !== null
+                        ? `${learningImpact.metrics.retention_7d_pct}%`
+                        : 'N/A'}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-elevated rounded-lg space-y-1">
+                    <span className="text-[11px] text-muted font-bold uppercase">30-Day Retention</span>
+                    <p className="text-xl font-extrabold text-heading">
+                      {learningImpact.metrics.retention_30d_pct !== null
+                        ? `${learningImpact.metrics.retention_30d_pct}%`
+                        : 'N/A'}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 text-center text-xs text-muted">
+                  Daily learning impact snapshots are being generated. Check back after the next scheduled snapshot.
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Audience & Follower Growth Trend */}
           {audienceGrowth && (
