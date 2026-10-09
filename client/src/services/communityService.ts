@@ -231,6 +231,27 @@ export async function toggleLike(postId: string): Promise<{ liked: boolean }> {
   return res.json();
 }
 
+export interface PostLiker {
+  id: string;
+  username: string;
+  full_name: string;
+  avatar_url?: string | null;
+  is_verified?: boolean;
+  liked_at?: string;
+}
+
+export async function getPostLikers(postId: string): Promise<PostLiker[]> {
+  const res = await authFetch(`${API_URL}/api/community/post/${postId}/likes`);
+  if (!res.ok) throw new Error(`Get post likers failed (${res.status})`);
+  return res.json();
+}
+
+export async function sharePost(postId: string): Promise<{ success: boolean }> {
+  const res = await authFetch(`${API_URL}/api/community/post/${postId}/share`, { method: 'POST' });
+  if (!res.ok) throw new Error(`Share post failed (${res.status})`);
+  return res.json();
+}
+
 export async function toggleBookmark(postId: string): Promise<{ bookmarked: boolean }> {
   const res = await authFetch(`${API_URL}/api/community/post/${postId}/bookmark`, { method: 'POST' });
   if (!res.ok) throw new Error(`Bookmark failed (${res.status})`);

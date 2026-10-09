@@ -27,6 +27,16 @@ class FeedRetrievalService {
       // Here we simulate it by pulling a large batch from DB, then processing in memory.
       
       // Handle special tabs that need different queries
+      const formatPosts = (list) => (list || []).map(post => {
+        const clean = {
+          ...post,
+          comments_count: post.comments_count ?? post.community_comments?.length ?? 0,
+          likes_count: post.likes_count ?? post.community_likes?.length ?? 0
+        };
+        delete clean.community_comments;
+        return clean;
+      });
+
       if (tab === 'following') {
         // Get posts from users the current user follows
         const { data: follows } = await supabase
@@ -46,7 +56,8 @@ class FeedRetrievalService {
         const { data, error } = await query;
         if (error) throw error;
         const hasMore = (data || []).length > limit;
-        return { posts: (data || []).slice(0, limit), hasMore, nextCursor: hasMore ? data[limit - 1]?.created_at : null };
+        const sliced = (data || []).slice(0, limit);
+        return { posts: formatPosts(sliced), hasMore, nextCursor: hasMore ? sliced[sliced.length - 1]?.created_at : null };
       }
 
       if (tab === 'saved') {
@@ -64,7 +75,7 @@ class FeedRetrievalService {
           .order('created_at', { ascending: false })
           .limit(limit);
         if (error) throw error;
-        return { posts: data || [], hasMore: false, nextCursor: null };
+        return { posts: formatPosts(data), hasMore: false, nextCursor: null };
       }
 
       if (tab === 'my-posts') {
@@ -75,7 +86,7 @@ class FeedRetrievalService {
           .order('created_at', { ascending: false })
           .limit(limit);
         if (error) throw error;
-        return { posts: data || [], hasMore: false, nextCursor: null };
+        return { posts: formatPosts(data), hasMore: false, nextCursor: null };
       }
 
       let query = supabase

@@ -25,10 +25,12 @@ import {
   reportItem,
   queueOfflineAction,
   votePollOption,
+  sharePost,
 } from '../../services/communityService';
 import { CommentSection } from './CommentSection';
 import { PostComposer } from './PostComposer';
 import { MediaViewer } from './MediaViewer';
+import { LikersModal } from './LikersModal';
 
 interface Props {
   post: CommunityPost;
@@ -73,6 +75,7 @@ export const UniversalPostCard: React.FC<Props> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [showMediaViewer, setShowMediaViewer] = useState(false);
   const [mediaViewerIndex, setMediaViewerIndex] = useState(0);
+  const [showLikersModal, setShowLikersModal] = useState(false);
   const likeInFlight = useRef(false);
   const bookmarkInFlight = useRef(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -174,13 +177,14 @@ export const UniversalPostCard: React.FC<Props> = ({
 
   const handleShare = useCallback(async () => {
     const url = `${window.location.origin}/dashboard/community/post/${post.id}`;
+    sharePost(post.id).catch(() => {});
     if (navigator.share) {
       await navigator.share({ title: post.title || 'Community post', url }).catch(() => {});
     } else {
       await navigator.clipboard.writeText(url);
       alert('Link copied!');
     }
-  }, [post]);
+  }, [post.id, post.title]);
 
   const handleCopyLink = useCallback(async () => {
     const url = `${window.location.origin}/dashboard/community/post/${post.id}`;
@@ -350,18 +354,30 @@ export const UniversalPostCard: React.FC<Props> = ({
           <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800/60">
             <div className="flex items-center space-x-5">
               {/* Like */}
-              <button
-                id={`like-${post.id}`}
-                onClick={handleLike}
-                aria-pressed={liked}
-                aria-label={liked ? 'Unlike' : 'Like'}
-                className={`flex items-center space-x-1.5 text-sm font-medium transition-colors group ${liked ? 'text-red-500' : 'text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400'}`}
-              >
-                <div className={`p-1.5 rounded-full transition-colors ${liked ? 'bg-red-50 dark:bg-red-500/10' : 'group-hover:bg-red-50 dark:group-hover:bg-red-500/10'}`}>
-                  <Heart size={17} className={liked ? 'fill-current' : ''} />
-                </div>
-                <span>{likeCount}</span>
-              </button>
+              <div className="flex items-center space-x-1">
+                <button
+                  id={`like-${post.id}`}
+                  onClick={handleLike}
+                  aria-pressed={liked}
+                  aria-label={liked ? 'Unlike' : 'Like'}
+                  className={`flex items-center space-x-1.5 text-sm font-medium transition-colors group ${liked ? 'text-red-500' : 'text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400'}`}
+                >
+                  <div className={`p-1.5 rounded-full transition-colors ${liked ? 'bg-red-50 dark:bg-red-500/10' : 'group-hover:bg-red-50 dark:group-hover:bg-red-500/10'}`}>
+                    <Heart size={17} className={liked ? 'fill-current' : ''} />
+                  </div>
+                </button>
+                <button
+                  id={`likers-${post.id}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (likeCount > 0) setShowLikersModal(true);
+                  }}
+                  className={`text-sm font-medium hover:underline cursor-pointer ${liked ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}
+                  title={likeCount > 0 ? "View who liked this post" : ""}
+                >
+                  {likeCount}
+                </button>
+              </div>
 
               {/* Comments */}
               <button
@@ -430,6 +446,14 @@ export const UniversalPostCard: React.FC<Props> = ({
           urls={post.media_urls}
           initialIndex={mediaViewerIndex}
           onClose={() => setShowMediaViewer(false)}
+        />
+      )}
+
+      {/* Likers modal */}
+      {showLikersModal && (
+        <LikersModal
+          postId={post.id}
+          onClose={() => setShowLikersModal(false)}
         />
       )}
     </>

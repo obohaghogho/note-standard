@@ -246,6 +246,43 @@ const toggleLike = async (req, res, next) => {
 };
 
 /**
+ * Retrieves list of public user profiles who liked a specific post
+ */
+const getPostLikers = async (req, res, next) => {
+  try {
+    const { postId } = req.params;
+
+    if (!postId) {
+      return res.status(400).json({ error: "Post ID is required" });
+    }
+
+    const { data: likes, error } = await supabase
+      .from("community_likes")
+      .select("created_at, user_id, profiles!user_id(id, username, full_name, avatar_url, is_verified)")
+      .eq("post_id", postId)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    const likers = (likes || []).map(l => {
+      const p = l.profiles || {};
+      return {
+        id: p.id || l.user_id,
+        username: p.username || 'user',
+        full_name: p.full_name || p.username || 'User',
+        avatar_url: p.avatar_url || null,
+        is_verified: Boolean(p.is_verified),
+        liked_at: l.created_at
+      };
+    });
+
+    res.json(likers);
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
  * Get feed posts (V1 API)
  */
 const getFeed = async (req, res, next) => {
@@ -781,6 +818,7 @@ module.exports = {
   createReel,
   sharePost,
   getPostById,
-  recordReelView
+  recordReelView,
+  getPostLikers
 };
 

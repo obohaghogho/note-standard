@@ -4,7 +4,7 @@ const { requireAuth } = require("../middleware/auth");
 const { 
   createCommunityPost, addComment, toggleLike, getFeed, getComments,
   toggleBookmark, deletePost, editPost, deleteComment, editComment,
-  toggleFollow, reportItem, reportUser, votePollOption, getReels, createReel, sharePost, getPostById, recordReelView
+  toggleFollow, reportItem, reportUser, votePollOption, getReels, createReel, sharePost, getPostById, recordReelView, getPostLikers
 } = require("../controllers/communityController");
 const spaceController = require("../controllers/spaceController");
 const spaceAiController = require("../controllers/spaceAiController");
@@ -31,6 +31,7 @@ router.post("/post/:postId/bookmark", toggleBookmark);
 router.post("/post/:postId/share", sharePost);
 router.post("/post/:postId/poll/:optionId/vote", votePollOption);
 router.get("/post/:postId/comments", getComments);
+router.get("/post/:postId/likes", getPostLikers);
 
 router.post("/comment", addComment);
 router.put("/comment/:commentId", editComment);

@@ -488,12 +488,26 @@ eventBus.on('activity_logged', async (activity) => {
 
     // Community: liked a post
     if (action_type === 'liked_post' && metadata.post_owner_id && metadata.post_owner_id !== user_id) {
+      let senderName = 'Someone';
+      try {
+        const { data: senderProf } = await supabase
+          .from('profiles')
+          .select('username, full_name')
+          .eq('id', user_id)
+          .maybeSingle();
+        if (senderProf) {
+          senderName = senderProf.username ? `@${senderProf.username}` : (senderProf.full_name || 'Someone');
+        }
+      } catch (profErr) {
+        console.warn('[NotificationService] Sender profile lookup notice:', profErr.message);
+      }
+
       await createNotification({
         receiverId: metadata.post_owner_id,
         senderId: user_id,
         type: 'like',
         title: 'New Like',
-        message: `Someone liked your post.`,
+        message: `${senderName} liked your post.`,
         link: `/dashboard/community/post/${entity_id}`,
       });
     }
