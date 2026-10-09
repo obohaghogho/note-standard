@@ -772,31 +772,31 @@ export const CreatorStudio: React.FC = () => {
 
   // State C: Active Creator Studio
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6 w-full min-w-0">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-surface border border-border p-6 rounded-card shadow-sm">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-extrabold text-heading">Creator Studio</h1>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-surface border border-border p-4 sm:p-6 rounded-card shadow-sm w-full min-w-0">
+        <div className="space-y-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            <h1 className="text-xl sm:text-2xl font-extrabold text-heading">Creator Studio</h1>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20 flex items-center gap-1 shrink-0">
               <ShieldCheck size={14} /> Active Creator
             </span>
           </div>
-          <p className="text-xs text-muted">
+          <p className="text-xs text-muted truncate">
             Category: <strong className="text-heading">{creatorProfile?.creator_category || 'General Creator'}</strong>
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
           <button
             onClick={() => setShowCreateReelModal(true)}
-            className="px-3.5 py-2 rounded-button bg-primary text-white hover:bg-primary-hover text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+            className="flex-1 sm:flex-none justify-center px-3.5 py-2 rounded-button bg-primary text-white hover:bg-primary-hover text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
           >
             <Plus size={16} /> + Create Reel
           </button>
           <button
             onClick={() => setActiveTab('settings')}
-            className="px-3.5 py-2 rounded-button bg-elevated border border-border hover:bg-border text-heading text-xs font-bold flex items-center gap-1.5 transition-all"
+            className="flex-1 sm:flex-none justify-center px-3.5 py-2 rounded-button bg-elevated border border-border hover:bg-border text-heading text-xs font-bold flex items-center gap-1.5 transition-all"
           >
             <Settings size={16} /> Edit Profile & Settings
           </button>
@@ -804,10 +804,10 @@ export const CreatorStudio: React.FC = () => {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-border">
+      <div className="flex items-center gap-1 sm:gap-2 border-b border-border overflow-x-auto no-scrollbar max-w-full shrink-0 pb-0.5">
         <button
           onClick={() => setActiveTab('overview')}
-          className={`pb-3 px-4 font-bold text-sm flex items-center gap-2 transition-colors border-b-2 ${
+          className={`pb-3 px-3 sm:px-4 font-bold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 transition-colors border-b-2 shrink-0 whitespace-nowrap ${
             activeTab === 'overview'
               ? 'border-primary text-primary'
               : 'border-transparent text-muted hover:text-heading'
@@ -818,7 +818,7 @@ export const CreatorStudio: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('reels')}
-          className={`pb-3 px-4 font-bold text-sm flex items-center gap-2 transition-colors border-b-2 ${
+          className={`pb-3 px-3 sm:px-4 font-bold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 transition-colors border-b-2 shrink-0 whitespace-nowrap ${
             activeTab === 'reels'
               ? 'border-primary text-primary'
               : 'border-transparent text-muted hover:text-heading'
@@ -829,7 +829,7 @@ export const CreatorStudio: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('drafts')}
-          className={`pb-3 px-4 font-bold text-sm flex items-center gap-2 transition-colors border-b-2 ${
+          className={`pb-3 px-3 sm:px-4 font-bold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 transition-colors border-b-2 shrink-0 whitespace-nowrap ${
             activeTab === 'drafts'
               ? 'border-primary text-primary'
               : 'border-transparent text-muted hover:text-heading'
@@ -840,7 +840,7 @@ export const CreatorStudio: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('settings')}
-          className={`pb-3 px-4 font-bold text-sm flex items-center gap-2 transition-colors border-b-2 ${
+          className={`pb-3 px-3 sm:px-4 font-bold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 transition-colors border-b-2 shrink-0 whitespace-nowrap ${
             activeTab === 'settings'
               ? 'border-primary text-primary'
               : 'border-transparent text-muted hover:text-heading'
@@ -992,29 +992,29 @@ export const CreatorStudio: React.FC = () => {
           )}
 
           {/* Phase 13 Candidate B: Top Learner AI Questions Surface & Content Remediation Bridge */}
-          <div className="bg-surface border border-border p-5 rounded-card space-y-4 shadow-sm">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <div className="flex items-center gap-2">
-                <Sparkles size={18} className="text-primary" />
-                <h3 className="text-sm font-bold text-heading">Top Learner AI Questions ({period.toUpperCase()})</h3>
+          <div className="bg-surface border border-border p-4 sm:p-5 rounded-card space-y-4 shadow-sm w-full min-w-0">
+            <div className="flex items-center justify-between pb-3 border-b border-border flex-wrap gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Sparkles size={18} className="text-primary shrink-0" />
+                <h3 className="text-sm font-bold text-heading truncate">Top Learner AI Questions ({period.toUpperCase()})</h3>
               </div>
-              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
+              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-primary/10 text-primary border border-primary/20 flex items-center gap-1 shrink-0">
                 <ShieldCheck size={12} /> AI Tutor Telemetry
               </span>
             </div>
 
             {topAiQuestions.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-3 min-w-0">
                 {topAiQuestions.map((qItem, idx) => (
-                  <div key={idx} className="p-4 bg-elevated border border-border rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                    <div className="space-y-1 min-w-0">
+                  <div key={idx} className="p-3.5 sm:p-4 bg-elevated border border-border rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs min-w-0">
+                    <div className="space-y-1 min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
+                        <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 shrink-0">
                           {qItem.count} Ask{qItem.count > 1 ? 's' : ''}
                         </span>
-                        <span className="text-[10px] text-muted font-bold">Learner Query</span>
+                        <span className="text-[10px] text-muted font-bold shrink-0">Learner Query</span>
                       </div>
-                      <p className="text-xs font-semibold text-heading leading-relaxed">
+                      <p className="text-xs font-semibold text-heading leading-relaxed break-words">
                         "{qItem.question}"
                       </p>
                     </div>
@@ -1022,17 +1022,17 @@ export const CreatorStudio: React.FC = () => {
                     <button
                       disabled={draftingQuestionIdx !== null}
                       onClick={() => handleDraftAiQuestionExplanation(qItem, idx)}
-                      className="px-3.5 py-1.5 rounded-button bg-primary text-white hover:bg-primary-hover text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm shrink-0 disabled:opacity-50"
+                      className="px-3.5 py-2 sm:py-1.5 rounded-button bg-primary text-white hover:bg-primary-hover text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm shrink-0 w-full sm:w-auto disabled:opacity-50"
                       title="Create pre-filled explanation draft and open Post Composer"
                     >
                       {draftingQuestionIdx === idx ? (
                         <>
-                          <Loader2 className="animate-spin text-white" size={13} />
+                          <Loader2 className="animate-spin text-white shrink-0" size={13} />
                           <span>Creating Draft...</span>
                         </>
                       ) : (
                         <>
-                          <PlusCircle size={13} />
+                          <PlusCircle size={13} className="shrink-0" />
                           <span>Draft Explanation</span>
                         </>
                       )}
@@ -1052,11 +1052,11 @@ export const CreatorStudio: React.FC = () => {
 
           {/* Audience & Follower Growth Trend */}
           {audienceGrowth && (
-            <div className="bg-surface border border-border p-5 rounded-card space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <h3 className="text-sm font-bold text-heading flex items-center gap-2">
-                  <Users size={16} className="text-emerald-500" />
-                  <span>Audience Follower Growth ({period.toUpperCase()})</span>
+            <div className="bg-surface border border-border p-4 sm:p-5 rounded-card space-y-4 w-full min-w-0 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 min-w-0">
+                <h3 className="text-sm font-bold text-heading flex items-center gap-2 truncate">
+                  <Users size={16} className="text-emerald-500 shrink-0" />
+                  <span className="truncate">Audience Follower Growth ({period.toUpperCase()})</span>
                 </h3>
                 <div className="text-xs text-muted">
                   Current Followers: <strong className="text-heading font-extrabold">{audienceGrowth.current_followers.toLocaleString()}</strong> · <strong className="text-emerald-500 font-extrabold">+{audienceGrowth.new_followers_period.toLocaleString()}</strong> New Followers in {period}
@@ -1064,12 +1064,12 @@ export const CreatorStudio: React.FC = () => {
               </div>
 
               {audienceGrowth.daily_growth_trend.length > 0 ? (
-                <div className="flex items-end gap-1.5 h-32 pt-4 border-b border-border pb-2 overflow-x-auto no-scrollbar">
+                <div className="flex items-end gap-1 sm:gap-1.5 h-32 pt-4 border-b border-border pb-2 overflow-x-auto no-scrollbar max-w-full">
                   {audienceGrowth.daily_growth_trend.map((pt, idx) => {
                     const maxNew = Math.max(...audienceGrowth.daily_growth_trend.map(t => t.new_followers), 1);
                     const heightPct = Math.max((pt.new_followers / maxNew) * 100, 6);
                     return (
-                      <div key={idx} className="flex-1 min-w-[20px] flex flex-col items-center gap-1 group relative">
+                      <div key={idx} className="flex-1 min-w-[16px] sm:min-w-[20px] flex flex-col items-center gap-1 group relative">
                         <div className="absolute -top-9 opacity-0 group-hover:opacity-100 transition-opacity bg-black text-white text-[10px] py-1 px-2 rounded shadow whitespace-nowrap z-10 pointer-events-none">
                           {pt.date}: +{pt.new_followers} new followers
                         </div>
@@ -1094,14 +1094,14 @@ export const CreatorStudio: React.FC = () => {
 
           {/* Creator Health & Readiness Score Card */}
           {creatorReadiness && (
-            <div className="bg-surface border border-border p-5 rounded-card space-y-4 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <h3 className="text-sm font-bold text-heading flex items-center gap-2">
-                    <ShieldCheck size={18} className="text-primary" />
+            <div className="bg-surface border border-border p-4 sm:p-5 rounded-card space-y-4 shadow-sm w-full min-w-0">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 min-w-0">
+                <div className="space-y-1 min-w-0 flex-1">
+                  <h3 className="text-sm font-bold text-heading flex items-center gap-2 flex-wrap">
+                    <ShieldCheck size={18} className="text-primary shrink-0" />
                     <span>Creator Health & Readiness Index</span>
                   </h3>
-                  <p className="text-xs text-muted">
+                  <p className="text-xs text-muted leading-relaxed">
                     Composite quality score based on publishing consistency, content engagement rate, and audience reach.
                   </p>
                 </div>
@@ -1113,7 +1113,7 @@ export const CreatorStudio: React.FC = () => {
                     <span className="text-xs text-muted"> / 100</span>
                     <p className="text-[10px] text-muted">Overall Health Index</p>
                   </div>
-                  <div className={`px-2.5 py-1 rounded text-xs font-bold ${
+                  <div className={`px-2.5 py-1 rounded text-xs font-bold shrink-0 ${
                     creatorReadiness.is_ready ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-primary/10 text-primary border border-primary/20'
                   }`}>
                     {creatorReadiness.is_ready ? '🟢 High Health' : '🔵 Building Health'}
@@ -1130,46 +1130,46 @@ export const CreatorStudio: React.FC = () => {
               </div>
 
               {/* Sub-scores Breakdown */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-center pt-2">
-                <div className="p-2.5 bg-elevated rounded-lg border border-border space-y-0.5">
-                  <span className="text-[10px] text-muted font-bold uppercase">Active Learners</span>
-                  <p className="text-sm font-extrabold text-heading">{creatorReadiness.active_learners_score ?? 0} / 100</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 text-center pt-2">
+                <div className="p-2 sm:p-2.5 bg-elevated rounded-lg border border-border space-y-0.5 min-w-0">
+                  <span className="text-[10px] text-muted font-bold uppercase truncate block" title="Active Learners">Active Learners</span>
+                  <p className="text-xs sm:text-sm font-extrabold text-heading truncate">{creatorReadiness.active_learners_score ?? 0} / 100</p>
                 </div>
-                <div className="p-2.5 bg-elevated rounded-lg border border-border space-y-0.5">
-                  <span className="text-[10px] text-muted font-bold uppercase">Completion Rate</span>
-                  <p className="text-sm font-extrabold text-heading">{creatorReadiness.completion_rate_score ?? 0}%</p>
+                <div className="p-2 sm:p-2.5 bg-elevated rounded-lg border border-border space-y-0.5 min-w-0">
+                  <span className="text-[10px] text-muted font-bold uppercase truncate block" title="Completion Rate">Completion</span>
+                  <p className="text-xs sm:text-sm font-extrabold text-heading truncate">{creatorReadiness.completion_rate_score ?? 0}%</p>
                 </div>
-                <div className="p-2.5 bg-elevated rounded-lg border border-border space-y-0.5">
-                  <span className="text-[10px] text-muted font-bold uppercase">Content Quality</span>
-                  <p className="text-sm font-extrabold text-heading">{creatorReadiness.content_quality_score ?? 0} / 100</p>
+                <div className="p-2 sm:p-2.5 bg-elevated rounded-lg border border-border space-y-0.5 min-w-0">
+                  <span className="text-[10px] text-muted font-bold uppercase truncate block" title="Content Quality">Quality</span>
+                  <p className="text-xs sm:text-sm font-extrabold text-heading truncate">{creatorReadiness.content_quality_score ?? 0} / 100</p>
                 </div>
-                <div className="p-2.5 bg-elevated rounded-lg border border-border space-y-0.5">
-                  <span className="text-[10px] text-muted font-bold uppercase">AI Engagement</span>
-                  <p className="text-sm font-extrabold text-heading">{creatorReadiness.ai_engagement_score ?? 0} / 100</p>
+                <div className="p-2 sm:p-2.5 bg-elevated rounded-lg border border-border space-y-0.5 min-w-0">
+                  <span className="text-[10px] text-muted font-bold uppercase truncate block" title="AI Engagement">AI Engagement</span>
+                  <p className="text-xs sm:text-sm font-extrabold text-heading truncate">{creatorReadiness.ai_engagement_score ?? 0} / 100</p>
                 </div>
-                <div className="p-2.5 bg-elevated rounded-lg border border-border space-y-0.5">
-                  <span className="text-[10px] text-muted font-bold uppercase">Consistency</span>
-                  <p className="text-sm font-extrabold text-heading">{creatorReadiness.publishing_consistency_score ?? 0} / 100</p>
+                <div className="p-2 sm:p-2.5 bg-elevated rounded-lg border border-border space-y-0.5 min-w-0">
+                  <span className="text-[10px] text-muted font-bold uppercase truncate block" title="Consistency">Consistency</span>
+                  <p className="text-xs sm:text-sm font-extrabold text-heading truncate">{creatorReadiness.publishing_consistency_score ?? 0} / 100</p>
                 </div>
-                <div className="p-2.5 bg-elevated rounded-lg border border-border space-y-0.5">
-                  <span className="text-[10px] text-muted font-bold uppercase">Community Trust</span>
-                  <p className="text-sm font-extrabold text-heading">{creatorReadiness.community_trust_score ?? 0} / 100</p>
+                <div className="p-2 sm:p-2.5 bg-elevated rounded-lg border border-border space-y-0.5 min-w-0">
+                  <span className="text-[10px] text-muted font-bold uppercase truncate block" title="Community Trust">Trust</span>
+                  <p className="text-xs sm:text-sm font-extrabold text-heading truncate">{creatorReadiness.community_trust_score ?? 0} / 100</p>
                 </div>
               </div>
 
               {/* Phase 11: Highest-Impact Next Action Bridge */}
               {nextAction && (
-                <div className="pt-4 mt-4 border-t border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
+                <div className="pt-4 mt-4 border-t border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 min-w-0">
+                  <div className="space-y-1 min-w-0 flex-1">
                     <h4 className="text-xs font-bold text-heading flex items-center gap-2">
-                      <ArrowRight size={14} className="text-primary" />
-                      Highest-Impact Next Action
+                      <ArrowRight size={14} className="text-primary shrink-0" />
+                      <span>Highest-Impact Next Action</span>
                     </h4>
-                    <p className="text-[11px] text-muted">{nextAction.message}</p>
+                    <p className="text-[11px] text-muted leading-relaxed">{nextAction.message}</p>
                   </div>
                   <button
                     onClick={nextAction.action}
-                    className="px-4 py-2 bg-primary text-white hover:bg-primary-hover font-bold text-xs rounded-button flex items-center gap-1.5 shadow-sm transition-all"
+                    className="px-4 py-2.5 bg-primary text-white hover:bg-primary-hover font-bold text-xs rounded-button flex items-center justify-center gap-1.5 shadow-sm transition-all shrink-0 w-full sm:w-auto"
                   >
                     {nextAction.icon}
                     <span>{nextAction.buttonText}</span>
@@ -1180,14 +1180,14 @@ export const CreatorStudio: React.FC = () => {
           )}
 
           {actionNotice && (
-            <div className="p-4 bg-primary/10 border border-primary/20 rounded-card text-xs flex items-center justify-between text-primary shadow-sm transition-all">
-              <div className="flex items-center gap-2 font-bold">
+            <div className="p-3.5 sm:p-4 bg-primary/10 border border-primary/20 rounded-card text-xs flex items-center justify-between text-primary shadow-sm transition-all min-w-0 gap-2">
+              <div className="flex items-center gap-2 font-bold min-w-0">
                 <CheckCircle2 size={16} className="shrink-0" />
-                <span>{actionNotice}</span>
+                <span className="truncate">{actionNotice}</span>
               </div>
               <button
                 onClick={() => setActionNotice(null)}
-                className="text-muted hover:text-heading transition-colors"
+                className="text-muted hover:text-heading transition-colors shrink-0"
               >
                 <X size={14} />
               </button>
@@ -1195,46 +1195,46 @@ export const CreatorStudio: React.FC = () => {
           )}
 
           {/* AI Content Health & Actionable Insights Component */}
-          <div id="ai-creator-assistant">
+          <div id="ai-creator-assistant" className="w-full min-w-0">
             <AiCreatorAssistant onAction={handleRecommendationAction} />
           </div>
 
           {/* Content Drop-Off & Node Performance Insights */}
           {topInsights.length > 0 && (
-            <div id="drop-off-insights" className="bg-surface border border-border p-5 rounded-card space-y-4 shadow-sm">
-              <div className="flex items-center justify-between pb-3 border-b border-border">
-                <div className="flex items-center gap-2">
-                  <Activity size={18} className="text-red-500" />
-                  <h3 className="text-sm font-bold text-heading">Content Drop-Off & Node Performance Insights</h3>
+            <div id="drop-off-insights" className="bg-surface border border-border p-4 sm:p-5 rounded-card space-y-4 shadow-sm w-full min-w-0">
+              <div className="flex items-center justify-between pb-3 border-b border-border flex-wrap gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Activity size={18} className="text-red-500 shrink-0" />
+                  <h3 className="text-sm font-bold text-heading truncate">Content Drop-Off & Node Performance Insights</h3>
                 </div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-red-500/10 text-red-500 border border-red-500/20">
+                <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-red-500/10 text-red-500 border border-red-500/20 shrink-0">
                   Telemetry Analysis
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
                 {topInsights.map((insight) => (
-                  <div key={insight.node_id} className="p-4 bg-elevated border border-border rounded-xl space-y-3 text-xs flex flex-col justify-between">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
+                  <div key={insight.node_id} className="p-3.5 sm:p-4 bg-elevated border border-border rounded-xl space-y-3 text-xs flex flex-col justify-between min-w-0">
+                    <div className="space-y-2 min-w-0">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
                         {typeof insight.ai_question_count === 'number' && insight.ai_question_count > 0 ? (
-                          <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                          <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-amber-500/10 text-amber-500 border border-amber-500/20 shrink-0">
                             High AI Confusion
                           </span>
                         ) : typeof insight.drop_off_pct === 'number' && insight.drop_off_pct > 60 ? (
-                          <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-red-500/10 text-red-500 border border-red-500/20">
+                          <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-red-500/10 text-red-500 border border-red-500/20 shrink-0">
                             High Drop-Off ({insight.drop_off_pct}% Drop-Off)
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-slate-500/10 text-slate-500 border border-slate-500/20">
+                          <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-slate-500/10 text-slate-500 border border-slate-500/20 shrink-0">
                             Content Review
                           </span>
                         )}
-                        <span className="text-[10px] text-muted uppercase font-bold">{insight.node_type || 'Node'}</span>
+                        <span className="text-[10px] text-muted uppercase font-bold shrink-0">{insight.node_type || 'Node'}</span>
                       </div>
 
-                      <div className="space-y-1">
-                        <h4 className="text-xs font-bold text-heading">
+                      <div className="space-y-1 min-w-0">
+                        <h4 className="text-xs font-bold text-heading truncate">
                           Node {insight.node_id.slice(0, 8)} ({insight.node_type || 'content'})
                         </h4>
                         <p className="text-[11px] text-muted leading-relaxed">
@@ -1243,14 +1243,14 @@ export const CreatorStudio: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="pt-2 border-t border-border flex items-center justify-between">
+                    <div className="pt-2 border-t border-border flex items-center justify-between gap-2 flex-wrap">
                       <button
                         disabled={actionSubmitting}
                         onClick={() => handleRemediateInsight(insight)}
                         className="px-3 py-1.5 rounded-button bg-primary text-white hover:bg-primary-hover text-xs font-bold transition-all flex items-center gap-1 shadow-sm disabled:opacity-50"
                         title="Create revision draft and open Post Composer"
                       >
-                        <Sparkles size={13} /> {
+                        <Sparkles size={13} className="shrink-0" /> {
                           typeof insight.ai_question_count === 'number' && insight.ai_question_count > 0
                             ? 'Clarify Concept'
                             : typeof insight.drop_off_pct === 'number' && insight.drop_off_pct > 60
@@ -1267,14 +1267,14 @@ export const CreatorStudio: React.FC = () => {
           )}
 
           {/* Monetization Informational Boundary Notice */}
-          <div className="p-5 bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-500/30 rounded-card flex items-start gap-4">
+          <div className="p-4 sm:p-5 bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-500/30 rounded-card flex items-start gap-3 sm:gap-4 min-w-0">
             <div className="p-2 bg-blue-500/20 text-blue-400 rounded-lg shrink-0 mt-0.5">
               <Info size={20} />
             </div>
-            <div className="space-y-1 text-xs">
-              <h4 className="font-bold text-heading text-sm flex items-center gap-2">
+            <div className="space-y-1 text-xs min-w-0 flex-1">
+              <h4 className="font-bold text-heading text-sm flex items-center gap-2 flex-wrap">
                 <span>Monetization Status:</span>
-                <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 font-extrabold text-[10px] uppercase">
+                <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 font-extrabold text-[10px] uppercase shrink-0">
                   Coming Soon
                 </span>
               </h4>
@@ -1398,40 +1398,40 @@ export const CreatorStudio: React.FC = () => {
                 No published Reels found. Create short video notes to see performance metrics here!
               </div>
             ) : (
-              <div className="divide-y divide-border border-t border-border">
+              <div className="divide-y divide-border border-t border-border min-w-0">
                 {topReels.map(reel => (
-                  <div key={reel.id} className="py-3 flex items-center justify-between gap-4 group">
-                    <div className="flex items-center gap-3 min-w-0">
+                  <div key={reel.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 group min-w-0">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div className="w-10 h-14 bg-elevated rounded overflow-hidden flex items-center justify-center shrink-0 border border-border relative">
                         {reel.media_url ? (
                           <video src={reel.media_url} className="w-full h-full object-cover" muted />
                         ) : (
-                          <Video size={18} className="text-muted" />
+                          <Video size={18} className="text-muted shrink-0" />
                         )}
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="text-xs font-bold text-heading truncate group-hover:text-primary transition-colors">
                           {reel.content || 'Untitled Reel'}
                         </p>
-                        <p className="text-[11px] text-muted mt-0.5">
+                        <p className="text-[11px] text-muted mt-0.5 truncate">
                           Posted {new Date(reel.created_at).toLocaleDateString()} · {reel.video_duration}s
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-6 shrink-0 text-right">
-                      <div>
+                    <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-6 shrink-0 text-right w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-border/40">
+                      <div className="text-left sm:text-right">
                         <p className="text-xs font-bold text-heading">{reel.views_count.toLocaleString()}</p>
                         <p className="text-[10px] text-muted">Views</p>
                       </div>
-                      <div>
+                      <div className="text-left sm:text-right">
                         <p className="text-xs font-bold text-heading">{reel.avg_watch_duration_seconds}s</p>
                         <p className="text-[10px] text-muted">Avg Watch</p>
                       </div>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap shrink-0">
                         <button
                           onClick={() => handleInspectReel(reel.id)}
-                          className="px-3 py-1 rounded bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-all"
+                          className="px-2.5 sm:px-3 py-1 rounded bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-all"
                         >
                           Inspect
                         </button>
@@ -1440,20 +1440,20 @@ export const CreatorStudio: React.FC = () => {
                             setActionError(null);
                             setEditingReel({ id: reel.id, title: '', content: reel.content || '' });
                           }}
-                          className="px-2.5 py-1 rounded bg-elevated hover:bg-border text-heading text-xs font-bold transition-all flex items-center gap-1 border border-border"
+                          className="px-2 sm:px-2.5 py-1 rounded bg-elevated hover:bg-border text-heading text-xs font-bold transition-all flex items-center gap-1 border border-border"
                           title="Edit Reel Caption & Title"
                         >
-                          <Edit3 size={13} /> Edit
+                          <Edit3 size={13} className="shrink-0" /> Edit
                         </button>
                         <button
                           onClick={() => {
                             setActionError(null);
                             setDeletingReelId(reel.id);
                           }}
-                          className="px-2.5 py-1 rounded bg-red-500/10 hover:bg-red-500/20 text-red-500 text-xs font-bold transition-all flex items-center gap-1 border border-red-500/20"
+                          className="px-2 sm:px-2.5 py-1 rounded bg-red-500/10 hover:bg-red-500/20 text-red-500 text-xs font-bold transition-all flex items-center gap-1 border border-red-500/20"
                           title="Delete Reel"
                         >
-                          <Trash2 size={13} /> Delete
+                          <Trash2 size={13} className="shrink-0" /> Delete
                         </button>
                       </div>
                     </div>
@@ -1653,8 +1653,8 @@ export const CreatorStudio: React.FC = () => {
 
       {/* SINGLE REEL ANALYTICS MODAL */}
       {selectedReelId && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface border border-border rounded-card max-w-md w-full p-6 space-y-5 relative shadow-2xl">
+        <div className="fixed inset-0 z-[1000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-surface border border-border rounded-card max-w-md w-full p-4 sm:p-6 space-y-5 relative shadow-2xl my-auto">
             <button
               onClick={() => setSelectedReelId(null)}
               className="absolute top-4 right-4 text-muted hover:text-heading transition-colors"
@@ -1761,8 +1761,8 @@ export const CreatorStudio: React.FC = () => {
 
       {/* EDIT REEL CAPTION & TITLE MODAL */}
       {editingReel && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface border border-border rounded-card max-w-md w-full p-6 space-y-5 relative shadow-2xl">
+        <div className="fixed inset-0 z-[1000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-surface border border-border rounded-card max-w-md w-full p-4 sm:p-6 space-y-5 relative shadow-2xl my-auto">
             <button
               onClick={() => {
                 setEditingReel(null);
@@ -1836,8 +1836,8 @@ export const CreatorStudio: React.FC = () => {
 
       {/* DELETE REEL CONFIRMATION MODAL */}
       {deletingReelId && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface border border-border rounded-card max-w-sm w-full p-6 space-y-4 relative shadow-2xl">
+        <div className="fixed inset-0 z-[1000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-surface border border-border rounded-card max-w-sm w-full p-4 sm:p-6 space-y-4 relative shadow-2xl my-auto">
             <button
               onClick={() => {
                 setDeletingReelId(null);
@@ -1893,8 +1893,8 @@ export const CreatorStudio: React.FC = () => {
 
       {/* DRAFT CREATE / EDIT MODAL */}
       {showDraftModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface border border-border rounded-card max-w-md w-full p-6 space-y-4 relative shadow-2xl">
+        <div className="fixed inset-0 z-[1000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-surface border border-border rounded-card max-w-md w-full p-4 sm:p-6 space-y-4 relative shadow-2xl my-auto">
             <button
               onClick={() => setShowDraftModal(false)}
               className="absolute top-4 right-4 text-muted hover:text-heading transition-colors"
@@ -1975,8 +1975,8 @@ export const CreatorStudio: React.FC = () => {
 
       {/* DELETE DRAFT CONFIRMATION MODAL */}
       {deletingDraftId && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface border border-border rounded-card max-w-sm w-full p-6 space-y-4 relative shadow-2xl">
+        <div className="fixed inset-0 z-[1000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-surface border border-border rounded-card max-w-sm w-full p-4 sm:p-6 space-y-4 relative shadow-2xl my-auto">
             <button
               onClick={() => {
                 setDeletingDraftId(null);
