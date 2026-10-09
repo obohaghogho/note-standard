@@ -145,6 +145,11 @@ interface LearningImpact {
   metrics: LearningImpactMetrics | null;
 }
 
+interface TopAiQuestion {
+  question: string;
+  count: number;
+}
+
 export const CreatorStudio: React.FC = () => {
   const { refreshProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'reels' | 'drafts' | 'settings'>('overview');
@@ -163,6 +168,8 @@ export const CreatorStudio: React.FC = () => {
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [topReels, setTopReels] = useState<TopReel[]>([]);
   const [topInsights, setTopInsights] = useState<ContentInsight[]>([]);
+  const [topAiQuestions, setTopAiQuestions] = useState<TopAiQuestion[]>([]);
+  const [draftingQuestionIdx, setDraftingQuestionIdx] = useState<number | null>(null);
 
   // Drafts State & Modals
   const [drafts, setDrafts] = useState<DraftItem[]>([]);
@@ -332,6 +339,39 @@ export const CreatorStudio: React.FC = () => {
     }
   };
 
+  const handleDraftAiQuestionExplanation = async (item: TopAiQuestion, idx: number) => {
+    setActionNotice(null);
+    setActionError(null);
+    setDraftingQuestionIdx(idx);
+    try {
+      const qText = item.question;
+      const title = `FAQ: ${qText.length > 50 ? qText.slice(0, 47) + '...' : qText}`;
+      const content = `## Explanation Outline for Learner Question\n\n**Learner Question:** "${qText}"\n*(Asked ${item.count} time${item.count > 1 ? 's' : ''} during the selected period)*\n\n### Key Concepts & Explanation:\n- [Add clear answer/explanation here]\n- [Provide examples or code snippets]\n\n### Summary:\n- [Key takeaways for learners]`;
+
+      const res = await api.post('/creator/drafts', {
+        contentType: 'post',
+        title,
+        contentPayload: {
+          content,
+          note: `Explanation draft pre-filled for top learner AI question: "${qText}" (${item.count} occurrences).`,
+          source_question: qText
+        },
+        status: 'draft'
+      });
+
+      if (res.data && res.data.draft) {
+        await fetchDrafts();
+        setPublishingPostDraft(res.data.draft);
+        setActionNotice(`Draft explanation created for: "${qText.slice(0, 40)}...". Opening Post Composer...`);
+      }
+    } catch (err: any) {
+      console.error('Failed to create AI question explanation draft:', err);
+      setActionNotice(`Failed to create draft: ${err.response?.data?.error || err.message}`);
+    } finally {
+      setDraftingQuestionIdx(null);
+    }
+  };
+
   // Settings State
   const [category, setCategory] = useState<string>('');
   const [socials, setSocials] = useState<Record<string, string>>({});
@@ -361,6 +401,7 @@ export const CreatorStudio: React.FC = () => {
           setTrend(data.trend || []);
           setTopReels(data.top_reels || []);
           setTopInsights(data.top_insights || []);
+          setTopAiQuestions(Array.isArray(data.top_ai_questions) ? data.top_ai_questions : []);
         }
       } else {
         setError('Failed to load Creator Studio dashboard.');
@@ -949,6 +990,65 @@ export const CreatorStudio: React.FC = () => {
               )}
             </div>
           )}
+
+          {/* Phase 13 Candidate B: Top Learner AI Questions Surface & Content Remediation Bridge */}
+          <div className="bg-surface border border-border p-5 rounded-card space-y-4 shadow-sm">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <Sparkles size={18} className="text-primary" />
+                <h3 className="text-sm font-bold text-heading">Top Learner AI Questions ({period.toUpperCase()})</h3>
+              </div>
+              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
+                <ShieldCheck size={12} /> AI Tutor Telemetry
+              </span>
+            </div>
+
+            {topAiQuestions.length > 0 ? (
+              <div className="space-y-3">
+                {topAiQuestions.map((qItem, idx) => (
+                  <div key={idx} className="p-4 bg-elevated border border-border rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
+                          {qItem.count} Ask{qItem.count > 1 ? 's' : ''}
+                        </span>
+                        <span className="text-[10px] text-muted font-bold">Learner Query</span>
+                      </div>
+                      <p className="text-xs font-semibold text-heading leading-relaxed">
+                        "{qItem.question}"
+                      </p>
+                    </div>
+
+                    <button
+                      disabled={draftingQuestionIdx !== null}
+                      onClick={() => handleDraftAiQuestionExplanation(qItem, idx)}
+                      className="px-3.5 py-1.5 rounded-button bg-primary text-white hover:bg-primary-hover text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm shrink-0 disabled:opacity-50"
+                      title="Create pre-filled explanation draft and open Post Composer"
+                    >
+                      {draftingQuestionIdx === idx ? (
+                        <>
+                          <Loader2 className="animate-spin text-white" size={13} />
+                          <span>Creating Draft...</span>
+                        </>
+                      ) : (
+                        <>
+                          <PlusCircle size={13} />
+                          <span>Draft Explanation</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-6 text-center text-xs text-muted bg-elevated rounded-lg space-y-1">
+                <p className="font-semibold text-heading">No Learner AI Questions Recorded</p>
+                <p className="text-[11px] text-muted">
+                  When learners ask the AI Tutor questions about your content during this period, top queries will appear here for targeted content creation.
+                </p>
+              </div>
+            )}
+          </div>
 
           {/* Audience & Follower Growth Trend */}
           {audienceGrowth && (

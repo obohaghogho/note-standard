@@ -279,6 +279,48 @@ class CreatorAnalyticsService {
       };
     }
 
+    // Phase 13 Candidate B: Aggregate Learner Top AI Questions across snapshots for the selected period
+    const aiQuestionMap = new Map();
+    if (Array.isArray(snapshots)) {
+      snapshots.forEach(s => {
+        let questions = s.top_ai_questions;
+        if (typeof questions === 'string') {
+          try {
+            questions = JSON.parse(questions);
+          } catch (e) {
+            questions = [];
+          }
+        }
+        if (!Array.isArray(questions)) return;
+
+        questions.forEach(q => {
+          if (!q || typeof q !== 'object') return;
+          const rawQ = q.question;
+          if (typeof rawQ !== 'string') return;
+          const trimmed = rawQ.trim();
+          if (!trimmed) return;
+
+          const rawCount = Number(q.count);
+          if (!Number.isFinite(rawCount) || rawCount <= 0) return;
+
+          const key = trimmed.toLowerCase();
+          if (aiQuestionMap.has(key)) {
+            const existing = aiQuestionMap.get(key);
+            existing.count += rawCount;
+          } else {
+            aiQuestionMap.set(key, {
+              question: trimmed,
+              count: rawCount
+            });
+          }
+        });
+      });
+    }
+
+    const topAiQuestions = Array.from(aiQuestionMap.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
     return {
       success: true,
       mode_status: 'active',
@@ -318,6 +360,7 @@ class CreatorAnalyticsService {
       trend: trendList,
       top_reels: topReels,
       top_insights: await this._getTopInsights(creatorId),
+      top_ai_questions: topAiQuestions,
       monetization: {
         status: 'coming_soon'
       },
