@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 interface PublicRouteProps {
@@ -8,6 +8,7 @@ interface PublicRouteProps {
 
 export const PublicRoute: React.FC<PublicRouteProps> = ({ children }) => {
   const { user, authReady } = useAuth();
+  const location = useLocation();
 
   // 1. While authentication is being restored, display boot loading state.
   // Prevents premature rendering of public landing/login DOM before session is resolved.
@@ -20,12 +21,15 @@ export const PublicRoute: React.FC<PublicRouteProps> = ({ children }) => {
   }
 
   // 2. If user is already authenticated, bypass public onboarding/auth pages
-  // and route directly to homepage (/dashboard). Zero public DOM flash.
-  if (user) {
+  // and route directly to homepage (/dashboard), UNLESS explicitly adding an account.
+  const searchParams = new URLSearchParams(location.search);
+  const isAddingAccount = searchParams.get('add_account') === 'true';
+
+  if (user && !isAddingAccount) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  // 3. Unauthenticated guest -> render public onboarding/auth page
+  // 3. Unauthenticated guest or authenticated user adding an account -> render auth page
   return <>{children}</>;
 };
 
