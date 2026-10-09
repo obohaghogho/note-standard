@@ -1,15 +1,25 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ReelCard, type ReelPost } from '../../components/community/ReelCard';
 import { ReelUploadModal } from '../../components/community/ReelUploadModal';
-import { Loader2, Plus, Sparkles, Video, RefreshCw, X, MessageCircle, Send } from 'lucide-react';
+import { Loader2, Plus, Sparkles, Video, RefreshCw, X, MessageCircle, Send, ArrowLeft } from 'lucide-react';
 import { API_URL } from '../../lib/api';
 import { deletePost, recordReelView } from '../../services/communityService';
 import { useAuth } from '../../context/AuthContext';
 
 export const Reels: React.FC = () => {
+  const navigate = useNavigate();
   const { user, profile } = useAuth();
   const [reels, setReels] = useState<ReelPost[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const handleBackNav = useCallback(() => {
+    if (window.history.state && typeof window.history.state.idx === 'number' && window.history.state.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate('/dashboard');
+    }
+  }, [navigate]);
   const [activeReelId, setActiveReelId] = useState<string | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedCommentsReelId, setSelectedCommentsReelId] = useState<string | null>(null);
@@ -221,15 +231,28 @@ export const Reels: React.FC = () => {
   return (
     <div className="relative w-full h-full min-h-0 bg-black flex flex-col overflow-hidden">
       {/* Floating Top Branding & Action Overlay */}
-      <div className="absolute top-3 left-3 right-3 sm:top-4 sm:left-4 sm:right-4 z-40 flex items-center justify-between pointer-events-none pt-safe">
-        <div className="flex items-center gap-1.5 bg-black/50 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/20 shadow-xl text-white font-bold text-xs sm:text-sm pointer-events-auto">
-          <Sparkles className="text-yellow-400 shrink-0" size={15} />
-          <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent">NoteStandard Reels</span>
+      <div className="absolute top-3 left-3 right-3 sm:top-4 sm:left-4 sm:right-4 z-40 flex items-center justify-between pointer-events-none pt-safe gap-2">
+        <div className="flex items-center gap-2 pointer-events-auto">
+          <button
+            onClick={handleBackNav}
+            aria-label="Back to dashboard"
+            title="Back to dashboard"
+            className="flex items-center justify-center bg-black/60 backdrop-blur-md hover:bg-white/20 border border-white/20 text-white rounded-full min-w-[44px] min-h-[44px] transition-all active:scale-95 cursor-pointer shadow-xl"
+          >
+            <ArrowLeft size={18} />
+          </button>
+
+          <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-full border border-white/20 shadow-xl text-white font-bold text-xs sm:text-sm">
+            <Sparkles className="text-yellow-400 shrink-0" size={15} />
+            <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent">
+              <span className="hidden xs:inline sm:inline">NoteStandard </span>Reels
+            </span>
+          </div>
         </div>
 
         <button
           onClick={() => setShowUploadModal(true)}
-          className="flex items-center gap-1.5 bg-gradient-to-r from-indigo-500 via-primary to-purple-600 hover:brightness-110 text-white px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-xl shadow-primary/30 transition-all active:scale-95 cursor-pointer pointer-events-auto"
+          className="flex items-center gap-1.5 bg-gradient-to-r from-indigo-500 via-primary to-purple-600 hover:brightness-110 text-white px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-full text-xs font-semibold shadow-xl shadow-primary/30 transition-all active:scale-95 cursor-pointer pointer-events-auto shrink-0"
         >
           <Plus size={15} />
           <span>Post Reel</span>
