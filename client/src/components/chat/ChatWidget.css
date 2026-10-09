@@ -381,7 +381,7 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 14px;
     color: #e4e4e7;
-    font-size: 15px;
+    font-size: 16px;
     outline: none;
     transition: all 0.3s ease;
 }
@@ -441,7 +441,8 @@
 
     .chat-widget-window {
         width: 100vw;
-        height: 100dvh;
+        height: var(--vv-height, 100dvh);
+        max-height: 100dvh;
         border-radius: 0;
         border: none;
         box-shadow: none;

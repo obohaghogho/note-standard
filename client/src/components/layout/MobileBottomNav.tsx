@@ -40,7 +40,7 @@ export const MobileBottomNav: React.FC = () => {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden bg-gray-950/90 backdrop-blur-xl border-t border-white/10 pb-safe shadow-2xl">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden bg-gray-950/90 backdrop-blur-xl border-t border-white/10 pb-safe pb-1 shadow-2xl">
       <div className="flex items-center justify-around h-16 px-1 max-w-md mx-auto">
         {items.map((item) => {
           const Icon = item.icon;
@@ -52,8 +52,6 @@ export const MobileBottomNav: React.FC = () => {
             <button
               key={item.id}
               onMouseEnter={() => preloadRoute(item.to)}
-              onTouchStart={() => preloadRoute(item.to)}
-              onPointerDown={() => preloadRoute(item.to)}
               onClick={() => navigate(item.to)}
               className={cn(
                 "flex flex-col items-center justify-center flex-1 min-h-[44px] min-w-[44px] py-1 transition-all duration-200 relative rounded-xl",

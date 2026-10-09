@@ -122,6 +122,9 @@ export function DashboardLayout() {
                     }>
                         <div className="flex-1 min-h-0 flex flex-col min-w-0 w-full">
                             <Outlet context={{ openCreateNoteModal: () => setIsCreateNoteModalOpen(true), openMobileMenu: () => setIsMobileMenuOpen(true) }} />
+                            {!isStandalonePageOnMobile && (
+                                <div className="h-36 w-full shrink-0 lg:h-8 pointer-events-none" aria-hidden="true" />
+                            )}
                         </div>
                     </ErrorBoundary>
                 </div>
