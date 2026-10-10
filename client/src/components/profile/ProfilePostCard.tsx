@@ -1,25 +1,19 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Heart, MessageCircle, Share2, Bookmark, MoreVertical, CheckCircle, Play, Trash2 } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Bookmark, CheckCircle, Play } from 'lucide-react';
 import SecureImage from '../common/SecureImage';
 import type { PublicPost } from './PublicProfileModal';
 import { formatDistanceToNow } from 'date-fns';
-import { deletePost } from '../../services/communityService';
 
 interface ProfilePostCardProps {
   post: PublicPost;
   onLike: () => void;
   onComment: () => void;
   onClick: () => void;
-  /** Present only when the viewing user owns this post. Called with the deleted post id on confirmed server success. */
-  onDelete?: (postId: string) => void;
 }
 
-export const ProfilePostCard: React.FC<ProfilePostCardProps> = ({ post, onLike, onComment, onClick, onDelete }) => {
+export const ProfilePostCard: React.FC<ProfilePostCardProps> = ({ post, onLike, onComment, onClick }) => {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
 
   const mediaUrl = post.media_url || (Array.isArray(post.media_urls) && post.media_urls.length > 0 ? post.media_urls[0] : null);
 
@@ -32,38 +26,7 @@ export const ProfilePostCard: React.FC<ProfilePostCardProps> = ({ post, onLike, 
     )
   );
 
-  // Close menu when clicking/tapping outside
-  useEffect(() => {
-    if (!showMenu) return;
-    const handler = (e: MouseEvent | TouchEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setShowMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    document.addEventListener('touchstart', handler);
-    return () => {
-      document.removeEventListener('mousedown', handler);
-      document.removeEventListener('touchstart', handler);
-    };
-  }, [showMenu]);
 
-  const handleDeleteClick = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowMenu(false);
-    if (!window.confirm('Delete this post permanently? This cannot be undone.')) return;
-
-    setIsDeleting(true);
-    try {
-      await deletePost(post.id);
-      // Only remove from UI after server confirms success
-      onDelete?.(post.id);
-    } catch (err: any) {
-      alert('Could not delete: ' + (err?.message || 'Unknown error. Please try again.'));
-    } finally {
-      setIsDeleting(false);
-    }
-  };
 
   return (
     <motion.div
@@ -104,47 +67,6 @@ export const ProfilePostCard: React.FC<ProfilePostCardProps> = ({ post, onLike, 
             </div>
           </div>
 
-          {/* Owner action menu — only rendered when onDelete is provided (i.e. isSelf) */}
-          {onDelete ? (
-            <div className="relative" ref={menuRef}>
-              <button
-                className="text-gray-500 hover:text-white p-1.5 rounded-full hover:bg-white/10 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                onClick={(e) => { e.stopPropagation(); setShowMenu(v => !v); }}
-                aria-label="Post options"
-                aria-haspopup="true"
-                aria-expanded={showMenu}
-                disabled={isDeleting}
-              >
-                <MoreVertical size={16} />
-              </button>
-
-              {showMenu && (
-                <div
-                  className="absolute right-0 top-full mt-1 w-44 bg-gray-900 border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150"
-                  role="menu"
-                >
-                  <button
-                    onClick={handleDeleteClick}
-                    disabled={isDeleting}
-                    className="flex items-center gap-2.5 w-full px-4 py-3 text-left text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    role="menuitem"
-                  >
-                    <Trash2 size={14} />
-                    {isDeleting ? 'Deleting…' : 'Delete post'}
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            /* Non-owner: keep stub button invisible — no destructive action available */
-            <button
-              className="text-gray-500 hover:text-white p-1.5 rounded-full hover:bg-white/10 transition-colors opacity-0 group-hover:opacity-100"
-              onClick={(e) => { e.stopPropagation(); }}
-              aria-label="Post options"
-            >
-              <MoreVertical size={16} />
-            </button>
-          )}
         </div>
 
         {/* Content */}

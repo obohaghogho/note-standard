@@ -369,16 +369,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
     }
   };
 
-  // ── Profile post deletion (Fix C) ────────────────────────────────────────
-  // Called only when isSelf=true (ProfilePostCard only receives onDelete then).
-  // Removes the deleted post from every locally tracked list — the server-side
-  // ownership guard in deletePost (DELETE /api/community/post/:postId) is the
-  // authoritative check; this is purely a UI state update after confirmed success.
-  const handleProfilePostDelete = (deletedId: string) => {
-    setPosts(prev => prev.filter(p => p.id !== deletedId));
-    setLikedPosts(prev => prev.filter(p => p.id !== deletedId));
-    setBookmarkedPosts(prev => prev.filter(p => p.id !== deletedId));
-  };
+
 
   const handleBlockUser = async () => {
     if (!profile) return;
@@ -705,7 +696,6 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                       onClick={() => navigate(`/dashboard/post/${post.id}`)}
                       onLike={() => {}}
                       onComment={() => navigate(`/dashboard/post/${post.id}`)}
-                      onDelete={isSelf ? handleProfilePostDelete : undefined}
                     />
                   ))
                 )}
@@ -748,7 +738,6 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                       onClick={() => navigate(`/dashboard/post/${post.id}`)}
                       onLike={() => {}}
                       onComment={() => navigate(`/dashboard/post/${post.id}`)}
-                      onDelete={isSelf ? handleProfilePostDelete : undefined}
                     />
                   ));
                 })()}
@@ -767,7 +756,6 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                       onClick={() => navigate(`/dashboard/post/${post.id}`)}
                       onLike={() => {}}
                       onComment={() => navigate(`/dashboard/post/${post.id}`)}
-                      onDelete={isSelf ? handleProfilePostDelete : undefined}
                     />
                   ))
                 )}
@@ -786,7 +774,6 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                       onClick={() => navigate(`/dashboard/post/${post.id}`)}
                       onLike={() => {}}
                       onComment={() => navigate(`/dashboard/post/${post.id}`)}
-                      onDelete={isSelf ? handleProfilePostDelete : undefined}
                     />
                   ))
                 )}

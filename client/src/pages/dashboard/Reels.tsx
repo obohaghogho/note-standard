@@ -43,32 +43,9 @@ export const Reels: React.FC = () => {
     } catch {}
   }
 
-  // Fix B: Initialise mute from stored preference (default: true for iOS autoplay compliance).
-  // A stored 'false' (Sound On) preference is applied to the UI state only — it does NOT
-  // attempt audible autoplay, which iOS Safari requires a user gesture for. The user
-  // still needs to tap the mute button once on a new session if iOS rejects auto-unmute,
-  // but repeat visitors who explicitly chose Sound On will see the correct indicator.
-  const getInitialMute = () => {
-    try {
-      const stored = localStorage.getItem('reel_muted');
-      // Treat missing (first use) and 'true' identically — start muted
-      return stored === null || stored === 'true';
-    } catch {
-      return true; // localStorage unavailable — safe default
-    }
-  };
-  const [isMuted, setIsMuted] = useState(getInitialMute);
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
-
-  const handleToggleMute = useCallback(() => {
-    setIsMuted(prev => {
-      const next = !prev;
-      try { localStorage.setItem('reel_muted', String(next)); } catch { /* unavailable */ }
-      return next;
-    });
-  }, []);
 
   const handleRecordView = useCallback(async (reelId: string, metadata?: { watch_duration_seconds?: number; is_muted?: boolean; completed?: boolean }) => {
     if (trackedSessionViewsRef.current.has(reelId)) return;
@@ -327,8 +304,6 @@ export const Reels: React.FC = () => {
                   <ReelCard
                     reel={reel}
                     isActive={activeReelId === reel.id}
-                    isMuted={isMuted}
-                    onToggleMute={handleToggleMute}
                     isInResourceWindow={isInResourceWindow}
                     currentUserId={currentUserId}
                     currentUserRole={currentUserRole}

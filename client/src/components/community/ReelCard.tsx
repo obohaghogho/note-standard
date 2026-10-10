@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Heart, MessageCircle, Bookmark, Share2, Volume2, VolumeX, Play, UserPlus, Check, Sparkles, Trash2, Eye } from 'lucide-react';
+import { Heart, MessageCircle, Bookmark, Share2, Play, UserPlus, Check, Sparkles, Trash2, Eye } from 'lucide-react';
 import { API_URL } from '../../lib/api';
 import { toggleLike, toggleBookmark } from '../../services/communityService';
 
@@ -118,14 +118,6 @@ export const ReelCard: React.FC<ReelCardProps> = ({
 
   const { formatted: formattedViews, full: fullViewsText } = formatReelViews(viewsCount);
 
-  // Keep video element muted property synchronized with shared isMuted prop
-  useEffect(() => {
-    const video = videoRef.current;
-    if (video) {
-      video.muted = isMuted;
-    }
-  }, [isMuted]);
-
   // 2-second actual active playback view tracking trigger
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -138,7 +130,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
           if (onRecordView) {
             onRecordView(reel.id, {
               watch_duration_seconds: activePlaybackTimeRef.current,
-              is_muted: isMuted,
+              is_muted: videoRef.current?.muted ?? false,
               completed: false,
             });
           }
@@ -154,20 +146,27 @@ export const ReelCard: React.FC<ReelCardProps> = ({
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isActive, isPlaying, isMuted, reel.id, onRecordView]);
+  }, [isActive, isPlaying, reel.id, onRecordView]);
 
-
-  // Auto-play/pause when active changes
+  // Auto-play/pause when active changes (attempts sound-on playback; falls back to muted autoplay if browser policy blocks unmuted audio)
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !isInResourceWindow) return;
 
     if (isActive) {
+      video.muted = false;
       const playPromise = video.play();
       if (playPromise !== undefined) {
         playPromise
           .then(() => setIsPlaying(true))
-          .catch(() => setIsPlaying(false));
+          .catch(() => {
+            // Browser blocked unmuted autoplay. Fall back to muted autoplay so video plays visually.
+            // Tapping the video unmutes audio.
+            video.muted = true;
+            video.play()
+              .then(() => setIsPlaying(true))
+              .catch(() => setIsPlaying(false));
+          });
       }
     } else {
       video.pause();
@@ -184,19 +183,18 @@ export const ReelCard: React.FC<ReelCardProps> = ({
       video.pause();
       setIsPlaying(false);
     } else {
+      video.muted = false;
       const playPromise = video.play();
       if (playPromise !== undefined) {
         playPromise
           .then(() => setIsPlaying(true))
-          .catch(() => setIsPlaying(false));
+          .catch(() => {
+            video.muted = true;
+            video.play()
+              .then(() => setIsPlaying(true))
+              .catch(() => setIsPlaying(false));
+          });
       }
-    }
-  };
-
-  const toggleMute = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (onToggleMute) {
-      onToggleMute();
     }
   };
 
@@ -303,7 +301,6 @@ export const ReelCard: React.FC<ReelCardProps> = ({
           poster={reel.thumbnail_url}
           playsInline
           loop
-          muted={isMuted}
           preload={isInResourceWindow ? "auto" : "metadata"}
           onTimeUpdate={() => {
             const video = videoRef.current;
@@ -333,32 +330,12 @@ export const ReelCard: React.FC<ReelCardProps> = ({
            never overlap these controls. Outer div is pointer-events-none; each
            interactive child opts back in with pointer-events-auto. z-40 ensures
            controls sit above the top gradient (z-10) and below no other absolute layer. */}
-      <div
-        className="absolute left-3 right-3 z-40 flex items-center justify-between pointer-events-none"
-        style={{ top: 'calc(3.75rem + env(safe-area-inset-top, 0px))' }}
-      >
-        {/* Floating Sound Toggle Pill */}
-        <button
-          onClick={toggleMute}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/55 backdrop-blur-md text-white pointer-events-auto hover:bg-black/80 transition-all border border-white/20 shadow-xl active:scale-95 cursor-pointer text-xs font-semibold group"
-          title={isMuted ? 'Unmute Sound' : 'Mute Sound'}
-          aria-label={isMuted ? 'Unmute Sound' : 'Mute Sound'}
+      {canDelete && (
+        <div
+          className="absolute left-3 right-3 z-40 flex items-center justify-end pointer-events-none"
+          style={{ top: 'calc(3.75rem + env(safe-area-inset-top, 0px))' }}
         >
-          {isMuted ? (
-            <>
-              <VolumeX size={14} className="text-red-400 group-hover:scale-110 transition-transform" />
-              <span className="text-[11px]">Muted</span>
-            </>
-          ) : (
-            <>
-              <Volume2 size={14} className="text-emerald-400 animate-pulse group-hover:scale-110 transition-transform" />
-              <span className="text-[11px] text-emerald-300">Sound On</span>
-            </>
-          )}
-        </button>
-
-        {/* Delete Reel Icon Button (Visible for author or admin) */}
-        {canDelete && (
+          {/* Delete Reel Icon Button (Visible for author or admin) */}
           <button
             onClick={handleDeleteClick}
             className="w-8 h-8 rounded-full bg-black/55 backdrop-blur-md text-red-400 hover:text-white hover:bg-red-600/80 hover:border-red-500/60 pointer-events-auto transition-all border border-white/20 shadow-xl active:scale-95 cursor-pointer flex items-center justify-center group"
@@ -367,8 +344,8 @@ export const ReelCard: React.FC<ReelCardProps> = ({
           >
             <Trash2 size={15} className="group-hover:scale-110 transition-transform" />
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Center Play Button Overlay when video is paused */}
       {!isPlaying && (
