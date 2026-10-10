@@ -328,13 +328,21 @@ export const ReelCard: React.FC<ReelCardProps> = ({
       {/* Top Gradient Overlay for Header Contrast */}
       <div className="absolute top-0 left-0 right-0 h-36 bg-gradient-to-b from-black/85 via-black/35 to-transparent pointer-events-none z-10" />
 
-      {/* Top Floating Controls Bar (Mute Sound Pill on Left, Delete Icon on Right - Positioned at top-14/top-16 to prevent collision with top branding overlay) */}
-      <div className="absolute top-14 sm:top-16 left-3 right-3 z-30 flex items-center justify-between pointer-events-none">
+      {/* Top Floating Controls Bar — offset clears branding overlay on all phones.
+           Uses CSS env(safe-area-inset-top, 0px) so notch / Dynamic Island devices
+           never overlap these controls. Outer div is pointer-events-none; each
+           interactive child opts back in with pointer-events-auto. z-40 ensures
+           controls sit above the top gradient (z-10) and below no other absolute layer. */}
+      <div
+        className="absolute left-3 right-3 z-40 flex items-center justify-between pointer-events-none"
+        style={{ top: 'calc(3.75rem + env(safe-area-inset-top, 0px))' }}
+      >
         {/* Floating Sound Toggle Pill */}
         <button
           onClick={toggleMute}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/55 backdrop-blur-md text-white pointer-events-auto hover:bg-black/80 transition-all border border-white/20 shadow-xl active:scale-95 cursor-pointer text-xs font-semibold group"
-          title={isMuted ? "Unmute Sound" : "Mute Sound"}
+          title={isMuted ? 'Unmute Sound' : 'Mute Sound'}
+          aria-label={isMuted ? 'Unmute Sound' : 'Mute Sound'}
         >
           {isMuted ? (
             <>
@@ -354,7 +362,8 @@ export const ReelCard: React.FC<ReelCardProps> = ({
           <button
             onClick={handleDeleteClick}
             className="w-8 h-8 rounded-full bg-black/55 backdrop-blur-md text-red-400 hover:text-white hover:bg-red-600/80 hover:border-red-500/60 pointer-events-auto transition-all border border-white/20 shadow-xl active:scale-95 cursor-pointer flex items-center justify-center group"
-            title="Delete Reel Video"
+            title="Delete Reel"
+            aria-label="Delete Reel"
           >
             <Trash2 size={15} className="group-hover:scale-110 transition-transform" />
           </button>

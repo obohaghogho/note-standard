@@ -43,13 +43,31 @@ export const Reels: React.FC = () => {
     } catch {}
   }
 
-  const [isMuted, setIsMuted] = useState(true);
+  // Fix B: Initialise mute from stored preference (default: true for iOS autoplay compliance).
+  // A stored 'false' (Sound On) preference is applied to the UI state only — it does NOT
+  // attempt audible autoplay, which iOS Safari requires a user gesture for. The user
+  // still needs to tap the mute button once on a new session if iOS rejects auto-unmute,
+  // but repeat visitors who explicitly chose Sound On will see the correct indicator.
+  const getInitialMute = () => {
+    try {
+      const stored = localStorage.getItem('reel_muted');
+      // Treat missing (first use) and 'true' identically — start muted
+      return stored === null || stored === 'true';
+    } catch {
+      return true; // localStorage unavailable — safe default
+    }
+  };
+  const [isMuted, setIsMuted] = useState(getInitialMute);
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
 
   const handleToggleMute = useCallback(() => {
-    setIsMuted(prev => !prev);
+    setIsMuted(prev => {
+      const next = !prev;
+      try { localStorage.setItem('reel_muted', String(next)); } catch { /* unavailable */ }
+      return next;
+    });
   }, []);
 
   const handleRecordView = useCallback(async (reelId: string, metadata?: { watch_duration_seconds?: number; is_muted?: boolean; completed?: boolean }) => {
@@ -230,8 +248,13 @@ export const Reels: React.FC = () => {
 
   return (
     <div className="relative w-full h-full min-h-0 bg-black flex flex-col overflow-hidden">
-      {/* Floating Top Branding & Action Overlay */}
-      <div className="absolute top-3 left-3 right-3 sm:top-4 sm:left-4 sm:right-4 z-40 flex items-center justify-between pointer-events-none pt-safe gap-2">
+      {/* Floating Top Branding & Action Overlay.
+           top and padding-top mirror the safe-area-inset-top so the rendered height
+           is deterministic — ReelCard controls use the same calc() baseline. */}
+      <div
+        className="absolute left-3 right-3 sm:left-4 sm:right-4 z-50 flex items-center justify-between pointer-events-none gap-2"
+        style={{ top: 'max(0.75rem, env(safe-area-inset-top, 0.75rem))' }}
+      >
         <div className="flex items-center gap-2 pointer-events-auto">
           <button
             onClick={handleBackNav}
