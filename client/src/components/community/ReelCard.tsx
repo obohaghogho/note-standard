@@ -75,7 +75,6 @@ export const ReelCard: React.FC<ReelCardProps> = ({
   onToggleMute,
   isInResourceWindow = true,
   currentUserId,
-  currentUserRole,
   onOpenComments,
   onLikeToggle,
   onDeleteReel,
@@ -96,8 +95,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
   const isOwner = Boolean(
     currentUserId && (reel.author_id === currentUserId || reel.author?.id === currentUserId)
   );
-  const isAdmin = currentUserRole === 'admin' || currentUserRole === 'superadmin';
-  const canDelete = Boolean(onDeleteReel && (isOwner || isAdmin));
+  const canDelete = Boolean(onDeleteReel && isOwner);
 
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
