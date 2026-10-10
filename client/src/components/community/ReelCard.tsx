@@ -148,7 +148,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
     };
   }, [isActive, isPlaying, reel.id, onRecordView]);
 
-  // Auto-play/pause when active changes (attempts sound-on playback; falls back to muted autoplay if browser policy blocks unmuted audio)
+  // Auto-play/pause when active changes (attempts sound-on playback; if browser policy blocks unmuted audio, sets isPlaying=false so user can tap to play with sound)
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !isInResourceWindow) return;
@@ -160,12 +160,9 @@ export const ReelCard: React.FC<ReelCardProps> = ({
         playPromise
           .then(() => setIsPlaying(true))
           .catch(() => {
-            // Browser blocked unmuted autoplay. Fall back to muted autoplay so video plays visually.
-            // Tapping the video unmutes audio.
-            video.muted = true;
-            video.play()
-              .then(() => setIsPlaying(true))
-              .catch(() => setIsPlaying(false));
+            // Browser blocked unmuted autoplay. Keep unmuted and show play overlay.
+            // Tapping the card plays with sound.
+            setIsPlaying(false);
           });
       }
     } else {
@@ -188,12 +185,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
       if (playPromise !== undefined) {
         playPromise
           .then(() => setIsPlaying(true))
-          .catch(() => {
-            video.muted = true;
-            video.play()
-              .then(() => setIsPlaying(true))
-              .catch(() => setIsPlaying(false));
-          });
+          .catch(() => setIsPlaying(false));
       }
     }
   };
