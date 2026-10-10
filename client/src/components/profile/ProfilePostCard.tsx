@@ -4,16 +4,57 @@ import { Heart, MessageCircle, Share2, Bookmark, CheckCircle, Play } from 'lucid
 import SecureImage from '../common/SecureImage';
 import type { PublicPost } from './PublicProfileModal';
 import { formatDistanceToNow } from 'date-fns';
+import toast from 'react-hot-toast';
 
 interface ProfilePostCardProps {
   post: PublicPost;
   onLike: () => void;
   onComment: () => void;
   onClick: () => void;
+  onShare?: () => void;
 }
 
-export const ProfilePostCard: React.FC<ProfilePostCardProps> = ({ post, onLike, onComment, onClick }) => {
+export const ProfilePostCard: React.FC<ProfilePostCardProps> = ({ post, onLike, onComment, onClick, onShare }) => {
   const [isPlaying, setIsPlaying] = useState(false);
+
+  const handleShare = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onShare) {
+      onShare();
+      return;
+    }
+
+    const shareUrl = `${window.location.origin}/dashboard/post/${post.id}`;
+    const shareData = {
+      title: `Post by @${post.profiles?.username || 'user'} on NoteStandard`,
+      text: post.content ? post.content.slice(0, 100) : 'Check out this post on NoteStandard',
+      url: shareUrl,
+    };
+
+    if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+      try {
+        await navigator.share(shareData);
+      } catch (err: any) {
+        if (err?.name !== 'AbortError') {
+          try {
+            await navigator.clipboard.writeText(shareUrl);
+            toast.success('Post link copied to clipboard!');
+          } catch {
+            toast.error('Failed to share post');
+          }
+        }
+      }
+    } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success('Post link copied to clipboard!');
+      } catch {
+        toast.error('Failed to copy link to clipboard');
+      }
+    } else {
+      toast.error('Sharing is not supported on this browser');
+    }
+  };
 
   const mediaUrl = post.media_url || (Array.isArray(post.media_urls) && post.media_urls.length > 0 ? post.media_urls[0] : null);
 
@@ -143,7 +184,13 @@ export const ProfilePostCard: React.FC<ProfilePostCardProps> = ({ post, onLike, 
             <span className="text-xs font-semibold">{post.likes_count > 0 ? post.likes_count : ''}</span>
           </motion.button>
 
-          <button className="flex items-center gap-2 hover:text-emerald-400 group/btn transition-colors" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            className="flex items-center gap-2 hover:text-emerald-400 group/btn transition-colors cursor-pointer"
+            onClick={handleShare}
+            title="Share Post"
+            aria-label="Share Post"
+          >
             <div className="p-2 rounded-full group-hover/btn:bg-emerald-400/10 transition-colors">
               <Share2 size={18} />
             </div>

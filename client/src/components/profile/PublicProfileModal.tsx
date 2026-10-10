@@ -14,6 +14,7 @@ import { ProfileEmptyStates } from './ProfileEmptyStates';
 import { ProfilePostCard } from './ProfilePostCard';
 import { FeaturedNote } from './FeaturedNote';
 import { Dropdown } from '../common/Dropdown';
+import { toggleLike } from '../../services/communityService';
 
 export interface PublicProfile {
   id: string;
@@ -190,8 +191,77 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
   const modalRef = useRef<HTMLDivElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
+  const pendingLikesRef = useRef<Set<string>>(new Set());
 
   const isSelf = currentUser?.id === profile?.id;
+
+  const handleToggleLike = async (postId: string) => {
+    if (!postId || pendingLikesRef.current.has(postId)) return;
+
+    const target = posts.find(p => p.id === postId)
+      || likedPosts.find(p => p.id === postId)
+      || bookmarkedPosts.find(p => p.id === postId);
+
+    if (!target) return;
+
+    pendingLikesRef.current.add(postId);
+    const prevLiked = Boolean(target.is_liked);
+    const prevCount = target.likes_count || 0;
+    const nextLiked = !prevLiked;
+    const nextCount = nextLiked ? prevCount + 1 : Math.max(0, prevCount - 1);
+
+    const updatePostInList = (list: PublicPost[]) =>
+      list.map(p =>
+        p.id === postId
+          ? { ...p, is_liked: nextLiked, likes_count: nextCount }
+          : p
+      );
+
+    // Optimistic update across all post arrays
+    setPosts(updatePostInList);
+    setLikedPosts(updatePostInList);
+    setBookmarkedPosts(updatePostInList);
+
+    try {
+      const res = await toggleLike(postId);
+      if (res && typeof res.liked === 'boolean') {
+        const serverLiked = res.liked;
+        if (serverLiked !== nextLiked) {
+          const authoritativeCount = serverLiked
+            ? (prevLiked ? prevCount : prevCount + 1)
+            : (prevLiked ? Math.max(0, prevCount - 1) : prevCount);
+
+          const syncPostInList = (list: PublicPost[]) =>
+            list.map(p =>
+              p.id === postId
+                ? {
+                    ...p,
+                    is_liked: serverLiked,
+                    likes_count: authoritativeCount
+                  }
+                : p
+            );
+          setPosts(syncPostInList);
+          setLikedPosts(syncPostInList);
+          setBookmarkedPosts(syncPostInList);
+        }
+      }
+    } catch {
+      // Revert on failure
+      const rollback = (list: PublicPost[]) =>
+        list.map(p =>
+          p.id === postId
+            ? { ...p, is_liked: prevLiked, likes_count: prevCount }
+            : p
+        );
+      setPosts(rollback);
+      setLikedPosts(rollback);
+      setBookmarkedPosts(rollback);
+      toast.error('Failed to update like');
+    } finally {
+      pendingLikesRef.current.delete(postId);
+    }
+  };
 
   const setNotesFromData = (data: any) => {
     if (Array.isArray(data)) {
@@ -685,7 +755,15 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
           <>
             {activeTab === 'posts' && (
               <div className="flex flex-col">
-                <FeaturedNote note={featuredNote} onClick={() => {}} />
+                <FeaturedNote
+                  note={featuredNote}
+                  onClick={() => {
+                    if (featuredNote?.id) {
+                      if (!isPage && onClose) onClose();
+                      navigate(`/dashboard/notes?noteId=${featuredNote.id}`);
+                    }
+                  }}
+                />
                 {posts.length === 0 ? (
                   <ProfileEmptyStates type="posts" isOwner={isSelf} onAction={() => navigate('/dashboard/community')} />
                 ) : (
@@ -694,7 +772,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                       key={post.id}
                       post={post}
                       onClick={() => navigate(`/dashboard/post/${post.id}`)}
-                      onLike={() => {}}
+                      onLike={() => handleToggleLike(post.id)}
                       onComment={() => navigate(`/dashboard/post/${post.id}`)}
                     />
                   ))
@@ -736,7 +814,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                       key={post.id}
                       post={post}
                       onClick={() => navigate(`/dashboard/post/${post.id}`)}
-                      onLike={() => {}}
+                      onLike={() => handleToggleLike(post.id)}
                       onComment={() => navigate(`/dashboard/post/${post.id}`)}
                     />
                   ));
@@ -754,7 +832,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                       key={post.id}
                       post={post}
                       onClick={() => navigate(`/dashboard/post/${post.id}`)}
-                      onLike={() => {}}
+                      onLike={() => handleToggleLike(post.id)}
                       onComment={() => navigate(`/dashboard/post/${post.id}`)}
                     />
                   ))
@@ -772,7 +850,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                       key={post.id}
                       post={post}
                       onClick={() => navigate(`/dashboard/post/${post.id}`)}
-                      onLike={() => {}}
+                      onLike={() => handleToggleLike(post.id)}
                       onComment={() => navigate(`/dashboard/post/${post.id}`)}
                     />
                   ))
