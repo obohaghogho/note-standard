@@ -4,6 +4,7 @@ import { Send, X, Edit3, Trash2, Reply } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import type { CommunityComment } from '../../services/communityService';
+import { useKeyboardLayout } from '../../hooks/useKeyboardLayout';
 import {
   getComments,
   addComment,
@@ -124,12 +125,25 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, postId, level = 0, o
 export const CommentSection: React.FC<Props> = ({ postId, onCommentAdded, onCommentDeleted }) => {
   const { user } = useAuth();
   const { socket } = useSocket();
+  const { isKeyboardOpen, kbHeight } = useKeyboardLayout();
   const [comments, setComments] = useState<CommunityComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [replyTo, setReplyTo] = useState<{ id: string; username: string } | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [isFocused, setIsFocused] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const focusRafRef = useRef<number | null>(null);
+
+  // ── Unmount cleanup for focus animations ─────────────────────────────────
+  useEffect(() => {
+    return () => {
+      if (focusRafRef.current !== null) cancelAnimationFrame(focusRafRef.current);
+      if (focusTimerRef.current !== null) clearTimeout(focusTimerRef.current);
+    };
+  }, []);
 
   // ── Load comments ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -178,6 +192,99 @@ export const CommentSection: React.FC<Props> = ({ postId, onCommentAdded, onComm
     };
   }, [socket, postId, onCommentAdded, onCommentDeleted]);
 
+  // ── Scroll-into-view within nested scroll container ──────────────────────
+  const scrollToComposer = useCallback(() => {
+    if (!composerRef.current) return;
+    if (inputRef.current && document.activeElement !== inputRef.current) return;
+    const container = findScrollContainer(composerRef.current);
+    if (!container) return;
+
+    const composerRect = composerRef.current.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+
+    const vp = window.visualViewport;
+    const vpBottom = vp ? (vp.offsetTop + vp.height) : (window.innerHeight - kbHeight);
+
+    let bottomCutoff = Math.min(containerRect.bottom, vpBottom);
+
+    // Account for fixed navigation overlay if present
+    const nav = document.querySelector('nav');
+    if (nav) {
+      const navRect = nav.getBoundingClientRect();
+      if (navRect.top > 0 && navRect.top < bottomCutoff) {
+        bottomCutoff = navRect.top;
+      }
+    }
+
+    const safeMargin = 16;
+    const targetBottom = bottomCutoff - safeMargin;
+
+    if (composerRect.bottom > targetBottom) {
+      const delta = composerRect.bottom - targetBottom;
+      container.scrollBy({
+        top: delta,
+        behavior: 'smooth',
+      });
+    } else if (composerRect.top < containerRect.top + 60) {
+      const delta = composerRect.top - (containerRect.top + 70);
+      container.scrollBy({
+        top: delta,
+        behavior: 'smooth',
+      });
+    }
+  }, [kbHeight]);
+
+  const handleFocus = useCallback(() => {
+    setIsFocused(true);
+    if (focusRafRef.current !== null) cancelAnimationFrame(focusRafRef.current);
+    focusRafRef.current = requestAnimationFrame(() => {
+      scrollToComposer();
+      focusRafRef.current = null;
+    });
+    if (focusTimerRef.current !== null) clearTimeout(focusTimerRef.current);
+    focusTimerRef.current = setTimeout(() => {
+      scrollToComposer();
+      focusTimerRef.current = null;
+    }, 300);
+  }, [scrollToComposer]);
+
+  const handleBlur = useCallback(() => {
+    setIsFocused(false);
+    if (focusRafRef.current !== null) {
+      cancelAnimationFrame(focusRafRef.current);
+      focusRafRef.current = null;
+    }
+    if (focusTimerRef.current !== null) {
+      clearTimeout(focusTimerRef.current);
+      focusTimerRef.current = null;
+    }
+  }, []);
+
+  // Listen to visualViewport resize/scroll when focused
+  useEffect(() => {
+    if (!isFocused || typeof window === 'undefined') return;
+    const vp = window.visualViewport;
+    if (!vp) return;
+
+    let rafId: number | null = null;
+    const handleVpChange = () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        scrollToComposer();
+        rafId = null;
+      });
+    };
+
+    vp.addEventListener('resize', handleVpChange, { passive: true });
+    vp.addEventListener('scroll', handleVpChange, { passive: true });
+
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      vp.removeEventListener('resize', handleVpChange);
+      vp.removeEventListener('scroll', handleVpChange);
+    };
+  }, [isFocused, scrollToComposer]);
+
   // ── Submit ────────────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
     const trimmed = text.trim();
@@ -191,6 +298,9 @@ export const CommentSection: React.FC<Props> = ({ postId, onCommentAdded, onComm
       });
       setComments(prev => [...prev, comment]);
       setText('');
+      if (inputRef.current) {
+        inputRef.current.style.height = 'auto';
+      }
       setReplyTo(null);
       if (socket) {
         socket.emit('community:comment_added', { postId, comment });
@@ -222,6 +332,8 @@ export const CommentSection: React.FC<Props> = ({ postId, onCommentAdded, onComm
   }, [onCommentDeleted]);
 
   const flat = flattenTree(comments);
+  const isInputActiveOnMobile = isFocused && (isKeyboardOpen || (typeof window !== 'undefined' && window.visualViewport && window.visualViewport.height < window.innerHeight - 50));
+  const bufferHeight = isInputActiveOnMobile ? Math.max(kbHeight, 300) : 0;
 
   return (
     <div className="px-4 sm:px-5 pb-4">
@@ -247,7 +359,7 @@ export const CommentSection: React.FC<Props> = ({ postId, onCommentAdded, onComm
 
       {/* Input */}
       {user && (
-        <div className="mt-3 flex items-start gap-2.5">
+        <div ref={composerRef} className="mt-3 flex items-start gap-2.5">
           <img
             src={`https://ui-avatars.com/api/?name=U&background=6366f1&color=fff`}
             alt="You"
@@ -262,20 +374,32 @@ export const CommentSection: React.FC<Props> = ({ postId, onCommentAdded, onComm
                 </button>
               </div>
             )}
-            <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-full border border-gray-200 dark:border-gray-700 pr-1 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
-              <input
+            <div className="flex items-end bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 pr-1 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent transition-all">
+              <textarea
                 ref={inputRef}
                 value={text}
-                onChange={e => setText(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSubmit()}
+                onChange={e => {
+                  setText(e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = `${Math.min(e.target.scrollHeight, 110)}px`;
+                }}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit();
+                  }
+                }}
+                rows={1}
                 placeholder="Write a comment…"
-                className="flex-1 bg-transparent text-sm text-gray-900 dark:text-white px-4 py-2 focus:outline-none"
+                className="flex-1 bg-transparent text-base sm:text-sm text-gray-900 dark:text-white px-4 py-2 focus:outline-none resize-none max-h-28 overflow-y-auto leading-relaxed"
                 maxLength={2000}
               />
               <button
                 onClick={handleSubmit}
                 disabled={!text.trim() || submitting}
-                className="p-2 rounded-full text-blue-600 dark:text-blue-400 disabled:opacity-30 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                className="p-2 mb-0.5 rounded-full text-blue-600 dark:text-blue-400 disabled:opacity-30 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors shrink-0"
                 aria-label="Send comment"
               >
                 <Send size={15} />
@@ -284,6 +408,15 @@ export const CommentSection: React.FC<Props> = ({ postId, onCommentAdded, onComm
           </div>
         </div>
       )}
+
+      {/* Keyboard avoidance buffer spacer for nested scroll container */}
+      <div
+        style={{
+          height: bufferHeight,
+          transition: 'height 0.2s ease-out',
+        }}
+        aria-hidden="true"
+      />
     </div>
   );
 };
@@ -327,4 +460,19 @@ function getLevel(roots: CommunityComment[], id: string, level = 0): number {
     }
   }
   return 0;
+}
+
+function findScrollContainer(el: HTMLElement | null): HTMLElement | null {
+  let parent = el?.parentElement;
+  while (parent && parent !== document.body) {
+    const style = window.getComputedStyle(parent);
+    if (
+      (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+      parent.scrollHeight > parent.clientHeight
+    ) {
+      return parent;
+    }
+    parent = parent.parentElement;
+  }
+  return null;
 }
