@@ -31,6 +31,7 @@ import {
   Menu,
   Video,
   PhoneCall,
+  BadgeCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { uploadTeamImage, uploadTeamAudio } from '../../lib/teamsApi';
@@ -320,6 +321,7 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
     const sender = msg?.sender || members?.find((m) => m?.user_id === msg?.sender_id)?.profile;
     const senderName = String(sender?.full_name || sender?.username || sender?.email || 'Unknown');
     const senderAvatar = sender?.avatar_url;
+    const isVerified = Boolean(sender?.is_verified);
 
     // Different rendering based on message type
     if (msg?.message_type === 'system') {
@@ -368,7 +370,12 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
             </div>
           )}
           <div className="team-chat__message-content">
-            {showName && !isOwn && <div className="team-chat__message-name">{senderName}</div>}
+            {showName && !isOwn && (
+              <div className="team-chat__message-name flex items-center gap-1">
+                <span>{senderName}</span>
+                {isVerified && <BadgeCheck size={13} className="text-blue-500 shrink-0 inline-block" />}
+              </div>
+            )}
             <div className="team-chat__message-note-card">
               <div className="team-chat__message-note-header">
                 <FileText size={16} />
@@ -445,7 +452,12 @@ export const TeamChat: React.FC<TeamChatProps> = ({ teamId, className = '', acti
           </div>
         )}
         <div className="team-chat__message-content">
-          {showName && !isOwn && <div className="team-chat__message-name">{senderName}</div>}
+          {showName && !isOwn && (
+            <div className="team-chat__message-name flex items-center gap-1">
+              <span>{senderName}</span>
+              {isVerified && <BadgeCheck size={13} className="text-blue-500 shrink-0 inline-block" />}
+            </div>
+          )}
           <div className={`team-chat__message-bubble ${isSelected ? 'ring-1 ring-blue-500/40 bg-blue-600/15' : ''}`}>
             {msg.message_type === 'image' && msg.metadata?.image_url && (
               <div 

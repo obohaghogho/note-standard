@@ -33,6 +33,7 @@ export interface TeamMember {
     username?: string;
     full_name?: string;
     avatar_url?: string;
+    is_verified?: boolean;
   };
 }
 
@@ -64,6 +65,7 @@ export interface TeamMessage {
     username?: string;
     full_name?: string;
     avatar_url?: string;
+    is_verified?: boolean;
   };
   
   // Joined reply message

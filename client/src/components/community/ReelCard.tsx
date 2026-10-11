@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Heart, MessageCircle, Bookmark, Share2, Play, UserPlus, Check, Sparkles, Trash2, Eye } from 'lucide-react';
+import { Heart, MessageCircle, Bookmark, Share2, Play, UserPlus, Check, Sparkles, Trash2, Eye, BadgeCheck } from 'lucide-react';
 import { API_URL } from '../../lib/api';
 import { toggleLike, toggleBookmark } from '../../services/communityService';
 
@@ -35,6 +35,7 @@ export type ReelPost = {
     username: string;
     display_name?: string;
     avatar_url?: string;
+    is_verified?: boolean;
   };
   content: string;
   media_url?: string;
@@ -375,6 +376,14 @@ export const ReelCard: React.FC<ReelCardProps> = ({
           <span className="font-bold text-white text-xs sm:text-sm drop-shadow-md truncate shrink min-w-0 max-w-[130px] sm:max-w-[180px]">
             @{reel.author?.username || 'creator'}
           </span>
+
+          {reel.author?.is_verified && (
+            <BadgeCheck
+              size={15}
+              className="text-blue-400 fill-blue-500/20 shrink-0"
+              aria-label="Verified creator"
+            />
+          )}
 
           <button
             onClick={handleFollow}

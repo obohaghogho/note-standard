@@ -542,7 +542,7 @@ const getReels = async (req, res, next) => {
 
     let query = supabase
       .from('community_posts')
-      .select('*, author:profiles!community_posts_author_id_fkey(id, username, full_name, avatar_url)')
+      .select('*, author:profiles!community_posts_author_id_fkey(id, username, full_name, avatar_url, is_verified)')
       .or('post_type.eq.video,post_type.eq.reel,is_reel.eq.true')
       .order('created_at', { ascending: false })
       .limit(limitNum + 1);
@@ -558,7 +558,7 @@ const getReels = async (req, res, next) => {
       logger.warn(`[CommunityController] getReels primary query empty/failed (${error?.message}), querying posts with video media.`);
       const { data: fallbackPosts } = await supabase
         .from('community_posts')
-        .select('*, author:profiles(id, username, full_name, avatar_url)')
+        .select('*, author:profiles(id, username, full_name, avatar_url, is_verified)')
         .not('media_urls', 'is', null)
         .order('created_at', { ascending: false })
         .limit(limitNum + 1);
@@ -576,7 +576,7 @@ const getReels = async (req, res, next) => {
     if (authorIds.length > 0) {
       const { data: profilesData } = await supabase
         .from('profiles')
-        .select('id, username, full_name, avatar_url')
+        .select('id, username, full_name, avatar_url, is_verified')
         .in('id', authorIds);
 
       (profilesData || []).forEach(prof => {

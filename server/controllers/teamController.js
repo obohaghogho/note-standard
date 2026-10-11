@@ -79,7 +79,8 @@ exports.getTeamMessages = async (req, res, next) => {
           id,
           username,
           full_name,
-          avatar_url
+          avatar_url,
+          is_verified
         )
       `)
       .eq('team_id', teamId)
@@ -90,7 +91,7 @@ exports.getTeamMessages = async (req, res, next) => {
       if (error.code === '42703' || error.code === 'PGRST200') {
         const { data: retryData, error: retryError } = await supabase
           .from('team_messages')
-          .select('*, profiles:sender_id(id, username, full_name, avatar_url)')
+          .select('*, profiles:sender_id(id, username, full_name, avatar_url, is_verified)')
           .eq('team_id', teamId)
           .order('created_at', { ascending: false })
           .limit(50);
@@ -146,7 +147,8 @@ exports.sendTeamMessage = async (req, res, next) => {
           id,
           username,
           full_name,
-          avatar_url
+          avatar_url,
+          is_verified
         )
       `)
       .single();
@@ -353,7 +355,8 @@ exports.getTeamMembers = async (req, res, next) => {
           username,
           full_name,
           avatar_url,
-          email
+          email,
+          is_verified
         )
       `)
       .eq('team_id', teamId)

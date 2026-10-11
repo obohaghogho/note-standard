@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { 
   Users, Search, UserCheck, ShieldAlert, Award, Layers, 
-  Trash2, Mail, Edit3, Settings, Plus, RefreshCw, X, ChevronLeft, ChevronRight
+  Trash2, Mail, Edit3, Settings, Plus, RefreshCw, X, ChevronLeft, ChevronRight, BadgeCheck
 } from 'lucide-react';
 import { 
   getDepartments, getCustomRoles, createCustomRole, 
@@ -293,7 +293,10 @@ export const WorkspaceMembers: React.FC<WorkspaceMembersProps> = ({
                   )}
                 </div>
                 <div className="min-w-0">
-                  <div className="font-bold text-white truncate">{m.profile?.full_name || m.profile?.username}</div>
+                  <div className="font-bold text-white truncate flex items-center gap-1">
+                    <span>{m.profile?.full_name || m.profile?.username}</span>
+                    {m.profile?.is_verified && <BadgeCheck size={13} className="text-blue-500 shrink-0 inline-block" />}
+                  </div>
                   <div className="text-[9px] text-gray-500 truncate mt-0.5">{m.profile?.email}</div>
                 </div>
               </td>

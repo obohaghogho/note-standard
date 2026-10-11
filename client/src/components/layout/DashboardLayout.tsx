@@ -104,14 +104,14 @@ export function DashboardLayout() {
                 className={cn(
                     "flex-1 transition-all duration-300 min-w-0 flex flex-col h-full relative w-full max-w-full overflow-x-hidden",
                     !isStandalonePageOnMobile && "pb-safe lg:ml-[16rem]",
-                    isStandalonePageOnMobile && "absolute inset-0 z-[60] bg-black m-0 p-0 lg:relative lg:inset-auto lg:z-0 lg:bg-transparent lg:ml-[16rem] overflow-hidden"
+                    isStandalonePageOnMobile && "absolute inset-0 z-[60] bg-black m-0 p-0 lg:relative lg:inset-auto lg:z-0 lg:bg-transparent lg:ml-[16rem] overflow-hidden lg:overflow-visible"
                 )}
             >
                 {renderHeader()}
 
                 <div className={cn(
                     "flex-1 min-h-0 w-full flex flex-col min-w-0 relative h-full max-w-full overflow-x-hidden",
-                    isStandalonePageOnMobile ? "p-0 overflow-hidden" : "p-3 sm:p-4 md:p-8 max-w-7xl mx-auto overflow-y-auto overflow-x-hidden pb-[calc(9rem+env(safe-area-inset-bottom,0px))] lg:pb-8 touch-pan-y"
+                    isStandalonePageOnMobile ? "p-0 overflow-hidden lg:overflow-visible" : "p-3 sm:p-4 md:p-8 max-w-7xl mx-auto overflow-y-auto overflow-x-hidden pb-[calc(9rem+env(safe-area-inset-bottom,0px))] lg:pb-8 touch-pan-y"
                 )}>
                     <ErrorBoundary fallback={
                         <div className="p-8 text-center bg-red-500/10 rounded-xl border border-red-500/20 m-4">
