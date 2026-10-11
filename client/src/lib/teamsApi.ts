@@ -222,7 +222,8 @@ export async function getTeamMembers(teamId: string): Promise<TeamMember[]> {
           email,
           username,
           full_name,
-          avatar_url
+          avatar_url,
+          is_verified
         )
       `)
       .eq('team_id', teamId)
@@ -437,7 +438,8 @@ export async function getTeamMessages(
           email,
           username,
           full_name,
-          avatar_url
+          avatar_url,
+          is_verified
         )
       `)
       .eq('team_id', teamId)
