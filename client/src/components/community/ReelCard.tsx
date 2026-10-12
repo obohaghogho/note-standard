@@ -37,6 +37,14 @@ export type ReelPost = {
     avatar_url?: string;
     is_verified?: boolean;
   };
+  /** Raw Supabase join key returned when the server uses profiles!author_id(...)
+   *  without an alias. Prefer `author` when present; fall back to `profiles`. */
+  profiles?: {
+    id?: string;
+    username?: string;
+    avatar_url?: string;
+    is_verified?: boolean;
+  };
   content: string;
   media_url?: string;
   thumbnail_url?: string;
@@ -282,7 +290,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
   return (
     <div
       onClick={handleDoubleTap}
-      className="relative w-full h-full sm:max-h-[calc(100vh-5rem)] sm:max-w-[420px] mx-auto rounded-none sm:rounded-2xl overflow-hidden snap-start shrink-0 bg-black shadow-2xl flex flex-col justify-between select-none cursor-pointer border-0 sm:border sm:border-white/10"
+      className="relative w-full h-full sm:max-h-[calc(100vh-5rem)] sm:max-w-[420px] mx-auto rounded-none sm:rounded-2xl overflow-hidden shrink-0 bg-black shadow-2xl flex flex-col justify-between select-none cursor-pointer border-0 sm:border sm:border-white/10"
     >
       {/* Background Video (Only mounted within safe active-1..active+1 resource window) */}
       {reel.media_url && isInResourceWindow ? (
@@ -368,19 +376,20 @@ export const ReelCard: React.FC<ReelCardProps> = ({
           <img
             src={
               reel.author?.avatar_url ||
-              `https://ui-avatars.com/api/?name=${reel.author?.username || 'User'}&background=6366f1&color=fff`
+              reel.profiles?.avatar_url ||
+              `https://ui-avatars.com/api/?name=${reel.author?.username || reel.profiles?.username || 'User'}&background=6366f1&color=fff`
             }
-            alt={reel.author?.username}
+            alt={reel.author?.username || reel.profiles?.username}
             className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover border-2 border-white/40 shrink-0 shadow-lg"
           />
           <span className="font-bold text-white text-xs sm:text-sm drop-shadow-md truncate shrink min-w-0 max-w-[130px] sm:max-w-[180px]">
-            @{reel.author?.username || 'creator'}
+            @{reel.author?.username || reel.profiles?.username || 'creator'}
           </span>
 
-          {reel.author?.is_verified && (
+          {Boolean(reel.author?.is_verified || reel.profiles?.is_verified) && (
             <BadgeCheck
               size={15}
-              className="text-blue-400 fill-blue-500/20 shrink-0"
+              className="text-blue-500 shrink-0 inline-block"
               aria-label="Verified creator"
             />
           )}

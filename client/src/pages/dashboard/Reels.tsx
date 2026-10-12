@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ReelCard, type ReelPost } from '../../components/community/ReelCard';
 import { ReelUploadModal } from '../../components/community/ReelUploadModal';
-import { Loader2, Plus, Sparkles, Video, RefreshCw, X, MessageCircle, Send, ArrowLeft } from 'lucide-react';
+import { Loader2, Plus, Sparkles, Video, X, MessageCircle, Send, ArrowLeft, ChevronUp, ChevronDown } from 'lucide-react';
 import { API_URL } from '../../lib/api';
 import { deletePost, recordReelView } from '../../services/communityService';
 import { useAuth } from '../../context/AuthContext';
@@ -164,6 +164,89 @@ export const Reels: React.FC = () => {
     return () => observer.disconnect();
   }, [reels, fetchMoreReels]);
 
+  // Shared navigation helper
+  const navigateToReel = useCallback((direction: 'next' | 'prev') => {
+    const currentIdx = reels.findIndex(r => r.id === activeReelId);
+    const safeIdx = currentIdx >= 0 ? currentIdx : 0;
+    if (direction === 'next' && safeIdx < reels.length - 1) {
+      const target = reels[safeIdx + 1];
+      const el = cardRefs.current.get(target.id);
+      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); setActiveReelId(target.id); }
+    } else if (direction === 'prev' && safeIdx > 0) {
+      const target = reels[safeIdx - 1];
+      const el = cardRefs.current.get(target.id);
+      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); setActiveReelId(target.id); }
+    }
+  }, [reels, activeReelId]);
+
+  // Desktop Wheel and Trackpad navigation.
+  // Throttle state lives in refs so it survives re-renders and active-reel changes;
+  // the listener reads the latest navigator through a ref instead of re-registering.
+  const navigateToReelRef = useRef(navigateToReel);
+  navigateToReelRef.current = navigateToReel;
+  const wheelLockRef = useRef(false);
+  const wheelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (wheelTimerRef.current) clearTimeout(wheelTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (selectedCommentsReelId || showUploadModal) return;
+
+      const LINE_PX = 40;
+      const PAGE_PX = 200;
+      const normalizedDelta =
+        e.deltaMode === 1 ? e.deltaY * LINE_PX :
+        e.deltaMode === 2 ? e.deltaY * PAGE_PX :
+        e.deltaY;
+
+      if (Math.abs(normalizedDelta) < 20) return;
+      e.preventDefault();
+
+      // Release the lock 400ms after the last wheel event of the gesture,
+      // so trackpad inertia cannot trigger a second navigation.
+      if (wheelTimerRef.current) clearTimeout(wheelTimerRef.current);
+      wheelTimerRef.current = setTimeout(() => { wheelLockRef.current = false; }, 400);
+
+      if (wheelLockRef.current) return;
+      wheelLockRef.current = true;
+      navigateToReelRef.current(normalizedDelta > 0 ? 'next' : 'prev');
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', handleWheel);
+    };
+  }, [selectedCommentsReelId, showUploadModal]);
+
+  // Desktop Keyboard navigation (ArrowDown, ArrowUp, PageDown, PageUp, Space)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (selectedCommentsReelId || showUploadModal) return;
+      const target = e.target as HTMLElement;
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName)) return;
+      if (target?.isContentEditable) return;
+
+      if (e.key === 'ArrowDown' || e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey)) {
+        e.preventDefault();
+        navigateToReel('next');
+      } else if (e.key === 'ArrowUp' || e.key === 'PageUp' || (e.key === ' ' && e.shiftKey)) {
+        e.preventDefault();
+        navigateToReel('prev');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [navigateToReel, selectedCommentsReelId, showUploadModal]);
+
   // Comments Drawer handler
   const handleOpenComments = async (reelId: string) => {
     setSelectedCommentsReelId(reelId);
@@ -223,6 +306,11 @@ export const Reels: React.FC = () => {
     }
   };
 
+  const activeIndex = reels.findIndex(r => r.id === activeReelId);
+  const safeActiveIdx = activeIndex >= 0 ? activeIndex : 0;
+  const canGoNext = safeActiveIdx < reels.length - 1;
+  const canGoPrev = safeActiveIdx > 0;
+
   return (
     <div className="relative w-full h-full min-h-0 bg-black flex flex-col overflow-hidden">
       {/* Floating Top Branding & Action Overlay.
@@ -259,10 +347,59 @@ export const Reels: React.FC = () => {
         </button>
       </div>
 
+      {/* Right-side Navigation Arrows — always visible, primary scroll method */}
+      {reels.length > 1 && !loading && (
+        <div className="absolute right-3 sm:right-4 z-50 flex flex-col gap-2 pointer-events-none"
+          style={{ top: '50%', transform: 'translateY(-50%)' }}
+        >
+          <button
+            onClick={() => navigateToReel('prev')}
+            disabled={!canGoPrev}
+            aria-label="Previous reel"
+            title="Previous reel (↑)"
+            className="pointer-events-auto flex items-center justify-center w-10 h-10 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white shadow-xl transition-all hover:bg-white/20 active:scale-95 disabled:opacity-20 disabled:cursor-not-allowed"
+          >
+            <ChevronUp size={22} />
+          </button>
+
+          {/* Dot indicator */}
+          <div className="flex flex-col items-center gap-1 py-1 pointer-events-none">
+            {reels.slice(Math.max(0, safeActiveIdx - 2), Math.min(reels.length, safeActiveIdx + 3)).map((r, i) => {
+              const realIdx = Math.max(0, safeActiveIdx - 2) + i;
+              return (
+                <button
+                  key={r.id}
+                  onClick={() => {
+                    const el = cardRefs.current.get(r.id);
+                    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); setActiveReelId(r.id); }
+                  }}
+                  className={`pointer-events-auto w-1.5 rounded-full transition-all duration-300 ${
+                    realIdx === safeActiveIdx ? 'h-4 bg-white' : 'h-1.5 bg-white/40 hover:bg-white/70'
+                  }`}
+                  aria-label={`Go to reel ${realIdx + 1}`}
+                />
+              );
+            })}
+          </div>
+
+          <button
+            onClick={() => navigateToReel('next')}
+            disabled={!canGoNext}
+            aria-label="Next reel"
+            title="Next reel (↓)"
+            className="pointer-events-auto flex items-center justify-center w-10 h-10 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white shadow-xl transition-all hover:bg-white/20 active:scale-95 disabled:opacity-20 disabled:cursor-not-allowed"
+          >
+            <ChevronDown size={22} />
+          </button>
+        </div>
+      )}
+
       {/* Main Full-Height Snap-Scroll Container */}
       <div
         ref={containerRef}
-        className="w-full h-full overflow-y-scroll snap-y snap-mandatory scrollbar-none p-0"
+        tabIndex={0}
+        className="w-full h-full overflow-y-scroll snap-y snap-mandatory scrollbar-none outline-none flex-1 min-h-0"
+        style={{ scrollSnapType: 'y mandatory', WebkitOverflowScrolling: 'touch' }}
       >
         {loading ? (
           <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 gap-3">
@@ -286,35 +423,32 @@ export const Reels: React.FC = () => {
             </button>
           </div>
         ) : (
-          (() => {
-            const activeIndex = reels.findIndex(r => r.id === activeReelId);
-            const safeActiveIdx = activeIndex >= 0 ? activeIndex : 0;
-            return reels.map((reel, index) => {
-              const isInResourceWindow = Math.abs(index - safeActiveIdx) <= 1;
-              return (
-                <div
-                  key={reel.id}
-                  data-reel-id={reel.id}
-                  ref={(el) => {
-                    if (el) cardRefs.current.set(reel.id, el);
-                    else cardRefs.current.delete(reel.id);
-                  }}
-                  className="w-full h-full flex items-center justify-center p-0 sm:py-2 snap-start shrink-0 my-auto"
-                >
-                  <ReelCard
-                    reel={reel}
-                    isActive={activeReelId === reel.id}
-                    isInResourceWindow={isInResourceWindow}
-                    currentUserId={currentUserId}
-                    currentUserRole={currentUserRole}
-                    onOpenComments={handleOpenComments}
-                    onDeleteReel={handleDeleteReel}
-                    onRecordView={handleRecordView}
-                  />
-                </div>
-              );
-            });
-          })()
+          reels.map((reel, index) => {
+            const isInResourceWindow = Math.abs(index - safeActiveIdx) <= 1;
+            return (
+              <div
+                key={reel.id}
+                data-reel-id={reel.id}
+                ref={(el) => {
+                  if (el) cardRefs.current.set(reel.id, el);
+                  else cardRefs.current.delete(reel.id);
+                }}
+                className="w-full snap-start snap-always shrink-0 flex items-center justify-center"
+                style={{ height: '100%', minHeight: '100%' }}
+              >
+                <ReelCard
+                  reel={reel}
+                  isActive={activeReelId === reel.id}
+                  isInResourceWindow={isInResourceWindow}
+                  currentUserId={currentUserId}
+                  currentUserRole={currentUserRole}
+                  onOpenComments={handleOpenComments}
+                  onDeleteReel={handleDeleteReel}
+                  onRecordView={handleRecordView}
+                />
+              </div>
+            );
+          })
         )}
       </div>
 

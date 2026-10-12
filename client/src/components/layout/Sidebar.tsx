@@ -48,7 +48,7 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
     const { t } = useTranslation();
     const location = useLocation();
     const navigate = useNavigate();
-    const { user, profile, signOut, switchAccount, removeAccount, addAccount, isPro, isAdmin } = useAuth();
+    const { user, profile, signOut, switchAccount, removeAccount, addAccount, isAdmin } = useAuth();
     const { unreadCount } = useNotifications();
     
 
@@ -314,7 +314,7 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1">
                             <div className="text-sm font-medium text-white truncate">{fullName}</div>
-                            {isPro && <BadgeCheck size={14} className="text-blue-400 fill-blue-400/10" />}
+                            {Boolean(profile?.is_verified) && <BadgeCheck size={14} className="text-blue-500 shrink-0 inline-block" />}
                         </div>
                         <div className="text-xs text-gray-500 truncate">{email}</div>
                     </div>

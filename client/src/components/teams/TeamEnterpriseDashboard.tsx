@@ -22,6 +22,7 @@ import {
   Activity,
   Users,
   CheckCircle2,
+  BadgeCheck,
   Clock,
   Heart,
   Upload,
@@ -1105,10 +1106,11 @@ export const TeamEnterpriseDashboard: React.FC<TeamEnterpriseDashboardProps> = (
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
                     <p className="text-sm font-bold text-white truncate">{name}</p>
+                    {Boolean(m.profile?.is_verified) && <BadgeCheck size={13} className="text-blue-500 shrink-0 inline-block" />}
                     {isOwner && <Crown size={12} className="text-yellow-400 flex-shrink-0" />}
-                    {isAdmin && !isOwner && <Shield size={12} className="text-blue-400 flex-shrink-0" />}
+                    {isAdmin && !isOwner && <Shield size={12} className="text-indigo-400 flex-shrink-0" />}
                   </div>
                   <p className="text-[10px] text-gray-500 truncate">{m.profile?.email}</p>
                 </div>

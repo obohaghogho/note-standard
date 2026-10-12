@@ -37,6 +37,15 @@ export interface CommunityPost {
     is_verified?: boolean;
     followers_count?: number;
   };
+  /** FK-alias join key returned when the server uses
+   *  `author:profiles!author_id(...)` in its select string.
+   *  Prefer `profiles` when present; this is a secondary fallback. */
+  author?: {
+    id?: string;
+    username?: string;
+    avatar_url?: string;
+    is_verified?: boolean;
+  };
   community_likes?: { user_id: string }[];
   community_bookmarks?: { user_id: string }[];
 }

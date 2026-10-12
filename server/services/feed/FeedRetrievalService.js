@@ -233,7 +233,7 @@ class FeedRetrievalService {
     try {
        const { data } = await supabase
         .from('community_posts')
-        .select('*, profiles!author_id(username, avatar_url), community_comments(id)')
+        .select('*, profiles!author_id(username, avatar_url, is_verified), community_comments(id)')
         .eq('status', 'public')
         .order('created_at', { ascending: false })
         .limit(limit);

@@ -5,7 +5,7 @@ import {
   Bookmark,
   Share2,
   MoreHorizontal,
-  CheckCircle,
+  BadgeCheck,
   Copy,
   Flag,
   Trash2,
@@ -204,8 +204,8 @@ export const UniversalPostCard: React.FC<Props> = ({
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-3">
               <img
-                src={post.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${post.profiles?.username || 'U'}&background=6366f1&color=fff`}
-                alt={post.profiles?.username || 'User'}
+                src={post.profiles?.avatar_url || post.author?.avatar_url || `https://ui-avatars.com/api/?name=${post.profiles?.username || post.author?.username || 'U'}&background=6366f1&color=fff`}
+                alt={post.profiles?.username || post.author?.username || 'User'}
                 className="w-10 h-10 rounded-full object-cover bg-gray-100 cursor-pointer"
                 onClick={() => post.author_id && navigate(`/dashboard/profile/${post.author_id}`)}
               />
@@ -215,10 +215,10 @@ export const UniversalPostCard: React.FC<Props> = ({
                     className="font-bold text-sm text-gray-900 dark:text-white hover:underline cursor-pointer"
                     onClick={() => post.author_id && navigate(`/dashboard/profile/${post.author_id}`)}
                   >
-                    {post.profiles?.username || 'Unknown User'}
+                    {post.profiles?.username || post.author?.username || 'Unknown User'}
                   </h4>
-                  {post.profiles?.is_verified && (
-                    <CheckCircle size={13} className="text-blue-500 shrink-0" />
+                  {Boolean(post.profiles?.is_verified || post.author?.is_verified) && (
+                    <BadgeCheck size={14} className="text-blue-500 shrink-0 inline-block" />
                   )}
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">

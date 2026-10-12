@@ -106,9 +106,9 @@ export const PWAInstallPrompt: React.FC = () => {
 
   return (
     <>
-      {/* Dimmed Backdrop */}
+      {/* Dimmed Backdrop (mobile only — desktop dialog is a non-blocking corner toast) */}
       <div 
-        className="fixed inset-0 bg-black/60 backdrop-blur-md z-[9990] animate-in fade-in duration-300"
+        className="fixed inset-0 bg-black/60 backdrop-blur-md z-[9990] animate-in fade-in duration-300 md:hidden"
         onClick={() => handleDismiss(false)}
       />
 

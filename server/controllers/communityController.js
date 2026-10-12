@@ -34,7 +34,7 @@ const createCommunityPost = async (req, res, next) => {
         link_url,
         code_language
       }])
-      .select('*, profiles!author_id(username, avatar_url)')
+      .select('*, profiles!author_id(username, avatar_url, is_verified)')
       .single();
 
     if (postError) throw postError;
@@ -110,7 +110,7 @@ const addComment = async (req, res, next) => {
         parent_id: parentId || null,
         content,
       }])
-      .select("*, profiles!author_id(username, avatar_url)")
+      .select("*, profiles!author_id(username, avatar_url, is_verified)")
       .single();
 
     if (commentError) throw commentError;
@@ -698,10 +698,17 @@ const createReel = async (req, res, next) => {
       post = data;
     }
 
+    const { data: authorProfile } = await supabase
+      .from('profiles')
+      .select('id, username, full_name, avatar_url, is_verified')
+      .eq('id', userId)
+      .maybeSingle();
+
     res.status(201).json({
       success: true,
       reel: {
         ...post,
+        author: authorProfile || null,
         media_url: videoUrl,
         thumbnail_url: thumbnailUrl || null,
         video_duration: clampedDuration,

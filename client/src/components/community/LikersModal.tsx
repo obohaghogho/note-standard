@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { X, Heart, CheckCircle, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { getPostLikers, PostLiker } from '../../services/communityService';
+import { getPostLikers } from '../../services/communityService';
+import type { PostLiker } from '../../services/communityService';
 
 interface LikersModalProps {
   postId: string;

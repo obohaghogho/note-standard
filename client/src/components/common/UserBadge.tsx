@@ -16,21 +16,21 @@ export const UserBadge: React.FC<UserBadgeProps> = ({
   className = "",
   showText = false
 }) => {
-  // Business plan users get the blue tick
-  if (planTier === 'business') {
+  // Authoritative verification: verified users get the blue tick
+  if (isVerified) {
     return (
-      <div className={`inline-flex items-center gap-1 ${className}`} title="Business Plan">
+      <div className={`inline-flex items-center gap-1 ${className}`} title="Verified User">
         <CheckCircle2 
           size={size} 
           className="text-blue-500 fill-blue-500/10 flex-shrink-0" 
         />
-        {showText && <span className="text-xs font-medium text-blue-400">Business</span>}
+        {showText && <span className="text-xs font-medium text-blue-400">Verified</span>}
       </div>
     );
   }
 
-  // Other subscribers get a different badge (ShieldCheck)
-  const isSubscribed = planTier && ['pro', 'team', 'enterprise'].includes(planTier);
+  // Plan subscribers without verification get a plan indicator badge (ShieldCheck)
+  const isSubscribed = planTier && ['pro', 'team', 'business', 'enterprise'].includes(planTier);
   if (isSubscribed) {
     return (
       <div className={`inline-flex items-center gap-1 ${className}`} title={`${planTier?.charAt(0).toUpperCase()}${planTier?.slice(1)} Plan`}>
@@ -39,18 +39,6 @@ export const UserBadge: React.FC<UserBadgeProps> = ({
           className="text-blue-400 flex-shrink-0" 
         />
         {showText && <span className="text-xs font-medium text-blue-400/80">{planTier?.charAt(0).toUpperCase()}${planTier?.slice(1)}</span>}
-      </div>
-    );
-  }
-
-  // Fallback for manually verified users who aren't on business plan
-  if (isVerified) {
-    return (
-      <div className={`inline-flex items-center gap-1 ${className}`} title="Verified User">
-        <CheckCircle2 
-          size={size} 
-          className="text-gray-400 flex-shrink-0" 
-        />
       </div>
     );
   }

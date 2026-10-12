@@ -46,7 +46,7 @@ exports.getRecommendedPosts = async (userId, limit = 10) => {
         // Phase 0: Just return recent trending posts (e.g. most viewed/liked)
         const { data, error } = await supabase
             .from('community_posts')
-            .select('*, profiles!author_id(username, avatar_url)')
+            .select('*, profiles!author_id(username, avatar_url, is_verified)')
             .eq('visibility', 'public')
             .order('views_count', { ascending: false })
             .limit(limit);
