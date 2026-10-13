@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ReelCard, type ReelPost } from '../../components/community/ReelCard';
 import { ReelUploadModal } from '../../components/community/ReelUploadModal';
@@ -183,7 +183,10 @@ export const Reels: React.FC = () => {
   // Throttle state lives in refs so it survives re-renders and active-reel changes;
   // the listener reads the latest navigator through a ref instead of re-registering.
   const navigateToReelRef = useRef(navigateToReel);
-  navigateToReelRef.current = navigateToReel;
+
+  useLayoutEffect(() => {
+    navigateToReelRef.current = navigateToReel;
+  });
   const wheelLockRef = useRef(false);
   const wheelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
