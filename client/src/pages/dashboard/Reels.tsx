@@ -350,9 +350,9 @@ export const Reels: React.FC = () => {
         </button>
       </div>
 
-      {/* Right-side Navigation Arrows — always visible, primary scroll method */}
+      {/* Right-side Navigation Arrows — desktop/tablet only; hidden on mobile where swipe is the primary nav method */}
       {reels.length > 1 && !loading && (
-        <div className="absolute right-3 sm:right-4 z-50 flex flex-col gap-2 pointer-events-none"
+        <div className="absolute right-3 sm:right-4 z-50 hidden sm:flex flex-col gap-2 pointer-events-none"
           style={{ top: '50%', transform: 'translateY(-50%)' }}
         >
           <button

@@ -31,23 +31,23 @@ interface MatchedUser {
 }
 
 const SkeletonCard = () => (
-  <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 shadow-sm border border-gray-200 dark:border-gray-800 animate-pulse">
-    <div className="flex items-center space-x-3 mb-4">
-      <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-800" />
-      <div className="flex-1 space-y-2">
-        <div className="h-3 w-32 bg-gray-200 dark:bg-gray-800 rounded" />
-        <div className="h-2 w-24 bg-gray-200 dark:bg-gray-800 rounded" />
+  <div data-testid="skeleton" className="bg-white dark:bg-gray-900 border-y sm:border border-gray-100 dark:border-gray-800 sm:rounded-2xl p-3.5 sm:p-4 shadow-sm animate-pulse">
+    <div className="flex items-center space-x-3 mb-3">
+      <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gray-200 dark:bg-gray-800" />
+      <div className="flex-1 space-y-1.5">
+        <div className="h-3 w-28 bg-gray-200 dark:bg-gray-800 rounded" />
+        <div className="h-2 w-20 bg-gray-200 dark:bg-gray-800 rounded" />
       </div>
     </div>
-    <div className="space-y-2 mb-4">
+    <div className="space-y-2 mb-3">
       <div className="h-4 w-3/4 bg-gray-200 dark:bg-gray-800 rounded" />
       <div className="h-4 w-full bg-gray-200 dark:bg-gray-800 rounded" />
       <div className="h-4 w-5/6 bg-gray-200 dark:bg-gray-800 rounded" />
     </div>
-    <div className="flex items-center gap-4 pt-4 border-t border-gray-100 dark:border-gray-800">
-      <div className="h-7 w-14 bg-gray-200 dark:bg-gray-800 rounded-full" />
-      <div className="h-7 w-14 bg-gray-200 dark:bg-gray-800 rounded-full" />
-      <div className="h-7 w-14 bg-gray-200 dark:bg-gray-800 rounded-full" />
+    <div className="flex items-center gap-4 pt-3 border-t border-gray-100 dark:border-gray-800">
+      <div className="h-6 w-12 bg-gray-200 dark:bg-gray-800 rounded-full" />
+      <div className="h-6 w-12 bg-gray-200 dark:bg-gray-800 rounded-full" />
+      <div className="h-6 w-12 bg-gray-200 dark:bg-gray-800 rounded-full" />
     </div>
   </div>
 );
@@ -109,22 +109,24 @@ export const FeedContent: React.FC<Props> = ({
     }
   };
   return (
-    <div className="flex-1 w-full max-w-2xl mx-auto px-4 py-6 space-y-6">
+    <div id="community-feed" data-testid="community-feed" className="flex-1 w-full max-w-2xl mx-auto px-0 sm:px-4 py-2 sm:py-4 space-y-3 sm:space-y-4">
       {/* Create Post Button */}
-      <button
-        id="open-post-composer"
-        onClick={onOpenComposer}
-        className="w-full bg-white dark:bg-gray-900 rounded-2xl p-4 shadow-sm border border-gray-200 dark:border-gray-800 flex items-center space-x-4 cursor-text hover:border-blue-300 dark:hover:border-blue-700 transition-colors text-left group"
-      >
-        <img
-          src={currentUserAvatar || `https://ui-avatars.com/api/?name=U&background=6366f1&color=fff`}
-          alt="You"
-          className="w-10 h-10 rounded-full object-cover bg-gray-100 shrink-0"
-        />
-        <div className="flex-1 h-10 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 group-hover:border-blue-200 dark:group-hover:border-blue-700 flex items-center px-4 transition-colors">
-          <span className="text-gray-500 dark:text-gray-400 text-sm">Share your knowledge…</span>
-        </div>
-      </button>
+      <div className="px-3 sm:px-0">
+        <button
+          id="open-post-composer"
+          onClick={onOpenComposer}
+          className="w-full bg-white dark:bg-gray-900 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 shadow-sm border border-gray-200/90 dark:border-gray-800 flex items-center space-x-3 cursor-text hover:border-blue-300 dark:hover:border-blue-700 transition-colors text-left group"
+        >
+          <img
+            src={currentUserAvatar || `https://ui-avatars.com/api/?name=U&background=6366f1&color=fff`}
+            alt="You"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover bg-gray-100 shrink-0"
+          />
+          <div className="flex-1 h-8 sm:h-9 rounded-full bg-gray-100/80 dark:bg-gray-800/80 border border-gray-200/50 dark:border-gray-700/60 group-hover:border-blue-200 dark:group-hover:border-blue-700 flex items-center px-3.5 transition-colors">
+            <span className="text-gray-500 dark:text-gray-400 text-xs sm:text-sm">Share your knowledge…</span>
+          </div>
+        </button>
+      </div>
 
       {/* People & Creators Search Results */}
       {searchQuery && searchQuery.trim().length >= 2 && (
@@ -200,12 +202,12 @@ export const FeedContent: React.FC<Props> = ({
       )}
 
       {/* Posts */}
-      <div className="space-y-5">
+      <div className="space-y-3 sm:space-y-4">
         {isLoading ? (
           Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
         ) : posts.length === 0 && !error ? (
-          <div className="text-center py-20">
-            <div className="w-20 h-20 mx-auto bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
+          <div data-testid="empty-state" className="text-center py-16 px-4">
+            <div className="w-16 h-16 mx-auto bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-3">
               <span className="text-3xl">🌌</span>
             </div>
             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Welcome to the Community!</h3>
