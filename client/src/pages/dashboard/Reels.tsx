@@ -13,7 +13,7 @@ import { useKeyboardLayout } from '../../hooks/useKeyboardLayout';
 export const Reels: React.FC = () => {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
-  const { isKeyboardOpen, kbHeight } = useKeyboardLayout();
+  const { isKeyboardOpen } = useKeyboardLayout();
   const [reels, setReels] = useState<ReelPost[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -520,6 +520,9 @@ export const Reels: React.FC = () => {
             if (e.target === e.currentTarget) setSelectedCommentsReelId(null);
           }}
           className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex justify-end flex-col sm:items-center sm:justify-center p-0 sm:p-4"
+          style={{
+            bottom: isKeyboardOpen ? 'var(--kb-height, 0px)' : '0px',
+          }}
         >
           <div
             className="bg-gray-900 border border-white/10 w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl max-h-[85vh] sm:max-h-[75vh] h-[70vh] sm:h-[65vh] flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-300 pb-[env(safe-area-inset-bottom,0px)]"

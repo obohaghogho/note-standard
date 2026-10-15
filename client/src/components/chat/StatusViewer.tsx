@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { parseFormattedText } from '../../lib/formatParser';
 import { StatusRing } from './StatusTray';
 import SecureImage from '../common/SecureImage';
+import { useKeyboardLayout } from '../../hooks/useKeyboardLayout';
 
 const QUICK_REACTIONS = ['😂', '😍', '😢', '👏', '🔥', '🎉'];
 const STATUS_DURATION = 30000; // WhatsApp 30 seconds default
@@ -24,6 +25,7 @@ export default function StatusViewer() {
   const { feed, myStatuses, viewerOpen, closeViewer, nextStatus, prevStatus, markViewed, react, reply, deleteStatus } = useStatus();
   const { user, profile } = useAuth();
   const { setActiveConversationId } = useChat();
+  const { isKeyboardOpen } = useKeyboardLayout();
 
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -545,7 +547,13 @@ export default function StatusViewer() {
         </div>
 
         {/* Footer (Replies / Viewers) */}
-        <div className="absolute bottom-0 left-0 right-0 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] bg-gradient-to-t from-black/95 via-black/60 to-transparent z-20 pointer-events-auto">
+        <div
+          className="absolute left-0 right-0 p-3 bg-gradient-to-t from-black/95 via-black/60 to-transparent z-20 pointer-events-auto transition-[bottom] duration-150 ease-out"
+          style={{
+            bottom: isKeyboardOpen ? 'var(--kb-height, 0px)' : '0px',
+            paddingBottom: isKeyboardOpen ? '0.75rem' : 'calc(0.75rem + env(safe-area-inset-bottom, 0px))',
+          }}
+        >
           {isOwn ? (
             <div className="relative flex items-center justify-center min-h-[44px]">
               {/* WhatsApp-style Interactive Viewer Bar */}

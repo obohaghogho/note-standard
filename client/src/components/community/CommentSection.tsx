@@ -440,7 +440,7 @@ export const CommentSection: React.FC<Props> = ({
   }, [onCommentDeleted]);
 
   const isInputActiveOnMobile = isFocused && (isKeyboardOpen || (typeof window !== 'undefined' && window.visualViewport && window.visualViewport.height < window.innerHeight - 50));
-  const bufferHeight = isInputActiveOnMobile ? Math.max(kbHeight, 300) : 0;
+  const bufferHeight = 0; // Comment sheet is lifted above keyboard by --kb-height; internal void space is unnecessary
   const pendingLikesRef = useRef<Set<string>>(new Set());
 
   const handleToggleLike = useCallback(async (commentId: string) => {
@@ -593,7 +593,10 @@ export const CommentSection: React.FC<Props> = ({
       {user && (
         <div
           ref={composerRef}
-          className="shrink-0 border-t border-gray-100 dark:border-white/10 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md px-3.5 py-2.5 pb-[env(safe-area-inset-bottom,8px)]"
+          className="shrink-0 border-t border-gray-100 dark:border-white/10 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md px-3.5 py-2.5"
+          style={{
+            paddingBottom: isKeyboardOpen ? '0.625rem' : 'max(0.625rem, env(safe-area-inset-bottom, 8px))',
+          }}
         >
           {replyTo && (
             <div className="flex items-center justify-between px-3 py-1.5 mb-2 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/40 rounded-xl text-xs text-blue-600 dark:text-blue-400">

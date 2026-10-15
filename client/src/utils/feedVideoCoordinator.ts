@@ -22,7 +22,8 @@ class FeedVideoCoordinator {
   private activeId: string | null = null;
   private registrations = new Map<string, VideoRegistration>();
   private mutedPreference: boolean = false;
-  private isUserInteracted: boolean = false;
+  private audioBlockedIds = new Set<string>();
+  private listeners = new Set<(id: string, isAudioBlocked: boolean) => void>();
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -34,15 +35,6 @@ class FeedVideoCoordinator {
       } catch {
         // Safe fallback if localStorage is disabled
       }
-
-      // Mark user interaction on first touch or click anywhere in window
-      const handleUserGesture = () => {
-        this.isUserInteracted = true;
-        window.removeEventListener('pointerdown', handleUserGesture);
-        window.removeEventListener('keydown', handleUserGesture);
-      };
-      window.addEventListener('pointerdown', handleUserGesture, { passive: true });
-      window.addEventListener('keydown', handleUserGesture, { passive: true });
 
       // Pause playback when tab is backgrounded
       document.addEventListener('visibilitychange', () => {
@@ -64,6 +56,25 @@ class FeedVideoCoordinator {
     } catch {}
   }
 
+  isAudioBlocked(id: string): boolean {
+    return this.audioBlockedIds.has(id);
+  }
+
+  subscribe(listener: (id: string, isAudioBlocked: boolean) => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private notifyAudioBlocked(id: string, blocked: boolean) {
+    for (const listener of this.listeners) {
+      try {
+        listener(id, blocked);
+      } catch {}
+    }
+  }
+
   register(id: string, element: HTMLVideoElement, container: HTMLElement) {
     this.registrations.set(id, { id, element, container, ratio: 0 });
     // Apply user preference to initial element
@@ -76,6 +87,7 @@ class FeedVideoCoordinator {
       this.pauseActive();
     }
     this.registrations.delete(id);
+    this.audioBlockedIds.delete(id);
   }
 
   /**
@@ -195,6 +207,21 @@ class FeedVideoCoordinator {
   }
 
   /**
+   * Synchronously attempts to unmute and play the video within a direct user gesture handler.
+   */
+  unmuteAndPlay(video: HTMLVideoElement, id: string) {
+    this.notifyPlay(video, id);
+    this.setMutedPreference(false);
+    this.audioBlockedIds.delete(id);
+    this.notifyAudioBlocked(id, false);
+    video.muted = false;
+    const playPromise = video.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(() => {});
+    }
+  }
+
+  /**
    * Safely plays a video with automatic fallback for browser autoplay policies.
    */
   async playVideo(video: HTMLVideoElement, id: string) {
@@ -209,9 +236,9 @@ class FeedVideoCoordinator {
     this.activeId = id;
 
     // Apply mute preference:
-    // If user explicitly muted, or if user hasn't interacted with document yet,
-    // start muted to guarantee smooth autoplay.
-    if (this.mutedPreference || !this.isUserInteracted) {
+    // If user explicitly preferred muted, start muted.
+    // Otherwise, attempt unmuted playback first.
+    if (this.mutedPreference) {
       video.muted = true;
     } else {
       video.muted = false;
@@ -219,8 +246,14 @@ class FeedVideoCoordinator {
 
     try {
       await video.play();
+      if (this.audioBlockedIds.has(id)) {
+        this.audioBlockedIds.delete(id);
+        this.notifyAudioBlocked(id, false);
+      }
     } catch (err: any) {
-      // Autoplay blocked because unmuted sound was rejected by browser policy
+      // Autoplay blocked because unmuted sound was rejected by browser policy (e.g. iOS Safari)
+      this.audioBlockedIds.add(id);
+      this.notifyAudioBlocked(id, true);
       try {
         video.muted = true;
         await video.play();

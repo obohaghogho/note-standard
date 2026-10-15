@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Heart, MessageCircle, Bookmark, Share2, Play, UserPlus, Check, Sparkles, Trash2, Eye, BadgeCheck } from 'lucide-react';
+import { Heart, MessageCircle, Bookmark, Share2, Play, UserPlus, Check, Sparkles, Trash2, Eye, BadgeCheck, VolumeX } from 'lucide-react';
 import { API_URL } from '../../lib/api';
 import { toggleLike, toggleBookmark } from '../../services/communityService';
 
@@ -91,6 +91,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isAudioBlocked, setIsAudioBlocked] = useState(false);
   const [liked, setLiked] = useState(reel.user_has_liked || reel.is_liked || false);
   const [likesCount, setLikesCount] = useState(reel.likes_count || 0);
   const [bookmarked, setBookmarked] = useState(reel.user_has_bookmarked || reel.is_bookmarked || false);
@@ -165,18 +166,46 @@ export const ReelCard: React.FC<ReelCardProps> = ({
       const playPromise = video.play();
       if (playPromise !== undefined) {
         playPromise
-          .then(() => setIsPlaying(true))
+          .then(() => {
+            setIsPlaying(true);
+            setIsAudioBlocked(false);
+          })
           .catch(() => {
-            // Browser blocked unmuted autoplay. Keep unmuted and show play overlay.
-            // Tapping the card plays with sound.
-            setIsPlaying(false);
+            // Browser policy blocked unmuted autoplay.
+            // Continue playing visually in muted mode, showing a one-tap sound control.
+            video.muted = true;
+            video.play()
+              .then(() => {
+                setIsPlaying(true);
+                setIsAudioBlocked(true);
+              })
+              .catch(() => {
+                setIsPlaying(false);
+                setIsAudioBlocked(false);
+              });
           });
       }
     } else {
       video.pause();
       setIsPlaying(false);
+      setIsAudioBlocked(false);
     }
   }, [isActive, isInResourceWindow]);
+
+  const handleUnmuteTap = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const video = videoRef.current;
+    if (!video) return;
+
+    video.muted = false;
+    setIsAudioBlocked(false);
+    const playPromise = video.play();
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => setIsPlaying(true))
+        .catch(() => {});
+    }
+  };
 
   const togglePlay = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -188,6 +217,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
       setIsPlaying(false);
     } else {
       video.muted = false;
+      setIsAudioBlocked(false);
       const playPromise = video.play();
       if (playPromise !== undefined) {
         playPromise
@@ -329,12 +359,26 @@ export const ReelCard: React.FC<ReelCardProps> = ({
            never overlap these controls. Outer div is pointer-events-none; each
            interactive child opts back in with pointer-events-auto. z-40 ensures
            controls sit above the top gradient (z-10) and below no other absolute layer. */}
-      {canDelete && (
-        <div
-          className="absolute left-3 right-3 z-40 flex items-center justify-end pointer-events-none"
-          style={{ top: 'calc(3.75rem + env(safe-area-inset-top, 0px))' }}
-        >
-          {/* Delete Reel Icon Button (Visible for author or admin) */}
+      <div
+        className="absolute left-3 right-3 z-40 flex items-center justify-between pointer-events-none"
+        style={{ top: 'calc(3.75rem + env(safe-area-inset-top, 0px))' }}
+      >
+        {isAudioBlocked ? (
+          <button
+            type="button"
+            onClick={handleUnmuteTap}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-md text-white pointer-events-auto transition-all border border-white/20 shadow-xl active:scale-95 cursor-pointer text-xs font-semibold group animate-pulse"
+            title="Tap for sound"
+            aria-label="Tap for sound"
+          >
+            <VolumeX size={15} className="text-yellow-400 group-hover:scale-110 transition-transform" />
+            <span className="text-[11px] text-white/90">Tap for sound</span>
+          </button>
+        ) : (
+          <div />
+        )}
+
+        {canDelete && (
           <button
             onClick={handleDeleteClick}
             className="w-8 h-8 rounded-full bg-black/55 backdrop-blur-md text-red-400 hover:text-white hover:bg-red-600/80 hover:border-red-500/60 pointer-events-auto transition-all border border-white/20 shadow-xl active:scale-95 cursor-pointer flex items-center justify-center group"
@@ -343,8 +387,8 @@ export const ReelCard: React.FC<ReelCardProps> = ({
           >
             <Trash2 size={15} className="group-hover:scale-110 transition-transform" />
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Center Play Button Overlay when video is paused */}
       {!isPlaying && (

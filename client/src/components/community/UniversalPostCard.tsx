@@ -589,6 +589,9 @@ export const UniversalPostCard: React.FC<Props> = ({
             if (e.target === e.currentTarget) setShowComments(false);
           }}
           className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-sm flex justify-end flex-col sm:items-center sm:justify-center p-0 sm:p-4 animate-in fade-in duration-200"
+          style={{
+            bottom: isKeyboardOpen ? 'var(--kb-height, 0px)' : '0px',
+          }}
           role="dialog"
           aria-modal="true"
           aria-label="Comments"
