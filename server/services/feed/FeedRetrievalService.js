@@ -31,7 +31,11 @@ class FeedRetrievalService {
         const clean = {
           ...post,
           comments_count: post.comments_count ?? post.community_comments?.length ?? 0,
-          likes_count: post.likes_count ?? post.community_likes?.length ?? 0
+          likes_count: post.likes_count ?? post.community_likes?.length ?? 0,
+          is_liked: (post.community_likes || []).some(l => l.user_id === userId),
+          user_has_liked: (post.community_likes || []).some(l => l.user_id === userId),
+          is_bookmarked: (post.community_bookmarks || []).some(b => b.user_id === userId),
+          user_has_bookmarked: (post.community_bookmarks || []).some(b => b.user_id === userId),
         };
         delete clean.community_comments;
         return clean;
@@ -201,7 +205,12 @@ class FeedRetrievalService {
       const cleanFeed = finalFeed.map(post => {
         const clean = { 
           ...post,
-          comments_count: post.community_comments?.length || 0
+          comments_count: post.comments_count ?? post.community_comments?.length ?? 0,
+          likes_count: post.likes_count ?? post.community_likes?.length ?? 0,
+          is_liked: (post.community_likes || []).some(l => l.user_id === userId),
+          user_has_liked: (post.community_likes || []).some(l => l.user_id === userId),
+          is_bookmarked: (post.community_bookmarks || []).some(b => b.user_id === userId),
+          user_has_bookmarked: (post.community_bookmarks || []).some(b => b.user_id === userId),
         };
         delete clean.community_comments;
         if (!isDiagnostics) {

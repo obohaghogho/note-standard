@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Heart,
   MessageCircle,
   Bookmark,
   Share2,
   MoreHorizontal,
-  BadgeCheck,
   Copy,
   Flag,
   Trash2,
@@ -13,11 +13,15 @@ import {
   EyeOff,
   UserMinus,
   ExternalLink,
+  X,
 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import { VerifiedBadge } from '../common/VerifiedBadge';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import type { CommunityPost } from '../../services/communityService';
+import { useKeyboardLayout } from '../../hooks/useKeyboardLayout';
 import {
   toggleLike,
   toggleBookmark,
@@ -59,11 +63,21 @@ export const UniversalPostCard: React.FC<Props> = ({
   const navigate = useNavigate();
   const { user } = useAuth();
   const { socket } = useSocket();
+  const { isKeyboardOpen } = useKeyboardLayout();
   const isOwner = user?.id === post.author_id;
 
   // ── Derived state ─────────────────────────────────────────────────────────
-  const initialLiked = Boolean(post.community_likes?.some(l => l.user_id === user?.id));
-  const initialBookmarked = Boolean(post.community_bookmarks?.some(b => b.user_id === user?.id));
+  const initialLiked = Boolean(
+    post.user_has_liked ||
+    post.is_liked ||
+    (user?.id && post.community_likes?.some(l => l.user_id === user?.id))
+  );
+  const initialBookmarked = Boolean(
+    post.user_has_bookmarked ||
+    post.is_bookmarked ||
+    post.bookmarked ||
+    (user?.id && post.community_bookmarks?.some(b => b.user_id === user?.id))
+  );
 
   const [liked, setLiked] = useState(initialLiked);
   const [likeCount, setLikeCount] = useState(post.likes_count || post.community_likes?.length || 0);
@@ -80,12 +94,53 @@ export const UniversalPostCard: React.FC<Props> = ({
   const bookmarkInFlight = useRef(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  // Sync liked, likeCount, and bookmarked if post or user updates from parent
+  useEffect(() => {
+    if (!likeInFlight.current) {
+      const isLiked = Boolean(
+        post.user_has_liked !== undefined ? post.user_has_liked :
+        post.is_liked !== undefined ? post.is_liked :
+        (user?.id && post.community_likes?.some(l => l.user_id === user?.id))
+      );
+      setLiked(isLiked);
+      setLikeCount(post.likes_count ?? (post.community_likes?.length || 0));
+    }
+    if (!bookmarkInFlight.current) {
+      const isBookmarked = Boolean(
+        post.user_has_bookmarked !== undefined ? post.user_has_bookmarked :
+        post.is_bookmarked !== undefined ? post.is_bookmarked :
+        post.bookmarked !== undefined ? post.bookmarked :
+        (user?.id && post.community_bookmarks?.some(b => b.user_id === user?.id))
+      );
+      setBookmarked(isBookmarked);
+    }
+  }, [post.id, post.user_has_liked, post.is_liked, post.likes_count, post.user_has_bookmarked, post.is_bookmarked, user?.id]);
+
   // Sync commentCount if post prop updates from parent
   useEffect(() => {
     if (post.comments_count !== undefined) {
       setCommentCount(post.comments_count);
     }
   }, [post.comments_count]);
+
+  // Lock body scroll and handle Escape key when comment sheet/modal is open
+  useEffect(() => {
+    if (!showComments) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowComments(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showComments]);
 
   // Click/touch outside to dismiss options menu
   useEffect(() => {
@@ -119,6 +174,10 @@ export const UniversalPostCard: React.FC<Props> = ({
         ? await toggleLike(post.id)
         : (() => { queueOfflineAction({ type: wasLiked ? 'unlike' : 'like', payload: { postId: post.id } }); return { liked: !wasLiked }; })();
 
+      if (result && typeof result.liked === 'boolean') {
+        setLiked(result.liked);
+      }
+
       // Emit WS for cross-device sync
       if (socket && navigator.onLine) {
         socket.emit('community:like_toggled', {
@@ -131,6 +190,7 @@ export const UniversalPostCard: React.FC<Props> = ({
       // Rollback on failure
       setLiked(wasLiked);
       setLikeCount(c => c + (wasLiked ? 1 : -1));
+      onOptimisticLike?.(post.id, !wasLiked);
     } finally {
       likeInFlight.current = false;
     }
@@ -141,17 +201,27 @@ export const UniversalPostCard: React.FC<Props> = ({
     bookmarkInFlight.current = true;
 
     const wasBookmarked = bookmarked;
-    setBookmarked(!wasBookmarked);
+    const nextBookmarked = !wasBookmarked;
+    setBookmarked(nextBookmarked);
     onOptimisticBookmark?.(post.id, wasBookmarked);
 
     try {
       if (navigator.onLine) {
-        await toggleBookmark(post.id);
+        const res = await toggleBookmark(post.id);
+        if (res && typeof res.bookmarked === 'boolean') {
+          setBookmarked(res.bookmarked);
+          toast.success(res.bookmarked ? 'Saved to bookmarks' : 'Removed from bookmarks', { id: `bookmark-${post.id}` });
+        } else {
+          toast.success(nextBookmarked ? 'Saved to bookmarks' : 'Removed from bookmarks', { id: `bookmark-${post.id}` });
+        }
       } else {
         queueOfflineAction({ type: wasBookmarked ? 'unbookmark' : 'bookmark', payload: { postId: post.id } });
+        toast.success(nextBookmarked ? 'Saved offline' : 'Removed offline', { id: `bookmark-${post.id}` });
       }
     } catch {
       setBookmarked(wasBookmarked);
+      onOptimisticBookmark?.(post.id, nextBookmarked);
+      toast.error('Failed to update bookmark. Please try again.', { id: `bookmark-${post.id}` });
     } finally {
       bookmarkInFlight.current = false;
     }
@@ -199,7 +269,7 @@ export const UniversalPostCard: React.FC<Props> = ({
     <>
       <article
         data-testid="post-card"
-        className="bg-white dark:bg-gray-900 border-y sm:border border-gray-100 sm:border-gray-200/90 dark:border-gray-800/80 sm:rounded-2xl shadow-none sm:shadow-sm overflow-hidden transition-all duration-200"
+        className="bg-white dark:bg-gray-900 border-y sm:border border-gray-100 sm:border-gray-200/90 dark:border-gray-800/80 rounded-none sm:rounded-2xl shadow-none sm:shadow-sm overflow-hidden transition-all duration-200"
       >
         {/* ── Header ──────────────────────────────────────────────────── */}
         <div className="px-3.5 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between">
@@ -219,7 +289,7 @@ export const UniversalPostCard: React.FC<Props> = ({
                   {post.profiles?.username || post.author?.username || 'Unknown User'}
                 </h4>
                 {Boolean(post.profiles?.is_verified || post.author?.is_verified) && (
-                  <BadgeCheck size={14} className="text-blue-500 shrink-0 inline-block" />
+                  <VerifiedBadge size={14} className="ml-0.5 inline-block" />
                 )}
               </div>
               <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5 truncate">
@@ -440,7 +510,7 @@ export const UniversalPostCard: React.FC<Props> = ({
 
           {/* Poll */}
           {post.post_type === 'poll' && post.poll_options && (
-            <PollWidget postId={post.id} pollOptions={post.poll_options} />
+            <PollWidget postId={post.id} pollOptions={post.poll_options as any} />
           )}
         </div>
 
@@ -474,17 +544,87 @@ export const UniversalPostCard: React.FC<Props> = ({
           </span>
         </div>
 
-        {/* ── Expanded Comment Section ─────────────────────────────────── */}
-        {showComments && (
-          <div className="border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
-            <CommentSection 
-              postId={post.id} 
-              onCommentAdded={() => setCommentCount(c => c + 1)}
-              onCommentDeleted={() => setCommentCount(c => Math.max(0, c - 1))}
-            />
-          </div>
-        )}
+        {/* ── Expanded Comment Section (Preserved for layout anchors) ─────────────────── */}
       </article>
+
+      {/* ── Modern Instagram/Facebook-Inspired Comment Sheet / Modal ────────────────── */}
+      {showComments && typeof document !== 'undefined' && createPortal(
+        <div
+          id={`comments-sheet-${post.id}`}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowComments(false);
+          }}
+          className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-sm flex justify-end flex-col sm:items-center sm:justify-center p-0 sm:p-4 animate-in fade-in duration-200"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Comments"
+        >
+          <div
+            className="bg-white dark:bg-gray-900 border-t sm:border border-gray-200 dark:border-white/10 w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl max-h-[85vh] sm:max-h-[80vh] h-[75vh] sm:h-[650px] flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-300"
+            style={{
+              maxHeight: isKeyboardOpen ? 'calc(var(--vv-height, 100dvh) - 0.5rem)' : undefined,
+            }}
+          >
+            {/* Sheet Handle for Mobile */}
+            <div className="sm:hidden flex justify-center pt-2.5 pb-1 shrink-0">
+              <div className="w-10 h-1 bg-gray-300 dark:bg-gray-700 rounded-full" />
+            </div>
+
+            {/* Header */}
+            <div className="px-4 py-3 border-b border-gray-100 dark:border-white/10 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2 font-bold text-gray-900 dark:text-white text-sm">
+                <MessageCircle size={18} className="text-blue-500" />
+                <span>Comments</span>
+                {commentCount > 0 && (
+                  <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                    {commentCount}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setShowComments(false)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 cursor-pointer transition-colors"
+                title="Close comments"
+                aria-label="Close comments"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Post Author Context Preview (Instagram Pattern) */}
+            {(post.content || post.media_urls?.[0]) && (
+              <div className="px-4 py-2.5 bg-gray-50/70 dark:bg-white/[0.02] border-b border-gray-100 dark:border-white/5 flex items-start gap-2.5 shrink-0">
+                <img
+                  src={post.profiles?.avatar_url || post.author?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(post.profiles?.username || post.author?.username || 'U')}&background=6366f1&color=fff`}
+                  alt="Author"
+                  className="w-7 h-7 rounded-full object-cover shrink-0 mt-0.5 border border-gray-200/50 dark:border-white/10"
+                />
+                <div className="flex-1 min-w-0 text-xs">
+                  <div className="flex items-center gap-1 font-semibold text-gray-900 dark:text-white">
+                    <span>{post.profiles?.username || post.author?.username || 'User'}</span>
+                    {Boolean(post.profiles?.is_verified || post.author?.is_verified) && (
+                      <VerifiedBadge size={11} className="inline-block" />
+                    )}
+                  </div>
+                  <p className="text-gray-600 dark:text-gray-400 line-clamp-2 mt-0.5 leading-relaxed">
+                    {post.content}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Comments Thread with Sticky Composer */}
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              <CommentSection 
+                postId={post.id} 
+                onCommentAdded={() => setCommentCount(c => c + 1)}
+                onCommentDeleted={() => setCommentCount(c => Math.max(0, c - 1))}
+              />
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Edit modal */}
       {isEditing && (

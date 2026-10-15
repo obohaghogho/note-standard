@@ -1,17 +1,51 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 import { ReelCard, type ReelPost } from '../../components/community/ReelCard';
 import { ReelUploadModal } from '../../components/community/ReelUploadModal';
+import { CommentSection } from '../../components/community/CommentSection';
 import { Loader2, Plus, Sparkles, Video, X, MessageCircle, Send, ArrowLeft, ChevronUp, ChevronDown } from 'lucide-react';
-import { API_URL } from '../../lib/api';
+import { API_URL, getAuthHeader } from '../../lib/api';
 import { deletePost, recordReelView } from '../../services/communityService';
 import { useAuth } from '../../context/AuthContext';
+import { useKeyboardLayout } from '../../hooks/useKeyboardLayout';
 
 export const Reels: React.FC = () => {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
+  const { isKeyboardOpen, kbHeight } = useKeyboardLayout();
   const [reels, setReels] = useState<ReelPost[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const handleBookmarkToggle = useCallback((reelId: string, currentBookmarked: boolean) => {
+    setReels(prev =>
+      prev.map(r =>
+        r.id === reelId
+          ? {
+              ...r,
+              user_has_bookmarked: !currentBookmarked,
+              is_bookmarked: !currentBookmarked,
+              saves_count: Math.max(0, (r.saves_count || 0) + (currentBookmarked ? -1 : 1)),
+            }
+          : r
+      )
+    );
+  }, []);
+
+  const handleLikeToggle = useCallback((reelId: string, isLiked: boolean) => {
+    setReels(prev =>
+      prev.map(r =>
+        r.id === reelId
+          ? {
+              ...r,
+              user_has_liked: isLiked,
+              is_liked: isLiked,
+              likes_count: Math.max(0, (r.likes_count || 0) + (isLiked ? 1 : -1)),
+            }
+          : r
+      )
+    );
+  }, []);
 
   const handleBackNav = useCallback(() => {
     if (window.history.state && typeof window.history.state.idx === 'number' && window.history.state.idx > 0) {
@@ -23,13 +57,11 @@ export const Reels: React.FC = () => {
   const [activeReelId, setActiveReelId] = useState<string | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedCommentsReelId, setSelectedCommentsReelId] = useState<string | null>(null);
-  const [comments, setComments] = useState<any[]>([]);
-  const [loadingComments, setLoadingComments] = useState(false);
-  const [newCommentText, setNewCommentText] = useState('');
-  const [submittingComment, setSubmittingComment] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const trackedSessionViewsRef = useRef<Set<string>>(new Set());
+  const [searchParams] = useSearchParams();
+  const targetReelId = searchParams.get('id');
 
   // Extract current authenticated user information from AuthContext & fallback
   const storedUserStr = localStorage.getItem('user');
@@ -80,16 +112,73 @@ export const Reels: React.FC = () => {
   const fetchReels = useCallback(async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      const authHeaders = await getAuthHeader();
       const res = await fetch(`${API_URL}/api/community/reels?limit=20`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { ...authHeaders },
       });
+      let list: ReelPost[] = [];
       if (res.ok) {
         const data = await res.json();
-        const list = data.reels || [];
-        setReels(list);
+        list = data.reels || [];
         setHasMore(Boolean(data.hasMore));
         setNextCursor(data.nextCursor || null);
+      }
+
+      // Target Reel Deep-Link Resolution (Repair B)
+      if (targetReelId) {
+        const foundIdx = list.findIndex(r => r.id === targetReelId);
+        if (foundIdx >= 0) {
+          setReels(list);
+          setActiveReelId(targetReelId);
+        } else {
+          // Target reel not in newest 20 - fetch it specifically
+          try {
+            const targetRes = await fetch(`${API_URL}/api/community/post/${encodeURIComponent(targetReelId)}`, {
+              headers: { ...authHeaders },
+            });
+            if (targetRes.ok) {
+              const targetData = await targetRes.json();
+              const targetPost = targetData.post || targetData;
+              const hasVideo = targetPost && (targetPost.media_url || (Array.isArray(targetPost.media_urls) && targetPost.media_urls.length > 0));
+              if (hasVideo) {
+                const formattedTarget: ReelPost = {
+                  id: targetPost.id,
+                  author_id: targetPost.author_id,
+                  content: targetPost.content || targetPost.title || '',
+                  media_url: targetPost.media_url || targetPost.media_urls?.[0],
+                  thumbnail_url: targetPost.thumbnail_url || null,
+                  likes_count: targetPost.likes_count || 0,
+                  comments_count: targetPost.comments_count || 0,
+                  saves_count: targetPost.saves_count || 0,
+                  shares_count: targetPost.shares_count || 0,
+                  views_count: targetPost.views_count || 0,
+                  user_has_liked: Boolean(targetPost.user_has_liked),
+                  user_has_bookmarked: Boolean(targetPost.user_has_bookmarked || targetPost.is_bookmarked),
+                  is_bookmarked: Boolean(targetPost.is_bookmarked || targetPost.user_has_bookmarked),
+                  created_at: targetPost.created_at,
+                  author: targetPost.author || targetPost.profiles,
+                  profiles: targetPost.profiles || targetPost.author,
+                };
+                list = [formattedTarget, ...list.filter(r => r.id !== targetReelId)];
+                setReels(list);
+                setActiveReelId(targetReelId);
+              } else {
+                setReels(list);
+                if (list.length > 0) setActiveReelId(list[0].id);
+                toast.error('The requested Reel is unavailable or has no video.');
+              }
+            } else {
+              setReels(list);
+              if (list.length > 0) setActiveReelId(list[0].id);
+              toast.error('The requested Reel could not be found.');
+            }
+          } catch {
+            setReels(list);
+            if (list.length > 0) setActiveReelId(list[0].id);
+          }
+        }
+      } else {
+        setReels(list);
         if (list.length > 0) {
           setActiveReelId(list[0].id);
         }
@@ -99,15 +188,15 @@ export const Reels: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [targetReelId]);
 
   const fetchMoreReels = useCallback(async () => {
     if (loadingMore || !hasMore || !nextCursor) return;
     try {
       setLoadingMore(true);
-      const token = localStorage.getItem('token');
+      const authHeaders = await getAuthHeader();
       const res = await fetch(`${API_URL}/api/community/reels?limit=20&cursor=${encodeURIComponent(nextCursor)}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { ...authHeaders },
       });
       if (res.ok) {
         const data = await res.json();
@@ -131,6 +220,16 @@ export const Reels: React.FC = () => {
     fetchReels();
   }, [fetchReels]);
 
+  // Auto-scroll to target deep-link reel on load
+  useLayoutEffect(() => {
+    if (targetReelId && reels.length > 0) {
+      const el = cardRefs.current.get(targetReelId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'instant', block: 'start' });
+      }
+    }
+  }, [targetReelId, reels]);
+
   // IntersectionObserver to auto-activate the reel visible in viewport center
   useEffect(() => {
     const container = containerRef.current;
@@ -143,6 +242,7 @@ export const Reels: React.FC = () => {
             const reelId = entry.target.getAttribute('data-reel-id');
             if (reelId) {
               setActiveReelId(reelId);
+              window.history.replaceState(null, '', `/dashboard/reels?id=${encodeURIComponent(reelId)}`);
               const activeIdx = reels.findIndex(r => r.id === reelId);
               if (activeIdx >= 0 && activeIdx >= reels.length - 3) {
                 fetchMoreReels();
@@ -251,62 +351,8 @@ export const Reels: React.FC = () => {
   }, [navigateToReel, selectedCommentsReelId, showUploadModal]);
 
   // Comments Drawer handler
-  const handleOpenComments = async (reelId: string) => {
+  const handleOpenComments = (reelId: string) => {
     setSelectedCommentsReelId(reelId);
-    setLoadingComments(true);
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_URL}/api/community/post/${reelId}/comments`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setComments(data || []);
-      }
-    } catch (err) {
-      console.error('Error fetching reel comments:', err);
-    } finally {
-      setLoadingComments(false);
-    }
-  };
-
-  const handlePostComment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCommentText.trim() || !selectedCommentsReelId) return;
-
-    setSubmittingComment(true);
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_URL}/api/community/comment`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          postId: selectedCommentsReelId,
-          content: newCommentText.trim(),
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setComments(prev => [...prev, data.comment || data]);
-        setNewCommentText('');
-        // Update comments count on reel
-        setReels(prev =>
-          prev.map(r =>
-            r.id === selectedCommentsReelId
-              ? { ...r, comments_count: (r.comments_count || 0) + 1 }
-              : r
-          )
-        );
-      }
-    } catch (err) {
-      console.error('Failed to post comment:', err);
-    } finally {
-      setSubmittingComment(false);
-    }
   };
 
   const activeIndex = reels.findIndex(r => r.id === activeReelId);
@@ -446,6 +492,8 @@ export const Reels: React.FC = () => {
                   currentUserId={currentUserId}
                   currentUserRole={currentUserRole}
                   onOpenComments={handleOpenComments}
+                  onLikeToggle={handleLikeToggle}
+                  onBookmarkToggle={handleBookmarkToggle}
                   onDeleteReel={handleDeleteReel}
                   onRecordView={handleRecordView}
                 />
@@ -473,7 +521,13 @@ export const Reels: React.FC = () => {
           }}
           className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex justify-end flex-col sm:items-center sm:justify-center p-0 sm:p-4"
         >
-          <div className="bg-gray-900 border border-white/10 w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl h-[70vh] sm:h-[65vh] flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-300">
+          <div
+            className="bg-gray-900 border border-white/10 w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl max-h-[85vh] sm:max-h-[75vh] h-[70vh] sm:h-[65vh] flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-300 pb-[env(safe-area-inset-bottom,0px)]"
+            style={{
+              maxHeight: isKeyboardOpen ? 'calc(var(--vv-height, 100dvh) - 0.5rem)' : undefined,
+              height: isKeyboardOpen ? '100%' : undefined,
+            }}
+          >
             {/* Drawer Header */}
             <div className="p-4 border-b border-white/10 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2 font-bold text-white text-sm">
@@ -489,59 +543,30 @@ export const Reels: React.FC = () => {
               </button>
             </div>
 
-            {/* Comments List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {loadingComments ? (
-                <div className="flex justify-center py-10">
-                  <Loader2 size={24} className="animate-spin text-primary" />
-                </div>
-              ) : comments.length === 0 ? (
-                <div className="text-center text-xs text-gray-500 py-10">
-                  No comments yet. Start the conversation!
-                </div>
-              ) : (
-                comments.map((c) => (
-                  <div key={c.id} className="flex gap-2.5 items-start">
-                    <img
-                      src={
-                        c.profiles?.avatar_url ||
-                        `https://ui-avatars.com/api/?name=${c.profiles?.username || 'U'}&background=6366f1&color=fff`
-                      }
-                      alt={c.profiles?.username}
-                      className="w-8 h-8 rounded-full object-cover shrink-0 border border-white/10"
-                    />
-                    <div className="flex-1 bg-white/5 rounded-xl p-2.5 border border-white/5">
-                      <div className="font-semibold text-xs text-white">
-                        @{c.profiles?.username || 'user'}
-                      </div>
-                      <p className="text-xs text-gray-300 mt-1 leading-relaxed">{c.content}</p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Comment Input Form */}
-            <form onSubmit={handlePostComment} className="p-3 sm:p-4 bg-gray-950 border-t border-white/10 flex gap-2 shrink-0">
-              <label htmlFor="reel-comment-input" className="sr-only">Add a comment</label>
-              <input
-                id="reel-comment-input"
-                name="reel_comment"
-                type="text"
-                value={newCommentText}
-                onChange={(e) => setNewCommentText(e.target.value)}
-                placeholder="Add a comment to this Reel..."
-                aria-label="Add a comment to this Reel"
-                className="flex-1 bg-black/60 border border-white/15 rounded-full px-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-primary"
+            {/* Comments Body with full thread hierarchy & real-time sockets */}
+            <div className="flex-1 overflow-y-auto">
+              <CommentSection
+                postId={selectedCommentsReelId}
+                onCommentAdded={() => {
+                  setReels(prev =>
+                    prev.map(r =>
+                      r.id === selectedCommentsReelId
+                        ? { ...r, comments_count: (r.comments_count || 0) + 1 }
+                        : r
+                    )
+                  );
+                }}
+                onCommentDeleted={() => {
+                  setReels(prev =>
+                    prev.map(r =>
+                      r.id === selectedCommentsReelId
+                        ? { ...r, comments_count: Math.max(0, (r.comments_count || 0) - 1) }
+                        : r
+                    )
+                  );
+                }}
               />
-              <button
-                type="submit"
-                disabled={submittingComment || !newCommentText.trim()}
-                className="p-2.5 rounded-full bg-primary hover:bg-primary/90 text-white disabled:opacity-50 transition-all cursor-pointer shrink-0"
-              >
-                {submittingComment ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-              </button>
-            </form>
+            </div>
           </div>
         </div>
       )}

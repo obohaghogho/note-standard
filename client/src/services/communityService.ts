@@ -6,6 +6,8 @@
  */
 
 import { API_URL, getAuthHeader } from '../lib/api';
+import api from '../api/axiosInstance';
+import { supabase } from '../lib/supabase';
 
 export interface CommunityPost {
   id: string;
@@ -48,6 +50,11 @@ export interface CommunityPost {
   };
   community_likes?: { user_id: string }[];
   community_bookmarks?: { user_id: string }[];
+  user_has_liked?: boolean;
+  user_has_bookmarked?: boolean;
+  is_liked?: boolean;
+  is_bookmarked?: boolean;
+  bookmarked?: boolean;
 }
 
 export interface CommunityComment {
@@ -57,6 +64,7 @@ export interface CommunityComment {
   parent_id?: string | null;
   content: string;
   likes_count: number;
+  is_liked?: boolean;
   is_edited: boolean;
   created_at: string;
   profiles?: {
@@ -230,14 +238,47 @@ export async function deletePost(postId: string): Promise<void> {
   if (!res.ok) throw new Error(`Delete post failed (${res.status})`);
 }
 
-// ─── Interactions ──────────────────────────────────────────────────────────────
 export async function toggleLike(postId: string): Promise<{ liked: boolean }> {
-  const res = await authFetch(`${API_URL}/api/community/like`, {
-    method: 'POST',
-    body: JSON.stringify({ postId }),
-  });
-  if (!res.ok) throw new Error(`Like failed (${res.status})`);
-  return res.json();
+  // 1. Primary: Use resilient Axios API client (handles auth tokens, refresh on 401, retries)
+  try {
+    const res = await api.post<{ liked: boolean }>('/community/like', { postId });
+    if (res.data && typeof res.data.liked === 'boolean') {
+      return res.data;
+    }
+  } catch (apiErr) {
+    console.warn('[CommunityService] API /community/like failed, falling back to direct Supabase operation:', apiErr);
+  }
+
+  // 2. Direct Supabase Fallback (ensures liking NEVER fails on network/CORS/preview issues)
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data: existingLike } = await supabase
+      .from('community_likes')
+      .select('id')
+      .eq('post_id', postId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (existingLike) {
+      const { error: delErr } = await supabase
+        .from('community_likes')
+        .delete()
+        .eq('id', existingLike.id);
+      if (delErr) throw delErr;
+      return { liked: false };
+    } else {
+      const { error: insErr } = await supabase
+        .from('community_likes')
+        .insert([{ post_id: postId, user_id: user.id, reaction: 'like' }]);
+      if (insErr && insErr.code !== '23505') throw insErr;
+      return { liked: true };
+    }
+  } catch (dbErr) {
+    console.error('[CommunityService] Direct Supabase toggleLike failed:', dbErr);
+    throw dbErr;
+  }
 }
 
 export interface PostLiker {
@@ -262,9 +303,37 @@ export async function sharePost(postId: string): Promise<{ success: boolean }> {
 }
 
 export async function toggleBookmark(postId: string): Promise<{ bookmarked: boolean }> {
-  const res = await authFetch(`${API_URL}/api/community/post/${postId}/bookmark`, { method: 'POST' });
-  if (!res.ok) throw new Error(`Bookmark failed (${res.status})`);
-  return res.json();
+  try {
+    const res = await api.post<{ bookmarked: boolean }>(`/community/post/${postId}/bookmark`);
+    if (res.data && typeof res.data.bookmarked === 'boolean') {
+      return res.data;
+    }
+  } catch (apiErr) {
+    console.warn('[CommunityService] API toggleBookmark failed, falling back to Supabase:', apiErr);
+  }
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data: existing } = await supabase
+      .from('community_bookmarks')
+      .select('id')
+      .eq('post_id', postId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (existing) {
+      await supabase.from('community_bookmarks').delete().eq('id', existing.id);
+      return { bookmarked: false };
+    } else {
+      await supabase.from('community_bookmarks').insert([{ post_id: postId, user_id: user.id }]);
+      return { bookmarked: true };
+    }
+  } catch (dbErr) {
+    console.error('[CommunityService] Supabase fallback toggleBookmark failed:', dbErr);
+    throw dbErr;
+  }
 }
 
 export async function toggleFollow(profileId: string): Promise<{ following: boolean }> {
@@ -341,6 +410,62 @@ export async function editComment(commentId: string, content: string): Promise<C
 export async function deleteComment(commentId: string): Promise<void> {
   const res = await authFetch(`${API_URL}/api/community/comment/${commentId}`, { method: 'DELETE' });
   if (!res.ok) throw new Error(`Delete comment failed (${res.status})`);
+}
+
+export async function toggleCommentLike(commentId: string): Promise<{ liked: boolean; likes_count: number }> {
+  // 1. Primary: Use resilient Axios API client
+  try {
+    const res = await api.post<{ liked: boolean; likes_count: number }>(`/community/comment/${commentId}/like`);
+    if (res.data && typeof res.data.liked === 'boolean') {
+      return res.data;
+    }
+  } catch (apiErr) {
+    console.warn('[CommunityService] API /community/comment/:id/like failed, falling back to direct Supabase operation:', apiErr);
+  }
+
+  // 2. Direct Supabase Fallback (executes with user RLS)
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data: existingLike } = await supabase
+      .from('community_comment_likes')
+      .select('id')
+      .eq('comment_id', commentId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (existingLike) {
+      await supabase
+        .from('community_comment_likes')
+        .delete()
+        .eq('id', existingLike.id);
+
+      const { data: c } = await supabase
+        .from('community_comments')
+        .select('likes_count')
+        .eq('id', commentId)
+        .maybeSingle();
+
+      return { liked: false, likes_count: c?.likes_count ?? 0 };
+    } else {
+      const { error: insErr } = await supabase
+        .from('community_comment_likes')
+        .insert([{ comment_id: commentId, user_id: user.id }]);
+      if (insErr && insErr.code !== '23505') throw insErr;
+
+      const { data: c } = await supabase
+        .from('community_comments')
+        .select('likes_count')
+        .eq('id', commentId)
+        .maybeSingle();
+
+      return { liked: true, likes_count: c?.likes_count ?? 1 };
+    }
+  } catch (dbErr) {
+    console.error('[CommunityService] Direct Supabase toggleCommentLike failed:', dbErr);
+    throw dbErr;
+  }
 }
 
 // ─── Reporting ─────────────────────────────────────────────────────────────────

@@ -521,17 +521,186 @@ const votePollOption = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+function isMissingTableError(err, tableName = 'community_comment_likes') {
+  if (!err) return false;
+  // 42P01: PostgreSQL undefined_table
+  // PGRST205: PostgREST 12+ table not in schema cache
+  // PGRST200: PostgREST relationship not in schema cache
+  if (err.code === '42P01' || err.code === 'PGRST205' || err.code === 'PGRST200') return true;
+  const msg = (err.message || '').toLowerCase();
+  const details = (err.details || '').toLowerCase();
+  const target = tableName.toLowerCase();
+  if (
+    (msg.includes('does not exist') || msg.includes('schema cache') || msg.includes('could not find')) &&
+    (msg.includes(target) || details.includes(target))
+  ) {
+    return true;
+  }
+  return false;
+}
+
 const getComments = async (req, res, next) => {
   try {
     const { postId } = req.params;
+    const userId = req.user?.id;
+
+    // Attempt join with community_comment_likes
     const { data, error } = await supabase
       .from('community_comments')
-      .select('*, profiles!author_id(id, username, avatar_url, is_verified)')
+      .select('*, profiles!author_id(id, username, avatar_url, is_verified), community_comment_likes(user_id)')
       .eq('post_id', postId)
       .order('created_at', { ascending: true });
-    if (error) throw error;
-    res.json(data || []);
+
+    if (error) {
+      // Graceful fallback if migration 504 has not yet been executed in active database
+      if (isMissingTableError(error, 'community_comment_likes')) {
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('community_comments')
+          .select('*, profiles!author_id(id, username, avatar_url, is_verified)')
+          .eq('post_id', postId)
+          .order('created_at', { ascending: true });
+        if (fallbackError) throw fallbackError;
+
+        const formatted = (fallbackData || []).map(c => ({
+          ...c,
+          is_liked: false,
+          likes_count: c.likes_count || 0
+        }));
+        return res.json(formatted);
+      }
+      throw error;
+    }
+
+    const formatted = (data || []).map(c => {
+      const isLiked = userId && Array.isArray(c.community_comment_likes)
+        ? c.community_comment_likes.some(l => l.user_id === userId)
+        : false;
+      const { community_comment_likes, ...rest } = c;
+      return {
+        ...rest,
+        is_liked: isLiked,
+        likes_count: rest.likes_count || 0
+      };
+    });
+
+    res.json(formatted);
   } catch (err) { next(err); }
+};
+
+const toggleCommentLike = async (req, res, next) => {
+  try {
+    const { id: userId } = req.user;
+    const { commentId } = req.params;
+
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!commentId || !UUID_REGEX.test(commentId)) {
+      return res.status(400).json({ error: "Invalid comment ID format" });
+    }
+
+    // Verify target comment exists
+    const { data: targetComment, error: commentError } = await supabase
+      .from("community_comments")
+      .select("id, author_id, post_id, likes_count")
+      .eq("id", commentId)
+      .maybeSingle();
+
+    if (commentError) throw commentError;
+    if (!targetComment) {
+      return res.status(404).json({ error: "Comment not found" });
+    }
+
+    // Check if like exists
+    const { data: existingLike, error: findError } = await supabase
+      .from("community_comment_likes")
+      .select("id")
+      .eq("comment_id", commentId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (findError && findError.code !== 'PGRST116') {
+      // If table doesn't exist yet, return helpful graceful response
+      if (isMissingTableError(findError, 'community_comment_likes')) {
+        logger.warn('[Community] community_comment_likes table pending execution of migration 504');
+        return res.status(503).json({ error: "Comment likes service is pending database migration" });
+      }
+      throw findError;
+    }
+
+    if (existingLike) {
+      const { error: deleteError } = await supabase
+        .from("community_comment_likes")
+        .delete()
+        .eq("id", existingLike.id);
+      if (deleteError) throw deleteError;
+
+      // Authoritative count lookup
+      const { data: updatedComment, error: countError } = await supabase
+        .from("community_comments")
+        .select("likes_count")
+        .eq("id", commentId)
+        .maybeSingle();
+
+      if (countError) throw countError;
+      if (!updatedComment) {
+        return res.status(404).json({ error: "Comment not found" });
+      }
+
+      return res.json({
+        liked: false,
+        likes_count: updatedComment.likes_count ?? 0
+      });
+    } else {
+      let isNewTransition = true;
+      const { error: insertError } = await supabase
+        .from("community_comment_likes")
+        .insert([{ comment_id: commentId, user_id: userId }]);
+
+      if (insertError) {
+        if (insertError.code === '23503') {
+          return res.status(404).json({ error: "Comment not found" });
+        }
+        if (insertError.code === '23505') {
+          // Idempotent duplicate: already liked concurrently
+          isNewTransition = false;
+        } else {
+          throw insertError;
+        }
+      }
+
+      // Authoritative count lookup
+      const { data: updatedComment, error: countError } = await supabase
+        .from("community_comments")
+        .select("likes_count")
+        .eq("id", commentId)
+        .maybeSingle();
+
+      if (countError) throw countError;
+      if (!updatedComment) {
+        return res.status(404).json({ error: "Comment not found" });
+      }
+
+      // Log activity only if this was an actual new like transition and author is not self
+      if (isNewTransition && targetComment.author_id && targetComment.author_id !== userId) {
+        await activityService.logActivity({
+          userId,
+          actionType: 'liked_comment',
+          entityType: 'community_comment',
+          entityId: commentId,
+          metadata: {
+            comment_owner_id: targetComment.author_id,
+            post_id: targetComment.post_id
+          }
+        }).catch(err => logger.warn('[Community] Comment like activity log failed:', err.message));
+      }
+
+      return res.json({
+        liked: true,
+        likes_count: updatedComment.likes_count ?? 0
+      });
+    }
+  } catch (err) {
+    next(err);
+  }
 };
 
 const getReels = async (req, res, next) => {
@@ -826,6 +995,7 @@ module.exports = {
   sharePost,
   getPostById,
   recordReelView,
-  getPostLikers
+  getPostLikers,
+  toggleCommentLike
 };
 

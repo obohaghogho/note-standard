@@ -14,20 +14,49 @@ if (!API_URL) {
 }
 
 
-export const getAuthHeader = async () => {
+export const getAuthHeader = async (): Promise<Record<string, string>> => {
     try {
-        const { data } = await supabase.auth.getSession();
-        const token = data.session?.access_token;
-        
-        if (!token) {
-            return {}; // No token available
+        let token: string | null | undefined = null;
+
+        // 1. Check Supabase session
+        try {
+            const { data } = await supabase.auth.getSession();
+            token = data.session?.access_token;
+        } catch { /* proceed to fallbacks */ }
+
+        // 2. Fallback to localStorage 'token' or Supabase keys
+        if (!token && typeof window !== 'undefined' && window.localStorage) {
+            token = localStorage.getItem('token');
+            if (!token) {
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && (key.startsWith('sb-') || key.includes('supabase') || key.includes('auth-token'))) {
+                        try {
+                            const raw = localStorage.getItem(key);
+                            if (raw) {
+                                const parsed = JSON.parse(raw);
+                                const found = parsed?.access_token || parsed?.currentSession?.access_token;
+                                if (found) {
+                                    token = found;
+                                    break;
+                                }
+                            }
+                        } catch { /* ignore parse error */ }
+                    }
+                }
+            }
         }
-        
-        return {
-            'Authorization': `Bearer ${token}`
-        };
+
+        if (token) {
+            return {
+                'Authorization': `Bearer ${token}`
+            };
+        }
+        return {};
     } catch (err) {
         console.error('[API] Failed to get session:', err);
-        return {};
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        return token ? { 'Authorization': `Bearer ${token}` } : {};
     }
 };
+
