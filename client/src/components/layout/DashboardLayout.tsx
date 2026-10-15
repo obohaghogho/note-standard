@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Sidebar } from './Sidebar';
 import { CreateNoteModal } from '../dashboard/CreateNoteModal';
@@ -23,6 +23,41 @@ export function DashboardLayout() {
     const [isCreateNoteModalOpen, setIsCreateNoteModalOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const { user, authReady } = useAuth();
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const scrollPositionsRef = useRef<Record<string, number>>({});
+    const prevPathnameRef = useRef<string>(location.pathname);
+
+    // Smart scroll management: restore position when returning from post detail to feed,
+    // and reset to top when navigating to new views.
+    useEffect(() => {
+        const prevPath = prevPathnameRef.current;
+        const currentPath = location.pathname;
+
+        // If navigating away from feed to a post detail page, save current feed scroll
+        if (prevPath.startsWith('/dashboard/feed') && currentPath.startsWith('/dashboard/post/')) {
+            if (scrollContainerRef.current) {
+                scrollPositionsRef.current['/dashboard/feed'] = scrollContainerRef.current.scrollTop;
+            }
+        }
+
+        // Handle scroll behavior for current destination
+        if (currentPath.startsWith('/dashboard/feed') && prevPath.startsWith('/dashboard/post/')) {
+            // Returning to feed from a post: restore prior scroll position
+            const savedScroll = scrollPositionsRef.current['/dashboard/feed'] || 0;
+            requestAnimationFrame(() => {
+                if (scrollContainerRef.current) {
+                    scrollContainerRef.current.scrollTo({ top: savedScroll, behavior: 'instant' });
+                }
+            });
+        } else if (currentPath !== prevPath) {
+            // New page visit or explicit navigation: scroll to top
+            if (scrollContainerRef.current) {
+                scrollContainerRef.current.scrollTo({ top: 0, behavior: 'instant' });
+            }
+        }
+
+        prevPathnameRef.current = currentPath;
+    }, [location.pathname]);
 
     
     if (!authReady) {
@@ -34,6 +69,7 @@ export function DashboardLayout() {
     }
 
     const isReelsPage = location.pathname.startsWith('/dashboard/reels');
+    const isCommunityFeedPage = location.pathname.startsWith('/dashboard/feed') || location.pathname.startsWith('/dashboard/saved') || location.pathname.startsWith('/dashboard/community');
     const isStandalonePageOnMobile = location.pathname.startsWith('/dashboard/chat') || location.pathname.startsWith('/dashboard/teams') || isReelsPage;
     
     // Standard Header/Top bar - HIDDEN on mobile when a chat, team workspace, or Reels is active
@@ -71,9 +107,15 @@ export function DashboardLayout() {
                     <NotificationBell />
                     <LanguageSelector />
                     <button 
-                        onClick={() => navigate('/dashboard/settings')}
+                        onClick={() => {
+                            if (user?.id) {
+                                navigate(`/dashboard/profile/${user.id}`);
+                            } else {
+                                navigate('/dashboard/settings');
+                            }
+                        }}
                         className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs ring-1 ring-primary/20 hover:bg-primary/30 transition-colors min-w-[36px] min-h-[36px]"
-                        title={t('common.settings')}
+                        title={t('common.profile', 'Profile')}
                     >
                         {user?.email?.[0]?.toUpperCase() || '?'}
                     </button>
@@ -109,11 +151,16 @@ export function DashboardLayout() {
             >
                 {renderHeader()}
 
-                <div className={cn(
+                <div
+                    ref={scrollContainerRef}
+                    className={cn(
                     "min-w-0 w-full max-w-full relative",
                     isStandalonePageOnMobile
                         ? "flex-1 h-full overflow-hidden p-0"
-                        : "flex-1 min-h-0 flex flex-col p-3 sm:p-4 md:p-8 max-w-7xl mx-auto overflow-y-auto overflow-x-hidden pb-[calc(9rem+env(safe-area-inset-bottom,0px))] lg:pb-8 touch-pan-y"
+                        : cn(
+                            "flex-1 min-h-0 flex flex-col max-w-7xl mx-auto overflow-y-auto overflow-x-hidden pb-[calc(9rem+env(safe-area-inset-bottom,0px))] lg:pb-8 touch-pan-y",
+                            isCommunityFeedPage ? "p-0 sm:p-4 md:p-8" : "p-3 sm:p-4 md:p-8"
+                          )
                 )}>
                     <ErrorBoundary fallback={
                         <div className="p-8 text-center bg-red-500/10 rounded-xl border border-red-500/20 m-4">
@@ -130,7 +177,7 @@ export function DashboardLayout() {
                         )}>
                             <Outlet context={{ openCreateNoteModal: () => setIsCreateNoteModalOpen(true), openMobileMenu: () => setIsMobileMenuOpen(true) }} />
                             {!isStandalonePageOnMobile && (
-                                <div className="h-36 w-full shrink-0 lg:h-8 pointer-events-none" aria-hidden="true" />
+                                <div className="hidden lg:block lg:h-8 w-full shrink-0 pointer-events-none" aria-hidden="true" />
                             )}
                         </div>
                     </ErrorBoundary>

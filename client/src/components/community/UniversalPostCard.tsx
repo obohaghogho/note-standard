@@ -35,6 +35,8 @@ import { CommentSection } from './CommentSection';
 import { PostComposer } from './PostComposer';
 import { MediaViewer } from './MediaViewer';
 import { LikersModal } from './LikersModal';
+import { FeedVideoPlayer } from './FeedVideoPlayer';
+import { feedVideoCoordinator } from '../../utils/feedVideoCoordinator';
 
 interface Props {
   post: CommunityPost;
@@ -356,50 +358,82 @@ export const UniversalPostCard: React.FC<Props> = ({
           </div>
         )}
 
-        {/* ── Media (Images/Video - Edge-to-edge flush with card) ───────── */}
+        {/* ── Media (Images/Video - Full-width, full-length edge-to-edge Instagram style) ───────── */}
         {post.media_urls && post.media_urls.length > 0 && (
-          <div className="w-full bg-black/5 dark:bg-black/30 overflow-hidden">
+          <div className="w-full overflow-hidden bg-transparent">
             {post.media_urls.length === 1 ? (
               <div
-                className="relative cursor-pointer w-full flex items-center justify-center bg-black/10 dark:bg-black/40 overflow-hidden"
-                onClick={() => { setMediaViewerIndex(0); setShowMediaViewer(true); }}
+                className="relative w-full flex items-center justify-center overflow-hidden bg-transparent"
+                onClick={() => {
+                  const isVideoMedia = post.post_type === 'video' || post.media_urls[0].match(/\.(mp4|webm|ogg|mov|m4v)(\?|$)/i);
+                  if (!isVideoMedia) {
+                    feedVideoCoordinator.pauseAll();
+                    setMediaViewerIndex(0);
+                    setShowMediaViewer(true);
+                  }
+                }}
               >
                 {post.post_type === 'video' || post.media_urls[0].match(/\.(mp4|webm|ogg|mov|m4v)(\?|$)/i) ? (
-                  <video src={post.media_urls[0]} className="w-full max-h-[540px] object-contain bg-black" controls preload="metadata" />
+                  <FeedVideoPlayer
+                    src={post.media_urls[0]}
+                    postId={post.id}
+                    className="w-full h-auto max-h-[85vh] object-cover block mx-auto bg-transparent"
+                  />
                 ) : (
                   <img
                     src={post.media_urls[0]}
                     alt="Post media"
-                    className="w-full max-h-[540px] object-cover sm:object-contain hover:opacity-98 transition-opacity"
+                    className="w-full h-auto max-h-[85vh] object-cover block mx-auto hover:opacity-98 transition-opacity bg-transparent cursor-pointer"
                     loading="lazy"
                   />
                 )}
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-0.5 w-full bg-gray-200 dark:bg-gray-800">
-                {post.media_urls.slice(0, 4).map((url, idx) => (
-                  <div
-                    key={idx}
-                    className="relative aspect-square cursor-pointer bg-gray-100 dark:bg-gray-800 overflow-hidden"
-                    onClick={() => { setMediaViewerIndex(idx); setShowMediaViewer(true); }}
-                  >
-                    {post.post_type === 'video' || url.match(/\.(mp4|webm|ogg|mov|m4v)(\?|$)/i) ? (
-                      <video src={url} className="w-full h-full object-cover" controls preload="metadata" />
-                    ) : (
-                      <img
-                        src={url}
-                        alt={`Media ${idx + 1}`}
-                        className="w-full h-full object-cover hover:opacity-95 transition-opacity"
-                        loading="lazy"
-                      />
-                    )}
-                    {idx === 3 && post.media_urls.length > 4 && (
-                      <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center text-white font-bold text-xl">
-                        +{post.media_urls.length - 4}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                {post.media_urls.slice(0, 4).map((url, idx) => {
+                  const isVideoMedia = post.post_type === 'video' || url.match(/\.(mp4|webm|ogg|mov|m4v)(\?|$)/i);
+                  return (
+                    <div
+                      key={idx}
+                      className="relative aspect-square bg-gray-100 dark:bg-gray-800 overflow-hidden"
+                      onClick={() => {
+                        if (!isVideoMedia) {
+                          feedVideoCoordinator.pauseAll();
+                          setMediaViewerIndex(idx);
+                          setShowMediaViewer(true);
+                        }
+                      }}
+                    >
+                      {isVideoMedia ? (
+                        <FeedVideoPlayer
+                          src={url}
+                          postId={`${post.id}-${idx}`}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <img
+                          src={url}
+                          alt={`Media ${idx + 1}`}
+                          className="w-full h-full object-cover hover:opacity-95 transition-opacity cursor-pointer"
+                          loading="lazy"
+                        />
+                      )}
+                      {idx === 3 && post.media_urls.length > 4 && (
+                        <div
+                          className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center text-white font-bold text-xl cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            feedVideoCoordinator.pauseAll();
+                            setMediaViewerIndex(3);
+                            setShowMediaViewer(true);
+                          }}
+                        >
+                          +{post.media_urls.length - 4}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

@@ -15,15 +15,16 @@ import {
     MessageSquare,
     Bell,
     Shield,
-    BadgeCheck,
     TrendingUp,
     Smartphone,
     X,
     AlertTriangle,
     Wallet,
     Video,
-    Sparkles
+    Sparkles,
+    Bookmark
 } from 'lucide-react';
+import { VerifiedBadge } from '../common/VerifiedBadge';
 import { cn } from '../../utils/cn';
 import { Button } from '../common/Button';
 import { useAuth } from '../../context/AuthContext';
@@ -63,6 +64,7 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
         { icon: Notebook, label: t('nav.notes'), to: '/dashboard/notes' },
         { icon: Globe, label: t('nav.feed'), to: '/dashboard/feed' },
         { icon: Video, label: 'Reels', to: '/dashboard/reels' },
+        { icon: Bookmark, label: t('nav.saved', 'Saved'), to: '/dashboard/saved' },
         ...(isCreatorUser ? [{ icon: Sparkles, label: 'Creator Studio', to: '/dashboard/creator' }] : []),
         { icon: TrendingUp, label: t('nav.trends'), to: '/dashboard/trends' },
         { icon: MessageSquare, label: t('nav.chat'), to: '/dashboard/chat' },
@@ -224,7 +226,14 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
                                 : (acc.email?.substring(0, 2).toUpperCase() || '??');
 
                             const handleClick = () => {
-                                if (isActive) return;
+                                if (isActive) {
+                                    const targetId = user?.id || profile?.id;
+                                    if (targetId) {
+                                        navigate(`/dashboard/profile/${targetId}`);
+                                        onClose?.();
+                                    }
+                                    return;
+                                }
                                 if (sessionExpired) {
                                     // Session looks expired — try switch anyway (switchAccount handles refresh)
                                     // Only block if we know the switch will fail (e.g. permanent revocation)
@@ -307,14 +316,31 @@ export const Sidebar = ({ onCreateNote, isOpen = false, onClose }: SidebarProps)
                     </button>
                 </div>
 
-                <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer mb-2">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-xs font-bold text-white">
-                        {initials}
+                <div 
+                    onClick={() => {
+                        const targetId = user?.id || profile?.id;
+                        if (targetId) {
+                            navigate(`/dashboard/profile/${targetId}`);
+                            onClose?.();
+                        }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer mb-2 group"
+                    title="View Profile"
+                    aria-label="View Profile"
+                >
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-xs font-bold text-white overflow-hidden shrink-0 group-hover:ring-2 group-hover:ring-primary transition-all">
+                        {profile?.avatar_url || user?.user_metadata?.avatar_url ? (
+                            <img src={profile?.avatar_url || user?.user_metadata?.avatar_url} alt={fullName} className="w-full h-full object-cover" />
+                        ) : (
+                            initials
+                        )}
                     </div>
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1">
-                            <div className="text-sm font-medium text-white truncate">{fullName}</div>
-                            {Boolean(profile?.is_verified) && <BadgeCheck size={14} className="text-blue-500 shrink-0 inline-block" />}
+                            <div className="text-sm font-medium text-white truncate group-hover:text-primary transition-colors">{fullName}</div>
+                            {Boolean(profile?.is_verified) && <VerifiedBadge size={14} className="ml-1 inline-block" />}
                         </div>
                         <div className="text-xs text-gray-500 truncate">{email}</div>
                     </div>

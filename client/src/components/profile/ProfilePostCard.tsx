@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
-import { Heart, MessageCircle, Share2, Bookmark, CheckCircle, Play } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Bookmark } from 'lucide-react';
 import SecureImage from '../common/SecureImage';
+import VerifiedBadge from '../common/VerifiedBadge';
 import type { PublicPost } from './PublicProfileModal';
 import { formatDistanceToNow } from 'date-fns';
 import toast from 'react-hot-toast';
+import { FeedVideoPlayer } from '../community/FeedVideoPlayer';
 
 interface ProfilePostCardProps {
   post: PublicPost;
@@ -15,7 +17,6 @@ interface ProfilePostCardProps {
 }
 
 export const ProfilePostCard: React.FC<ProfilePostCardProps> = ({ post, onLike, onComment, onClick, onShare }) => {
-  const [isPlaying, setIsPlaying] = useState(false);
 
   const handleShare = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -97,7 +98,7 @@ export const ProfilePostCard: React.FC<ProfilePostCardProps> = ({ post, onLike, 
                   {post.profiles?.full_name || post.profiles?.username}
                 </span>
                 {post.profiles?.is_verified && (
-                  <CheckCircle size={14} className="text-blue-400 fill-blue-500/20" title="Verified" />
+                  <VerifiedBadge size={14} className="shrink-0" />
                 )}
               </div>
               <div className="flex items-center gap-1.5 text-[13px] text-gray-500 font-medium">
@@ -120,38 +121,17 @@ export const ProfilePostCard: React.FC<ProfilePostCardProps> = ({ post, onLike, 
         {/* Media */}
         {mediaUrl && (
           <div
-            className="ml-0 sm:ml-13 mb-4 rounded-2xl overflow-hidden border border-white/10 max-h-[420px] bg-gray-900 shadow-lg relative group/media"
+            className="ml-0 sm:ml-13 mb-4 rounded-2xl overflow-hidden border border-white/10 max-h-[85vh] bg-transparent shadow-lg relative group/media"
             onClick={(e) => e.stopPropagation()}
           >
             {isVideo ? (
-              <div className="relative w-full h-full min-h-[220px] bg-black flex items-center justify-center">
-                <video
+              <div className="relative w-full h-full min-h-[220px] bg-transparent flex items-center justify-center">
+                <FeedVideoPlayer
                   src={mediaUrl}
-                  controls={isPlaying}
-                  preload="metadata"
-                  playsInline
-                  className="w-full max-h-[400px] object-contain rounded-2xl"
-                  onPlay={() => setIsPlaying(true)}
-                  onPause={() => setIsPlaying(false)}
+                  postId={`profile-${post.id}`}
+                  className="w-full h-auto max-h-[85vh] object-cover rounded-2xl block mx-auto bg-transparent"
                 />
-                {!isPlaying && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const container = e.currentTarget.parentElement;
-                      const videoEl = container?.querySelector('video') as HTMLVideoElement;
-                      if (videoEl) {
-                        videoEl.play();
-                        setIsPlaying(true);
-                      }
-                    }}
-                    className="absolute inset-0 m-auto w-14 h-14 rounded-full bg-emerald-500/80 hover:bg-emerald-500 text-neutral-950 flex items-center justify-center shadow-xl backdrop-blur-sm transition-all transform hover:scale-105"
-                    title="Play Reel Video"
-                  >
-                    <Play size={24} className="fill-current ml-1" />
-                  </button>
-                )}
-                <span className="absolute top-3 left-3 bg-black/60 backdrop-blur-md text-xs text-white font-semibold px-2.5 py-1 rounded-full border border-white/10 flex items-center gap-1">
+                <span className="absolute top-3 left-3 bg-black/60 backdrop-blur-md text-xs text-white font-semibold px-2.5 py-1 rounded-full border border-white/10 flex items-center gap-1 z-20">
                   🎬 Reel
                 </span>
               </div>
