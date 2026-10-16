@@ -180,6 +180,7 @@ function AuthenticatedProviders() {
             <Route path="chat" element={<Chat />} />
             <Route path="shared" element={<Shared />} />
             <Route path="feed" element={<Feed />} />
+            <Route path="saved" element={<Feed />} />
             <Route path="reels" element={<Reels />} />
             <Route path="creator" element={<CreatorStudio />} />
             <Route path="favorites" element={<Notes />} />
