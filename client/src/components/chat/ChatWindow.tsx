@@ -808,10 +808,10 @@ const ChatWindow: React.FC = () => {
     return (
         <div 
             className="chat-root bg-crystal text-white w-full h-full flex flex-col relative overflow-hidden md:max-w-[1200px] md:mx-auto md:shadow-2xl md:border-x md:border-white/5"
-            style={{
-                height: isKeyboardOpen ? 'var(--vv-height, 100%)' : '100%',
-                maxHeight: isKeyboardOpen ? 'var(--vv-height, 100%)' : '100%',
-            }}
+            style={isKeyboardOpen ? {
+                height: 'var(--vv-height, 100%)',
+                maxHeight: 'var(--vv-height, 100%)',
+            } : undefined}
         >
             {/* Premium Wallpaper Engine */}
             <WallpaperEngine chatId={activeConversationId || undefined} />

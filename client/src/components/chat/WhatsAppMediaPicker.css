@@ -365,3 +365,12 @@
         min-width: 185px;
     }
 }
+
+@media (max-width: 639px) {
+    .keyboard-open .wa-media-overlay {
+        bottom: var(--kb-height, 0px);
+    }
+    .keyboard-open .wa-sheet-footer {
+        padding-bottom: 12px;
+    }
+}

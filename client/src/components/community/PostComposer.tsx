@@ -4,6 +4,7 @@ import {
   AtSign, Hash, Loader2, ChevronDown
 } from 'lucide-react';
 import { useSocket } from '../../context/SocketContext';
+import { useKeyboardLayout } from '../../hooks/useKeyboardLayout';
 import type { CommunityPost } from '../../services/communityService';
 import {
   createPost,
@@ -38,6 +39,7 @@ export const PostComposer: React.FC<Props> = ({
   draftId
 }) => {
   const { socket } = useSocket();
+  const { isKeyboardOpen } = useKeyboardLayout();
 
   const [postType, setPostType] = useState<PostType>(editPost?.post_type as PostType || 'text');
   const [title, setTitle] = useState(editPost?.title || initialTitle || '');
@@ -207,10 +209,17 @@ export const PostComposer: React.FC<Props> = ({
   return (
     <div
       className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 pb-[calc(4.25rem+env(safe-area-inset-bottom,0px))] sm:pb-4 bg-black/60 backdrop-blur-sm"
+      style={{
+        bottom: isKeyboardOpen ? 'var(--kb-height, 0px)' : '0px',
+        paddingBottom: isKeyboardOpen ? '0.5rem' : undefined,
+      }}
       onClick={e => e.target === e.currentTarget && onClose()}
     >
       <div
         className="w-full sm:max-w-2xl bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[calc(100dvh-5.5rem)] sm:max-h-[90vh] overflow-hidden min-h-0"
+        style={{
+          maxHeight: isKeyboardOpen ? 'calc(var(--vv-height, 100dvh) - 1rem)' : undefined,
+        }}
       >
         
         {/* Header */}

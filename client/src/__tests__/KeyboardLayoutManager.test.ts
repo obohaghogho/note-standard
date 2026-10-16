@@ -108,4 +108,84 @@ describe('KeyboardLayoutManager (KLM)', () => {
     // Desktop default: kbHeight is 0, keyboard-open class must NOT be present
     expect(document.documentElement.classList.contains('keyboard-open')).toBe(false);
   });
+
+  test('iOS regression: detects keyboard and non-zero kbHeight when offsetTop is non-zero', () => {
+    const originalInnerHeight = window.innerHeight;
+    const originalVp = window.visualViewport;
+
+    try {
+      Object.defineProperty(window, 'innerHeight', { value: 844, configurable: true, writable: true });
+      Object.defineProperty(window, 'visualViewport', {
+        value: {
+          height: 508,
+          offsetTop: 336,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        },
+        configurable: true,
+        writable: true,
+      });
+
+      const state = getKLMState();
+      expect(state.vvHeight).toBe(508);
+      expect(state.vvTop).toBe(336);
+      expect(state.kbHeight).toBe(336);
+      expect(state.isKeyboardOpen).toBe(true);
+    } finally {
+      Object.defineProperty(window, 'innerHeight', { value: originalInnerHeight, configurable: true, writable: true });
+      Object.defineProperty(window, 'visualViewport', { value: originalVp, configurable: true, writable: true });
+    }
+  });
+
+  test('keyboard closed: zero kbHeight and isKeyboardOpen is false when visualViewport matches innerHeight', () => {
+    const originalInnerHeight = window.innerHeight;
+    const originalVp = window.visualViewport;
+
+    try {
+      Object.defineProperty(window, 'innerHeight', { value: 844, configurable: true, writable: true });
+      Object.defineProperty(window, 'visualViewport', {
+        value: {
+          height: 844,
+          offsetTop: 0,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        },
+        configurable: true,
+        writable: true,
+      });
+
+      const state = getKLMState();
+      expect(state.kbHeight).toBe(0);
+      expect(state.isKeyboardOpen).toBe(false);
+    } finally {
+      Object.defineProperty(window, 'innerHeight', { value: originalInnerHeight, configurable: true, writable: true });
+      Object.defineProperty(window, 'visualViewport', { value: originalVp, configurable: true, writable: true });
+    }
+  });
+
+  test('Android-like resized layout: zero kbHeight and no negative values when layout shrinks natively', () => {
+    const originalInnerHeight = window.innerHeight;
+    const originalVp = window.visualViewport;
+
+    try {
+      Object.defineProperty(window, 'innerHeight', { value: 508, configurable: true, writable: true });
+      Object.defineProperty(window, 'visualViewport', {
+        value: {
+          height: 508,
+          offsetTop: 0,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        },
+        configurable: true,
+        writable: true,
+      });
+
+      const state = getKLMState();
+      expect(state.kbHeight).toBe(0);
+      expect(state.isKeyboardOpen).toBe(false);
+    } finally {
+      Object.defineProperty(window, 'innerHeight', { value: originalInnerHeight, configurable: true, writable: true });
+      Object.defineProperty(window, 'visualViewport', { value: originalVp, configurable: true, writable: true });
+    }
+  });
 });

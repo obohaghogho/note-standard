@@ -75,7 +75,7 @@ function computeState(): KLMState {
     // With iOS Safari:
     //   window.innerHeight stays fixed → kbHeight = keyboard size.
     //   The container shrinks via --vv-height continuously.
-    const kbHeight = Math.max(0, window.innerHeight - (vvHeight + vvTop));
+    const kbHeight = Math.max(0, window.innerHeight - vvHeight);
 
     return {
       vvTop,
