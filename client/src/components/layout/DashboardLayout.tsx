@@ -8,7 +8,7 @@ import PWAAwarenessBanner from '../PWAAwarenessBanner';
 import { BetaWelcomeBanner } from '../common/BetaWelcomeBanner';
 import { useAuth } from '../../context/AuthContext';
 import { NotificationBell } from '../dashboard/NotificationBell';
-import { Menu, Plus } from 'lucide-react';
+import { Menu, Plus, ArrowLeft } from 'lucide-react';
 import { LanguageSelector } from '../common/LanguageSelector';
 import { cn } from '../../utils/cn';
 import { ErrorBoundary } from 'react-error-boundary';
@@ -68,6 +68,7 @@ export function DashboardLayout() {
         );
     }
 
+    const isHomepage = location.pathname === '/dashboard' || location.pathname === '/dashboard/';
     const isReelsPage = location.pathname.startsWith('/dashboard/reels');
     const isCommunityFeedPage = location.pathname.startsWith('/dashboard/feed') || location.pathname.startsWith('/dashboard/saved') || location.pathname.startsWith('/dashboard/community');
     const isStandalonePageOnMobile = location.pathname.startsWith('/dashboard/chat') || location.pathname.startsWith('/dashboard/teams') || isReelsPage;
@@ -81,14 +82,26 @@ export function DashboardLayout() {
                 "pt-safe min-h-[4rem] border-b border-white/10 px-4 bg-black/40 backdrop-blur-md sticky top-0 z-40 flex items-center justify-between",
                 "md:flex"
             )}>
-                {/* Mobile Menu Toggle */}
-                <button 
-                    onClick={() => setIsMobileMenuOpen(true)}
-                    className="p-2 -ml-2 text-gray-400 hover:text-white lg:hidden min-w-[44px] min-h-[44px] flex items-center justify-center"
-                    aria-label="Open menu"
-                >
-                    <Menu size={24} />
-                </button>
+                {/* Navigation Control: Hamburger on authenticated homepage (/dashboard), Back-to-home on subpages */}
+                {isHomepage ? (
+                    <button
+                        onClick={() => setIsMobileMenuOpen(true)}
+                        className="p-2 -ml-2 text-gray-400 hover:text-white lg:hidden min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors active:scale-95 cursor-pointer"
+                        aria-label="Open menu"
+                        title="Open menu"
+                    >
+                        <Menu size={24} />
+                    </button>
+                ) : (
+                    <button
+                        onClick={() => navigate('/dashboard')}
+                        className="p-2 -ml-2 text-gray-400 hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors active:scale-95 cursor-pointer"
+                        aria-label="Back to home"
+                        title="Back to home"
+                    >
+                        <ArrowLeft size={24} />
+                    </button>
+                )}
 
                 {/* Create Note Button (Desktop & Tablet) */}
                 <button
