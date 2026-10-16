@@ -425,7 +425,7 @@ function NotesContent() {
                 hoverEffect
                 className={cn(
                   "cursor-pointer bg-neutral-900/40 border border-white/10 hover:border-white/20 transition-all flex flex-col justify-between group overflow-hidden relative",
-                  viewMode === "grid" ? "p-5 h-[180px]" : "p-4 flex-row items-center gap-4 h-auto"
+                  viewMode === "grid" ? "p-5 min-h-[180px] h-auto" : "p-4 flex-row items-center gap-4 h-auto"
                 )}
                 onClick={() => handleOpenNoteById(note.id)}
                 style={note.color ? { borderLeft: `4px solid ${note.color}` } : undefined}
@@ -479,7 +479,7 @@ function NotesContent() {
                   )}
                 </div>
 
-                <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/5 relative z-10">
+                <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/5 relative z-10 shrink-0">
                   <span className="flex items-center gap-1 text-[10px] text-neutral-500 font-bold">
                     <AlignLeft className="w-3 h-3 text-neutral-600" />
                     {note.word_count || 0} words
