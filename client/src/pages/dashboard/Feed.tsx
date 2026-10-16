@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { FeedLayout } from '../../components/community/FeedLayout';
 import { FeedHeader } from '../../components/community/FeedHeader';
 import { FeedTabs } from '../../components/community/FeedTabs';
@@ -26,7 +26,22 @@ const FEED_TABS = [
 
 export const Feed: React.FC = () => {
   const { profile } = useAuth();
-  const [activeTab, setActiveTab] = useState('trending');
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const isSavedPath = location.pathname.startsWith('/dashboard/saved');
+  const queryTab = searchParams.get('tab');
+  const initialTab = isSavedPath ? 'saved' : (queryTab || 'trending');
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/dashboard/saved')) {
+      setActiveTab('saved');
+    } else if (searchParams.get('tab')) {
+      setActiveTab(searchParams.get('tab')!);
+    } else if (activeTab === 'saved') {
+      setActiveTab('trending');
+    }
+  }, [location.pathname, searchParams, activeTab]);
   const [filterState, setFilterState] = useState({ category: 'All', sort: 'latest' });
   const [search, setSearch] = useState('');
   const [showComposer, setShowComposer] = useState(false);
@@ -101,10 +116,16 @@ export const Feed: React.FC = () => {
   const handleTabChange = useCallback((tab: string) => {
     if (tab === 'reels') {
       navigate('/dashboard/reels');
+    } else if (tab === 'saved') {
+      navigate('/dashboard/saved');
+      setActiveTab('saved');
     } else {
+      if (location.pathname.startsWith('/dashboard/saved')) {
+        navigate('/dashboard/feed');
+      }
       setActiveTab(tab);
     }
-  }, [navigate]);
+  }, [navigate, location.pathname]);
 
   const handleFilterChange = useCallback((state: { category: string; sort: string }) => {
     setFilterState(state);
