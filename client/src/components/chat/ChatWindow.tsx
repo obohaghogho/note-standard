@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback, startTransition } from 'react';
 import { useChatViewportEngine } from '../../hooks/useChatViewportEngine';
+import { useKeyboardLayout } from '../../hooks/useKeyboardLayout';
 import { useChatGesture } from '../../hooks/useChatGesture';
 import { AnimatePresence } from 'framer-motion';
 import { useChat } from '../../context/ChatContext';
@@ -20,6 +21,7 @@ import api from '../../api/axiosInstance';
 import { useChatStore } from '../../stores/chatStore';
 import toast from 'react-hot-toast';
 import { MediaPreviewModal } from './MediaPreviewModal';
+import { PublicProfileModal } from '../profile/PublicProfileModal';
 import { MentionSuggestions } from './MentionSuggestions';
 import { ForwardMessageModal } from './ForwardMessageModal';
 
@@ -50,6 +52,7 @@ const ChatWindow: React.FC = () => {
     const { user, profile, session, isAdmin } = useAuth();
     const { startCall } = useWebRTC();
     const { setIsSettingsOpen, setIsGalleryOpen } = useChatTheme();
+    const { isKeyboardOpen } = useKeyboardLayout();
 
     const rawCurrentMessages = useMemo(() => activeConversationId ? messages[activeConversationId] || [] : [], [messages, activeConversationId]);
     const activeConversation = useMemo(() => {
@@ -77,6 +80,9 @@ const ChatWindow: React.FC = () => {
     // ── WhatsApp-Style Selection System ──────────────────────
     const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
     const isSelectionMode = selectedMessages.size > 0;
+
+    // Selected user for full profile display
+    const [viewProfileUserId, setViewProfileUserId] = useState<string | null>(null);
 
     // Forward modal state
     const [forwardModal, setForwardModal] = useState<{
@@ -800,7 +806,13 @@ const ChatWindow: React.FC = () => {
 
 
     return (
-        <div className="chat-root bg-crystal text-white w-full h-full flex flex-col relative overflow-hidden md:max-w-[1200px] md:mx-auto md:shadow-2xl md:border-x md:border-white/5">
+        <div 
+            className="chat-root bg-crystal text-white w-full h-full flex flex-col relative overflow-hidden md:max-w-[1200px] md:mx-auto md:shadow-2xl md:border-x md:border-white/5"
+            style={{
+                height: isKeyboardOpen ? 'var(--vv-height, 100%)' : '100%',
+                maxHeight: isKeyboardOpen ? 'var(--vv-height, 100%)' : '100%',
+            }}
+        >
             {/* Premium Wallpaper Engine */}
             <WallpaperEngine chatId={activeConversationId || undefined} />
             {/* ── Selection Action Bar (WhatsApp-style) ── */}
@@ -938,7 +950,37 @@ const ChatWindow: React.FC = () => {
 
                             return (
                                 <>
-                                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center overflow-hidden border border-white/10 shadow-lg flex-shrink-0">
+                                    <div 
+                                        onClick={() => {
+                                            if (otherM?.user_id) {
+                                                setViewProfileUserId(otherM.user_id);
+                                            } else if (displayAvatar) {
+                                                handlePreviewMedia({ 
+                                                    url: displayAvatar, 
+                                                    type: 'image', 
+                                                    fileName: `${displayName || 'user'}-avatar` 
+                                                });
+                                            }
+                                        }}
+                                        className={`w-10 h-10 md:w-12 md:h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center overflow-hidden border border-white/10 shadow-lg flex-shrink-0 cursor-pointer hover:ring-2 hover:ring-blue-500/50 hover:opacity-90 active:scale-95 transition-all`}
+                                        title={otherM?.user_id ? `View ${displayName || 'user'}'s profile` : (displayAvatar ? `View ${displayName}'s avatar` : undefined)}
+                                        role="button"
+                                        tabIndex={0}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault();
+                                                if (otherM?.user_id) {
+                                                    setViewProfileUserId(otherM.user_id);
+                                                } else if (displayAvatar) {
+                                                    handlePreviewMedia({ 
+                                                        url: displayAvatar, 
+                                                        type: 'image', 
+                                                        fileName: `${displayName || 'user'}-avatar` 
+                                                    });
+                                                }
+                                            }
+                                        }}
+                                    >
                                         {displayAvatar ? (
                                             <SecureImage src={displayAvatar} alt={displayName} className="w-full h-full object-cover" fallbackType="profile" />
                                         ) : (
@@ -947,7 +989,15 @@ const ChatWindow: React.FC = () => {
                                             </span>
                                         )}
                                     </div>
-                                    <div className="min-w-0">
+                                    <div 
+                                        className={`min-w-0 ${otherM?.user_id ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+                                        onClick={() => {
+                                            if (otherM?.user_id) {
+                                                setViewProfileUserId(otherM.user_id);
+                                            }
+                                        }}
+                                        title={otherM?.user_id ? `View ${displayName || 'user'}'s profile` : undefined}
+                                    >
                                         <h2 className="font-semibold flex items-center gap-1 min-w-0 max-w-[150px] xs:max-w-[180px] sm:max-w-[240px] md:max-w-[320px]">
                                             <span className="truncate text-sm md:text-base">{displayName || 'Chat'}</span>
                                             {activeConversation?.type === 'direct' && otherM && otherM.profile && (
@@ -1212,7 +1262,12 @@ const ChatWindow: React.FC = () => {
             {!isPending ? (
                 <div className="chat-input-bar relative bg-gray-950 border-t border-white/10 z-40" ref={composerRef}>
                     <div className="absolute top-full left-0 right-0 h-[60vh] bg-gray-950 pointer-events-none -z-10" />
-                    <div className="max-w-[900px] mx-auto px-3 py-2 md:p-4 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+                    <div 
+                        className="max-w-[900px] mx-auto px-3 py-2 md:p-4"
+                        style={{
+                            paddingBottom: isKeyboardOpen ? '0.5rem' : 'max(0.5rem, env(safe-area-inset-bottom, 0.5rem))'
+                        }}
+                    >
                         {activeConversation?.isBlocked ? (
                             <div className="flex flex-col items-center justify-center p-4 bg-gray-800/80 rounded-2xl border border-gray-700/50">
                                 <p className="text-sm font-medium text-gray-300 text-center">
@@ -1430,7 +1485,13 @@ const ChatWindow: React.FC = () => {
                     </div>
                 </div>
             ) : (
-                <div className="chat-input-bar relative bg-gray-950 border-t border-white/10 p-4 md:p-6 z-40" ref={composerRef}>
+                <div 
+                    className="chat-input-bar relative bg-gray-950 border-t border-white/10 p-4 md:p-6 z-40" 
+                    ref={composerRef}
+                    style={{
+                        paddingBottom: isKeyboardOpen ? '1rem' : 'max(1rem, env(safe-area-inset-bottom, 1rem))'
+                    }}
+                >
                     <div className="absolute top-full left-0 right-0 h-[60vh] bg-gray-950 pointer-events-none -z-10" />
                     <div className="max-w-[700px] mx-auto flex flex-col items-center gap-3 text-center">
                         <div className="flex items-center gap-2 text-blue-400 font-semibold text-sm">
@@ -1473,6 +1534,13 @@ const ChatWindow: React.FC = () => {
             )}
 
             <MediaPreviewModal isOpen={previewMedia.isOpen} onClose={() => setPreviewMedia(prev => ({ ...prev, isOpen: false }))} mediaUrl={previewMedia.url} mediaType={previewMedia.type} fileName={previewMedia.fileName} isSender={previewMedia.isSender} />
+
+            {viewProfileUserId && (
+                <PublicProfileModal
+                    userId={viewProfileUserId}
+                    onClose={() => setViewProfileUserId(null)}
+                />
+            )}
 
             <ConfirmationModal
                 isOpen={confirmModal.isOpen}

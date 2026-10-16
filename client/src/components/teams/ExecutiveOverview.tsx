@@ -15,7 +15,7 @@ import {
 import { 
   Users, Layers, CheckSquare, HardDrive, ShieldCheck, 
   Activity, TrendingUp, Compass, ChevronRight, Loader2,
-  Bell, UserCheck, UserPlus
+  Bell, UserCheck, UserPlus, ArrowLeft
 } from 'lucide-react';
 import type { TeamWithUnreadCount } from '../../types/teams';
 import { getWorkspaceAnalytics } from '../../lib/collaborationApi';
@@ -37,6 +37,7 @@ interface ExecutiveOverviewProps {
   teams: TeamWithUnreadCount[];
   onSelectTeam: (teamId: string) => void;
   onCreateWorkspace?: () => void;
+  onExit?: () => void;
 }
 
 // Generate last-7-days labels
@@ -50,7 +51,7 @@ function getLast7DayLabels(): string[] {
   return labels;
 }
 
-export const ExecutiveOverview: React.FC<ExecutiveOverviewProps> = ({ teams, onSelectTeam, onCreateWorkspace }) => {
+export const ExecutiveOverview: React.FC<ExecutiveOverviewProps> = ({ teams, onSelectTeam, onCreateWorkspace, onExit }) => {
   // Aggregate analytics from ALL teams in parallel
   const [aggregated, setAggregated] = useState<WorkspaceAnalytics | null>(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
@@ -185,6 +186,18 @@ export const ExecutiveOverview: React.FC<ExecutiveOverviewProps> = ({ teams, onS
         <div className="absolute top-0 right-0 w-80 h-80 bg-primary/5 blur-[120px] rounded-full"></div>
         <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="space-y-2">
+            {onExit && (
+              <button
+                type="button"
+                onClick={onExit}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-400 hover:text-white transition-colors mb-1 active:scale-95"
+                title="Back to dashboard"
+                aria-label="Back to dashboard"
+              >
+                <ArrowLeft size={16} />
+                <span>Back to dashboard</span>
+              </button>
+            )}
             <h1 className="text-3xl md:text-4xl font-black bg-gradient-to-r from-white via-gray-200 to-gray-500 bg-clip-text text-transparent uppercase tracking-tight italic">
               Organization Overview
             </h1>

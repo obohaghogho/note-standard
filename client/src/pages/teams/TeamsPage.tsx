@@ -63,8 +63,10 @@ const TeamHeader: React.FC<TeamHeaderProps> = ({ team, myRole, onBack, isInfoOpe
     <div className="teams-page__header flex items-center justify-between px-3 md:px-5 py-2.5 md:py-5 pt-[max(0.75rem,env(safe-area-inset-top,0px))] md:pt-5 bg-gray-900/50 backdrop-blur-3xl border-b border-white/5 z-20 gap-2 min-w-0">
       <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1 cursor-pointer group" onClick={onToggleInfo}>
          <button 
-           className="p-1.5 -ml-1 text-gray-400 hover:text-white md:hidden shrink-0"
+           className="p-1.5 -ml-1 text-gray-400 hover:text-white lg:hidden shrink-0"
            onClick={(e) => { e.stopPropagation(); onBack(); }}
+           aria-label="Back to workspaces"
+           title="Back to workspaces"
          >
            <ArrowLeft size={18} />
          </button>
@@ -169,6 +171,14 @@ export function TeamsPage() {
 
   // Call status
   const [activeCall, setActiveCall] = useState<{ teamId: string; teamName: string; callerName: string } | null>(null);
+
+  const handleExitTeams = useCallback(() => {
+    if (window.history.state && window.history.state.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate('/dashboard');
+    }
+  }, [navigate]);
 
   // Layout & State
   const [teams, setTeams] = useState<TeamWithUnreadCount[]>([]);
@@ -292,14 +302,38 @@ export function TeamsPage() {
       <div className="teams-icon-rail">
         {/* Mobile header bar (only visible on mobile) */}
         <div className="teams-icon-rail__mobile-header">
-          <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Workspaces</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExitTeams}
+              className="p-1 -ml-1 text-gray-400 hover:text-white transition-colors active:scale-95"
+              aria-label="Back to dashboard"
+              title="Back to dashboard"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Workspaces</span>
+          </div>
           <button
             onClick={() => isBusiness ? setShowCreateModal(true) : setShowUpgradeModal(true)}
             className="w-7 h-7 rounded-xl bg-white/5 flex items-center justify-center text-gray-400 active:scale-95 transition-all"
+            title="Create workspace"
+            aria-label="Create workspace"
           >
             <Plus size={16} />
           </button>
         </div>
+
+        {/* Exit back to main dashboard (Desktop & Tablet) */}
+        <button
+          type="button"
+          onClick={handleExitTeams}
+          className="teams-icon-rail__btn hover:bg-white/10 text-gray-400 hover:text-white transition-all hidden md:flex"
+          title="Back to dashboard"
+          aria-label="Back to dashboard"
+        >
+          <ArrowLeft size={20} className="shrink-0" />
+        </button>
 
         {/* Global Overview Icon */}
         <button 
@@ -360,7 +394,10 @@ export function TeamsPage() {
               <TeamHeader 
                 team={selectedTeam} 
                 myRole={myRole}
-                onBack={() => setMobilePanel('teams')}
+                onBack={() => {
+                  setSelectedTeamId(null);
+                  setMobilePanel('teams');
+                }}
                 isInfoOpen={isInfoOpen}
                 onToggleInfo={() => setIsInfoOpen(!isInfoOpen)}
                 onInvite={handleInviteClick}
@@ -431,6 +468,7 @@ export function TeamsPage() {
               teams={teams} 
               onSelectTeam={(id) => handleSelectTeam(id)}
               onCreateWorkspace={() => isBusiness ? setShowCreateModal(true) : setShowUpgradeModal(true)}
+              onExit={handleExitTeams}
             />
           </div>
         )}
