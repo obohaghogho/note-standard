@@ -24,7 +24,6 @@ import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '../../utils/cn';
 import { useAgoraCall } from '../../hooks/useAgoraCall';
-import { useKeyboardLayout } from '../../hooks/useKeyboardLayout';
 import { useSocket } from '../../context/SocketContext';
 import { TeamCallOverlay } from '../../components/teams/TeamCallOverlay';
 import { TeamEnterpriseDashboard } from '../../components/teams/TeamEnterpriseDashboard';
@@ -169,7 +168,6 @@ export function TeamsPage() {
   const navigate = useNavigate();
   const { socket } = useSocket();
   const agoraCall = useAgoraCall();
-  const { isKeyboardOpen } = useKeyboardLayout();
 
   // Call status
   const [activeCall, setActiveCall] = useState<{ teamId: string; teamName: string; callerName: string } | null>(null);
@@ -392,13 +390,7 @@ export function TeamsPage() {
 
       {selectedTeamId && selectedTeam ? (
         <TeamChatProvider teamId={selectedTeamId}>
-          <div 
-            className="teams-content flex flex-col h-full bg-gray-950 overflow-hidden relative"
-            style={isKeyboardOpen ? {
-              height: 'var(--vv-height, 100%)',
-              maxHeight: 'var(--vv-height, 100%)',
-            } : undefined}
-          >
+          <div className="teams-content flex flex-col h-full bg-gray-950 overflow-hidden relative">
               <TeamHeader 
                 team={selectedTeam} 
                 myRole={myRole}

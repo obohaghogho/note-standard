@@ -125,11 +125,20 @@ export const UniversalPostCard: React.FC<Props> = ({
     }
   }, [post.comments_count]);
 
-  // Lock body scroll and handle Escape key when comment sheet/modal is open
+  // Lock body & feed scroll and handle Escape key when comment sheet/modal is open
   useEffect(() => {
     if (!showComments) return;
-    const prevOverflow = document.body.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+
+    const feedContainer = document.querySelector('main div.overflow-y-auto') as HTMLElement | null;
+    let prevFeedOverflow = '';
+    let savedScrollTop = 0;
+    if (feedContainer) {
+      prevFeedOverflow = feedContainer.style.overflowY;
+      savedScrollTop = feedContainer.scrollTop;
+      feedContainer.style.overflowY = 'hidden';
+    }
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -139,7 +148,11 @@ export const UniversalPostCard: React.FC<Props> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => {
-      document.body.style.overflow = prevOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+      if (feedContainer) {
+        feedContainer.style.overflowY = prevFeedOverflow;
+        feedContainer.scrollTop = savedScrollTop;
+      }
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [showComments]);
@@ -590,7 +603,7 @@ export const UniversalPostCard: React.FC<Props> = ({
           }}
           className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-sm flex justify-end flex-col sm:items-center sm:justify-center p-0 sm:p-4 animate-in fade-in duration-200"
           style={isKeyboardOpen ? {
-            top: 0,
+            top: 'var(--vv-top, 0px)',
             bottom: 'auto',
             height: 'var(--vv-height, 100%)',
             maxHeight: 'var(--vv-height, 100%)',

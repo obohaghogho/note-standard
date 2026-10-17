@@ -350,6 +350,17 @@ export const Reels: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [navigateToReel, selectedCommentsReelId, showUploadModal]);
 
+  // Lock underlying reel snap container while comment drawer is open
+  useEffect(() => {
+    if (!selectedCommentsReelId || !containerRef.current) return;
+    const container = containerRef.current;
+    const prevOverflowY = container.style.overflowY;
+    container.style.overflowY = 'hidden';
+    return () => {
+      container.style.overflowY = prevOverflowY;
+    };
+  }, [selectedCommentsReelId]);
+
   // Comments Drawer handler
   const handleOpenComments = (reelId: string) => {
     setSelectedCommentsReelId(reelId);
@@ -521,7 +532,7 @@ export const Reels: React.FC = () => {
           }}
           className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex justify-end flex-col sm:items-center sm:justify-center p-0 sm:p-4"
           style={isKeyboardOpen ? {
-            top: 0,
+            top: 'var(--vv-top, 0px)',
             bottom: 'auto',
             height: 'var(--vv-height, 100%)',
             maxHeight: 'var(--vv-height, 100%)',

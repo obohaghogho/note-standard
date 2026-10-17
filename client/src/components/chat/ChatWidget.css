@@ -442,7 +442,7 @@
     }
 
     .chat-widget.open.keyboard-visible {
-        top: 0;
+        top: var(--vv-top, 0px);
         bottom: auto;
         height: var(--vv-height, 100dvh);
         max-height: var(--vv-height, 100dvh);
