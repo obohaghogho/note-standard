@@ -7,13 +7,17 @@ interface FeedVideoPlayerProps {
   postId: string;
   poster?: string;
   className?: string;
+  containerClassName?: string;
+  style?: React.CSSProperties;
 }
 
 export const FeedVideoPlayer: React.FC<FeedVideoPlayerProps> = ({
   src,
   postId,
   poster,
-  className = 'w-full h-auto max-h-[85vh] object-cover block mx-auto bg-transparent',
+  className = 'w-full h-auto max-h-[min(54svh,500px)] object-cover block mx-auto bg-transparent',
+  containerClassName,
+  style,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -112,7 +116,8 @@ export const FeedVideoPlayer: React.FC<FeedVideoPlayerProps> = ({
   return (
     <div
       ref={containerRef}
-      className="relative w-full overflow-hidden bg-black flex items-center justify-center group/videoplayer select-none"
+      className={containerClassName || "relative w-full overflow-hidden bg-transparent flex items-center justify-center group/videoplayer select-none"}
+      style={style}
       onClick={(e) => e.stopPropagation()}
     >
       <video
@@ -124,6 +129,7 @@ export const FeedVideoPlayer: React.FC<FeedVideoPlayerProps> = ({
         loop
         preload="metadata"
         className={className}
+        style={style}
         onPlay={handlePlay}
         onPause={handlePause}
         onVolumeChange={handleVolumeChange}

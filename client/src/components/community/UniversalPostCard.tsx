@@ -369,12 +369,15 @@ export const UniversalPostCard: React.FC<Props> = ({
           </div>
         )}
 
-        {/* ── Media (Images/Video - Full-width, full-length edge-to-edge Instagram style) ───────── */}
+        {/* ── Media (Instagram-style edge-to-edge compact single-media frame / grid) ───────── */}
         {post.media_urls && post.media_urls.length > 0 && (
           <div className="w-full overflow-hidden bg-transparent">
             {post.media_urls.length === 1 ? (
               <div
-                className="relative w-full flex items-center justify-center overflow-hidden bg-transparent"
+                className="relative w-full flex items-center justify-center overflow-hidden bg-transparent mx-auto"
+                style={{
+                  maxHeight: 'min(54svh, 500px, calc(100svh - 15.5rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)))',
+                }}
                 onClick={() => {
                   const isVideoMedia = post.post_type === 'video' || post.media_urls[0].match(/\.(mp4|webm|ogg|mov|m4v)(\?|$)/i);
                   if (!isVideoMedia) {
@@ -388,13 +391,19 @@ export const UniversalPostCard: React.FC<Props> = ({
                   <FeedVideoPlayer
                     src={post.media_urls[0]}
                     postId={post.id}
-                    className="w-full h-auto max-h-[85vh] object-cover block mx-auto bg-transparent"
+                    className="w-full h-auto object-cover block mx-auto bg-transparent"
+                    style={{
+                      maxHeight: 'min(54svh, 500px, calc(100svh - 15.5rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)))',
+                    }}
                   />
                 ) : (
                   <img
                     src={post.media_urls[0]}
                     alt="Post media"
-                    className="w-full h-auto max-h-[85vh] object-cover block mx-auto hover:opacity-98 transition-opacity bg-transparent cursor-pointer"
+                    className="w-full h-auto object-cover block mx-auto hover:opacity-98 transition-opacity bg-transparent cursor-pointer"
+                    style={{
+                      maxHeight: 'min(54svh, 500px, calc(100svh - 15.5rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)))',
+                    }}
                     loading="lazy"
                   />
                 )}
