@@ -298,9 +298,6 @@ export const CommentSection: React.FC<Props> = ({
     if (inputRef.current && document.activeElement !== inputRef.current) return;
     const container = findScrollContainer(composerRef.current);
     if (!container) {
-      try {
-        composerRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      } catch {}
       return;
     }
 
@@ -539,7 +536,7 @@ export const CommentSection: React.FC<Props> = ({
       )}
 
       {/* Scrollable Comments Thread */}
-      <div className="flex-1 overflow-y-auto overscroll-contain px-4 sm:px-5 py-3 space-y-3 pb-20 md:pb-5">
+      <div className={`flex-1 overflow-y-auto overscroll-contain px-4 sm:px-5 py-3 space-y-3 ${isKeyboardOpen ? 'pb-3' : 'pb-20 md:pb-5'}`}>
         {loading ? (
           <div className="py-6 space-y-4 animate-pulse">
             {[1, 2, 3].map(i => (

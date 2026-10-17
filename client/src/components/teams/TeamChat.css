@@ -21,9 +21,10 @@
     display: flex;
     flex-direction: column;
     width: 100%;
-    height: var(--vv-height, 100dvh);
-    max-height: var(--vv-height, 100dvh);
+    height: 100%;
+    max-height: 100%;
     flex: 1;
+    min-height: 0;
     border-radius: 0;
     border: none;
     background: transparent;

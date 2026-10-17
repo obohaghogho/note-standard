@@ -455,7 +455,10 @@ export const ChatWidget = () => {
     if (!user || (!isOpen && isKeyboardOpen) || isChatRoom) return null;
 
     return (
-        <div className={`chat-widget ${isOpen ? 'open' : ''} ${isMinimized ? 'minimized' : ''} ${isOpen && isKeyboardOpen ? 'keyboard-visible' : ''}`} style={{ display: (!isOpen && isKeyboardOpen) || isChatRoom ? 'none' : 'block' }}>
+        <div 
+            className={`chat-widget ${isOpen ? 'open' : ''} ${isMinimized ? 'minimized' : ''} ${isOpen && isKeyboardOpen ? 'keyboard-visible' : ''}`} 
+            style={((!isOpen && isKeyboardOpen) || isChatRoom) ? { display: 'none' } : undefined}
+        >
             {!isOpen && (
                 <button className="chat-widget-button" onClick={() => setIsOpen(true)}>
                     <MessageCircle size={24} />

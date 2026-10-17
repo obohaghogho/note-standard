@@ -589,18 +589,22 @@ export const UniversalPostCard: React.FC<Props> = ({
             if (e.target === e.currentTarget) setShowComments(false);
           }}
           className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-sm flex justify-end flex-col sm:items-center sm:justify-center p-0 sm:p-4 animate-in fade-in duration-200"
-          style={{
-            bottom: isKeyboardOpen ? 'var(--kb-height, 0px)' : '0px',
-          }}
+          style={isKeyboardOpen ? {
+            top: 0,
+            bottom: 'auto',
+            height: 'var(--vv-height, 100%)',
+            maxHeight: 'var(--vv-height, 100%)',
+          } : undefined}
           role="dialog"
           aria-modal="true"
           aria-label="Comments"
         >
           <div
             className="bg-white dark:bg-gray-900 border-t sm:border border-gray-200 dark:border-white/10 w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl max-h-[85vh] sm:max-h-[80vh] h-[75vh] sm:h-[650px] flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-300"
-            style={{
-              maxHeight: isKeyboardOpen ? 'calc(var(--vv-height, 100dvh) - 0.5rem)' : undefined,
-            }}
+            style={isKeyboardOpen ? {
+              height: '100%',
+              maxHeight: '100%',
+            } : undefined}
           >
             {/* Sheet Handle for Mobile */}
             <div className="sm:hidden flex justify-center pt-2.5 pb-1 shrink-0">
