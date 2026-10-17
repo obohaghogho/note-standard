@@ -35,6 +35,38 @@ export interface KLMState {
 // Minimum px to be considered "keyboard open" — filters out browser chrome resize
 const KLM_KEYBOARD_THRESHOLD = 50;
 
+/**
+ * Check if an element is an editable input inside a fixed overlay or
+ * visual-viewport-tracked container where document scrolling is disallowed.
+ */
+function isViewportTrackedInput(el: Element | null): boolean {
+  if (!el) return false;
+  const tag = el.tagName;
+  const isEditable = tag === 'INPUT' || tag === 'TEXTAREA' || (el as HTMLElement).isContentEditable;
+  if (!isEditable) return false;
+
+  // 1. Direct match on known full-screen / viewport-avoidant container classes or selectors
+  if (el.closest && el.closest('.chat-root, .teams-page, .team-chat, .chat-widget, [role="dialog"], [id^="comments-sheet-"]')) {
+    return true;
+  }
+
+  // 2. Structural match: any ancestor with position: fixed
+  let curr: Element | null = el.parentElement;
+  while (curr && curr !== document.body && curr !== document.documentElement) {
+    try {
+      const style = window.getComputedStyle(curr);
+      if (style.position === 'fixed') {
+        return true;
+      }
+    } catch {
+      break;
+    }
+    curr = curr.parentElement;
+  }
+
+  return false;
+}
+
 // Cached safe-area — read once from CSS, never recalculated per-frame
 let _safeBottom = 0;
 
@@ -143,6 +175,28 @@ export function initKLM(): void {
 
   // Write safe-area to CSS once (so components can read --safe-bottom)
   document.documentElement.style.setProperty('--safe-bottom', `${_safeBottom}px`);
+
+  // ── Focus-scroll mitigation for iOS Safari ────────────────────────────────
+  // Mobile Safari automatically scrolls the layout viewport (window.scrollY > 0)
+  // when an input is focused to center it in the screen. For fixed/viewport-tracked
+  // containers (Chat, Team Chat, Feed Comments, Reels Comments), this unwanted
+  // document scroll causes the composer to transiently jump toward the top of the
+  // screen before visualViewport.resize fires and resets it.
+  // We clamp window.scrollY to (0, 0) immediately upon scroll/focusin for tracked inputs.
+  window.addEventListener('scroll', () => {
+    if (window.scrollY !== 0 && isViewportTrackedInput(document.activeElement)) {
+      window.scrollTo(0, 0);
+    }
+  }, { passive: true });
+
+  document.addEventListener('focusin', (e) => {
+    const target = e.target as Element | null;
+    if (isViewportTrackedInput(target)) {
+      if (window.scrollY !== 0) {
+        window.scrollTo(0, 0);
+      }
+    }
+  }, { passive: true });
 
   // ── Primary: visualViewport (iOS Safari + Android Chrome) ─────────────────
   if (window.visualViewport) {
