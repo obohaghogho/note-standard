@@ -325,13 +325,13 @@ export const CommentSection: React.FC<Props> = ({
       const delta = composerRect.bottom - targetBottom;
       container.scrollBy({
         top: delta,
-        behavior: 'smooth',
+        behavior: 'auto',
       });
     } else if (composerRect.top < containerRect.top + 60) {
       const delta = composerRect.top - (containerRect.top + 70);
       container.scrollBy({
         top: delta,
-        behavior: 'smooth',
+        behavior: 'auto',
       });
     }
   }, [kbHeight]);
@@ -590,9 +590,9 @@ export const CommentSection: React.FC<Props> = ({
       {user && (
         <div
           ref={composerRef}
-          className="shrink-0 border-t border-gray-100 dark:border-white/10 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md px-3.5 py-2.5"
+          className="shrink-0 border-t border-gray-100 dark:border-white/10 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md px-3.5 py-2.5 pb-[env(safe-area-inset-bottom,8px)]"
           style={{
-            paddingBottom: isKeyboardOpen ? '0.625rem' : 'max(0.625rem, env(safe-area-inset-bottom, 8px))',
+            paddingBottom: (isKeyboardOpen || isFocused) ? '0.625rem' : 'max(0.625rem, env(safe-area-inset-bottom, 8px))',
           }}
         >
           {replyTo && (
@@ -636,7 +636,7 @@ export const CommentSection: React.FC<Props> = ({
                 }}
                 rows={1}
                 placeholder={replyTo ? `Reply to @${replyTo.username}...` : "Write a comment..."}
-                className="flex-1 bg-transparent text-sm text-gray-900 dark:text-white px-3.5 py-2 focus:outline-none resize-none max-h-28 overflow-y-auto leading-relaxed placeholder:text-gray-400"
+                className="flex-1 bg-transparent text-base sm:text-sm text-gray-900 dark:text-white px-3.5 py-2 focus:outline-none resize-none max-h-28 overflow-y-auto leading-relaxed placeholder:text-gray-400"
                 maxLength={2000}
               />
               <button

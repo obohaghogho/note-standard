@@ -8,12 +8,10 @@ import { Loader2, Plus, Sparkles, Video, X, MessageCircle, Send, ArrowLeft, Chev
 import { API_URL, getAuthHeader } from '../../lib/api';
 import { deletePost, recordReelView } from '../../services/communityService';
 import { useAuth } from '../../context/AuthContext';
-import { useKeyboardLayout } from '../../hooks/useKeyboardLayout';
 
 export const Reels: React.FC = () => {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
-  const { isKeyboardOpen } = useKeyboardLayout();
   const [reels, setReels] = useState<ReelPost[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -531,19 +529,17 @@ export const Reels: React.FC = () => {
             if (e.target === e.currentTarget) setSelectedCommentsReelId(null);
           }}
           className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex justify-end flex-col sm:items-center sm:justify-center p-0 sm:p-4"
-          style={isKeyboardOpen ? {
+          style={{
             top: 'var(--vv-top, 0px)',
             bottom: 'auto',
-            height: 'var(--vv-height, 100%)',
-            maxHeight: 'var(--vv-height, 100%)',
-          } : undefined}
+            height: 'var(--vv-height, 100dvh)',
+            maxHeight: 'var(--vv-height, 100dvh)',
+          }}
         >
           <div
-            className="bg-gray-900 border border-white/10 w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl max-h-[85vh] sm:max-h-[75vh] h-[70vh] sm:h-[65vh] flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-300"
+            className="bg-gray-900 border border-white/10 w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl max-h-[85vh] sm:max-h-[75vh] h-[70vh] sm:h-[65vh] flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-300 pb-[env(safe-area-inset-bottom,0px)]"
             style={{
-              paddingBottom: isKeyboardOpen ? '0px' : 'env(safe-area-inset-bottom, 0px)',
-              maxHeight: isKeyboardOpen ? '100%' : undefined,
-              height: isKeyboardOpen ? '100%' : undefined,
+              maxHeight: 'calc(var(--vv-height, 100dvh) - 0.5rem)',
             }}
           >
             {/* Drawer Header */}

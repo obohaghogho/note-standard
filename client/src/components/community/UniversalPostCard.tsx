@@ -21,7 +21,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import type { CommunityPost } from '../../services/communityService';
-import { useKeyboardLayout } from '../../hooks/useKeyboardLayout';
 import {
   toggleLike,
   toggleBookmark,
@@ -65,7 +64,6 @@ export const UniversalPostCard: React.FC<Props> = ({
   const navigate = useNavigate();
   const { user } = useAuth();
   const { socket } = useSocket();
-  const { isKeyboardOpen } = useKeyboardLayout();
   const isOwner = user?.id === post.author_id;
 
   // ── Derived state ─────────────────────────────────────────────────────────
@@ -602,22 +600,21 @@ export const UniversalPostCard: React.FC<Props> = ({
             if (e.target === e.currentTarget) setShowComments(false);
           }}
           className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-sm flex justify-end flex-col sm:items-center sm:justify-center p-0 sm:p-4 animate-in fade-in duration-200"
-          style={isKeyboardOpen ? {
+          style={{
             top: 'var(--vv-top, 0px)',
             bottom: 'auto',
-            height: 'var(--vv-height, 100%)',
-            maxHeight: 'var(--vv-height, 100%)',
-          } : undefined}
+            height: 'var(--vv-height, 100dvh)',
+            maxHeight: 'var(--vv-height, 100dvh)',
+          }}
           role="dialog"
           aria-modal="true"
           aria-label="Comments"
         >
           <div
             className="bg-white dark:bg-gray-900 border-t sm:border border-gray-200 dark:border-white/10 w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl max-h-[85vh] sm:max-h-[80vh] h-[75vh] sm:h-[650px] flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-300"
-            style={isKeyboardOpen ? {
-              height: '100%',
-              maxHeight: '100%',
-            } : undefined}
+            style={{
+              maxHeight: 'calc(var(--vv-height, 100dvh) - 0.5rem)',
+            }}
           >
             {/* Sheet Handle for Mobile */}
             <div className="sm:hidden flex justify-center pt-2.5 pb-1 shrink-0">
