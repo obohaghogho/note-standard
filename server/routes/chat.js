@@ -31,6 +31,10 @@ router.put(
   "/conversations/:conversationId/accept",
   chatController.acceptConversation,
 );
+router.put(
+  "/conversations/:conversationId/decline",
+  chatController.declineConversation,
+);
 router.delete(
   "/conversations/:conversationId",
   chatController.deleteConversation,

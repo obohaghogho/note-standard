@@ -12,7 +12,7 @@ import { useAuth } from '../../context/AuthContext';
 import SecureImage from '../common/SecureImage';
 import ImageWithSignedUrl from '../common/ImageWithSignedUrl';
 import VideoWithSignedUrl from '../common/VideoWithSignedUrl';
-import { Send, Phone, Video, Paperclip, Smile, Search, MoreHorizontal, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Trash2, Share2, X, Copy, Pencil, MessageCircle, Reply, Palette } from 'lucide-react';
+import { Send, Phone, Video, Paperclip, Smile, Search, MoreHorizontal, CheckCheck, Loader2, ArrowDown, Mic, ArrowLeft, Trash2, Share2, X, Copy, Pencil, MessageCircle, Reply, Palette, UserX } from 'lucide-react';
 import { useWebRTC } from '../../context/WebRTCContext';
 import { WhatsAppMediaPicker } from './WhatsAppMediaPicker';
 import { VoiceRecorder } from './VoiceRecorder';
@@ -41,7 +41,7 @@ import { ThemeGalleryModal } from './ThemeGalleryModal';
 const ChatWindow: React.FC = () => {
     const { 
         activeConversationId, setActiveConversationId, messages, sendMessage, loading, 
-        conversations, acceptConversation, deleteConversation, deleteMessage, editMessage,
+        conversations, acceptConversation, declineConversation, stagedRequest, submitChatRequest, cancelStagedRequest, deleteConversation, deleteMessage, editMessage,
         muteConversation, clearChatHistory, loadMoreMessages, hasMore,
         sendTypingStatus, typingUsers, sendMessageToConversation,
         drafts, setDraft, sendMediaMessage,
@@ -211,6 +211,21 @@ const ChatWindow: React.FC = () => {
     const [isSearching, setIsSearching] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [isAccepting, setIsAccepting] = useState(false);
+    const [isDeclining, setIsDeclining] = useState(false);
+    const [stagedInput, setStagedInput] = useState('');
+    const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
+
+    const handleDecline = async () => {
+        if (isDeclining || !activeConversationId) return;
+        setIsDeclining(true);
+        try {
+            await declineConversation(activeConversationId);
+        } catch (err) {
+            console.error('Decline failed', err);
+        } finally {
+            setIsDeclining(false);
+        }
+    };
     
     // Mentions state
     const [showMentions, setShowMentions] = useState(false);
@@ -765,6 +780,107 @@ const ChatWindow: React.FC = () => {
     }, [activeConversationId, activeConversation]);
 
     if (!activeConversationId) {
+        if (stagedRequest) {
+            return (
+                <div className="chat-root bg-crystal text-white w-full h-full flex flex-col relative overflow-hidden md:max-w-[1200px] md:mx-auto md:shadow-2xl md:border-x md:border-white/5">
+                    <div className="chat-header bg-gray-950/95 backdrop-blur-md border-b border-white/5 p-4 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => {
+                                    cancelStagedRequest();
+                                    setSearchParams({});
+                                }}
+                                className="p-1.5 text-gray-400 hover:text-white rounded-full hover:bg-white/10 transition-colors"
+                                aria-label="Back"
+                            >
+                                <ArrowLeft size={20} />
+                            </button>
+                            <div>
+                                <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                                    New Message Request
+                                </h2>
+                                <p className="text-xs text-gray-400">@{stagedRequest.recipient.username}</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => {
+                                cancelStagedRequest();
+                                setSearchParams({});
+                            }}
+                            className="text-xs text-gray-400 hover:text-white px-3 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 transition-colors"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+
+                    <div className="flex-1 flex flex-col items-center justify-center p-6 max-w-lg mx-auto w-full">
+                        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center overflow-hidden border-2 border-white/10 shadow-xl mb-4">
+                            {stagedRequest.recipient.avatar_url ? (
+                                <img src={stagedRequest.recipient.avatar_url} alt={stagedRequest.recipient.username} className="w-full h-full object-cover" />
+                            ) : (
+                                <span className="text-2xl font-bold text-white uppercase">{stagedRequest.recipient.username.slice(0, 2)}</span>
+                            )}
+                        </div>
+                        <h3 className="text-lg font-bold text-white text-center">
+                            {stagedRequest.recipient.full_name || stagedRequest.recipient.username}
+                        </h3>
+                        <p className="text-xs text-blue-400 mb-2 font-medium">@{stagedRequest.recipient.username}</p>
+                        <div className="bg-blue-950/40 border border-blue-500/20 rounded-xl p-3.5 text-center mb-6 backdrop-blur-md">
+                            <p className="text-xs text-gray-300 leading-relaxed">
+                                You don't follow each other mutually. Send an introductory message to request a direct chat. They will see your request and can choose to accept or decline.
+                            </p>
+                        </div>
+
+                        <form
+                            onSubmit={async (e) => {
+                                e.preventDefault();
+                                if (!stagedInput.trim() || isSubmittingRequest) return;
+                                setIsSubmittingRequest(true);
+                                try {
+                                    const newId = await submitChatRequest(stagedRequest.recipient.id, stagedInput.trim());
+                                    if (newId) {
+                                        setSearchParams({ id: newId }, { replace: true });
+                                    }
+                                } finally {
+                                    setIsSubmittingRequest(false);
+                                }
+                            }}
+                            className="w-full flex flex-col gap-3"
+                        >
+                            <textarea
+                                value={stagedInput}
+                                onChange={(e) => setStagedInput(e.target.value)}
+                                placeholder="Write your introductory message..."
+                                maxLength={500}
+                                rows={4}
+                                className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50 resize-none transition-all"
+                            />
+                            <div className="flex items-center justify-between text-xs text-gray-500 px-1">
+                                <span>{500 - stagedInput.length} characters remaining</span>
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={!stagedInput.trim() || isSubmittingRequest}
+                                className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
+                            >
+                                {isSubmittingRequest ? (
+                                    <>
+                                        <Loader2 size={18} className="animate-spin" />
+                                        <span>Sending Request...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Send size={18} />
+                                        <span>Send Message Request</span>
+                                    </>
+                                )}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
         return (
             <div className="flex-grow flex flex-col items-center justify-center h-full text-gray-400 bg-crystal relative p-6">
                 <div className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-none z-0" />
@@ -1284,13 +1400,17 @@ const ChatWindow: React.FC = () => {
                                     </button>
                                 )}
                             </div>
+                        ) : isWaitingForOthers ? (
+                            <div className="flex flex-col items-center justify-center p-5 bg-blue-950/40 rounded-2xl border border-blue-500/20 backdrop-blur-md text-center">
+                                <p className="text-sm font-semibold text-blue-300 flex items-center gap-2">
+                                    <span>⏳</span> Waiting for {otherUserTitle} to accept your message request
+                                </p>
+                                <p className="text-xs text-gray-400 mt-1 max-w-md">
+                                    Ordinary messages, voice notes, and media uploads are paused until the recipient accepts your request.
+                                </p>
+                            </div>
                         ) : (
                             <form onSubmit={handleSend} className="flex flex-col gap-2 md:gap-3 max-w-full">
-                            {isWaitingForOthers && (
-                                <div className="px-3 py-1.5 bg-blue-900/30 text-blue-300 text-xs rounded-xl border border-blue-500/20 text-center font-medium backdrop-blur-md">
-                                    ⏳ Waiting for {otherUserTitle} to accept your message request.
-                                </div>
-                            )}
                             {isVoiceRecording ? (
                                 <div className="flex justify-center p-3 bg-gray-800/80 backdrop-blur rounded-2xl border border-gray-700/50 animate-in slide-in-from-bottom-4 duration-300">
                                     <VoiceRecorder onSend={handleVoiceMessage} onCancel={() => setIsVoiceRecording(false)} />
@@ -1501,7 +1621,7 @@ const ChatWindow: React.FC = () => {
                         <p className="text-xs text-gray-400 max-w-md">
                             Accepting this request will allow you and {otherUserTitle} to exchange end-to-end encrypted messages and make calls.
                         </p>
-                        <div className="flex items-center gap-3 mt-1 w-full sm:w-auto">
+                        <div className="flex items-center gap-2 sm:gap-3 mt-1 w-full sm:w-auto flex-wrap justify-center">
                             <button
                                 type="button"
                                 onClick={handleAccept}
@@ -1522,11 +1642,29 @@ const ChatWindow: React.FC = () => {
                             </button>
                             <button
                                 type="button"
+                                onClick={handleDecline}
+                                disabled={isDeclining}
+                                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-white/10 text-xs font-semibold rounded-xl transition-all active:scale-95 disabled:opacity-50"
+                            >
+                                {isDeclining ? (
+                                    <>
+                                        <Loader2 size={16} className="animate-spin" />
+                                        <span>Declining...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <UserX size={16} />
+                                        <span>Decline</span>
+                                    </>
+                                )}
+                            </button>
+                            <button
+                                type="button"
                                 onClick={handleBlockUser}
-                                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 bg-gray-800 hover:bg-gray-700 text-red-400 hover:text-red-300 border border-white/10 text-xs font-semibold rounded-xl transition-all active:scale-95"
+                                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-850 hover:bg-gray-800 text-red-400 hover:text-red-300 border border-red-500/20 text-xs font-semibold rounded-xl transition-all active:scale-95"
                             >
                                 <X size={16} />
-                                <span>Block & Ignore</span>
+                                <span>Block</span>
                             </button>
                         </div>
                     </div>

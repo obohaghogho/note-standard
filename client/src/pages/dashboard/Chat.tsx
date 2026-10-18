@@ -29,7 +29,7 @@ const StatusOverlays = () => {
 function ChatContent() {
     const [isNewChatOpen, setIsNewChatOpen] = useState(false);
     const [searchParams, setSearchParams] = useSearchParams();
-    const { activeConversationId, setActiveConversationId, startConversation, isConversationDeleted } = useChat();
+    const { activeConversationId, setActiveConversationId, startConversation, isConversationDeleted, stagedRequest } = useChat();
     const { openMobileMenu } = useOutletContext<{ openMobileMenu?: () => void }>() || {};
     const { user, authReady } = useAuth();
     const initiatingRef = useRef<string | null>(null);
@@ -102,7 +102,7 @@ function ChatContent() {
         }
     }, [searchParams, activeConversationId, setActiveConversationId, startConversation, setSearchParams, user?.id, authReady, isConversationDeleted]);
 
-    const isNavigatingToChat = !!(activeConversationId || searchParams.get('id') || searchParams.get('conversationId') || searchParams.get('username') || searchParams.get('user') || searchParams.get('userId'));
+    const isNavigatingToChat = !!(activeConversationId || stagedRequest || searchParams.get('id') || searchParams.get('conversationId') || searchParams.get('username') || searchParams.get('user') || searchParams.get('userId'));
 
     return (
         <div className="flex h-full bg-gray-950 shadow-none rounded-none md:border md:border-gray-800 md:rounded-2xl overflow-hidden md:shadow-2xl relative">
