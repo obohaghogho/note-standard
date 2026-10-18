@@ -8,8 +8,8 @@
 
 self.addEventListener('install', (event) => {
     console.log(`[FORENSIC][SW] INSTALL event at ${new Date().toISOString()}`);
-    // Force immediate update to bypass aggressive caching
-    self.skipWaiting();
+    // Do NOT call skipWaiting() automatically on install.
+    // The worker remains in the waiting state until the user explicitly taps "Update Now".
 });
 // Cache Bust Timestamp: 2026-09-10T13:00:00 — v13: notificationclick mobile-safe SW_NAVIGATE pattern (fix tap-does-nothing)
 
