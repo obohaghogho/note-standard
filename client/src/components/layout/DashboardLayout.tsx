@@ -143,8 +143,6 @@ export function DashboardLayout() {
             isStandalonePageOnMobile ? "bg-black" : "bg-crystal pt-safe pb-safe"
         )}>
             {!isStandalonePageOnMobile && <BroadcastBanner />}
-            {!isStandalonePageOnMobile && <BetaWelcomeBanner />}
-            {!isStandalonePageOnMobile && <PWAAwarenessBanner />}
             
             {/* Inner ambient glow for dashboard depth */}
             {!isStandalonePageOnMobile && <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 via-transparent to-purple-500/5 pointer-events-none -z-10" />}
@@ -162,6 +160,8 @@ export function DashboardLayout() {
                     isStandalonePageOnMobile && "absolute inset-0 z-[60] bg-black m-0 p-0 lg:relative lg:inset-auto lg:z-0 lg:bg-transparent lg:ml-[16rem] overflow-hidden"
                 )}
             >
+                {!isStandalonePageOnMobile && <BetaWelcomeBanner />}
+                {!isStandalonePageOnMobile && <PWAAwarenessBanner />}
                 {renderHeader()}
 
                 <div
