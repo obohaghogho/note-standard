@@ -241,7 +241,10 @@ export const VersionGuard: React.FC<{ children: React.ReactNode }> = ({ children
     <>
       {/* Soft dismissible update banner */}
       {hasOptionalUpdate && !dismissed && (
-        <div className="fixed top-0 left-0 right-0 z-[9998] bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-center py-2.5 px-4 text-sm flex items-center justify-center gap-3 shadow-lg">
+        <div
+          className="fixed top-0 left-0 right-0 z-[9998] bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-center pb-2.5 px-4 text-sm flex items-center justify-center gap-3 shadow-lg"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.625rem)' }}
+        >
           <span>🚀 <strong>v{status?.latest_version || 'New version'}</strong> is available!</span>
           <button 
             onClick={handleUpdate}
