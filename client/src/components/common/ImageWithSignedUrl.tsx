@@ -6,9 +6,11 @@ interface ImageWithSignedUrlProps {
     fetchUrl: (p: string) => Promise<string | null>;
     onPreview?: (url: string) => void;
     onLoad?: () => void;
+    className?: string;
+    style?: React.CSSProperties;
 }
 
-const ImageWithSignedUrl: React.FC<ImageWithSignedUrlProps> = ({ path, fetchUrl, onPreview, onLoad }) => {
+const ImageWithSignedUrl: React.FC<ImageWithSignedUrlProps> = ({ path, fetchUrl, onPreview, onLoad, className, style }) => {
     const [url, setUrl] = useState<string | null>(null);
 
     useEffect(() => {
@@ -24,7 +26,8 @@ const ImageWithSignedUrl: React.FC<ImageWithSignedUrlProps> = ({ path, fetchUrl,
             src={url || undefined}
             alt="Attached"
             onLoad={onLoad}
-            className="max-w-full h-auto cursor-pointer hover:opacity-95 transition-opacity"
+            style={style}
+            className={className || "w-full h-full object-cover cursor-pointer hover:opacity-95 transition-opacity"}
             onClick={() => {
                 if (url) {
                     if (onPreview) onPreview(url);

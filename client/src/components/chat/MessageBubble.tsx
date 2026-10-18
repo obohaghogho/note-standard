@@ -48,6 +48,7 @@ const MessageBubble = memo(({
     const { activeTheme, customizer } = useChatTheme();
     const { openStatusById } = useStatus();
     const isSender = msg.sender_id === currentUserId;
+    const isMediaAttachment = Boolean(msg.attachment && ['image', 'video'].includes(msg.type));
 
     const fontClass = `chat-font-${customizer.typography.fontFamily}`;
     const glassClass = customizer.bubble.glassmorphism ? 'chat-glass-bubble' : '';
@@ -133,7 +134,7 @@ const MessageBubble = memo(({
                 </div>
             )}
             <div 
-                className={`max-w-[92%] md:max-w-[75%] p-3.5 md:p-4 border ${glassClass} ${elevationClass} ${
+                className={`max-w-[92%] md:max-w-[75%] ${isMediaAttachment ? 'p-1.5 sm:p-2' : 'p-3.5 md:p-4'} border ${glassClass} ${elevationClass} ${
                     isSelected
                         ? 'ring-2 ring-blue-400 border-blue-400/50'
                         : ''
@@ -269,12 +270,17 @@ const MessageBubble = memo(({
                 )}
 
                 {msg.attachment && msg.type !== 'audio' && (
-                    <div className="mb-2 rounded-lg overflow-hidden border border-black/20 bg-black/10">
+                    <div className={`mb-1.5 rounded-xl overflow-hidden border border-black/10 dark:border-white/10 bg-black/10 ${
+                        ['image', 'video'].includes(msg.type)
+                            ? 'w-[240px] xs:w-[280px] sm:w-[320px] max-w-full h-[180px] xs:h-[210px] sm:h-[240px] relative group/media'
+                            : ''
+                    }`}>
                         {msg.type === 'image' ? (
                             <ImageWithSignedUrl 
                                 path={msg.attachment.storage_path} 
                                 fetchUrl={fetchSignedUrl} 
                                 onLoad={onMediaLoad}
+                                className="w-full h-full object-cover cursor-pointer hover:scale-[1.02] transition-transform duration-200"
                                 onPreview={(url) => setPreviewMedia({ url, type: 'image', fileName: msg.attachment?.file_name, isSender })}
                             />
                         ) : msg.type === 'video' ? (
@@ -378,14 +384,14 @@ const MessageBubble = memo(({
                                         )}
                                     </div>
                                 )}
-                                <p className="break-words text-sm leading-relaxed">
+                                <p className={`break-words text-sm leading-relaxed ${isMediaAttachment && msg.content ? 'px-1 pt-1' : ''}`}>
                                     {translations[msg.id] && !showOriginal[msg.id] && translations[msg.id] !== 'translating...' 
                                         ? translations[msg.id] 
                                         : msg.content}
                                 </p>
                             </div>
                         )}
-                        <div className="flex items-center justify-end gap-1 mt-1 opacity-70 flex-shrink-0">
+                        <div className={`flex items-center justify-end gap-1 mt-1 opacity-70 flex-shrink-0 ${isMediaAttachment ? 'px-1' : ''}`}>
                             {!isGrouped && (
                                 <span className="text-[10px] flex items-center gap-1 whitespace-nowrap flex-shrink-0 chat-timestamp" style={{ color: isSender ? activeTheme.colors.timestampSent : activeTheme.colors.timestampReceived }}>
                                     {msg.is_edited && <span className="italic opacity-70">(edited)</span>}

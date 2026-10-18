@@ -21,6 +21,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import type { CommunityPost } from '../../services/communityService';
+import { useKeyboardLayout } from '../../hooks/useKeyboardLayout';
 import {
   toggleLike,
   toggleBookmark,
@@ -64,6 +65,7 @@ export const UniversalPostCard: React.FC<Props> = ({
   const navigate = useNavigate();
   const { user } = useAuth();
   const { socket } = useSocket();
+  const { isKeyboardOpen } = useKeyboardLayout();
   const isOwner = user?.id === post.author_id;
 
   // ── Derived state ─────────────────────────────────────────────────────────
@@ -123,20 +125,11 @@ export const UniversalPostCard: React.FC<Props> = ({
     }
   }, [post.comments_count]);
 
-  // Lock body & feed scroll and handle Escape key when comment sheet/modal is open
+  // Lock body scroll and handle Escape key when comment sheet/modal is open
   useEffect(() => {
     if (!showComments) return;
-    const prevBodyOverflow = document.body.style.overflow;
+    const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-
-    const feedContainer = document.querySelector('main div.overflow-y-auto') as HTMLElement | null;
-    let prevFeedOverflow = '';
-    let savedScrollTop = 0;
-    if (feedContainer) {
-      prevFeedOverflow = feedContainer.style.overflowY;
-      savedScrollTop = feedContainer.scrollTop;
-      feedContainer.style.overflowY = 'hidden';
-    }
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -146,11 +139,7 @@ export const UniversalPostCard: React.FC<Props> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => {
-      document.body.style.overflow = prevBodyOverflow;
-      if (feedContainer) {
-        feedContainer.style.overflowY = prevFeedOverflow;
-        feedContainer.scrollTop = savedScrollTop;
-      }
+      document.body.style.overflow = prevOverflow;
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [showComments]);
@@ -608,9 +597,12 @@ export const UniversalPostCard: React.FC<Props> = ({
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowComments(false);
           }}
-          className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-sm flex justify-end flex-col sm:items-center sm:justify-center p-0 sm:p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-sm flex justify-end flex-col sm:items-center sm:justify-center p-0 sm:p-4 pt-[max(4.5rem,calc(env(safe-area-inset-top,0px)+2rem))] sm:pt-4 animate-in fade-in duration-200"
           style={{
+            position: 'fixed',
             top: 'var(--vv-top, 0px)',
+            left: 0,
+            right: 0,
             bottom: 'auto',
             height: 'var(--vv-height, 100dvh)',
             maxHeight: 'var(--vv-height, 100dvh)',
@@ -620,14 +612,14 @@ export const UniversalPostCard: React.FC<Props> = ({
           aria-label="Comments"
         >
           <div
-            className="bg-white dark:bg-gray-900 border-t sm:border border-gray-200 dark:border-white/10 w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl max-h-[85vh] sm:max-h-[80vh] h-[75vh] sm:h-[650px] flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-300"
+            className="bg-white dark:bg-gray-900 border-t sm:border border-gray-200 dark:border-white/10 w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl max-h-[85vh] sm:max-h-[80vh] h-[75vh] sm:h-[650px] flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-300 pb-[env(safe-area-inset-bottom,0px)]"
             style={{
-              maxHeight: 'calc(var(--vv-height, 100dvh) - 0.5rem)',
+              maxHeight: 'calc(var(--vv-height, 100dvh) - max(4.5rem, calc(env(safe-area-inset-top, 0px) + 2rem)))',
             }}
           >
             {/* Sheet Handle for Mobile */}
-            <div className="sm:hidden flex justify-center pt-2.5 pb-1 shrink-0">
-              <div className="w-10 h-1 bg-gray-300 dark:bg-gray-700 rounded-full" />
+            <div className="sm:hidden flex justify-center pt-3 pb-1.5 shrink-0">
+              <div className="w-10 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full" />
             </div>
 
             {/* Header */}
@@ -643,7 +635,7 @@ export const UniversalPostCard: React.FC<Props> = ({
               </div>
               <button
                 onClick={() => setShowComments(false)}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 cursor-pointer transition-colors"
+                className="p-2 -mr-1 rounded-full text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 active:scale-95 transition-all cursor-pointer min-w-[36px] min-h-[36px] flex items-center justify-center"
                 title="Close comments"
                 aria-label="Close comments"
               >

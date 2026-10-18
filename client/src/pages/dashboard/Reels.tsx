@@ -8,10 +8,12 @@ import { Loader2, Plus, Sparkles, Video, X, MessageCircle, Send, ArrowLeft, Chev
 import { API_URL, getAuthHeader } from '../../lib/api';
 import { deletePost, recordReelView } from '../../services/communityService';
 import { useAuth } from '../../context/AuthContext';
+import { useKeyboardLayout } from '../../hooks/useKeyboardLayout';
 
 export const Reels: React.FC = () => {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
+  const { isKeyboardOpen } = useKeyboardLayout();
   const [reels, setReels] = useState<ReelPost[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -348,17 +350,6 @@ export const Reels: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [navigateToReel, selectedCommentsReelId, showUploadModal]);
 
-  // Lock underlying reel snap container while comment drawer is open
-  useEffect(() => {
-    if (!selectedCommentsReelId || !containerRef.current) return;
-    const container = containerRef.current;
-    const prevOverflowY = container.style.overflowY;
-    container.style.overflowY = 'hidden';
-    return () => {
-      container.style.overflowY = prevOverflowY;
-    };
-  }, [selectedCommentsReelId]);
-
   // Comments Drawer handler
   const handleOpenComments = (reelId: string) => {
     setSelectedCommentsReelId(reelId);
@@ -528,9 +519,12 @@ export const Reels: React.FC = () => {
           onClick={(e) => {
             if (e.target === e.currentTarget) setSelectedCommentsReelId(null);
           }}
-          className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex justify-end flex-col sm:items-center sm:justify-center p-0 sm:p-4"
+          className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex justify-end flex-col sm:items-center sm:justify-center p-0 sm:p-4 pt-[max(4.5rem,calc(env(safe-area-inset-top,0px)+2rem))] sm:pt-4"
           style={{
+            position: 'fixed',
             top: 'var(--vv-top, 0px)',
+            left: 0,
+            right: 0,
             bottom: 'auto',
             height: 'var(--vv-height, 100dvh)',
             maxHeight: 'var(--vv-height, 100dvh)',
@@ -539,19 +533,25 @@ export const Reels: React.FC = () => {
           <div
             className="bg-gray-900 border border-white/10 w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl max-h-[85vh] sm:max-h-[75vh] h-[70vh] sm:h-[65vh] flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-300 pb-[env(safe-area-inset-bottom,0px)]"
             style={{
-              maxHeight: 'calc(var(--vv-height, 100dvh) - 0.5rem)',
+              maxHeight: 'calc(var(--vv-height, 100dvh) - max(4.5rem, calc(env(safe-area-inset-top, 0px) + 2rem)))',
             }}
           >
+            {/* Sheet Handle for Mobile */}
+            <div className="sm:hidden flex justify-center pt-3 pb-1.5 shrink-0">
+              <div className="w-10 h-1.5 bg-gray-600 rounded-full" />
+            </div>
+
             {/* Drawer Header */}
-            <div className="p-4 border-b border-white/10 flex items-center justify-between shrink-0">
+            <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2 font-bold text-white text-sm">
                 <MessageCircle size={18} className="text-primary" />
                 <span>Comments</span>
               </div>
               <button
                 onClick={() => setSelectedCommentsReelId(null)}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
+                className="p-2 -mr-1 rounded-full text-gray-400 hover:text-white hover:bg-white/10 active:scale-95 transition-all cursor-pointer min-w-[36px] min-h-[36px] flex items-center justify-center"
                 title="Close comments"
+                aria-label="Close comments"
               >
                 <X size={20} />
               </button>
