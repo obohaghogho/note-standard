@@ -128,6 +128,16 @@ function stableMerge(prev: Message[], incoming: Message[]): Message[] {
     return mergeMessages(prev, incoming).merged as Message[];
 }
 
+export interface StagedRequest {
+    recipient: {
+        id: string;
+        username: string;
+        full_name?: string;
+        avatar_url?: string;
+        is_verified?: boolean;
+    };
+}
+
 export interface ChatContextValue {
     conversations: Conversation[];
     messages: Record<string, Message[]>;
@@ -142,6 +152,11 @@ export interface ChatContextValue {
     markMessageDelivered: (messageId: string, conversationId: string) => Promise<void>;
     startConversation: (username: string) => Promise<string | null>; 
     acceptConversation: (conversationId: string) => Promise<void>;
+    declineConversation: (conversationId: string) => Promise<void>;
+    stagedRequest: StagedRequest | null;
+    setStagedRequest: (req: StagedRequest | null) => void;
+    submitChatRequest: (recipientId: string, initialMessage: string) => Promise<string | null>;
+    cancelStagedRequest: () => void;
     deleteConversation: (id: string) => Promise<void>;
     deleteMessage: (messageId: string) => Promise<void>;
     editMessage: (messageId: string, content: string) => Promise<void>;
@@ -217,6 +232,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [messages, setMessages] = useState<Record<string, Message[]>>({});
     const [activeConversationId, setActiveConversationIdState] = useState<string | null>(null);
+    const [stagedRequest, setStagedRequest] = useState<StagedRequest | null>(null);
     const [loading, setLoading] = useState(true);
     const [hasMore, setHasMore] = useState<Record<string, boolean>>({});
     const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({});
@@ -280,6 +296,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     const gapRefetchDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
     const setActiveConversationId = useCallback((id: string | null) => {
+        if (id) {
+            setStagedRequest(null);
+        }
         if (id && deletedConversationIdsRef.current.has(id)) {
             console.log(`[ChatContext] setActiveConversationId BLOCKED for tombstoned conversation: ${id}`);
             setActiveConversationIdState(null);
@@ -302,6 +321,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         setConversations([]);
         setMessages({});
         setActiveConversationId(null);
+        setStagedRequest(null);
         setLoading(true);
         setTypingUsers({});
         setHasMore({});
@@ -3231,10 +3251,19 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         runBackgroundUpload();
     }, [activeConversationId, session, user, isActiveWriter, markLeaseClaimStart, deviceId, sessionId]);
 
-    const startConversation = async (username: string): Promise<string | null> => {
+    const startConversation = async (username: string, initialMessage?: string): Promise<string | null> => {
         try {
             const cleanUsername = String(username).trim().replace(/^@/, '');
-            const res = await api.post('/chat/conversations', { participants: [cleanUsername], type: 'direct' });
+            const payload: Record<string, unknown> = { participants: [cleanUsername], type: 'direct' };
+            if (initialMessage && initialMessage.trim()) {
+                payload.initialMessage = initialMessage.trim();
+            }
+            const res = await api.post('/chat/conversations', payload);
+            if (res.data?.requiresRequest) {
+                setStagedRequest({ recipient: res.data.recipient });
+                return null;
+            }
+            setStagedRequest(null);
             const conv = res.data?.conversation;
             const id = conv?.id;
             if (!id) {
@@ -3466,6 +3495,28 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         }
     };
 
+    const submitChatRequest = async (recipientId: string, initialMessage: string): Promise<string | null> => {
+        return startConversation(recipientId, initialMessage);
+    };
+
+    const cancelStagedRequest = useCallback(() => {
+        setStagedRequest(null);
+    }, []);
+
+    const declineConversation = async (conversationId: string) => {
+        evictConversationLocally(conversationId);
+        if (activeConversationId === conversationId) {
+            setActiveConversationId(null);
+        }
+        try {
+            await api.put(`/chat/conversations/${conversationId}/decline`);
+            toast.success('Chat request declined');
+        } catch (err: unknown) {
+            console.error('[ChatContext] declineConversation error:', err);
+            toast.error('Failed to decline chat request');
+        }
+    };
+
     const acceptConversation = async (conversationId: string) => {
         const currentUserId = user?.id;
         // Optimistically set current member status to 'accepted'
@@ -3574,6 +3625,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         markMessageRead, markMessageDelivered,
         startConversation,
         acceptConversation,
+        declineConversation,
+        stagedRequest,
+        setStagedRequest,
+        submitChatRequest,
+        cancelStagedRequest,
         deleteConversation,
         deleteMessage, editMessage,
         muteConversation,
