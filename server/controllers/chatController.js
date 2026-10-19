@@ -672,7 +672,7 @@ exports.createConversation = async (req, res) => {
                 .from("conversation_members")
                 .select(`
                   user_id, role, status, is_deleted, deleted_at, cleared_at,
-                  profile:profiles (id, username, full_name, avatar_url, is_verified)
+                  profile:profiles (id, username, full_name, avatar_url, is_verified, plan_tier)
                 `)
                 .eq("conversation_id", existingId);
 
@@ -812,7 +812,7 @@ exports.createConversation = async (req, res) => {
       .from("conversation_members")
       .select(`
         user_id, role, status,
-        profile:profiles (id, username, full_name, avatar_url, is_verified)
+        profile:profiles (id, username, full_name, avatar_url, is_verified, plan_tier)
       `)
       .eq("conversation_id", conversationId);
 
