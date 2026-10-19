@@ -9,7 +9,15 @@ import toast from 'react-hot-toast';
 import { FeedVideoPlayer } from '../community/FeedVideoPlayer';
 
 interface ProfilePostCardProps {
-  post: PublicPost;
+  post: PublicPost & {
+    author?: {
+      id?: string;
+      username?: string;
+      full_name?: string;
+      avatar_url?: string;
+      is_verified?: boolean;
+    };
+  };
   onLike: () => void;
   onComment: () => void;
   onClick: () => void;
@@ -27,7 +35,7 @@ export const ProfilePostCard: React.FC<ProfilePostCardProps> = ({ post, onLike, 
 
     const shareUrl = `${window.location.origin}/dashboard/post/${post.id}`;
     const shareData = {
-      title: `Post by @${post.profiles?.username || 'user'} on NoteStandard`,
+      title: `Post by @${post.profiles?.username || post.author?.username || 'user'} on NoteStandard`,
       text: post.content ? post.content.slice(0, 100) : 'Check out this post on NoteStandard',
       url: shareUrl,
     };
@@ -84,25 +92,25 @@ export const ProfilePostCard: React.FC<ProfilePostCardProps> = ({ post, onLike, 
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-gray-800 overflow-hidden flex-shrink-0 border border-gray-800 shadow-sm">
-              {post.profiles?.avatar_url ? (
-                <SecureImage src={post.profiles.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+              {post.profiles?.avatar_url || post.author?.avatar_url ? (
+                <SecureImage src={post.profiles?.avatar_url || post.author?.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-gray-500 font-bold text-lg">
-                  {post.profiles?.username?.[0]?.toUpperCase()}
+                  {(post.profiles?.username || post.author?.username)?.[0]?.toUpperCase() || '?'}
                 </div>
               )}
             </div>
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-white text-[15px] hover:underline transition-colors">
-                  {post.profiles?.full_name || post.profiles?.username}
+                  {post.profiles?.full_name || post.author?.full_name || post.profiles?.username || post.author?.username || 'Unknown'}
                 </span>
-                {post.profiles?.is_verified && (
+                {Boolean(post.profiles?.is_verified || post.author?.is_verified) && (
                   <VerifiedBadge size={14} className="shrink-0" />
                 )}
               </div>
               <div className="flex items-center gap-1.5 text-[13px] text-gray-500 font-medium">
-                <span>@{post.profiles?.username}</span>
+                <span>@{post.profiles?.username || post.author?.username || 'user'}</span>
                 <span>•</span>
                 <span className="hover:underline">{formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}</span>
               </div>

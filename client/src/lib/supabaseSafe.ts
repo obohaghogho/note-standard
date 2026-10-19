@@ -545,7 +545,7 @@ export async function ensureProfile(user: User): Promise<Profile | null> {
       username: (user.user_metadata?.username || user.email?.split('@')[0] || 'user') + '_' + user.id.slice(0, 5),
       full_name: user.user_metadata?.full_name || '',
       avatar_url: user.user_metadata?.avatar_url || '',
-      is_verified: user.user_metadata?.is_verified || false
+      is_verified: false
     }, { onConflict: 'id' })
     .select()
     .single();

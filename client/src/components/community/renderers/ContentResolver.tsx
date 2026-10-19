@@ -6,6 +6,7 @@ import { SecurityLayer } from './SecurityLayer';
 import { PluginErrorBoundary } from './PluginErrorBoundary';
 import { DiagnosticOverlay } from './DiagnosticOverlay';
 import { MoreHorizontal } from 'lucide-react';
+import VerifiedBadge from '../../common/VerifiedBadge';
 import type { PluginContext, PostPlugin } from './PluginContract';
 
 // Import and register core plugins (synchronous)
@@ -25,6 +26,7 @@ interface ContentResolverProps {
     content?: unknown;
     media_urls?: string[];
     profiles?: { avatar_url?: string; username?: string; is_verified?: boolean };
+    author?: { avatar_url?: string; username?: string; is_verified?: boolean };
     category?: string;
     title?: string;
     tags?: string[];
@@ -107,11 +109,11 @@ export const ContentResolver: React.FC<ContentResolverProps> = ({ post, flags = 
           {/* Universal Header */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-3">
-              <img src={post.profiles?.avatar_url || 'https://via.placeholder.com/40'} alt="Avatar" className="w-10 h-10 rounded-full object-cover bg-gray-100" />
+              <img src={post.profiles?.avatar_url || post.author?.avatar_url || 'https://via.placeholder.com/40'} alt="Avatar" className="w-10 h-10 rounded-full object-cover bg-gray-100" />
               <div>
                 <div className="flex items-center space-x-1">
-                  <h4 className="font-bold text-sm text-gray-900 dark:text-white hover:underline cursor-pointer">{post.profiles?.username || 'Unknown User'}</h4>
-                  {post.profiles?.is_verified && <span className="text-blue-500 text-xs">✓</span>}
+                  <h4 className="font-bold text-sm text-gray-900 dark:text-white hover:underline cursor-pointer">{post.profiles?.username || post.author?.username || 'Unknown User'}</h4>
+                  {Boolean(post.profiles?.is_verified || post.author?.is_verified) && <VerifiedBadge size={14} className="shrink-0" />}
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">2h ago • {post.category || 'General'}</p>
               </div>
