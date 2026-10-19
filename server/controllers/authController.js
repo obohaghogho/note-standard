@@ -85,8 +85,7 @@ const register = async (req, res) => {
       user_metadata: {
         full_name: fullName,
         username: username,
-        referrer_id: referrerId,
-        is_verified: true
+        referrer_id: referrerId
       }
     });
 

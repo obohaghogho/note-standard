@@ -1,5 +1,6 @@
 import React from 'react';
-import { CheckCircle2, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
+import { VerifiedBadge } from './VerifiedBadge';
 
 interface UserBadgeProps {
   planTier?: 'free' | 'pro' | 'team' | 'business' | 'enterprise';
@@ -16,29 +17,33 @@ export const UserBadge: React.FC<UserBadgeProps> = ({
   className = "",
   showText = false
 }) => {
-  // Authoritative verification: verified users get the blue tick
+  // Authoritative verification: verified users get the Instagram-style blue seal
   if (isVerified) {
     return (
-      <div className={`inline-flex items-center gap-1 ${className}`} title="Verified User">
-        <CheckCircle2 
-          size={size} 
-          className="text-blue-500 fill-blue-500/10 flex-shrink-0" 
-        />
+      <div className={`inline-flex items-center gap-1 ${className}`}>
+        <VerifiedBadge size={size} showTooltip={!showText} />
         {showText && <span className="text-xs font-medium text-blue-400">Verified</span>}
       </div>
     );
   }
 
-  // Plan subscribers without verification get a plan indicator badge (ShieldCheck)
-  const isSubscribed = planTier && ['pro', 'team', 'business', 'enterprise'].includes(planTier);
+  // Plan subscribers without verification get a distinct plan indicator badge (ShieldCheck in indigo)
+  const normalizedTier = planTier ? planTier.toLowerCase() : '';
+  const isSubscribed = ['pro', 'team', 'business', 'enterprise'].includes(normalizedTier);
   if (isSubscribed) {
+    const formattedTier = normalizedTier.charAt(0).toUpperCase() + normalizedTier.slice(1);
     return (
-      <div className={`inline-flex items-center gap-1 ${className}`} title={`${planTier?.charAt(0).toUpperCase()}${planTier?.slice(1)} Plan`}>
-        <ShieldCheck 
-          size={size} 
-          className="text-blue-400 flex-shrink-0" 
+      <div
+        className={`inline-flex items-center gap-1 ${className}`}
+        title={`${formattedTier} Subscriber`}
+        role="img"
+        aria-label={`${formattedTier} Subscriber`}
+      >
+        <ShieldCheck
+          size={size}
+          className="text-indigo-400 flex-shrink-0"
         />
-        {showText && <span className="text-xs font-medium text-blue-400/80">{planTier?.charAt(0).toUpperCase()}${planTier?.slice(1)}</span>}
+        {showText && <span className="text-xs font-medium text-indigo-400/90">{formattedTier}</span>}
       </div>
     );
   }
