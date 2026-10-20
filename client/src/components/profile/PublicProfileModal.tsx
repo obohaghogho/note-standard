@@ -54,6 +54,7 @@ export interface PublicPost {
   likes_count: number;
   comments_count: number;
   is_liked?: boolean;
+  user_has_liked?: boolean;
   profiles?: {
     id: string;
     username: string;
@@ -205,7 +206,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
     if (!target) return;
 
     pendingLikesRef.current.add(postId);
-    const prevLiked = Boolean(target.is_liked);
+    const prevLiked = Boolean(target.is_liked || target.user_has_liked);
     const prevCount = target.likes_count || 0;
     const nextLiked = !prevLiked;
     const nextCount = nextLiked ? prevCount + 1 : Math.max(0, prevCount - 1);
@@ -213,7 +214,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
     const updatePostInList = (list: PublicPost[]) =>
       list.map(p =>
         p.id === postId
-          ? { ...p, is_liked: nextLiked, likes_count: nextCount }
+          ? { ...p, is_liked: nextLiked, user_has_liked: nextLiked, likes_count: nextCount }
           : p
       );
 
@@ -237,6 +238,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                 ? {
                     ...p,
                     is_liked: serverLiked,
+                    user_has_liked: serverLiked,
                     likes_count: authoritativeCount
                   }
                 : p
@@ -251,7 +253,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
       const rollback = (list: PublicPost[]) =>
         list.map(p =>
           p.id === postId
-            ? { ...p, is_liked: prevLiked, likes_count: prevCount }
+            ? { ...p, is_liked: prevLiked, user_has_liked: prevLiked, likes_count: prevCount }
             : p
         );
       setPosts(rollback);

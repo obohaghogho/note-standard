@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { toggleLike, toggleBookmark } from '../../../services/communityService';
 import { Heart, MessageCircle, Bookmark, Share2 } from 'lucide-react';
 import { useFeedStore } from '../../../stores/feedStore';
 
@@ -18,8 +19,34 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ post, suppor
   const optimisticLike = useFeedStore((s) => s.optimisticLike);
   const optimisticSave = useFeedStore((s) => s.optimisticSave);
 
-  const handleLike = () => optimisticLike(post.id);
-  const handleSave = () => optimisticSave(post.id);
+  const [loadingLike, setLoadingLike] = useState(false);
+  const [loadingSave, setLoadingSave] = useState(false);
+
+  const handleLike = async () => {
+    if (loadingLike) return;
+    setLoadingLike(true);
+    optimisticLike(post.id);
+    try {
+      await toggleLike(post.id);
+    } catch {
+      optimisticLike(post.id);
+    } finally {
+      setLoadingLike(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (loadingSave) return;
+    setLoadingSave(true);
+    optimisticSave(post.id);
+    try {
+      await toggleBookmark(post.id);
+    } catch {
+      optimisticSave(post.id);
+    } finally {
+      setLoadingSave(false);
+    }
+  };
 
   return (
     <div className="flex items-center justify-between pt-4 mt-4 border-t border-gray-100 dark:border-gray-800/60">
@@ -28,6 +55,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ post, suppor
         {supportedActions.includes('like') && (
           <button 
             onClick={handleLike}
+            disabled={loadingLike}
             className={`flex items-center space-x-2 transition-colors group ${post.user_has_liked ? 'text-red-500' : 'text-gray-500 dark:text-gray-400 hover:text-red-500'}`}
           >
             <div className={`p-1.5 rounded-full transition-colors ${post.user_has_liked ? 'bg-red-50 dark:bg-red-500/20' : 'group-hover:bg-red-50 dark:group-hover:bg-red-500/10'}`}>
@@ -59,6 +87,7 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ post, suppor
       {supportedActions.includes('save') && (
         <button 
           onClick={handleSave}
+          disabled={loadingSave}
           className={`transition-colors p-1.5 rounded-full ${post.user_has_saved ? 'text-yellow-500 bg-yellow-50 dark:bg-yellow-500/20' : 'text-gray-500 dark:text-gray-400 hover:text-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-500/10'}`}
         >
           <Bookmark size={18} fill={post.user_has_saved ? 'currentColor' : 'none'} />

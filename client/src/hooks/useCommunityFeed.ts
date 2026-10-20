@@ -190,19 +190,28 @@ export function useCommunityFeed(params: FeedParams) {
 
   // ── Optimistic updates ────────────────────────────────────────────────────
   const optimisticLike = useCallback((postId: string, currentLiked: boolean) => {
+    const nextLiked = !currentLiked;
     setPosts(prev => prev.map(p => {
       if (p.id !== postId) return p;
       return {
         ...p,
-        likes_count: (p.likes_count || 0) + (currentLiked ? -1 : 1),
+        user_has_liked: nextLiked,
+        is_liked: nextLiked,
+        likes_count: Math.max(0, (p.likes_count || 0) + (currentLiked ? -1 : 1)),
       };
     }));
   }, []);
 
   const optimisticBookmark = useCallback((postId: string, currentBookmarked: boolean) => {
+    const nextBookmarked = !currentBookmarked;
     setPosts(prev => prev.map(p => {
       if (p.id !== postId) return p;
-      return { ...p, saves_count: (p.saves_count || 0) + (currentBookmarked ? -1 : 1) };
+      return {
+        ...p,
+        user_has_bookmarked: nextBookmarked,
+        is_bookmarked: nextBookmarked,
+        saves_count: Math.max(0, (p.saves_count || 0) + (currentBookmarked ? -1 : 1)),
+      };
     }));
   }, []);
 

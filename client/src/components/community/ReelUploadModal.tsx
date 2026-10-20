@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { X, Upload, Video, Sparkles, Loader2, AlertCircle } from 'lucide-react';
 import { API_URL } from '../../lib/api';
+import { useKeyboardLayout } from '../../hooks/useKeyboardLayout';
 
 interface ReelUploadModalProps {
   onClose: () => void;
@@ -33,6 +34,7 @@ export const ReelUploadModal: React.FC<ReelUploadModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoPreviewRef = useRef<string | null>(null);
+  const { isKeyboardOpen } = useKeyboardLayout();
 
   const revokePreviewUrl = () => {
     if (videoPreviewRef.current) {
@@ -42,10 +44,21 @@ export const ReelUploadModal: React.FC<ReelUploadModalProps> = ({
   };
 
   React.useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !uploading) {
+        revokePreviewUrl();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
     return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
       revokePreviewUrl();
     };
-  }, []);
+  }, [uploading, onClose]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -200,8 +213,32 @@ export const ReelUploadModal: React.FC<ReelUploadModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-gray-900 border border-white/10 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex flex-col justify-end sm:justify-center items-center p-2 sm:p-4 overflow-y-auto overscroll-contain"
+      style={{
+        top: 'var(--vv-top, 0px)',
+        height: 'var(--vv-height, 100dvh)',
+        maxHeight: 'var(--vv-height, 100dvh)',
+        WebkitOverflowScrolling: 'touch',
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !uploading) {
+          revokePreviewUrl();
+          onClose();
+        }
+      }}
+    >
+      <div
+        className="bg-gray-900 border border-white/10 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col min-h-0 transition-all duration-200"
+        style={{
+          maxHeight: isKeyboardOpen
+            ? 'calc(var(--vv-height, 100dvh) - 0.75rem)'
+            : 'min(90vh, 90dvh)',
+          height: isKeyboardOpen ? 'calc(var(--vv-height, 100dvh) - 0.75rem)' : undefined,
+        }}
+      >
         {/* Header */}
         <div className="p-4 border-b border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-2 font-bold text-white text-base">
@@ -220,7 +257,7 @@ export const ReelUploadModal: React.FC<ReelUploadModalProps> = ({
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 min-h-0 overscroll-contain touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
           {error && (
             <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
               <AlertCircle size={16} className="shrink-0" />
@@ -291,6 +328,7 @@ export const ReelUploadModal: React.FC<ReelUploadModalProps> = ({
             <textarea
               id="reel-caption-textarea"
               name="reel_caption"
+              onFocus={e => (e.target as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'nearest' })}
               value={content}
               onChange={e => setContent(e.target.value)}
               placeholder="What's this reel about? Share a quick summary, tip, or note..."
@@ -307,6 +345,7 @@ export const ReelUploadModal: React.FC<ReelUploadModalProps> = ({
             <input
               id="reel-tags-input"
               name="reel_tags"
+              onFocus={e => (e.target as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'nearest' })}
               type="text"
               value={tags}
               onChange={e => setTags(e.target.value)}
