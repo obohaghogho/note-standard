@@ -25,9 +25,10 @@ export const InteractionLayer: React.FC<InteractionLayerProps> = ({ post, suppor
   const handleLike = async () => {
     if (loadingLike) return;
     setLoadingLike(true);
+    const desiredAction: 'like' | 'unlike' = post.user_has_liked ? 'unlike' : 'like';
     optimisticLike(post.id);
     try {
-      await toggleLike(post.id);
+      await toggleLike(post.id, desiredAction);
     } catch {
       optimisticLike(post.id);
     } finally {

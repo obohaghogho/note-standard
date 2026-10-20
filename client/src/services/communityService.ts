@@ -116,9 +116,11 @@ export async function flushOfflineQueue() {
     try {
       switch (action.type) {
         case 'like':
+        case 'unlike':
           await toggleLike(
             action.payload.postId as string,
-            (action.payload as { postId: string; action?: 'like' | 'unlike' }).action
+            (action.payload as { postId: string; action?: 'like' | 'unlike' }).action ||
+              (action.type === 'unlike' ? 'unlike' : 'like')
           );
           break;
         case 'bookmark':

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -191,10 +191,16 @@ export const CommunityFeedScreen: React.FC<CommunityFeedScreenProps> = ({ naviga
     }
   };
 
+  const pendingLikesRef = useRef<Set<string>>(new Set());
+
   // Toggle Like
   const handleToggleLike = async (post: FeedPost) => {
-    const originalLiked = post.has_liked;
+    if (pendingLikesRef.current.has(post.id)) return;
+    pendingLikesRef.current.add(post.id);
+
+    const originalLiked = Boolean(post.has_liked);
     const newLiked = !originalLiked;
+    const desiredAction: 'like' | 'unlike' = newLiked ? 'like' : 'unlike';
     const newCount = originalLiked ? Math.max(0, post.likes_count - 1) : post.likes_count + 1;
 
     // Optimistic Update
@@ -203,12 +209,19 @@ export const CommunityFeedScreen: React.FC<CommunityFeedScreenProps> = ({ naviga
     );
 
     try {
-      await apiClient.post('/community/like', { target_id: post.id, target_type: 'post' });
+      await apiClient.post('/community/like', {
+        postId: post.id,
+        target_id: post.id,
+        target_type: 'post',
+        action: desiredAction,
+      });
     } catch (err) {
       // Rollback on failure
       setPosts(prev =>
         prev.map(p => (p.id === post.id ? { ...p, has_liked: originalLiked, likes_count: post.likes_count } : p))
       );
+    } finally {
+      pendingLikesRef.current.delete(post.id);
     }
   };
 

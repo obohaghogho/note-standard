@@ -1,4 +1,4 @@
-﻿import assert from 'assert';
+import assert from 'assert';
 import type { PublicPost } from '../components/profile/PublicProfileModal';
 
 /**
@@ -228,6 +228,20 @@ runTest('7. Authoritative server response reconciliation sets both is_liked and 
   assert.strictEqual(syncedPost.is_liked, true, 'is_liked must match server');
   assert.strictEqual(syncedPost.user_has_liked, true, 'user_has_liked must match server');
   assert.strictEqual(syncedPost.likes_count, 7, 'likes_count must match server authoritative count');
+});
+
+// Test 8: PublicProfileModal deriveDesiredAction matches explicit action contract
+runTest('8. Explicit desiredAction is "like" when currently unliked and "unlike" when currently liked', () => {
+  const unlikedTarget = mockInitialList[0];
+  const likedTarget = mockInitialList[1];
+
+  const { nextLiked: nextLiked1 } = calculateNextState(unlikedTarget);
+  const desiredAction1: 'like' | 'unlike' = nextLiked1 ? 'like' : 'unlike';
+  assert.strictEqual(desiredAction1, 'like', 'Unliked post must produce explicit "like" action');
+
+  const { nextLiked: nextLiked2 } = calculateNextState(likedTarget);
+  const desiredAction2: 'like' | 'unlike' = nextLiked2 ? 'like' : 'unlike';
+  assert.strictEqual(desiredAction2, 'unlike', 'Liked post must produce explicit "unlike" action');
 });
 
 console.log('\n============================================================');

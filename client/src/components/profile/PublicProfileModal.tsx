@@ -209,6 +209,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
     const prevLiked = Boolean(target.is_liked || target.user_has_liked);
     const prevCount = target.likes_count || 0;
     const nextLiked = !prevLiked;
+    const desiredAction: 'like' | 'unlike' = nextLiked ? 'like' : 'unlike';
     const nextCount = nextLiked ? prevCount + 1 : Math.max(0, prevCount - 1);
 
     const updatePostInList = (list: PublicPost[]) =>
@@ -224,7 +225,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
     setBookmarkedPosts(updatePostInList);
 
     try {
-      const res = await toggleLike(postId);
+      const res = await toggleLike(postId, desiredAction);
       if (res && typeof res.liked === 'boolean') {
         const serverLiked = res.liked;
         if (serverLiked !== nextLiked) {

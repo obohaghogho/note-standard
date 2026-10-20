@@ -146,7 +146,7 @@ runTest('A.6: server/controllers/communityController.js toggleLike accepts postI
   );
 });
 
-runTest('A.7: InteractionLayer invokes toggleLike and toggleBookmark with rollback on failure', () => {
+runTest('A.7: InteractionLayer invokes toggleLike with explicit desiredAction and rollback on failure', () => {
   const filePath = path.join(worktreeRoot, 'client/src/components/community/renderers/InteractionLayer.tsx');
   const code = fs.readFileSync(filePath, 'utf8');
 
@@ -155,8 +155,9 @@ runTest('A.7: InteractionLayer invokes toggleLike and toggleBookmark with rollba
     'InteractionLayer must import toggleLike and toggleBookmark'
   );
   assert.ok(
-    code.includes('await toggleLike(post.id);'),
-    'handleLike must call server toggleLike'
+    code.includes("const desiredAction: 'like' | 'unlike' = post.user_has_liked ? 'unlike' : 'like';") &&
+    code.includes('await toggleLike(post.id, desiredAction);'),
+    'handleLike must derive desiredAction and call toggleLike with it'
   );
   assert.ok(
     code.includes('await toggleBookmark(post.id);'),
@@ -280,6 +281,68 @@ runTest('A.14: communityService flushOfflineQueue preserves explicit action when
     code.includes('action.payload.postId as string') &&
     code.includes('(action.payload as { postId: string; action?:'),
     'flushOfflineQueue must forward action payload to toggleLike'
+  );
+});
+
+runTest('A.15: PublicProfileModal derives explicit desiredAction and passes to toggleLike', () => {
+  const filePath = path.join(worktreeRoot, 'client/src/components/profile/PublicProfileModal.tsx');
+  const code = fs.readFileSync(filePath, 'utf8');
+
+  assert.ok(
+    code.includes("const desiredAction: 'like' | 'unlike' = nextLiked ? 'like' : 'unlike';"),
+    'PublicProfileModal must calculate explicit desired action'
+  );
+  assert.ok(
+    code.includes('await toggleLike(postId, desiredAction);'),
+    'PublicProfileModal must pass desiredAction to toggleLike'
+  );
+});
+
+runTest('A.16: UniversalPostCard derives desiredAction and forwards it to toggleLike and offline queue', () => {
+  const filePath = path.join(worktreeRoot, 'client/src/components/community/UniversalPostCard.tsx');
+  const code = fs.readFileSync(filePath, 'utf8');
+
+  assert.ok(
+    code.includes("const desiredAction: 'like' | 'unlike' = wasLiked ? 'unlike' : 'like';"),
+    'UniversalPostCard must derive desiredAction from wasLiked'
+  );
+  assert.ok(
+    code.includes('await toggleLike(post.id, desiredAction)'),
+    'UniversalPostCard must pass desiredAction to toggleLike'
+  );
+  assert.ok(
+    code.includes('queueOfflineAction({ type: desiredAction, payload: { postId: post.id, action: desiredAction } })'),
+    'UniversalPostCard offline fallback must include explicit desiredAction in payload'
+  );
+});
+
+runTest('A.17: mobile CommunityFeedScreen guards rapid taps with pendingLikesRef and sends explicit action', () => {
+  const filePath = path.join(worktreeRoot, 'mobile/src/screens/community/CommunityFeedScreen.tsx');
+  const code = fs.readFileSync(filePath, 'utf8');
+
+  assert.ok(
+    code.includes('const pendingLikesRef = useRef<Set<string>>(new Set());'),
+    'mobile CommunityFeedScreen must guard against rapid repeated taps using pendingLikesRef'
+  );
+  assert.ok(
+    code.includes("const desiredAction: 'like' | 'unlike' = newLiked ? 'like' : 'unlike';"),
+    'mobile CommunityFeedScreen must determine explicit desiredAction'
+  );
+  assert.ok(
+    code.includes('postId: post.id') &&
+    code.includes('target_id: post.id') &&
+    code.includes('action: desiredAction'),
+    'mobile CommunityFeedScreen must send postId, target_id, and desiredAction in payload'
+  );
+});
+
+runTest('A.18: communityService flushOfflineQueue handles both like and unlike actions', () => {
+  const filePath = path.join(worktreeRoot, 'client/src/services/communityService.ts');
+  const code = fs.readFileSync(filePath, 'utf8');
+
+  assert.ok(
+    code.includes("case 'like':") && code.includes("case 'unlike':"),
+    'flushOfflineQueue must handle both like and unlike action types'
   );
 });
 
