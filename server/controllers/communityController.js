@@ -189,10 +189,15 @@ const addComment = async (req, res, next) => {
 const toggleLike = async (req, res, next) => {
   try {
     const { id: userId } = req.user;
-    const { postId, reaction } = req.body;
+    const postId = req.body.postId || req.body.noteId;
+    const { reaction, action } = req.body;
 
     if (!postId) {
       return res.status(400).json({ error: "Post ID is required" });
+    }
+
+    if (action !== undefined && action !== 'like' && action !== 'unlike') {
+      return res.status(400).json({ error: "Invalid action. Must be 'like' or 'unlike'" });
     }
 
     const { data: existingLike } = await supabase
@@ -202,6 +207,57 @@ const toggleLike = async (req, res, next) => {
       .eq("user_id", userId)
       .maybeSingle();
 
+    // Explicit desired-state: like
+    if (action === 'like') {
+      if (existingLike) {
+        // Idempotent: already liked, return existing state without duplicate side-effects
+        return res.json({ liked: true });
+      }
+
+      const { error: insertError } = await supabase
+        .from("community_likes")
+        .upsert(
+          [{ post_id: postId, user_id: userId, reaction: reaction || 'like' }],
+          { onConflict: 'post_id,user_id' }
+        );
+
+      if (insertError && insertError.code !== '23505') {
+        throw insertError;
+      }
+
+      // Log activity only on actual state transition to liked
+      const { data: post } = await supabase
+        .from("community_posts")
+        .select("author_id")
+        .eq("id", postId)
+        .maybeSingle();
+
+      if (post) {
+        await activityService.logActivity({
+          userId,
+          actionType: 'liked_post',
+          entityType: 'community_post',
+          entityId: postId,
+          metadata: { post_owner_id: post.author_id }
+        }).catch(err => logger.warn('[Community] Activity log failed:', err.message));
+      }
+
+      return res.json({ liked: true });
+    }
+
+    // Explicit desired-state: unlike
+    if (action === 'unlike') {
+      if (existingLike) {
+        const { error: deleteError } = await supabase
+          .from("community_likes")
+          .delete()
+          .eq("id", existingLike.id);
+        if (deleteError) throw deleteError;
+      }
+      return res.json({ liked: false });
+    }
+
+    // Legacy fallback: toggle behavior when action is omitted
     if (existingLike) {
       const { error: deleteError } = await supabase
         .from("community_likes")
@@ -216,7 +272,7 @@ const toggleLike = async (req, res, next) => {
           [{ post_id: postId, user_id: userId, reaction: reaction || 'like' }],
           { onConflict: 'post_id,user_id' }
         );
-      
+
       if (insertError && insertError.code !== '23505') {
         throw insertError;
       }

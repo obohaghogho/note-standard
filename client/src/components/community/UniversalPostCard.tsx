@@ -167,14 +167,15 @@ export const UniversalPostCard: React.FC<Props> = ({
 
     // Optimistic
     const wasLiked = liked;
+    const desiredAction: 'like' | 'unlike' = wasLiked ? 'unlike' : 'like';
     setLiked(!wasLiked);
     setLikeCount(c => c + (wasLiked ? -1 : 1));
     onOptimisticLike?.(post.id, wasLiked);
 
     try {
       const result = navigator.onLine
-        ? await toggleLike(post.id)
-        : (() => { queueOfflineAction({ type: wasLiked ? 'unlike' : 'like', payload: { postId: post.id } }); return { liked: !wasLiked }; })();
+        ? await toggleLike(post.id, desiredAction)
+        : (() => { queueOfflineAction({ type: desiredAction, payload: { postId: post.id, action: desiredAction } }); return { liked: !wasLiked }; })();
 
       if (result && typeof result.liked === 'boolean') {
         setLiked(result.liked);

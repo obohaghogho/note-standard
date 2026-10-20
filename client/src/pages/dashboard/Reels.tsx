@@ -34,16 +34,17 @@ export const Reels: React.FC = () => {
 
   const handleLikeToggle = useCallback((reelId: string, isLiked: boolean) => {
     setReels(prev =>
-      prev.map(r =>
-        r.id === reelId
-          ? {
-              ...r,
-              user_has_liked: isLiked,
-              is_liked: isLiked,
-              likes_count: Math.max(0, (r.likes_count || 0) + (isLiked ? 1 : -1)),
-            }
-          : r
-      )
+      prev.map(r => {
+        if (r.id !== reelId) return r;
+        const currentLiked = Boolean(r.user_has_liked || r.is_liked);
+        if (currentLiked === isLiked) return r;
+        return {
+          ...r,
+          user_has_liked: isLiked,
+          is_liked: isLiked,
+          likes_count: Math.max(0, (r.likes_count || 0) + (isLiked ? 1 : -1)),
+        };
+      })
     );
   }, []);
 

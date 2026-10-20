@@ -99,6 +99,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
   const [following, setFollowing] = useState(reel.is_following || false);
   const [showHeartAnim, setShowHeartAnim] = useState(false);
   const lastTapRef = useRef<number>(0);
+  const isLikingRef = useRef<boolean>(false);
   const hasViewTrackedRef = useRef<boolean>(false);
   const activePlaybackTimeRef = useRef<number>(0);
 
@@ -233,15 +234,19 @@ export const ReelCard: React.FC<ReelCardProps> = ({
     if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
       setShowHeartAnim(true);
       setTimeout(() => setShowHeartAnim(false), 900);
-      if (!liked) {
+      if (!liked && !isLikingRef.current) {
+        isLikingRef.current = true;
         setLiked(true);
         setLikesCount(prev => prev + 1);
         try {
-          await toggleLike(reel.id);
-          if (onLikeToggle) onLikeToggle(reel.id, false);
+          await toggleLike(reel.id, 'like');
+          if (onLikeToggle) onLikeToggle(reel.id, true);
         } catch {
           setLiked(false);
           setLikesCount(prev => Math.max(0, prev - 1));
+          if (onLikeToggle) onLikeToggle(reel.id, false);
+        } finally {
+          isLikingRef.current = false;
         }
       }
     } else {
@@ -252,18 +257,23 @@ export const ReelCard: React.FC<ReelCardProps> = ({
 
   const handleLike = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isLikingRef.current) return;
+    isLikingRef.current = true;
     const wasLiked = liked;
     const newLiked = !wasLiked;
     setLiked(newLiked);
     setLikesCount(prev => (newLiked ? prev + 1 : Math.max(0, prev - 1)));
 
     try {
-      await toggleLike(reel.id);
-      if (onLikeToggle) onLikeToggle(reel.id, wasLiked);
+      await toggleLike(reel.id, newLiked ? 'like' : 'unlike');
+      if (onLikeToggle) onLikeToggle(reel.id, newLiked);
     } catch {
       // Rollback on failure
       setLiked(wasLiked);
       setLikesCount(prev => (wasLiked ? prev + 1 : Math.max(0, prev - 1)));
+      if (onLikeToggle) onLikeToggle(reel.id, wasLiked);
+    } finally {
+      isLikingRef.current = false;
     }
   };
 

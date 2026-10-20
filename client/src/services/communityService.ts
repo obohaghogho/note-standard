@@ -116,7 +116,12 @@ export async function flushOfflineQueue() {
     try {
       switch (action.type) {
         case 'like':
-          await toggleLike(action.payload.postId as string);
+        case 'unlike':
+          await toggleLike(
+            action.payload.postId as string,
+            (action.payload as { postId: string; action?: 'like' | 'unlike' }).action ||
+              (action.type === 'unlike' ? 'unlike' : 'like')
+          );
           break;
         case 'bookmark':
           await toggleBookmark(action.payload.postId as string);
@@ -238,10 +243,14 @@ export async function deletePost(postId: string): Promise<void> {
   if (!res.ok) throw new Error(`Delete post failed (${res.status})`);
 }
 
-export async function toggleLike(postId: string): Promise<{ liked: boolean }> {
+export async function toggleLike(
+  postId: string,
+  action?: 'like' | 'unlike'
+): Promise<{ liked: boolean }> {
   // 1. Primary: Use resilient Axios API client (handles auth tokens, refresh on 401, retries)
   try {
-    const res = await api.post<{ liked: boolean }>('/community/like', { postId });
+    const payload = action ? { postId, action } : { postId };
+    const res = await api.post<{ liked: boolean }>('/community/like', payload);
     if (res.data && typeof res.data.liked === 'boolean') {
       return res.data;
     }
@@ -254,6 +263,40 @@ export async function toggleLike(postId: string): Promise<{ liked: boolean }> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
+    // Explicit desired-state: like (idempotent upsert, never toggles off)
+    if (action === 'like') {
+      const { data: existingLike } = await supabase
+        .from('community_likes')
+        .select('id')
+        .eq('post_id', postId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (existingLike) {
+        return { liked: true };
+      }
+      const { error: insErr } = await supabase
+        .from('community_likes')
+        .upsert(
+          [{ post_id: postId, user_id: user.id, reaction: 'like' }],
+          { onConflict: 'post_id,user_id' }
+        );
+      if (insErr && insErr.code !== '23505') throw insErr;
+      return { liked: true };
+    }
+
+    // Explicit desired-state: unlike (idempotent delete, never toggles on)
+    if (action === 'unlike') {
+      const { error: delErr } = await supabase
+        .from('community_likes')
+        .delete()
+        .eq('post_id', postId)
+        .eq('user_id', user.id);
+      if (delErr) throw delErr;
+      return { liked: false };
+    }
+
+    // Legacy fallback: toggle behavior when action is omitted
     const { data: existingLike } = await supabase
       .from('community_likes')
       .select('id')
