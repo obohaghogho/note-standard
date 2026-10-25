@@ -74,12 +74,18 @@ export const FeedNoteCard = ({ note, onCommentClick, onTagClick }: FeedNoteCardP
                     'Content-Type': 'application/json',
                     ...(await getAuthHeader())
                 },
-                body: JSON.stringify({ noteId: note.id })
+                body: JSON.stringify({
+                    postId: note.id,
+                    noteId: note.id,
+                    action: newLikedState ? 'like' : 'unlike'
+                })
             });
 
             if (!res.ok) throw new Error('Failed to toggle like');
             const data = await res.json();
-            setLiked(data.liked);
+            if (data && typeof data.liked === 'boolean') {
+                setLiked(data.liked);
+            }
         } catch {
             setLiked(previousLiked);
             setLikesCount(previousCount);
