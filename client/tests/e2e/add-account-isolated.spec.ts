@@ -6,6 +6,14 @@ import { test, expect } from '@playwright/test';
 // ============================================================================
 
 /**
+ * Supabase auth storage key derived from project URL in client/.env.development:
+ * VITE_SUPABASE_URL=https://tngcvgisfctggvivcnva.supabase.co
+ * Key format in @supabase/supabase-js: sb-${baseUrl.hostname.split('.')[0]}-auth-token
+ * Configured with storage: window.sessionStorage in client/src/lib/supabase.ts
+ */
+const SUPABASE_STORAGE_KEY = 'sb-tngcvgisfctggvivcnva-auth-token';
+
+/**
  * Helper to construct a structurally valid 3-part base64url JWT for hermetic mock tests.
  * Satisfies GoTrue / @supabase/auth-js decodeJWT client-side format requirements.
  */
@@ -32,7 +40,6 @@ function createMockJwt(userId: string, email: string, role = 'authenticated'): s
   const signature = Buffer.from('mock_signature_for_e2e_isolation_only').toString('base64url');
   return `${header}.${payload}.${signature}`;
 }
-
 
 const MOCK_ACCOUNT_1 = {
   id: 'usr-account-1-id',
@@ -81,6 +88,80 @@ const MOCK_ACCOUNT_2 = {
 };
 
 /**
+ * Creates a native Supabase session object compatible with @supabase/auth-js 2.89.0
+ */
+function createMockSupabaseSession(account: typeof MOCK_ACCOUNT_1) {
+  return {
+    access_token: account.tokens.access_token,
+    refresh_token: account.tokens.refresh_token,
+    expires_at: account.tokens.expires_at,
+    expires_in: 3600,
+    token_type: 'bearer',
+    user: {
+      id: account.id,
+      email: account.email,
+      aud: 'authenticated',
+      role: 'authenticated',
+      user_metadata: {
+        full_name: account.full_name
+      },
+      app_metadata: {
+        provider: 'email',
+        providers: ['email']
+      }
+    }
+  };
+}
+
+/**
+ * Seeds client storage with an authenticated account.
+ * Populates both:
+ * 1. NoteStandard multi-account manager in localStorage
+ * 2. Native Supabase session in sessionStorage (unless skipSessionStorage is true)
+ */
+async function seedAuthenticatedSession(
+  page: any,
+  activeAccount: typeof MOCK_ACCOUNT_1,
+  allAccounts: (typeof MOCK_ACCOUNT_1)[] = [activeAccount],
+  options: { skipSessionStorage?: boolean } = {}
+) {
+  const session = createMockSupabaseSession(activeAccount);
+  await page.addInitScript(
+    ({ accounts, activeId, storageKey, nativeSession, skipSession }) => {
+      localStorage.setItem('notestandard_accounts', JSON.stringify(accounts));
+      localStorage.setItem('notestandard_active_account_id', activeId);
+      if (!skipSession) {
+        sessionStorage.setItem(storageKey, JSON.stringify(nativeSession));
+      }
+    },
+    {
+      accounts: allAccounts,
+      activeId: activeAccount.id,
+      storageKey: SUPABASE_STORAGE_KEY,
+      nativeSession: session,
+      skipSession: !!options.skipSessionStorage
+    }
+  );
+}
+
+/**
+ * Parse POST data supporting JSON or URLSearchParams payloads.
+ */
+function parseRequestBody(postData: string | null): Record<string, any> {
+  if (!postData) return {};
+  try {
+    return JSON.parse(postData);
+  } catch {
+    const params = new URLSearchParams(postData);
+    const result: Record<string, any> = {};
+    params.forEach((value, key) => {
+      result[key] = value;
+    });
+    return result;
+  }
+}
+
+/**
  * Configure strict Playwright routes to intercept all auth/REST/API traffic.
  * Guarantees zero requests reach external Supabase servers.
  */
@@ -99,21 +180,48 @@ async function setupStrictNetworkMocks(page: any, options: { failLogin?: boolean
       }
 
       const postData = route.request().postData() || '';
-      if (postData.includes('refresh_token')) {
+      const body = parseRequestBody(postData);
+      const isRefreshRequest = url.includes('grant_type=refresh_token') || !!body.refresh_token || body.grant_type === 'refresh_token';
+
+      if (isRefreshRequest) {
+        const refreshToken = body.refresh_token;
+
+        // Exact match against known mock accounts
+        let targetAccount: typeof MOCK_ACCOUNT_1 | null = null;
+        if (refreshToken === MOCK_ACCOUNT_1.tokens.refresh_token) {
+          targetAccount = MOCK_ACCOUNT_1;
+        } else if (refreshToken === MOCK_ACCOUNT_2.tokens.refresh_token) {
+          targetAccount = MOCK_ACCOUNT_2;
+        }
+
+        if (!targetAccount) {
+          return route.fulfill({
+            status: 400,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              error: 'invalid_grant',
+              error_description: 'Invalid or unknown refresh token'
+            })
+          });
+        }
+
+        const now = Math.floor(Date.now() / 1000);
         return route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            access_token: createMockJwt(MOCK_ACCOUNT_1.id, MOCK_ACCOUNT_1.email),
+            access_token: createMockJwt(targetAccount.id, targetAccount.email),
             token_type: 'bearer',
             expires_in: 3600,
-            expires_at: Math.floor(Date.now() / 1000) + 3600,
-            refresh_token: 'mock-refreshed-refresh-token',
+            expires_at: now + 3600,
+            refresh_token: `mock-refreshed-${targetAccount.tokens.refresh_token}`,
             user: {
-              id: MOCK_ACCOUNT_1.id,
-              email: MOCK_ACCOUNT_1.email,
+              id: targetAccount.id,
+              email: targetAccount.email,
               aud: 'authenticated',
-              user_metadata: { full_name: MOCK_ACCOUNT_1.full_name }
+              role: 'authenticated',
+              user_metadata: { full_name: targetAccount.full_name },
+              app_metadata: { provider: 'email', providers: ['email'] }
             }
           })
         });
@@ -141,15 +249,18 @@ async function setupStrictNetworkMocks(page: any, options: { failLogin?: boolean
     }
 
     if (url.includes('/auth/v1/user') || url.includes('/auth/v1/session')) {
+      const authHeader = route.request().headers()['authorization'] || '';
+      const isAccount2 = authHeader.includes(MOCK_ACCOUNT_2.tokens.access_token);
+      const acc = isAccount2 ? MOCK_ACCOUNT_2 : MOCK_ACCOUNT_1;
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          id: MOCK_ACCOUNT_1.id,
-          email: MOCK_ACCOUNT_1.email,
+          id: acc.id,
+          email: acc.email,
           aud: 'authenticated',
           role: 'authenticated',
-          user_metadata: { full_name: MOCK_ACCOUNT_1.full_name }
+          user_metadata: { full_name: acc.full_name }
         })
       });
     }
@@ -179,6 +290,10 @@ async function setupStrictNetworkMocks(page: any, options: { failLogin?: boolean
     if (url.includes('/src/api/')) {
       return route.continue();
     }
+    const parsedUrl = new URL(url);
+    if (route.request().method() === 'GET' && parsedUrl.pathname === '/api/notifications') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+    }
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, session_id: 'mock-session-123' }) });
   });
 }
@@ -188,11 +303,8 @@ test.describe('Isolated Add Account & Multi-Account Switching', () => {
   test('1. Authenticated /login?add_account=true renders Add Account login flow', async ({ page }) => {
     await setupStrictNetworkMocks(page);
 
-    // Pre-seed authenticated Account 1
-    await page.addInitScript(({ acc, activeId }) => {
-      localStorage.setItem('notestandard_accounts', JSON.stringify([acc]));
-      localStorage.setItem('notestandard_active_account_id', activeId);
-    }, { acc: MOCK_ACCOUNT_1, activeId: MOCK_ACCOUNT_1.id });
+    // Pre-seed authenticated Account 1 in both localStorage and sessionStorage
+    await seedAuthenticatedSession(page, MOCK_ACCOUNT_1);
 
     await page.goto('/login?add_account=true');
 
@@ -206,10 +318,7 @@ test.describe('Isolated Add Account & Multi-Account Switching', () => {
   test('2. Authenticated /login without query parameter redirects to /dashboard', async ({ page }) => {
     await setupStrictNetworkMocks(page);
 
-    await page.addInitScript(({ acc, activeId }) => {
-      localStorage.setItem('notestandard_accounts', JSON.stringify([acc]));
-      localStorage.setItem('notestandard_active_account_id', activeId);
-    }, { acc: MOCK_ACCOUNT_1, activeId: MOCK_ACCOUNT_1.id });
+    await seedAuthenticatedSession(page, MOCK_ACCOUNT_1);
 
     await page.goto('/login');
 
@@ -237,10 +346,7 @@ test.describe('Isolated Add Account & Multi-Account Switching', () => {
   test('4. Mocked Account 2 login preserves Account 1 in store without duplicates', async ({ page }) => {
     await setupStrictNetworkMocks(page);
 
-    await page.addInitScript(({ acc, activeId }) => {
-      localStorage.setItem('notestandard_accounts', JSON.stringify([acc]));
-      localStorage.setItem('notestandard_active_account_id', activeId);
-    }, { acc: MOCK_ACCOUNT_1, activeId: MOCK_ACCOUNT_1.id });
+    await seedAuthenticatedSession(page, MOCK_ACCOUNT_1);
 
     await page.goto('/login?add_account=true');
 
@@ -266,11 +372,8 @@ test.describe('Isolated Add Account & Multi-Account Switching', () => {
   test('5. Switching between accounts restores expected active identity', async ({ page }) => {
     await setupStrictNetworkMocks(page);
 
-    // Seed both accounts into storage
-    await page.addInitScript(({ acc1, acc2 }) => {
-      localStorage.setItem('notestandard_accounts', JSON.stringify([acc2, acc1]));
-      localStorage.setItem('notestandard_active_account_id', acc2.id);
-    }, { acc1: MOCK_ACCOUNT_1, acc2: MOCK_ACCOUNT_2 });
+    // Seed both accounts into storage with Account 2 active
+    await seedAuthenticatedSession(page, MOCK_ACCOUNT_2, [MOCK_ACCOUNT_2, MOCK_ACCOUNT_1]);
 
     await page.goto('/dashboard');
 
@@ -283,10 +386,7 @@ test.describe('Isolated Add Account & Multi-Account Switching', () => {
     // Configure mock to reject login request with 400 Bad Request
     await setupStrictNetworkMocks(page, { failLogin: true });
 
-    await page.addInitScript(({ acc, activeId }) => {
-      localStorage.setItem('notestandard_accounts', JSON.stringify([acc]));
-      localStorage.setItem('notestandard_active_account_id', activeId);
-    }, { acc: MOCK_ACCOUNT_1, activeId: MOCK_ACCOUNT_1.id });
+    await seedAuthenticatedSession(page, MOCK_ACCOUNT_1);
 
     await page.goto('/login?add_account=true');
 
