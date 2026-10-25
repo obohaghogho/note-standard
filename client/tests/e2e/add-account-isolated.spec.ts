@@ -5,13 +5,42 @@ import { test, expect } from '@playwright/test';
 // Mode: 100% Mocked Network / Zero External Requests / Zero DB Mutations
 // ============================================================================
 
+/**
+ * Helper to construct a structurally valid 3-part base64url JWT for hermetic mock tests.
+ * Satisfies GoTrue / @supabase/auth-js decodeJWT client-side format requirements.
+ */
+function createMockJwt(userId: string, email: string, role = 'authenticated'): string {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const now = Math.floor(Date.now() / 1000);
+  const payload = Buffer.from(JSON.stringify({
+    iss: 'supabase',
+    ref: 'tngcvgisfctggvivcnva',
+    role,
+    sub: userId,
+    aud: 'authenticated',
+    email,
+    exp: now + 86400 * 365,
+    iat: now,
+    user_metadata: {
+      full_name: email.includes('2') ? 'Account Two' : 'Account One'
+    },
+    app_metadata: {
+      provider: 'email',
+      providers: ['email']
+    }
+  })).toString('base64url');
+  const signature = Buffer.from('mock_signature_for_e2e_isolation_only').toString('base64url');
+  return `${header}.${payload}.${signature}`;
+}
+
+
 const MOCK_ACCOUNT_1 = {
   id: 'usr-account-1-id',
   email: 'account1@notestandard.test',
   full_name: 'Account One',
   avatar_url: null,
   tokens: {
-    access_token: 'mock-access-token-1',
+    access_token: createMockJwt('usr-account-1-id', 'account1@notestandard.test'),
     refresh_token: 'mock-refresh-token-1',
     expires_at: Math.floor(Date.now() / 1000) + 86400
   },
@@ -34,7 +63,7 @@ const MOCK_ACCOUNT_2 = {
   full_name: 'Account Two',
   avatar_url: null,
   tokens: {
-    access_token: 'mock-access-token-2',
+    access_token: createMockJwt('usr-account-2-id', 'account2@notestandard.test'),
     refresh_token: 'mock-refresh-token-2',
     expires_at: Math.floor(Date.now() / 1000) + 86400
   },
@@ -75,7 +104,7 @@ async function setupStrictNetworkMocks(page: any, options: { failLogin?: boolean
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            access_token: 'mock-refreshed-access-token',
+            access_token: createMockJwt(MOCK_ACCOUNT_1.id, MOCK_ACCOUNT_1.email),
             token_type: 'bearer',
             expires_in: 3600,
             expires_at: Math.floor(Date.now() / 1000) + 3600,
@@ -145,6 +174,11 @@ async function setupStrictNetworkMocks(page: any, options: { failLogin?: boolean
 
   // 3. Intercept App API Endpoints
   await page.route('**/api/**', async (route: any) => {
+    const url = route.request().url();
+    // Do not intercept Vite dev server source modules served under /src/api/
+    if (url.includes('/src/api/')) {
+      return route.continue();
+    }
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, session_id: 'mock-session-123' }) });
   });
 }
