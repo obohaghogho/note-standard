@@ -48,7 +48,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onSelectNote }) => {
     setLoading(true);
     const delayDebounce = setTimeout(async () => {
       try {
-        const token = localStorage.getItem("token");
+        const token = getTabAuthToken();
         let fetchedData: SearchResult[] = [];
 
         if (token) {

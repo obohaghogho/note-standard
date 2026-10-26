@@ -27,7 +27,7 @@ export const TrashRecoveryModal: React.FC<TrashRecoveryModalProps> = ({ isOpen, 
   const fetchTrash = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem("token");
+      const token = getTabAuthToken();
       const { data } = await axios.get(`${API_URL}/api/notes/trash`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -49,7 +49,7 @@ export const TrashRecoveryModal: React.FC<TrashRecoveryModalProps> = ({ isOpen, 
   const handleRestore = async (id: string) => {
     setActionId(id);
     try {
-      const token = localStorage.getItem("token");
+      const token = getTabAuthToken();
       await axios.post(`${API_URL}/api/notes/${id}/restore`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -69,7 +69,7 @@ export const TrashRecoveryModal: React.FC<TrashRecoveryModalProps> = ({ isOpen, 
     
     setActionId(id);
     try {
-      const token = localStorage.getItem("token");
+      const token = getTabAuthToken();
       await axios.delete(`${API_URL}/api/notes/${id}/permanent`, {
         headers: { Authorization: `Bearer ${token}` }
       });

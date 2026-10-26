@@ -325,8 +325,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         setLoading(true);
         setTypingUsers({});
         setHasMore({});
-        // Capture outgoingUserId BEFORE resetting refs so cache clearance can execute properly
-        const outgoingUserId = lastUserIdRef.current || prevUserIdRef.current || user?.id;
         lastUserIdRef.current = null;
         prevUserIdRef.current = null;
         // Clear message cache timestamps so next account gets a fresh load
@@ -342,10 +340,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         appliedTicksRef.current = new Map();
         useChatStore.getState().clearAll();
 
-        // Evict the stale conversation and message cache for the outgoing user.
-        if (outgoingUserId) {
-            ChatCacheEngine.clearConversationsForUser(outgoingUserId).catch(() => {});
-        }
+        // Note: Do not purge the outgoing user's IndexedDB offline cache on account switch.
+        // Caches are scoped by owner_user_id and safely rehydrated when returning to this account.
+        // In-memory state has been flushed above via clearAll() so no data leaks to the new user.
 
         if (typeof window !== 'undefined' && window.location.search) {
             try {
@@ -470,12 +467,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     useEffect(() => {
         const handleAccountSwitch = () => {
-            console.log('[ChatContext] Account switch detected — immediately clearing all chat state');
-            const outgoingId = lastSeenUserIdRef.current || prevUserIdRef.current || lastUserIdRef.current;
+            console.log('[ChatContext] Account switch detected — immediately clearing all in-memory chat state');
             clearState();
-            if (outgoingId) {
-                ChatCacheEngine.clearConversationsForUser(outgoingId).catch(() => {});
-            }
         };
 
         const currentId = user?.id || null;
@@ -786,7 +779,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             } : c);
 
             useChatStore.getState().setConversations(nextConvs);
-            ChatCacheEngine.saveConversations(nextConvs).catch(() => {});
+            const currentUserId = userRef.current?.id || user?.id;
+            if (currentUserId) {
+                ChatCacheEngine.saveConversations(nextConvs, currentUserId).catch(() => {});
+            }
 
             return nextConvs;
         });
@@ -955,7 +951,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
                 // Synchronize Zustand store and IndexedDB cache with server-authoritative snapshot
                 useChatStore.getState().setConversations(filteredServerData);
-                ChatCacheEngine.saveConversations(filteredServerData, user?.id).catch(() => {});
+                const currentUserId = userRef.current?.id || user?.id;
+                if (currentUserId) {
+                    ChatCacheEngine.saveConversations(filteredServerData, currentUserId).catch(() => {});
+                }
 
                 setConversations(prev => {
                     const existingMap = new Map(filteredServerData.map(c => [c.id, c]));
@@ -1995,7 +1994,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                     });
 
                     useChatStore.getState().setConversations(nextConvs);
-                    ChatCacheEngine.saveConversations(nextConvs).catch(() => {});
+                    const currentUserId = userRef.current?.id || user?.id;
+                    if (currentUserId) {
+                        ChatCacheEngine.saveConversations(nextConvs, currentUserId).catch(() => {});
+                    }
                     
                     console.log(`[CLIENT_TRACE] [${Date.now()}] conversations state updated: PASS | next state size: ${nextConvs.length}`);
                     return nextConvs;
@@ -2336,7 +2338,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
                         return c;
                     });
                     useChatStore.getState().setConversations(nextConvs);
-                    ChatCacheEngine.saveConversations(nextConvs).catch(() => {});
+                    const currentUserId = userRef.current?.id || user?.id;
+                    if (currentUserId) {
+                        ChatCacheEngine.saveConversations(nextConvs, currentUserId).catch(() => {});
+                    }
                     return nextConvs;
                 });
             }
@@ -3605,8 +3610,10 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         if (!conversationId) return;
         if (messagesRef.current[conversationId] && messagesRef.current[conversationId].length > 0) return;
 
-        ChatCacheEngine.getMessagesForConversation(conversationId).then(cached => {
+        const currentUserId = userRef.current?.id || user?.id;
+        ChatCacheEngine.getMessagesForConversation(conversationId, currentUserId).then(cached => {
             if (cached && cached.length > 0 && isMounted.current) {
+                if (currentUserId && userRef.current?.id !== currentUserId) return;
                 setMessages(prev => {
                     if (prev[conversationId] && prev[conversationId].length > 0) return prev;
                     return { ...prev, [conversationId]: cached };

@@ -29,7 +29,7 @@ export const ShareNoteModal: React.FC<ShareNoteModalProps> = ({ isOpen, onClose,
     if (!noteId) return;
     setLoading(true);
     try {
-      const token = localStorage.getItem("token");
+      const token = getTabAuthToken();
       const { data } = await axios.get(`${API_URL}/api/notes/${noteId}/permissions`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -56,7 +56,7 @@ export const ShareNoteModal: React.FC<ShareNoteModalProps> = ({ isOpen, onClose,
     if (!noteId || !email.trim()) return;
     setSubmitting(true);
     try {
-      const token = localStorage.getItem("token");
+      const token = getTabAuthToken();
       await axios.post(
         `${API_URL}/api/notes/${noteId}/permissions`,
         { email, role },
@@ -76,7 +76,7 @@ export const ShareNoteModal: React.FC<ShareNoteModalProps> = ({ isOpen, onClose,
   const handleRevoke = async (userId: string) => {
     if (!noteId) return;
     try {
-      const token = localStorage.getItem("token");
+      const token = getTabAuthToken();
       await axios.delete(`${API_URL}/api/notes/${noteId}/permissions/${userId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });

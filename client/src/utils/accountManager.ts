@@ -55,9 +55,19 @@ export const accountManager = {
    */
   setActiveAccountId(id: string | null) {
     if (id) {
-      localStorage.setItem(ACTIVE_ACCOUNT_KEY, id);
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem(ACTIVE_ACCOUNT_KEY, id);
+      }
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(ACTIVE_ACCOUNT_KEY, id);
+      }
     } else {
-      localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem(ACTIVE_ACCOUNT_KEY);
+      }
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
+      }
     }
 
     try {
@@ -118,7 +128,20 @@ export const accountManager = {
    * Cross-checks with list of available accounts to prevent rehydrating ghost accounts.
    */
   getActiveAccountId(): string | null {
-    const id = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
+    // Priority 1: Check tab-scoped sessionStorage for active account in this tab
+    let id: string | null = null;
+    if (typeof sessionStorage !== 'undefined') {
+      id = sessionStorage.getItem(ACTIVE_ACCOUNT_KEY);
+    }
+
+    // Priority 2: Fallback to localStorage (initial boot of fresh tab)
+    if (!id && typeof localStorage !== 'undefined') {
+      id = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
+      if (id && typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem(ACTIVE_ACCOUNT_KEY, id);
+      }
+    }
+
     if (!id) return null;
     
     // Validate that this ID actually exists in our accounts list (case-insensitive & trimmed)
@@ -127,7 +150,12 @@ export const accountManager = {
     const match = accounts.find(a => a.id && a.id.trim().toLowerCase() === target);
     if (!match) {
       console.warn(`[AccountManager] Active ID ${id} not found in accounts list. Clearing.`);
-      localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem(ACTIVE_ACCOUNT_KEY);
+      }
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
+      }
       return null;
     }
     return match.id;
@@ -244,9 +272,21 @@ export const accountManager = {
     const accounts = this.getAllAccounts().filter(a => !a.id || a.id.trim().toLowerCase() !== cleanUserId);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
     this.syncToIndexedDB(accounts);
-    const activeId = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
+    const activeId = this.getActiveAccountId();
     if (activeId && activeId.trim().toLowerCase() === cleanUserId) {
       this.setActiveAccountId(null);
+    }
+    // Clean up offline chat cache for permanently removed account
+    try {
+      import('../services/chatCache').then(({ ChatCacheEngine }) => {
+        ChatCacheEngine.clearConversationsForUser(cleanUserId).catch((err) => {
+          console.warn('[AccountManager] clearConversationsForUser error:', err);
+        });
+      }).catch((err) => {
+        console.warn('[AccountManager] ChatCacheEngine import error:', err);
+      });
+    } catch (err) {
+      console.warn('[AccountManager] removeAccount cache cleanup error:', err);
     }
   },
 
@@ -285,3 +325,31 @@ export const getAllAccounts = accountManager.getAllAccounts.bind(accountManager)
 // Compatibility aliases
 export const updateAccountSession = updateAccountTokens;
 export const updateSessionMeta = accountManager.updateSessionMeta.bind(accountManager);
+
+/**
+ * Synchronous tab-safe token resolver.
+ * Retrieves only the verified token belonging to the current tab's active account.
+ * Never reads untagged generic localStorage['token'].
+ */
+export function getTabAuthToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  const activeId = accountManager.getActiveAccountId();
+  if (!activeId) return null;
+
+  const acc = accountManager.getAccount(activeId);
+  if (!acc) return null;
+
+  if (acc.tokens?.access_token) {
+    return acc.tokens.access_token;
+  }
+
+  // Tier 2: Check tab-scoped sessionStorage token, but only if verified against active account
+  if (typeof sessionStorage !== 'undefined') {
+    const tabToken = sessionStorage.getItem('token');
+    if (tabToken && acc.tokens?.access_token === tabToken) {
+      return tabToken;
+    }
+  }
+
+  return null;
+}

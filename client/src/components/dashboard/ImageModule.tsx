@@ -22,7 +22,7 @@ export const ImageModule: React.FC<ImageModuleProps> = ({ noteId }) => {
   const fetchImages = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem("token");
+      const token = getTabAuthToken();
       const { data } = await axios.get(`${API_URL}/api/notes/${noteId}/files`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -49,7 +49,7 @@ export const ImageModule: React.FC<ImageModuleProps> = ({ noteId }) => {
     formData.append("file", file);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getTabAuthToken();
       const { data } = await axios.post(
         `${API_URL}/api/notes/${noteId}/files`,
         formData,
@@ -73,7 +73,7 @@ export const ImageModule: React.FC<ImageModuleProps> = ({ noteId }) => {
   const handleDelete = async (fileId: string) => {
     if (!window.confirm("Are you sure you want to delete this image?")) return;
     try {
-      const token = localStorage.getItem("token");
+      const token = getTabAuthToken();
       await axios.delete(`${API_URL}/api/notes/${noteId}/files/${fileId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });

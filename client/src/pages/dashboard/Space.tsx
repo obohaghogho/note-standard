@@ -30,7 +30,7 @@ export default function SpacePage() {
     const fetchSpace = async () => {
       try {
         setIsLoading(true);
-        const token = localStorage.getItem('token');
+        const token = getTabAuthToken();
         const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/community/spaces/${spaceId}`, {
           headers: {
             'Authorization': `Bearer ${token}`

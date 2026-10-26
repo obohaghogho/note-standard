@@ -203,7 +203,7 @@ export const EditNoteModal = ({ isOpen, onClose, onNoteUpdated, note }: EditNote
         if (!note) return;
         setAiLoading(true);
         try {
-            const token = localStorage.getItem("token");
+            const token = getTabAuthToken();
             const { data } = await axios.post(
                 `${API_URL}/api/notes/ai/assist`,
                 {

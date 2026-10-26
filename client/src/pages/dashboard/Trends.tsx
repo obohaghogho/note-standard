@@ -109,7 +109,7 @@ export const Trends = () => {
     const fetchTrendingPosts = async () => {
         try {
             setLoadingPosts(true);
-            const token = localStorage.getItem('token');
+            const token = getTabAuthToken();
             const response = await fetch(`${API_URL}/api/community/feed?tab=trending`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -127,7 +127,7 @@ export const Trends = () => {
     const fetchBriefing = async () => {
         try {
             setLoadingBriefing(true);
-            const token = localStorage.getItem('token');
+            const token = getTabAuthToken();
             const response = await fetch(`${API_URL}/api/notes-ai/trends-briefing`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -145,7 +145,7 @@ export const Trends = () => {
     const fetchDiscover = async () => {
         try {
             setLoadingDiscover(true);
-            const token = localStorage.getItem('token');
+            const token = getTabAuthToken();
             const [creatorsRes, spacesRes] = await Promise.all([
                 fetch(`${API_URL}/api/community/suggested-creators?limit=6`, { headers: { 'Authorization': `Bearer ${token}` } }),
                 fetch(`${API_URL}/api/community/spaces`, { headers: { 'Authorization': `Bearer ${token}` } })
@@ -173,7 +173,7 @@ export const Trends = () => {
         const was = followingState[creatorId];
         setFollowingState(prev => ({ ...prev, [creatorId]: !was }));
         try {
-            const token = localStorage.getItem('token');
+            const token = getTabAuthToken();
             await fetch(`${API_URL}/api/community/profile/${creatorId}/follow`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -186,7 +186,7 @@ export const Trends = () => {
     const handleJoinSpace = async (spaceId: string) => {
         setJoiningState(prev => ({ ...prev, [spaceId]: true }));
         try {
-            const token = localStorage.getItem('token');
+            const token = getTabAuthToken();
             const res = await fetch(`${API_URL}/api/community/spaces/${spaceId}/join`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }

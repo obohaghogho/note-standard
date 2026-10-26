@@ -178,6 +178,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setProfile(null);
       setSession(null);
       setSubscription(null);
+      sessionStorage.removeItem("token");
       localStorage.removeItem("token");
 
       const { error } = await supabase.auth.signOut().catch((err) => {
@@ -197,6 +198,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSession(null);
       setSubscription(null);
       accountManager.setActiveAccountId(null);
+      sessionStorage.removeItem("token");
       localStorage.removeItem("token");
       setLoading(false);
       isLoggingOutRef.current = false;
@@ -470,8 +472,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (isMounted.current) {
           if (initialSession?.access_token) {
+            sessionStorage.setItem("token", initialSession.access_token);
             localStorage.setItem("token", initialSession.access_token);
           } else {
+            sessionStorage.removeItem("token");
             localStorage.removeItem("token");
           }
           // Rule 9: Listener handles state, but we set initial once for loading sync
@@ -555,12 +559,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Intentional logout guard: skip auto-rehydration if user explicitly initiated signOut
         if (isLoggingOutRef.current) {
+          const outgoingId = user?.id;
+          sessionStorage.removeItem("token");
           localStorage.removeItem("token");
           setSession(null);
           setUser(null);
           setProfile(null);
           setSubscription(null);
           accountManager.setActiveAccountId(null);
+          if (outgoingId) {
+            import('../services/chatCache').then(({ ChatCacheEngine }) => {
+              ChatCacheEngine.clearConversationsForUser(outgoingId).catch(() => {});
+            }).catch(() => {});
+          }
           resetRateLimiters();
           setLoading(false);
           return;
@@ -595,6 +606,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
 
+        sessionStorage.removeItem("token");
         localStorage.removeItem("token");
         setSession(null);
         setUser(null);
@@ -608,10 +620,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
         const currentUser = newSession?.user ?? null;
+
+        // -----------------------------------------------------------------------
+        // PHASE 101.55: ACCOUNT OWNERSHIP GUARD
+        //
+        // Supabase broadcasts auth events to every tab sharing the same storage.
+        // A SIGNED_IN / TOKEN_REFRESHED fired by Tab B (Account B) will reach
+        // this listener in Tab A (Account A). Without the guard below, Tab A
+        // would blindly replace its active account, session token, and React
+        // auth state with Account B's data.
+        //
+        // Rules:
+        //   1. Tab with no established active account accepts any first session.
+        //   2. Tab that already owns an account only accepts events for that user.
+        //   3. Intentional same-tab switch (switchInProgress.current) bypasses guard.
+        //   4. Same-account TOKEN_REFRESHED (unchanged user ID) always passes.
+        //   5. Foreign-account events: tokens cached silently; React state preserved.
+        // -----------------------------------------------------------------------
+        if (currentUser) {
+          const establishedActiveId = accountManager.getActiveAccountId();
+          const isIntentionalSwitch = switchInProgress.current;
+
+          if (
+            establishedActiveId &&           // Tab already owns an account
+            !isIntentionalSwitch &&          // Not a deliberate same-tab switch
+            currentUser.id !== establishedActiveId  // Event is for a different user
+          ) {
+            // Foreign-account event: cache tokens silently; preserve this tab's state.
+            accountManager.updateAccountTokens(currentUser.id, newSession);
+            console.log(
+              `[Auth] Ownership guard: ignoring ${event} for foreign account ` +
+              `${currentUser.id} (tab owns ${establishedActiveId}). ` +
+              `Tokens cached for account registry; React state preserved.`
+            );
+            return;
+          }
+        }
+        // END PHASE 101.55 OWNERSHIP GUARD
+        // -----------------------------------------------------------------------
+
         
         if (newSession?.access_token) {
+          sessionStorage.setItem("token", newSession.access_token);
           localStorage.setItem("token", newSession.access_token);
         } else {
+          sessionStorage.removeItem("token");
           localStorage.removeItem("token");
         }
 

@@ -152,7 +152,7 @@ export const NotesDashboardProvider: React.FC<{ children: React.ReactNode }> = (
     if (!user) return;
     
     // Set headers with token from Supabase session or fallback to localStorage
-    let token = localStorage.getItem("token");
+    let token = getTabAuthToken();
     try {
       const { data } = await supabase.auth.getSession();
       if (data.session?.access_token) {
@@ -223,7 +223,7 @@ export const NotesDashboardProvider: React.FC<{ children: React.ReactNode }> = (
     await idbSet(STORES.USER_PREFS, { key: `widgets_${user.id}`, widget: newLayout });
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getTabAuthToken();
       await axios.put(
         `${API_URL}/api/dashboard/notes/layout`,
         newLayout,
@@ -238,7 +238,7 @@ export const NotesDashboardProvider: React.FC<{ children: React.ReactNode }> = (
   // Log new note activity from UI client
   const logActivity = async (noteId: string, actionType: string, details = {}) => {
     try {
-      const token = localStorage.getItem("token");
+      const token = getTabAuthToken();
       await axios.post(
         `${API_URL}/api/notes/${noteId}/activity`,
         { actionType, details },

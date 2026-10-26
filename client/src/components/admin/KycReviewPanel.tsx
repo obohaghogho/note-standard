@@ -35,7 +35,7 @@ export const KycReviewPanel: React.FC = () => {
 
   const resolveDocumentUrl = (url?: string) => {
     if (!url) return undefined;
-    const token = localStorage.getItem('token');
+    const token = getTabAuthToken();
     let fullUrl = url;
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       const cleanUrl = url.startsWith('/') ? url : `/${url}`;

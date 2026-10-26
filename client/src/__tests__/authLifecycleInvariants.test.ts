@@ -1,6 +1,32 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { accountManager } from '../utils/accountManager';
 
+// Polyfill in-memory web storages if running in node environment
+if (typeof (globalThis as any).window === 'undefined') {
+  (globalThis as any).window = globalThis;
+}
+if (typeof localStorage === 'undefined' || typeof sessionStorage === 'undefined') {
+  const createMockStorage = () => {
+    let store: Record<string, string> = {};
+    return {
+      getItem: (k: string) => store[k] ?? null,
+      setItem: (k: string, v: string) => { store[k] = String(v); },
+      removeItem: (k: string) => { delete store[k]; },
+      clear: () => { store = {}; },
+      get length() { return Object.keys(store).length; },
+      key: (i: number) => Object.keys(store)[i] ?? null,
+    };
+  };
+  if (typeof localStorage === 'undefined') {
+    (globalThis as any).localStorage = createMockStorage();
+  }
+  if (typeof sessionStorage === 'undefined') {
+    (globalThis as any).sessionStorage = createMockStorage();
+    (globalThis as any).window.sessionStorage = (globalThis as any).sessionStorage;
+    (globalThis as any).window.localStorage = (globalThis as any).localStorage;
+  }
+}
+
 describe('Auth Lifecycle Stale Token Invariant Suite', () => {
   beforeEach(() => {
     localStorage.clear();

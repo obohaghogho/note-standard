@@ -25,7 +25,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ onSelectNote }) 
     try {
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, "0");
-      const token = localStorage.getItem("token");
+      const token = getTabAuthToken();
       
       const { data } = await axios.get(
         `${API_URL}/api/dashboard/notes/calendar?month=${year}-${month}`,

@@ -97,7 +97,7 @@ export const ReelUploadModal: React.FC<ReelUploadModalProps> = ({
     setTotalBytesMB((file.size / (1024 * 1024)).toFixed(1));
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getTabAuthToken();
       const formData = new FormData();
       formData.append('file', file);
       formData.append('type', 'video');
