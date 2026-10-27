@@ -16,7 +16,7 @@ export const SmartSuggestions: React.FC<SmartSuggestionsProps> = ({ onSelectNote
 
   const handleAction = async (type: string, targetId: string) => {
     try {
-      const token = localStorage.getItem("token");
+      const token = getTabAuthToken();
       const headers = { Authorization: `Bearer ${token}` };
 
       if (type === "archive_suggestion") {

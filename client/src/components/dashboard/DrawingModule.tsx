@@ -27,7 +27,7 @@ export const DrawingModule: React.FC<DrawingModuleProps> = ({ noteId }) => {
   const fetchDrawings = async () => {
     setLoadingFiles(true);
     try {
-      const token = localStorage.getItem("token");
+      const token = getTabAuthToken();
       const { data } = await axios.get(`${API_URL}/api/notes/${noteId}/files`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -127,7 +127,7 @@ export const DrawingModule: React.FC<DrawingModuleProps> = ({ noteId }) => {
       const formData = new FormData();
       formData.append("file", file);
 
-      const token = localStorage.getItem("token");
+      const token = getTabAuthToken();
       const { data } = await axios.post(
         `${API_URL}/api/notes/${noteId}/files`,
         formData,

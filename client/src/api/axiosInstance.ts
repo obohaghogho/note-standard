@@ -28,10 +28,10 @@ api.interceptors.request.use(
       return config;
     }
 
-    // Attempt to get session using the resilient safeAuth helper
+    // Attempt to get session using the resilient safeAuth helper (reads tab-scoped Supabase session)
     let session = await safeAuth();
 
-    // Direct fallback 1: Query Supabase Auth directly if safeAuth returned null
+    // Direct fallback: Query Supabase Auth directly if safeAuth returned null
     if (!session?.access_token) {
       try {
         const { supabase } = await import('../lib/supabase');
@@ -40,28 +40,46 @@ api.interceptors.request.use(
       } catch { /* silent fallback */ }
     }
 
-    // Direct fallback 2: Extract active token directly from local storage if Auth hydration is pending
-    if (!session?.access_token && typeof window !== 'undefined' && window.localStorage) {
-      try {
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && (key.startsWith('sb-') || key.includes('supabase') || key.includes('auth-token'))) {
-            const raw = localStorage.getItem(key);
-            if (raw) {
-              const parsed = JSON.parse(raw);
-              const token = parsed?.access_token || parsed?.currentSession?.access_token;
-              if (token) {
-                session = { access_token: token } as any;
-                break;
-              }
-            }
+    // Tab-scoped active account validation and account-registry restoration
+    try {
+      const { accountManager } = await import('../utils/accountManager');
+      const activeId = accountManager.getActiveAccountId();
+
+      if (session?.access_token && session.user?.id && activeId) {
+        // If the session user ID does not match the tab's verified active account,
+        // do NOT send a request with a mismatched foreign token! Fail closed or restore from account registry.
+        if (session.user.id.trim().toLowerCase() !== activeId.trim().toLowerCase()) {
+          console.warn(`[Axios] Session mismatch: session user ${session.user.id} !== active account ${activeId}. Attempting verified restoration...`);
+          const verifiedAccount = accountManager.getAccount(activeId);
+          if (verifiedAccount?.tokens?.access_token) {
+            session = { access_token: verifiedAccount.tokens.access_token, user: { id: activeId } } as any;
+          } else {
+            // Mismatched and cannot verify active account token -> fail closed
+            session = null;
           }
         }
-      } catch { /* silent fallback */ }
-    }
+      } else if (!session?.access_token && activeId) {
+        // Tab session missing: check tab-scoped sessionStorage token or restore verified account token
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+          const tabToken = window.sessionStorage.getItem('token');
+          const verifiedAccount = accountManager.getAccount(activeId);
+          if (tabToken && verifiedAccount?.tokens?.access_token === tabToken) {
+            session = { access_token: tabToken, user: { id: activeId } } as any;
+          } else if (verifiedAccount?.tokens?.access_token) {
+            session = { access_token: verifiedAccount.tokens.access_token, user: { id: activeId } } as any;
+          }
+        }
+      }
+    } catch { /* proceed */ }
 
     if (session?.access_token) {
       config.headers.Authorization = `Bearer ${session.access_token}`;
+      // Bind this request to its verified owner ID for 401 retry identity validation.
+      // Captured once at dispatch; never overwritten during retry.
+      if (!(config as any).__requestOwnerId) {
+        const ownerId = (session as any)?.user?.id || null;
+        if (ownerId) (config as any).__requestOwnerId = ownerId;
+      }
     } else {
       console.warn(`[Axios] Sending request to ${config.url} without Authorization header. (Session missing)`);
     }
@@ -114,7 +132,36 @@ api.interceptors.response.use(
           const { supabase } = await import('../lib/supabase');
           const { data: refreshData, error: refreshErr } = await supabase.auth.refreshSession();
           if (!refreshErr && refreshData?.session?.access_token) {
-            console.log('[Axios] Token refreshed successfully after 401. Retrying request...');
+            // Identity validation: the refreshed session must belong to the original
+            // request's owner AND the tab's current active account must still be that
+            // same owner. Prevents stale requests from being replayed under a switched identity.
+            const requestOwnerId = (config as any).__requestOwnerId as string | undefined;
+            const refreshedUserId: string | undefined = refreshData.session.user?.id;
+            let currentActiveId: string | null = null;
+            try {
+              const { accountManager: am } = await import('../utils/accountManager');
+              currentActiveId = am.getActiveAccountId();
+            } catch { /* non-fatal */ }
+
+            const ownerMatch = requestOwnerId
+              // Original request was identity-bound: all three must agree
+              ? (refreshedUserId === requestOwnerId && currentActiveId === requestOwnerId)
+              // Original request had no captured owner (pre-existing unbound request):
+              // still require refreshed user and current active account to agree
+              : (!!refreshedUserId && !!currentActiveId && refreshedUserId === currentActiveId);
+
+            if (!ownerMatch) {
+              console.warn(
+                `[Axios] 401 refresh rejected — identity mismatch. ` +
+                `requestOwner=${requestOwnerId ?? 'unbound'}, ` +
+                `refreshedUser=${refreshedUserId ?? 'none'}, ` +
+                `activeAccount=${currentActiveId ?? 'none'}. ` +
+                `Rejecting retry to prevent cross-account request replay.`
+              );
+              return Promise.reject(error);
+            }
+
+            console.log('[Axios] Token refreshed successfully after 401. Identity validated. Retrying request...');
             config.headers.Authorization = `Bearer ${refreshData.session.access_token}`;
             return api(config);
           }

@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { resolveLocalUrl } from './networkUtils';
+import { accountManager } from '../utils/accountManager';
 
 const defaultApiUrl = import.meta.env.DEV ? 'http://localhost:5000' : 'https://api.notestandard.com';
 const rawApiUrl = import.meta.env.VITE_API_URL || defaultApiUrl;
@@ -13,50 +14,67 @@ if (!API_URL) {
   }
 }
 
+// Re-export the single authoritative getTabAuthToken resolver
+export { getTabAuthToken } from '../utils/accountManager';
 
-export const getAuthHeader = async (): Promise<Record<string, string>> => {
+export const getAuthToken = async (): Promise<string | null> => {
     try {
-        let token: string | null | undefined = null;
+        let token: string | null = null;
+        let sessionUserId: string | null = null;
 
-        // 1. Check Supabase session
+        // 1. Check tab-scoped Supabase session
         try {
             const { data } = await supabase.auth.getSession();
-            token = data.session?.access_token;
-        } catch { /* proceed to fallbacks */ }
+            token = data.session?.access_token || null;
+            sessionUserId = data.session?.user?.id || null;
+        } catch { /* proceed to account registry verification */ }
 
-        // 2. Fallback to localStorage 'token' or Supabase keys
-        if (!token && typeof window !== 'undefined' && window.localStorage) {
-            token = localStorage.getItem('token');
-            if (!token) {
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    if (key && (key.startsWith('sb-') || key.includes('supabase') || key.includes('auth-token'))) {
-                        try {
-                            const raw = localStorage.getItem(key);
-                            if (raw) {
-                                const parsed = JSON.parse(raw);
-                                const found = parsed?.access_token || parsed?.currentSession?.access_token;
-                                if (found) {
-                                    token = found;
-                                    break;
-                                }
-                            }
-                        } catch { /* ignore parse error */ }
-                    }
+        // 2. Validate against tab-scoped active account
+        const activeId = accountManager.getActiveAccountId();
+        if (!activeId) {
+            // Fail closed: No verified active account in this tab. Never return unverified token.
+            return null;
+        }
+
+        const acc = accountManager.getAccount(activeId);
+        if (!acc) {
+            return null;
+        }
+
+        if (token && sessionUserId) {
+            if (sessionUserId.trim().toLowerCase() !== activeId.trim().toLowerCase()) {
+                console.warn(`[API] Session user ${sessionUserId} mismatch with active account ${activeId}. Restoring active account token.`);
+                return acc.tokens?.access_token || null;
+            }
+            return token;
+        }
+
+        if (!token) {
+            // Check tab-scoped sessionStorage token if verified to match active account
+            if (typeof window !== 'undefined' && window.sessionStorage) {
+                const tabToken = window.sessionStorage.getItem('token');
+                if (tabToken && acc.tokens?.access_token === tabToken) {
+                    return tabToken;
                 }
+            }
+            if (acc.tokens?.access_token) {
+                return acc.tokens.access_token;
             }
         }
 
-        if (token) {
-            return {
-                'Authorization': `Bearer ${token}`
-            };
+        // Token present but sessionUserId missing: verify against account token
+        if (token && acc.tokens?.access_token === token) {
+            return token;
         }
-        return {};
-    } catch (err) {
-        console.error('[API] Failed to get session:', err);
-        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        return token ? { 'Authorization': `Bearer ${token}` } : {};
+
+        // Fail closed: Never return an untagged generic or unverified token
+        return null;
+    } catch {
+        return null;
     }
 };
 
+export const getAuthHeader = async (): Promise<Record<string, string>> => {
+    const token = await getAuthToken();
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+};

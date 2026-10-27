@@ -285,7 +285,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
     const newFollowing = !following;
     setFollowing(newFollowing);
     try {
-      const token = localStorage.getItem('token');
+      const token = getTabAuthToken();
       await fetch(`${API_URL}/api/community/profile/${reel.author_id}/follow`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
@@ -298,7 +298,7 @@ export const ReelCard: React.FC<ReelCardProps> = ({
   const handleShare = async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const token = localStorage.getItem('token');
+      const token = getTabAuthToken();
       await fetch(`${API_URL}/api/community/post/${reel.id}/share`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },

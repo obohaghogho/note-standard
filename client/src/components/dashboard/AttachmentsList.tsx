@@ -27,7 +27,7 @@ export const AttachmentsList: React.FC<AttachmentsListProps> = ({ noteId }) => {
   const fetchAttachments = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem("token");
+      const token = getTabAuthToken();
       const { data } = await axios.get(
         `${API_URL}/api/notes/${noteId}/files`,
         { headers: { Authorization: `Bearer ${token}` } }
@@ -60,7 +60,7 @@ export const AttachmentsList: React.FC<AttachmentsListProps> = ({ noteId }) => {
     formData.append("file", file);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getTabAuthToken();
       const { data } = await axios.post(
         `${API_URL}/api/notes/${noteId}/files`,
         formData,
@@ -84,7 +84,7 @@ export const AttachmentsList: React.FC<AttachmentsListProps> = ({ noteId }) => {
 
   const handleDownload = async (fileId: string, fileName: string) => {
     try {
-      const token = localStorage.getItem("token");
+      const token = getTabAuthToken();
       const { data } = await axios.get(
         `${API_URL}/api/notes/${noteId}/files/${fileId}/download`,
         { headers: { Authorization: `Bearer ${token}` } }
@@ -109,7 +109,7 @@ export const AttachmentsList: React.FC<AttachmentsListProps> = ({ noteId }) => {
     if (!window.confirm("Are you sure you want to delete this attachment?")) return;
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getTabAuthToken();
       await axios.delete(
         `${API_URL}/api/notes/${noteId}/files/${fileId}`,
         { headers: { Authorization: `Bearer ${token}` } }

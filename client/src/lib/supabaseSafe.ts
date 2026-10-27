@@ -303,10 +303,45 @@ export async function safeAuth(): Promise<Session | null> {
 }
 
 // Listen for Supabase auth state changes and invalidate cache immediately
-// so sign-out / token refresh doesn't serve a stale token
+// so sign-out / token refresh doesn't serve a stale token.
+//
+// PHASE 101.55: SESSION CACHE OWNERSHIP GUARD
+// The _sessionCache is tab-scoped.  A SIGNED_IN / TOKEN_REFRESHED event
+// from a remote tab (different account) must NOT overwrite this tab's
+// session cache.  We check the incoming session user against the tab's
+// active account pointer (sessionStorage) before updating the cache.
+// If there is no established active account yet, the first valid session
+// is accepted unconditionally (fresh-tab / initial login path).
 supabase.auth.onAuthStateChange((_event, session) => {
   if (session) {
-    _sessionCache = { session, expiresAt: Date.now() + 55_000 };
+    // Ownership check: only update cache when the incoming session belongs
+    // to this tab's active account (or when no account is established yet).
+    const tabActiveId = (() => {
+      try {
+        return (
+          sessionStorage.getItem('notestandard_active_account_id') ||
+          localStorage.getItem('notestandard_active_account_id') ||
+          null
+        );
+      } catch {
+        return null;
+      }
+    })();
+
+    const incomingUserId = session.user?.id ?? null;
+
+    if (!tabActiveId || incomingUserId === tabActiveId) {
+      // Own-tab event (or fresh tab): update cache normally.
+      _sessionCache = { session, expiresAt: Date.now() + 55_000 };
+    } else {
+      // Foreign-tab event: do NOT replace this tab's session cache.
+      // AuthContext.onAuthStateChange already cached the foreign account's
+      // tokens in the account registry (accountManager). No action here.
+      console.log(
+        `[supabaseSafe] Session cache ownership guard: ignoring foreign ` +
+        `${_event} for user ${incomingUserId} (tab owns ${tabActiveId}).`
+      );
+    }
   } else {
     _sessionCache = null;
   }

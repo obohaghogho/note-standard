@@ -22,7 +22,7 @@ export const VoiceModule: React.FC<VoiceModuleProps> = ({ noteId }) => {
   const fetchAudioFiles = async () => {
     setLoadingFiles(true);
     try {
-      const token = localStorage.getItem("token");
+      const token = getTabAuthToken();
       const { data } = await axios.get(`${API_URL}/api/notes/${noteId}/files`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -43,7 +43,7 @@ export const VoiceModule: React.FC<VoiceModuleProps> = ({ noteId }) => {
       const formData = new FormData();
       formData.append("file", file);
 
-      const token = localStorage.getItem("token");
+      const token = getTabAuthToken();
       const { data } = await axios.post(
         `${API_URL}/api/notes/${noteId}/files`,
         formData,

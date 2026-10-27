@@ -45,7 +45,7 @@ export const FincraVirtualAccountCard: React.FC<FincraVirtualAccountCardProps> =
       setLoading(true);
       setError(null);
 
-      const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+      const token = getTabAuthToken();
       const res   = await fetch(`${API_BASE}/api/fincra/accounts`, {
         headers: { Authorization: `Bearer ${token}` },
       });

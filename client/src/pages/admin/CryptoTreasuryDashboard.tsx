@@ -53,7 +53,7 @@ export const CryptoTreasuryDashboard: React.FC = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      const token = getTabAuthToken();
       const headers = { Authorization: `Bearer ${token}` };
 
       const [custodyRes, approvalsRes] = await Promise.all([
@@ -84,7 +84,7 @@ export const CryptoTreasuryDashboard: React.FC = () => {
   const handleManualSync = async () => {
     try {
       setSyncing(true);
-      const token = localStorage.getItem('token');
+      const token = getTabAuthToken();
       await axios.post('/api/admin/crypto/sync', {}, { headers: { Authorization: `Bearer ${token}` } });
       setActionMessage("Manual custody sync completed successfully!");
       fetchDashboardData();
@@ -97,7 +97,7 @@ export const CryptoTreasuryDashboard: React.FC = () => {
 
   const handleApprovalAction = async (transactionId: string, action: 'APPROVED' | 'REJECTED') => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getTabAuthToken();
       await axios.post(
         '/api/admin/crypto/approvals/action',
         { transactionId, action, reason: `Admin ${action.toLowerCase()} via Treasury Dashboard` },

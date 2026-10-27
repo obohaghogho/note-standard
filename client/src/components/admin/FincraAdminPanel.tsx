@@ -64,7 +64,7 @@ export const FincraAdminPanel: React.FC = () => {
   const [recRunning,  setRecRunning]  = useState(false);
 
   const getAuthHeaders = () => {
-    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+    const token = getTabAuthToken();
     return {
       Authorization:  `Bearer ${token}`,
       "Content-Type": "application/json",

@@ -178,7 +178,7 @@ export const PostComposer: React.FC<Props> = ({
 
         if (draftId) {
           try {
-            const token = localStorage.getItem('token');
+            const token = getTabAuthToken();
             if (token) {
               const delRes = await fetch(`${API_URL}/creator/drafts/${draftId}`, {
                 method: 'DELETE',
