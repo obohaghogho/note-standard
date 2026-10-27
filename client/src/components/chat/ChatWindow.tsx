@@ -28,6 +28,7 @@ import { ForwardMessageModal } from './ForwardMessageModal';
 import { ConfirmationModal } from '../common/ConfirmationModal';
 import { Button } from '../common/Button';
 import { applyAutoCorrect } from '../../utils/textUtils';
+import { normalizeSearchResults } from '../../utils/chatSearch';
 import { useWallpaper } from '../../context/WallpaperContext';
 import { WallpaperEngine } from './WallpaperEngine';
 import { WallpaperPicker } from './WallpaperPicker';
@@ -484,7 +485,7 @@ const ChatWindow: React.FC = () => {
                 });
                 if (res.ok) {
                     const data = await res.json();
-                    setSearchResults(data);
+                    setSearchResults(normalizeSearchResults(data));
                 }
             } catch (err) {
                 console.error('Search failed:', err);
