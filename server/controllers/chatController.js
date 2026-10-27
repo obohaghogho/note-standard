@@ -1086,20 +1086,28 @@ exports.getMessages = async (req, res) => {
     const { limit = 50, before, after, after_id, after_created_at } = req.query;
     const userId = req.user.id;
 
-    let clearedAt = null;
-    try {
-      // Fetch cleared_at for the user - wrap in try-catch as column might be missing
-      const { data: member } = await supabase
-        .from("conversation_members")
-        .select("cleared_at")
-        .eq("conversation_id", conversationId)
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      clearedAt = member?.cleared_at;
-    } catch (e) {
-      console.warn("[Chat] Could not fetch cleared_at (column might be missing):", e.message);
+    if (!conversationId) {
+      return res.status(400).json({ error: "Missing conversationId" });
     }
+
+    // Verify user is a member of this conversation and fetch cleared_at
+    const { data: member, error: memError } = await supabase
+      .from("conversation_members")
+      .select("cleared_at")
+      .eq("conversation_id", conversationId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (memError) {
+      console.error("[Chat Controller] Error checking membership in getMessages:", memError.message || memError);
+      return res.status(500).json({ error: "Server Error" });
+    }
+
+    if (!member) {
+      return res.status(403).json({ error: "Access denied or conversation not found" });
+    }
+
+    const clearedAt = member.cleared_at;
 
     // Build the main messages query with attachment join.
     // IMPORTANT: .eq('is_deleted', false) ensures soft-deleted messages never reach clients.
