@@ -12,7 +12,7 @@ if (fs.existsSync(envPath) && typeof (process as any).loadEnvFile === 'function'
   (process as any).loadEnvFile(envPath);
 }
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5173';
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:5173';
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -40,7 +40,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
     },
     {
       name: 'firefox',
@@ -58,13 +58,27 @@ export default defineConfig({
       name: 'Mobile Safari',
       use: { ...devices['iPhone 12'] },
     },
+    {
+      name: 'hermetic-preview',
+      testMatch: /.*chat-tab-isolation\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: {
+          args: [
+            '--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1',
+          ],
+        },
+      },
+    },
   ],
   
   // Spin up local webserver if testing against localhost
-  webServer: baseURL.includes('localhost') ? {
-    command: 'npm run dev',
-    url: 'http://localhost:5173',
+  webServer: (baseURL.includes('localhost') || baseURL.includes('127.0.0.1')) ? {
+    command: 'node ../node_modules/vite/bin/vite.js --host 127.0.0.1',
+    url: 'http://127.0.0.1:5173',
     reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
+    timeout: 240 * 1000,
+    stdout: 'pipe',
+    stderr: 'pipe',
   } : undefined,
 });
