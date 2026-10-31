@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
 import { supabase } from '../lib/supabase';
 import { idbGet, idbSet, STORES } from '../lib/indexedDB';
+import { getTabAuthToken } from '../utils/accountManager';
 
 import toast from 'react-hot-toast';
 

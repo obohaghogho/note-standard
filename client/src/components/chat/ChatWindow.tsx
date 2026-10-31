@@ -210,6 +210,7 @@ const ChatWindow: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<Message[]>([]);
     const [isSearching, setIsSearching] = useState(false);
+    const searchRequestIdRef = useRef(0);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [isAccepting, setIsAccepting] = useState(false);
     const [isDeclining, setIsDeclining] = useState(false);
@@ -471,30 +472,50 @@ const ChatWindow: React.FC = () => {
     }, [preferredLanguage, session?.access_token]);
 
     useEffect(() => {
+        const currentRequestId = ++searchRequestIdRef.current;
+
         if (!searchQuery.trim() || !isSearchOpen) {
             setSearchResults([]);
             setIsSearching(false);
             return;
         }
 
+        const controller = new AbortController();
         setIsSearching(true);
+
         const delayDebounce = setTimeout(async () => {
+            if (controller.signal.aborted || currentRequestId !== searchRequestIdRef.current) {
+                return;
+            }
             try {
                 const res = await fetch(`${API_URL}/api/chat/conversations/${activeConversationId}/search?q=${encodeURIComponent(searchQuery)}`, {
-                    headers: { 'Authorization': `Bearer ${session?.access_token}` }
+                    headers: { 'Authorization': `Bearer ${session?.access_token}` },
+                    signal: controller.signal
                 });
                 if (res.ok) {
                     const data = await res.json();
-                    setSearchResults(normalizeSearchResults(data));
+                    if (!controller.signal.aborted && currentRequestId === searchRequestIdRef.current) {
+                        setSearchResults(normalizeSearchResults(data));
+                    }
                 }
-            } catch (err) {
-                console.error('Search failed:', err);
+            } catch (err: any) {
+                if (err?.name === 'AbortError' || controller.signal.aborted) {
+                    return;
+                }
+                if (currentRequestId === searchRequestIdRef.current) {
+                    console.error('Search failed:', err);
+                }
             } finally {
-                setIsSearching(false);
+                if (!controller.signal.aborted && currentRequestId === searchRequestIdRef.current) {
+                    setIsSearching(false);
+                }
             }
         }, 500);
 
-        return () => clearTimeout(delayDebounce);
+        return () => {
+            clearTimeout(delayDebounce);
+            controller.abort();
+        };
     }, [searchQuery, isSearchOpen, activeConversationId, session?.access_token]);
 
     const fetchSignedUrl = useCallback(async (path: string): Promise<string | null> => {

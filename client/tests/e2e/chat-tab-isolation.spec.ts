@@ -121,6 +121,13 @@ interface NetworkAuditLog {
   handledMock: string[];
 }
 
+const ALLOWED_LOOPBACK_ORIGINS = new Set([
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:4173',
+  'http://127.0.0.1:4173'
+]);
+
 /**
  * Configure comprehensive hermetic route interception across all tabs in this context.
  */
@@ -131,16 +138,29 @@ async function setupHermeticContext(context: BrowserContext): Promise<NetworkAud
     handledMock: []
   };
 
+  // Context-wide WebSocket interception: prevent any real network WebSocket connections
+  await context.routeWebSocket(/.*/, async (ws) => {
+    const wsUrl = ws.url();
+    audit.blockedExternal.push(wsUrl);
+    console.warn('[HERMETIC_GUARD] Intercepted and blocked context WebSocket: ' + wsUrl);
+    await ws.close({ code: 1008, reason: 'Hermetic context: external WebSocket blocked' });
+  });
+
   await context.route('**', async (route) => {
     const req = route.request();
     const url = req.url();
-    const parsed = new URL(url);
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      audit.blockedExternal.push(url);
+      console.warn('[HERMETIC_GUARD] Blocked unparseable URL: ' + url);
+      return route.abort('blockedbyclient');
+    }
 
-    // 1. Local Vite dev server static assets, styles, and client scripts
-    if (parsed.origin === 'http://localhost:5173' || parsed.origin === 'http://127.0.0.1:5173') {
-      if (parsed.pathname.includes('/src/api/')) {
-        return route.continue();
-      }
+    // 1. Local loopback web server static assets, styles, and client bundles
+    // Permits Vite dev (5173) and Vite preview (4173) on exact loopback origins only
+    if (ALLOWED_LOOPBACK_ORIGINS.has(parsed.origin)) {
       return route.continue();
     }
 

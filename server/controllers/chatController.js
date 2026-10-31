@@ -1247,21 +1247,41 @@ exports.getMessages = async (req, res) => {
 exports.searchMessages = async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const { q } = req.query;
+    const query = (req.query.q || '').trim();
     const userId = req.user.id;
 
-    if (!q) return res.status(400).json({ error: "Search query required" });
+    if (!conversationId || conversationId === 'undefined' || conversationId === 'null') {
+      return res.status(400).json({ error: 'Valid conversation ID is required' });
+    }
 
-    let clearedAt = null;
-    try {
-      const { data: member } = await supabase
-        .from("conversation_members")
-        .select("cleared_at")
-        .eq("conversation_id", conversationId)
-        .eq("user_id", userId)
-        .maybeSingle();
-      clearedAt = member?.cleared_at;
-    } catch (_) {}
+    // Verify user is a member of this conversation and fetch cleared_at
+    const { data: member, error: memError } = await supabase
+      .from('conversation_members')
+      .select('cleared_at')
+      .eq('conversation_id', conversationId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (memError) {
+      console.error('[Chat Controller] Error checking membership in searchMessages:', memError.message || memError);
+      return res.status(500).json({ error: 'Server Error' });
+    }
+
+    if (!member) {
+      return res.status(403).json({ error: 'Access denied or conversation not found' });
+    }
+
+    // Return empty result envelope if query is empty after verifying membership
+    if (!query) {
+      return res.json({
+        success: true,
+        query: '',
+        messages: [],
+        total: 0,
+      });
+    }
+
+    const clearedAt = member.cleared_at;
 
     const filterCleared = (list) => {
       if (!clearedAt) return list || [];
@@ -1272,67 +1292,86 @@ exports.searchMessages = async (req, res) => {
     // Try full query with attachments
     try {
       let searchQuery = supabase
-        .from("messages")
-        .select("*, attachment:media_attachments(*)")
-        .eq("conversation_id", conversationId)
-        .eq("is_deleted", false)
-        .ilike("content", `%${q}%`)
-        .order("created_at", { ascending: false })
-        .limit(100);
+        .from('messages')
+        .select('*, attachment:media_attachments(*)')
+        .eq('conversation_id', conversationId)
+        .eq('is_deleted', false)
+        .ilike('content', `%${query}%`)
+        .order('created_at', { ascending: false })
+        .limit(50);
 
       if (clearedAt) {
-        searchQuery = searchQuery.gt("created_at", clearedAt);
+        searchQuery = searchQuery.gt('created_at', clearedAt);
       }
 
       const { data, error } = await searchQuery;
 
       if (error) {
         if (
-          error.code === "PGRST200" ||
-          error.message.includes("media_attachments")
+          error.code === 'PGRST200' ||
+          error.code === '42703' ||
+          error.message?.includes('media_attachments')
         ) {
           console.warn(
-            "[Chat Controller] Falling back to basic search (media_attachments missing)",
+            '[Chat Controller] Falling back to basic search (media_attachments missing)',
           );
           let simpleSearch = supabase
-            .from("messages")
-            .select("*")
-            .eq("conversation_id", conversationId)
-            .eq("is_deleted", false)
-            .ilike("content", `%${q}%`)
-            .order("created_at", { ascending: false })
-            .limit(100);
+            .from('messages')
+            .select('*')
+            .eq('conversation_id', conversationId)
+            .eq('is_deleted', false)
+            .ilike('content', `%${query}%`)
+            .order('created_at', { ascending: false })
+            .limit(50);
 
-          if (clearedAt) simpleSearch = simpleSearch.gt("created_at", clearedAt);
+          if (clearedAt) simpleSearch = simpleSearch.gt('created_at', clearedAt);
 
           const { data: simpleData, error: simpleError } = await simpleSearch;
 
           if (simpleError) throw simpleError;
-          return res.json(filterCleared(simpleData));
+          const filteredSimple = filterCleared(simpleData);
+          return res.json({
+            success: true,
+            query,
+            messages: filteredSimple,
+            total: filteredSimple.length,
+          });
         }
         throw error;
       }
-      res.json(filterCleared(data));
+      const filtered = filterCleared(data);
+      return res.json({
+        success: true,
+        query,
+        messages: filtered,
+        total: filtered.length,
+      });
     } catch (innerErr) {
-      console.warn("[Chat Controller] Search error:", innerErr.message);
+      console.warn('[Chat Controller] Search error:', innerErr.message);
       let fallbackSearch = supabase
-        .from("messages")
-        .select("*")
-        .eq("conversation_id", conversationId)
-        .eq("is_deleted", false)
-        .ilike("content", `%${q}%`)
-        .order("created_at", { ascending: false })
-        .limit(100);
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .eq('is_deleted', false)
+        .ilike('content', `%${query}%`)
+        .order('created_at', { ascending: false })
+        .limit(50);
 
-      if (clearedAt) fallbackSearch = fallbackSearch.gt("created_at", clearedAt);
+      if (clearedAt) fallbackSearch = fallbackSearch.gt('created_at', clearedAt);
 
       const { data, error } = await fallbackSearch;
       if (error) throw error;
-      res.json(filterCleared(data));
+      const filtered = filterCleared(data);
+      return res.json({
+        success: true,
+        query,
+        messages: filtered,
+        total: filtered.length,
+      });
     }
   } catch (err) {
-    console.error("Error searching messages:", err.message);
-    res.status(500).json({ error: "Server Error" });
+    console.error('[Chat Controller] Error searching messages:', err.message);
+    res.status(500).json({ error: 'Server Error' });
   }
 };
 
@@ -3270,58 +3309,6 @@ exports.webhookDeliver = async (req, res, next) => {
 
     if (error) throw error;
     res.json({ success: true, delivered: !!updated });
-  } catch (err) {
-    next(err);
-  }
-};
-
-/**
- * GET /api/chat/conversations/:conversationId/search
- * Search messages within a specific conversation (B-07)
- */
-exports.searchMessages = async (req, res, next) => {
-  try {
-    const userId = req.user.id;
-    const { conversationId } = req.params;
-    const query = (req.query.q || '').trim();
-
-    if (!conversationId || conversationId === 'undefined' || conversationId === 'null') {
-      return res.status(400).json({ error: 'Valid conversation ID is required' });
-    }
-
-    if (!query) {
-      return res.json({ success: true, messages: [], total: 0 });
-    }
-
-    // Verify user is a member of the conversation
-    const { data: member, error: memberErr } = await supabase
-      .from('conversation_members')
-      .select('id')
-      .eq('conversation_id', conversationId)
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (memberErr || !member) {
-      return res.status(403).json({ error: 'Access denied to conversation' });
-    }
-
-    // Search messages in this conversation
-    const { data: messages, error } = await supabase
-      .from('messages')
-      .select('id, conversation_id, sender_id, content, type, created_at')
-      .eq('conversation_id', conversationId)
-      .ilike('content', `%${query}%`)
-      .order('created_at', { ascending: false })
-      .limit(50);
-
-    if (error) throw error;
-
-    res.json({
-      success: true,
-      query,
-      messages: messages || [],
-      total: messages?.length || 0,
-    });
   } catch (err) {
     next(err);
   }
