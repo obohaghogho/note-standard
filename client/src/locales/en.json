@@ -75,10 +75,10 @@
         "pricing": "Pricing",
         "security": "Security",
         "install_app": "Install App",
-        "hero_badge": "Crystal Theme 2.0 Live",
+        "hero_badge": "Feed • Chat • Calls • Teams • Wallet",
         "hero_title_1": "Connect, Call & Transact",
         "hero_title_2": "Globally in Real-Time",
-        "hero_subtitle": "Experience the ultimate all-in-one platform featuring instant encrypted messaging, crystal-clear WebRTC voice and video calls, and a secure multi-currency digital wallet. Built for global collaboration.",
+        "hero_subtitle": "Post on your feed, chat with handles, connect through audio and video calls, collaborate with your team, keep private notes, and access your wallet — all in one place. No more switching between multiple apps.",
         "start_free": "Start for free"
     },
     "auth": {

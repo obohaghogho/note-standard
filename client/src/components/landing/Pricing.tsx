@@ -7,24 +7,42 @@ const plans = [
         name: 'Free',
         price: '$0',
         description: 'Perfect for getting started',
-        features: ['50 Notes', 'Basic Formatting', 'Mobile Access', 'Sync 2 Devices'],
+        features: [
+            'Up to 100 Notes',
+            'Real-Time 1-on-1 Messaging',
+            'Direct Audio & Video Calls',
+            'Multi-Currency Wallet (NGN & USD)',
+            'Community Feed Access'
+        ],
         highlight: false
     },
     {
         name: 'Pro',
-        price: '$9',
+        price: '$9.99',
         period: '/month',
         description: 'For power users & creators',
-        features: ['Unlimited Notes', 'Rich Media Support', 'Advanced Search', 'Priority Support', 'Version History'],
+        features: [
+            'Unlimited Notes',
+            '1 GB Cloud Storage',
+            'Expanded Cloud Media Storage',
+            'Advanced Note Organization & Search',
+            'Reduced Transaction Fees'
+        ],
         highlight: true,
         tag: 'Most Popular'
     },
     {
-        name: 'Team',
-        price: '$19',
-        period: '/user',
+        name: 'Business',
+        price: '$29.99',
+        period: '/month',
         description: 'Collaborate with your team',
-        features: ['Everything in Pro', 'Team Sharing', 'Admin Dashboard', 'SSO Integration', 'API Access'],
+        features: [
+            'Everything in Pro',
+            'Team Workspaces & Channels',
+            '5 GB Cloud Storage',
+            'Team File Cabinet & Bulletins',
+            'Priority Support Routing'
+        ],
         highlight: false
     }
 ];
