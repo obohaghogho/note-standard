@@ -21,12 +21,13 @@ export const Navbar = () => {
                             <span className="font-black text-xl bg-clip-text text-transparent bg-gradient-to-tr from-emerald-400 to-teal-300">N</span>
                         </div>
                     </div>
-                    <div className="flex flex-col">
+                    <div className="flex flex-col min-w-0">
                         <span className="font-bold text-lg leading-tight tracking-tight flex items-center gap-1.5">
                             NoteStandard
                             <span className="text-[10px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Pro</span>
                         </span>
-                        <span className="text-[10px] text-gray-400 font-medium">Real-Time Messaging & Wallet</span>
+                        <span className="sm:hidden text-[10px] text-gray-400 font-medium truncate">The Connected Super App</span>
+                        <span className="hidden sm:inline text-[10px] text-gray-400 font-medium whitespace-nowrap">Feed, Chat, Teams, Notes & Wallet — One Secure Super App</span>
                     </div>
                 </Link>
 

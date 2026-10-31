@@ -1,36 +1,36 @@
 import { motion } from 'framer-motion';
-import { Lock, Cloud, Users, Zap, Search, Layout } from 'lucide-react';
+import { Share2, MessageSquare, Video, FileText, Users, Wallet } from 'lucide-react';
 
 const features = [
     {
-        icon: Lock,
-        title: 'Secure Messaging',
-        description: 'End-to-end encryption ensures your conversations remain private and secure.'
+        icon: Share2,
+        title: 'Social Feed & Community',
+        description: 'Share updates, post reels, join community discussions, and engage with creators and community members worldwide.'
     },
     {
-        icon: Cloud,
-        title: 'Voice Notes & Media',
-        description: 'Share voice notes, images, and files instantly with your contacts.'
+        icon: MessageSquare,
+        title: 'Secure Messaging',
+        description: 'Chat using handles, share supported files, send voice notes, and react to messages with encrypted transit.'
+    },
+    {
+        icon: Video,
+        title: 'Audio/Video Calls',
+        description: 'Connect through real-time WebRTC audio and video calling, engineered for low-latency communication.'
+    },
+    {
+        icon: FileText,
+        title: 'Private Notes',
+        description: 'Organize private notes with fast full-text search across your saved notes, drafts, and ideas.'
     },
     {
         icon: Users,
-        title: 'Social Communication',
-        description: 'Connect with friends and colleagues globally through user handles.'
+        title: 'Team Workspaces',
+        description: 'Create teams, collaborate in channels, and share documents on eligible business plans.'
     },
     {
-        icon: Zap,
-        title: 'Audio/Video Calling',
-        description: 'Crystal-clear WebRTC voice and video calls built for reliability.'
-    },
-    {
-        icon: Search,
-        title: 'Smart Search',
-        description: 'Find any conversation or shared media in milliseconds.'
-    },
-    {
-        icon: Layout,
-        title: 'Clean Interface',
-        description: 'Distraction-free chat environment designed for modern communication.'
+        icon: Wallet,
+        title: 'Multi-Currency Wallet',
+        description: 'Access multi-currency wallet features for NGN and USD, with dedicated virtual accounts available subject to applicable KYC verification.'
     }
 ];
 

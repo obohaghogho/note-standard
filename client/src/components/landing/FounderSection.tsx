@@ -50,7 +50,8 @@ export const FounderSection = () => {
 
                             <div className="flex-1 text-center md:text-left">
                                 <h3 className="text-xl sm:text-2xl font-bold text-white mb-1">Oboh Aghogho Jossy</h3>
-                                <p className="text-primary text-xs sm:text-sm font-medium mb-4">Web Designer & Founder @ Note-Standard</p>
+                                <p className="text-primary text-xs sm:text-sm font-medium mb-1">Web Designer & Founder @ Note-Standard</p>
+                                <p className="text-xs text-gray-400 mb-4">Built in Delta State, Nigeria for the world</p>
                                 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 mb-6 text-left">
                                     <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-300">

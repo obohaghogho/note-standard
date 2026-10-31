@@ -27,7 +27,7 @@ const CHAPTERS: Chapter[] = [
         timestamp: 0,
         icon: MessageSquare,
         badge: 'Core Chat',
-        description: 'Instant encrypted messaging with rich media, high-fidelity voice notes, live reaction emojis, and read receipts.',
+        description: 'Instant real-time messaging with rich media, high-fidelity voice notes, live reaction emojis, and read receipts.',
         narration: 'Welcome to NoteStandard Messaging. Type messages, record crystal-clear voice notes, share media, and react instantly in private or group conversations.',
         steps: [
             'Tap the voice note icon to record audio on the fly',
@@ -57,10 +57,10 @@ const CHAPTERS: Chapter[] = [
         timestamp: 50,
         icon: Wallet,
         badge: 'Fintech & Wallet',
-        description: 'Instant virtual NUBAN account generation, multi-currency wallet (NGN, USD, EUR), and peer-to-peer transfers inside chat.',
-        narration: 'Manage your finances directly inside NoteStandard. Get a dedicated virtual bank account, fund your wallet, and send money to anyone in chat instantly.',
+        description: 'Virtual account access, multi-currency wallet features for NGN and USD, and peer-to-peer transfers inside chat.',
+        narration: 'Manage your finances directly inside NoteStandard. Access dedicated virtual accounts subject to applicable KYC verification, fund your wallet, and use supported peer-to-peer payment features.',
         steps: [
-            'Generate a dedicated virtual bank account number in seconds',
+            'Request dedicated virtual accounts subject to applicable KYC verification',
             'Hold and exchange multi-currency balances with live rates',
             'Send peer-to-peer payments directly inside active chat threads'
         ]
@@ -87,40 +87,43 @@ const CHAPTERS: Chapter[] = [
         timestamp: 95,
         icon: Bot,
         badge: 'AI Powered',
-        description: 'Smart AI note taking, automated transcriptions for voice messages & calls, and instant multilingual translation.',
-        narration: 'Supercharge your workflow with our built-in AI Assistant. Get instant summaries of long conversations and automated voice transcriptions.',
+        description: 'Smart AI note taking, intelligent text assistance and note summarization, and instant multilingual translation.',
+        narration: 'Supercharge your workflow with our built-in AI Assistant. Get instant summaries of long conversations and intelligent text assistance.',
         steps: [
             'Generate concise bullet summaries of unread chat threads',
-            'Transcribe incoming voice notes into text automatically',
+            'Summarize notes and refine content with intelligent text assistance',
             'Translate incoming messages into 30+ languages instantaneously'
         ]
     },
     {
         id: 'security',
-        title: 'Bank-Grade E2E Security',
+        title: 'Account Security & Protection',
         duration: '0:15',
         timestamp: 110,
         icon: ShieldCheck,
-        badge: 'Security & E2E',
-        description: 'End-to-end encryption for chat & calls, biometric authentication, app lock PIN, and session device monitoring.',
-        narration: 'Your privacy is paramount. NoteStandard protects every message, file, and payment with end-to-end encryption and bank-grade protocols.',
+        badge: 'Security',
+        description: 'Encrypted network transit for chat & calls, secure authentication, and session device monitoring.',
+        narration: 'Your privacy is paramount. NoteStandard protects your account with encrypted transit, secure authentication, and active session controls.',
         steps: [
-            'End-to-End Encryption (E2EE) ensures only you and your recipient read messages',
-            'Enable biometric lock and PIN protection for app access',
+            'All data in transit is encrypted using standard secure protocols',
+            'Secure authentication and credential protection for account access',
             'View and revoke active device sessions anytime'
         ]
     }
 ];
 
-export const AppDemoSection: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'video' | 'interactive'>('video');
+interface AppDemoSectionProps {
+    activeTab: 'video' | 'interactive';
+    onTabChange: (tab: 'video' | 'interactive') => void;
+}
+
+export const AppDemoSection: React.FC<AppDemoSectionProps> = ({ activeTab, onTabChange }) => {
     const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
     const [isPlaying, setIsPlaying] = useState(true);
     const [currentTime, setCurrentTime] = useState(0);
     const [playbackSpeed, setPlaybackSpeed] = useState(1);
     const [isMuted, setIsMuted] = useState(false);
     const [showSubtitles, setShowSubtitles] = useState(true);
-    const [copiedNuban, setCopiedNuban] = useState(false);
 
     // Interactive Mode State
     const [simulatedChat, setSimulatedChat] = useState([
@@ -239,7 +242,7 @@ export const AppDemoSection: React.FC = () => {
                     {/* Mode Toggle Switch */}
                     <div className="mt-8 inline-flex p-1.5 rounded-2xl bg-white/5 border border-white/15 backdrop-blur-xl shadow-2xl">
                         <button
-                            onClick={() => setActiveTab('video')}
+                            onClick={() => onTabChange('video')}
                             className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all duration-300 ${
                                 activeTab === 'video'
                                     ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)]'
@@ -250,7 +253,7 @@ export const AppDemoSection: React.FC = () => {
                             Watch Video Tour (2 Min)
                         </button>
                         <button
-                            onClick={() => setActiveTab('interactive')}
+                            onClick={() => onTabChange('interactive')}
                             className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all duration-300 ${
                                 activeTab === 'interactive'
                                     ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)]'
@@ -388,7 +391,7 @@ export const AppDemoSection: React.FC = () => {
                                                     <div className="flex-1">
                                                         <div className="flex justify-between items-center mb-1">
                                                             <span className="text-sm font-bold text-white">Jossy (Engineering)</span>
-                                                            <span className="text-[10px] text-emerald-400 font-mono">E2E Encrypted 🔒</span>
+                                                            <span className="text-[10px] text-emerald-400 font-mono">Encrypted Transit 🔒</span>
                                                         </div>
                                                         <p className="text-sm text-gray-200 bg-emerald-950/60 p-3 rounded-xl border border-emerald-500/30">
                                                             Hey! Did you check out the new real-time WebRTC audio call updates?
@@ -471,10 +474,9 @@ export const AppDemoSection: React.FC = () => {
 
                                                     <div className="grid grid-cols-2 gap-3 pt-2">
                                                         <div className="p-3 rounded-xl bg-black/40 border border-white/10">
-                                                            <div className="text-[10px] text-gray-400">Zenith Bank NUBAN</div>
+                                                            <div className="text-[10px] text-gray-400">Sample Virtual NUBAN</div>
                                                             <div className="text-sm font-bold text-white font-mono flex items-center justify-between">
-                                                                9048123490
-                                                                <Copy className="w-3.5 h-3.5 text-emerald-400 cursor-pointer" />
+                                                                DEMO-NUBAN-0000
                                                             </div>
                                                         </div>
                                                         <div className="p-3 rounded-xl bg-black/40 border border-white/10">
@@ -524,7 +526,7 @@ export const AppDemoSection: React.FC = () => {
                                                         Instant Thread Summary Generated:
                                                     </div>
                                                     <ul className="list-disc list-inside space-y-1 text-gray-300">
-                                                        <li>Team agreed to deploy Zenith Virtual NUBAN integration tomorrow.</li>
+                                                        <li>Team discussed virtual account payment capabilities for a future release.</li>
                                                         <li>Agora RTC video call scheduled for 3:00 PM GMT.</li>
                                                     </ul>
                                                 </div>
@@ -538,9 +540,9 @@ export const AppDemoSection: React.FC = () => {
                                                     <ShieldCheck className="w-9 h-9" />
                                                 </div>
                                                 <div>
-                                                    <h4 className="text-xl font-bold text-white">Bank-Grade E2EE Encryption</h4>
+                                                    <h4 className="text-xl font-bold text-white">Account Security & Protection</h4>
                                                     <p className="text-xs text-gray-300 max-w-md mx-auto mt-1">
-                                                        256-bit AES Elliptic Curve Encryption guarantees that no unauthorized third-parties or servers can access your private data.
+                                                        Industry-standard encrypted transit, session device controls, and secure account authentication protect your workspace account.
                                                     </p>
                                                 </div>
                                             </div>
@@ -651,7 +653,7 @@ export const AppDemoSection: React.FC = () => {
                                             </div>
                                             <div>
                                                 <div className="text-sm font-bold text-white">General Product Channel</div>
-                                                <div className="text-[10px] text-emerald-400">3 Online • End-to-End Encrypted</div>
+                                                <div className="text-[10px] text-emerald-400">3 Online • Active Channel</div>
                                             </div>
                                         </div>
 
@@ -720,27 +722,28 @@ export const AppDemoSection: React.FC = () => {
                                         <div className="flex items-center justify-between mb-4">
                                             <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
                                                 <Wallet className="w-4 h-4" />
-                                                Live Digital Wallet
+                                                Simulated Digital Wallet
                                             </span>
                                             <span className="text-[10px] text-gray-400 font-mono">NGN / USD</span>
                                         </div>
 
                                         <div className="p-4 rounded-xl bg-black/50 border border-white/10 mb-4">
-                                            <div className="text-[10px] text-gray-400">Total Available Balance</div>
+                                            <div className="text-[10px] text-gray-400">Simulated Available Balance</div>
                                             <div className="text-2xl font-black text-white font-mono mt-1">₦ 150,000.00</div>
-                                            <div className="text-[10px] text-emerald-400 mt-1">Virtual NUBAN: 9048123490</div>
+                                            <div className="text-[10px] text-emerald-400 mt-1 font-mono">Virtual NUBAN: DEMO-NUBAN-0000</div>
+                                            <div className="mt-2.5 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[10px] text-amber-300 font-semibold text-center leading-tight">
+                                                SIMULATION ONLY — NOT A REAL BANK ACCOUNT. DO NOT SEND MONEY.
+                                            </div>
                                         </div>
 
                                         <div className="space-y-2">
                                             <button
-                                                onClick={() => {
-                                                    setCopiedNuban(true);
-                                                    setTimeout(() => setCopiedNuban(false), 2000);
-                                                }}
-                                                className="w-full py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-xs text-white font-semibold flex items-center justify-center gap-2 transition-all"
+                                                type="button"
+                                                disabled
+                                                className="w-full py-2.5 rounded-xl bg-white/5 border border-white/10 text-xs text-gray-400 font-semibold flex items-center justify-center gap-2 cursor-not-allowed opacity-60"
                                             >
-                                                {copiedNuban ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                                                {copiedNuban ? 'NUBAN Account Copied!' : 'Copy Virtual Account NUBAN'}
+                                                <Copy className="w-4 h-4 text-gray-500" />
+                                                Copying Disabled (Simulation Only)
                                             </button>
                                         </div>
                                     </div>

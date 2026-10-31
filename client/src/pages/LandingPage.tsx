@@ -4,7 +4,7 @@ import { Hero } from '../components/landing/Hero';
 import { AppDemoSection } from '../components/landing/AppDemoSection';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Features } from '../components/landing/Features';
 import { Pricing } from '../components/landing/Pricing';
 import { FounderSection } from '../components/landing/FounderSection';
@@ -14,6 +14,7 @@ import { preloadAuthRoutes } from '../utils/routePreloader';
 export const LandingPage = () => {
     const { user, authReady } = useAuth();
     const navigate = useNavigate();
+    const [demoTab, setDemoTab] = useState<'video' | 'interactive'>('video');
 
     useEffect(() => {
         preloadAuthRoutes();
@@ -30,11 +31,11 @@ export const LandingPage = () => {
                 keywords="secure messaging, voice notes, media sharing, real-time conversations, social communication"
             />
             <Navbar />
-            <Hero />
-            <AppDemoSection />
+            <Hero onTrySimulator={() => setDemoTab('interactive')} />
+            <AppDemoSection activeTab={demoTab} onTabChange={setDemoTab} />
+            <FounderSection />
             <Features />
             <Pricing />
-            <FounderSection />
             <Footer />
         </div>
     );
