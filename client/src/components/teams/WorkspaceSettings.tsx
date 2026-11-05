@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { 
-  Settings, Palette, Mail, ShieldAlert, Key, Clipboard, 
+  Settings, Palette, Mail, ShieldAlert, Key, 
   Trash2, ArrowRight, Save, KeyRound 
 } from 'lucide-react';
 import { updateTeam, inviteMember, deleteTeam } from '../../lib/teamsApi';
-import { getWorkspaceWebhookSecret } from '../../lib/collaborationApi';
 import { Button } from '../common/Button';
 import toast from 'react-hot-toast';
 
@@ -25,8 +24,6 @@ export const WorkspaceSettings: React.FC<WorkspaceSettingsProps> = ({
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'member' | 'admin'>('member');
   const [primaryColor, setPrimaryColor] = useState('#3b82f6');
-  const [webhookSecret, setWebhookSecret] = useState<string | null>(null);
-  const [loadingSecret, setLoadingSecret] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [inviting, setInviting] = useState(false);
@@ -77,19 +74,6 @@ export const WorkspaceSettings: React.FC<WorkspaceSettingsProps> = ({
     }
   };
 
-  const copyWebhookSecret = async () => {
-    setLoadingSecret(true);
-    try {
-      const secret = webhookSecret || await getWorkspaceWebhookSecret(teamId);
-      setWebhookSecret(secret);
-      await navigator.clipboard.writeText(secret);
-      toast.success('Webhook Secret copied to clipboard!');
-    } catch {
-      toast.error('Failed to retrieve webhook secret.');
-    } finally {
-      setLoadingSecret(false);
-    }
-  };
 
   const isAdmin = myRole === 'owner' || myRole === 'admin';
 
@@ -187,31 +171,15 @@ export const WorkspaceSettings: React.FC<WorkspaceSettingsProps> = ({
         </div>
       )}
 
-      {/* Developer API Keys */}
-      <div className="p-6 rounded-[2.5rem] bg-white/[0.01] border border-white/5 space-y-6">
+      {/* Workspace Integrations */}
+      <div className="p-6 rounded-[2.5rem] bg-white/[0.01] border border-white/5 space-y-4">
         <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest pl-1 flex items-center gap-2">
-          <KeyRound size={14} /> Integration Webhook Secrets
+          <KeyRound size={14} /> Workspace Integrations
         </h3>
         
         <p className="text-[11px] text-gray-500 leading-relaxed font-bold uppercase tracking-widest">
-          Configure external endpoints to subscribe to real-time project status and tasks progression updates.
+          Workspace webhook integrations are not currently available.
         </p>
-
-        <div className="p-4 rounded-2xl bg-white/5 border border-white/5 flex justify-between items-center gap-4">
-          <div className="min-w-0">
-            <div className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Signing Secret key</div>
-            <div className="text-xs text-gray-300 font-mono truncate mt-1">
-              {webhookSecret ? webhookSecret : `whsec_${'•'.repeat(32)}`}
-            </div>
-          </div>
-          <button
-            onClick={copyWebhookSecret}
-            disabled={loadingSecret}
-            className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 hover:text-white text-gray-400 active:scale-95 transition-all flex-shrink-0 disabled:opacity-50"
-          >
-            <Clipboard size={16} />
-          </button>
-        </div>
       </div>
 
       {/* Danger Zone */}

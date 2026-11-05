@@ -30,7 +30,6 @@ import {
   RotateCcw,
   Plus,
   Lock,
-  Copy,
   RefreshCw,
   FileText,
   Search,
@@ -115,11 +114,6 @@ interface SharedNote {
   sharer?: { full_name?: string; username?: string; avatar_url?: string };
 }
 
-interface WebhookSecretResponse {
-  team_id: string;
-  webhook_secret: string;
-  algorithm: string;
-}
 
 // Kanban task types
 interface KanbanTask {
@@ -251,8 +245,6 @@ export const TeamEnterpriseDashboard: React.FC<TeamEnterpriseDashboardProps> = (
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
 
-  const [webhookSecret, setWebhookSecret] = useState<WebhookSecretResponse | null>(null);
-  const [loadingSecret, setLoadingSecret] = useState(false);
 
   // Kanban state (local — backed by API when projects endpoint ready)
   const [kanbanTasks, setKanbanTasks] = useState<KanbanTask[]>([
@@ -356,17 +348,6 @@ export const TeamEnterpriseDashboard: React.FC<TeamEnterpriseDashboardProps> = (
     }
   }, [team.id]);
 
-  const fetchWebhookSecret = useCallback(async () => {
-    setLoadingSecret(true);
-    try {
-      const res = await api.get(`/teams/${team.id}/webhook-secret`);
-      setWebhookSecret(res.data);
-    } catch {
-      toast.error('Failed to load webhook secret');
-    } finally {
-      setLoadingSecret(false);
-    }
-  }, [team.id]);
 
   // Load overview data on mount
   useEffect(() => {
@@ -380,7 +361,6 @@ export const TeamEnterpriseDashboard: React.FC<TeamEnterpriseDashboardProps> = (
   useEffect(() => {
     if (activeTab === 'analytics') fetchAnalytics();
     if (activeTab === 'files') fetchFiles();
-    if (activeTab === 'settings') fetchWebhookSecret();
   }, [activeTab]); // eslint-disable-line
 
   // Scroll to top when tab changes
@@ -433,18 +413,6 @@ export const TeamEnterpriseDashboard: React.FC<TeamEnterpriseDashboardProps> = (
     } catch { toast.error('Failed to post bulletin'); }
   };
 
-  const handleRegenerateSecret = async () => {
-    setLoadingSecret(true);
-    try {
-      const res = await api.post(`/teams/${team.id}/webhook-secret/generate`);
-      setWebhookSecret(res.data);
-      toast.success('New HMAC-SHA256 Webhook Secret generated!');
-    } catch {
-      toast.error('Failed to generate secret');
-    } finally {
-      setLoadingSecret(false);
-    }
-  };
 
   const handleRemoveMember = async (userId: string, name: string) => {
     if (!window.confirm(`Remove ${name} from this workspace?`)) return;
@@ -1217,59 +1185,16 @@ export const TeamEnterpriseDashboard: React.FC<TeamEnterpriseDashboardProps> = (
 
   const renderSettings = () => (
     <div className="space-y-5 animate-in fade-in duration-300 max-w-2xl">
-      <div className="p-6 rounded-2xl bg-gray-900/80 border border-white/10 space-y-5">
+      <div className="p-6 rounded-2xl bg-gray-900/80 border border-white/10 space-y-4">
         <div className="flex items-center gap-3">
           <div className="p-3 rounded-xl bg-blue-500/10 text-blue-400">
             <Lock size={22} />
           </div>
           <div>
-            <h3 className="font-bold text-base text-white">Webhook Signing Secret</h3>
-            <p className="text-xs text-gray-400">HMAC-SHA256 signature verification key for workspace integration events.</p>
+            <h3 className="font-bold text-base text-white">Workspace Integrations</h3>
+            <p className="text-xs text-gray-400">Workspace webhook integrations are not currently available.</p>
           </div>
         </div>
-
-        <div className="space-y-2">
-          <label className="text-xs font-semibold text-gray-400">Signing Algorithm</label>
-          <div className="px-4 py-2 bg-gray-800 rounded-xl text-xs font-mono text-gray-300 border border-gray-700">
-            {webhookSecret?.algorithm || 'HMAC-SHA256'}
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-xs font-semibold text-gray-400">Webhook Secret Key</label>
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              readOnly
-              value={loadingSecret ? 'Loading...' : webhookSecret?.webhook_secret || ''}
-              className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-xs font-mono text-green-400 focus:outline-none"
-            />
-            <button
-              onClick={() => {
-                if (webhookSecret?.webhook_secret) {
-                  navigator.clipboard.writeText(webhookSecret.webhook_secret);
-                  toast.success('Copied!');
-                }
-              }}
-              className="p-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl transition-colors"
-            >
-              <Copy size={15} />
-            </button>
-          </div>
-        </div>
-
-        {(myRole === 'owner' || myRole === 'admin') && (
-          <div className="pt-2 flex justify-end">
-            <button
-              onClick={handleRegenerateSecret}
-              disabled={loadingSecret}
-              className="flex items-center gap-2 px-5 py-2.5 bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/30 rounded-xl text-xs font-bold transition-all disabled:opacity-50"
-            >
-              <RefreshCw size={14} className={loadingSecret ? 'animate-spin' : ''} />
-              Regenerate Secret
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Workspace Info */}

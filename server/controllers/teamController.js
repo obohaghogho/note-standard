@@ -803,41 +803,23 @@ exports.deleteBulletin = async (req, res, next) => {
 };
 
 // ====================================
-// WORKSPACE WEBHOOK SECRET
+// WORKSPACE WEBHOOK SECRET (RETIRED - PHASE 2.0U.5A)
 // ====================================
 
 exports.getWebhookSecret = async (req, res, next) => {
-  try {
-    const { teamId } = req.params;
-    const jwtSecret = process.env.JWT_SECRET || 'notestandard_jwt_secret_key_2026';
-    const secret = crypto.createHmac('sha256', jwtSecret).update(teamId).digest('hex');
-
-    res.json({
-      team_id: teamId,
-      webhook_secret: `whsec_${secret}`,
-      algorithm: 'HMAC-SHA256'
-    });
-  } catch (err) {
-    next(err);
-  }
+  return res.status(410).json({
+    success: false,
+    code: 'WORKSPACE_WEBHOOKS_UNAVAILABLE',
+    message: 'Workspace webhook integrations are not currently available.'
+  });
 };
 
 exports.generateWebhookSecret = async (req, res, next) => {
-  try {
-    const { teamId } = req.params;
-    const jwtSecret = process.env.JWT_SECRET || 'notestandard_jwt_secret_key_2026';
-    const nonce = Date.now().toString();
-    const secret = crypto.createHmac('sha256', jwtSecret).update(`${teamId}:${nonce}`).digest('hex');
-
-    res.json({
-      team_id: teamId,
-      webhook_secret: `whsec_${secret}`,
-      algorithm: 'HMAC-SHA256',
-      generated_at: new Date().toISOString()
-    });
-  } catch (err) {
-    next(err);
-  }
+  return res.status(410).json({
+    success: false,
+    code: 'WORKSPACE_WEBHOOKS_UNAVAILABLE',
+    message: 'Workspace webhook integrations are not currently available.'
+  });
 };
 
 // ====================================
@@ -1002,7 +984,6 @@ exports.getBulletins = async (req, res) => res.json([]);
 exports.createBulletin = async (req, res) => res.json({ success: true });
 exports.markBulletinRead = async (req, res) => res.json({ success: true });
 exports.deleteBulletin = async (req, res) => res.json({ success: true });
-exports.getWebhookSecret = async (req, res) => res.json({ secret: 'whsec_dummy' });
-exports.generateWebhookSecret = async (req, res) => res.json({ secret: 'whsec_' + Date.now() });
+// Webhook secret endpoints retired - Phase 2.0U.5A (shadowing exports removed)
 
 
