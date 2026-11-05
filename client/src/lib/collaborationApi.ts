@@ -197,13 +197,31 @@ export async function updateMeetingStatus(teamId: string, meetingId: string, sta
 // ANNOUNCEMENTS
 // ====================================
 
+// Announcements are strictly team-scoped. A missing/invalid team ID must never be turned into a
+// request path (the server no longer supports an organization-wide announcement route).
+const ANNOUNCEMENT_TEAM_ID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function assertAnnouncementTeamId(teamId: string | null | undefined): string {
+  if (typeof teamId !== 'string' || !ANNOUNCEMENT_TEAM_ID_REGEX.test(teamId)) {
+    throw new Error('A valid team ID is required for announcements');
+  }
+  return teamId;
+}
+
 export async function getAnnouncements(teamId?: string | null): Promise<Announcement[]> {
-  const res = await api.get(`/collaboration/teams/${teamId || 'null'}/announcements`);
+  const validTeamId = assertAnnouncementTeamId(teamId);
+  const res = await api.get(`/collaboration/teams/${validTeamId}/announcements`);
   return res.data;
 }
 
 export async function createAnnouncement(teamId: string | null, payload: Partial<Announcement>): Promise<Announcement> {
-  const res = await api.post(`/collaboration/teams/${teamId || 'null'}/announcements`, payload);
+  const validTeamId = assertAnnouncementTeamId(teamId);
+  // Send only the fields the server accepts; the team is identified solely by the route.
+  const { title, content, priority, audience, scheduled_at } = payload;
+  const body = Object.fromEntries(
+    Object.entries({ title, content, priority, audience, scheduled_at }).filter(([, v]) => v !== undefined)
+  );
+  const res = await api.post(`/collaboration/teams/${validTeamId}/announcements`, body);
   return res.data;
 }
 
